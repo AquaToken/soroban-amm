@@ -1,12 +1,19 @@
 #![no_std]
 
+mod admin;
 mod pool_contract;
+mod storage;
 mod test;
 pub mod testutils;
 
+use crate::admin::{get_admin, has_admin, require_admin, set_admin};
+use crate::storage::{
+    add_pool_to_list, get_pool_hash, get_pool_id, get_pools_list, get_token_hash, has_pool,
+    put_pool, set_pool_hash, set_token_hash,
+};
 use pool_contract::LiquidityPoolClient;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, Vec};
 
 mod token {
     // soroban_sdk::contractimport!(file = "../soroban_token_spec.wasm");
@@ -20,34 +27,24 @@ mod token {
 #[contracttype]
 pub enum DataKey {
     Pool(BytesN<32>),
-}
-
-fn get_pool_id(e: &Env, salt: &BytesN<32>) -> Address {
-    e.storage().instance().bump(6_312_000);
-    e.storage().instance()
-        .get(&DataKey::Pool(salt.clone()))
-        .unwrap()
-}
-
-fn put_pool(e: &Env, salt: &BytesN<32>, pool: &Address) {
-    e.storage().instance().bump(6_312_000);
-    e.storage().instance().set(&DataKey::Pool(salt.clone()), pool)
-}
-
-fn has_pool(e: &Env, salt: &BytesN<32>) -> bool {
-    e.storage().instance().bump(6_312_000);
-    e.storage().instance().has(&DataKey::Pool(salt.clone()))
+    Admin,
+    TokenHash,
+    PoolHash,
+    PoolsList, // temp key to handle list of pools to upgrade them
 }
 
 pub trait LiquidityPoolRouterTrait {
-    fn init_pool(
-        e: Env,
-        liquidity_pool_wasm_hash: BytesN<32>,
-        token_wasm_hash: BytesN<32>,
-        token_a: Address,
-        token_b: Address,
-    );
-    fn sf_deposit(
+    fn init_pool(e: Env, token_a: Address, token_b: Address) -> Address;
+
+    fn get_pools_list(e: Env) -> Vec<Address>;
+
+    fn get_pool_hash(e: Env) -> BytesN<32>;
+    fn set_pool_hash(e: Env, new_hash: BytesN<32>);
+
+    fn get_token_hash(e: Env) -> BytesN<32>;
+    fn set_token_hash(e: Env, new_hash: BytesN<32>);
+
+    fn deposit(
         e: Env,
         account: Address,
         token_a: Address,
@@ -60,10 +57,17 @@ pub trait LiquidityPoolRouterTrait {
 
     // swaps out an exact amount of "buy", in exchange for "sell" that this contract has an
     // allowance for from "to". "sell" amount swapped in must not be greater than "in_max"
-    fn swap_out(e: Env, account: Address, sell: Address, buy: Address, out: i128, in_max: i128) -> i128;
+    fn swap_out(
+        e: Env,
+        account: Address,
+        sell: Address,
+        buy: Address,
+        out: i128,
+        in_max: i128,
+    ) -> i128;
     fn estimate_swap_out(e: Env, sell: Address, buy: Address, out: i128) -> i128;
 
-    fn sf_withdrw(
+    fn withdraw(
         e: Env,
         account: Address,
         token_a: Address,
@@ -74,22 +78,10 @@ pub trait LiquidityPoolRouterTrait {
     ) -> (i128, i128);
 
     // returns the contract address for the specified token_a/token_b combo
-    fn get_pool(e: Env, token_a: Address, token_b: Address) -> Address;
-
-    fn get_or_create_pool(
-        e: Env,
-        liquidity_pool_wasm_hash: BytesN<32>,
-        token_wasm_hash: BytesN<32>,
-        token_a: Address,
-        token_b: Address,
-    ) -> Address;
+    fn get_pool(e: Env, token_a: Address, token_b: Address) -> (bool, Address);
 
     // get pool reserves amount. it may differ from pool balance
-    fn get_reserves(
-        e: Env,
-        token_a: Address,
-        token_b: Address,
-    ) -> (i128, i128);
+    fn get_reserves(e: Env, token_a: Address, token_b: Address) -> (i128, i128);
 }
 
 fn sort(a: &Address, b: &Address) -> (Address, Address) {
@@ -112,20 +104,24 @@ pub fn pool_salt(e: &Env, token_a: &Address, token_b: &Address) -> BytesN<32> {
     e.crypto().sha256(&salt)
 }
 
+pub trait UpgradeableContract {
+    fn init_admin(e: Env, account: Address);
+    fn version() -> u32;
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
+}
+
 #[contract]
 struct LiquidityPoolRouter;
 
 #[contractimpl]
 impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
-    fn init_pool(
-        e: Env,
-        liquidity_pool_wasm_hash: BytesN<32>,
-        token_wasm_hash: BytesN<32>,
-        token_a: Address,
-        token_b: Address,
-    ) {
+    fn init_pool(e: Env, token_a: Address, token_b: Address) -> Address {
         let salt = pool_salt(&e, &token_a, &token_b);
         if !has_pool(&e, &salt) {
+            let liquidity_pool_wasm_hash = get_pool_hash(&e);
+            let token_wasm_hash = get_token_hash(&e);
+            let admin = get_admin(&e);
+
             let pool_contract_id = e
                 .deployer()
                 .with_current_contract(salt.clone())
@@ -133,15 +129,44 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
 
             put_pool(&e, &salt, &pool_contract_id);
 
+            // TODO: NOT FOR PRODUCTION
+            //  this is unsafe as we can store limited amount of records
+            add_pool_to_list(&e, &get_pool_id(&e, &salt));
+
             LiquidityPoolClient::new(&e, &pool_contract_id).initialize(
+                &admin,
                 &token_wasm_hash,
                 &token_a,
                 &token_b,
             );
         }
+        let (_pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
+        pool_id
     }
 
-    fn sf_deposit(
+    fn get_pools_list(e: Env) -> Vec<Address> {
+        get_pools_list(&e)
+    }
+
+    fn get_pool_hash(e: Env) -> BytesN<32> {
+        get_pool_hash(&e)
+    }
+
+    fn set_pool_hash(e: Env, new_hash: BytesN<32>) {
+        require_admin(&e);
+        set_pool_hash(&e, &new_hash);
+    }
+
+    fn get_token_hash(e: Env) -> BytesN<32> {
+        get_token_hash(&e)
+    }
+
+    fn set_token_hash(e: Env, new_hash: BytesN<32>) {
+        require_admin(&e);
+        set_token_hash(&e, &new_hash);
+    }
+
+    fn deposit(
         e: Env,
         account: Address,
         token_a: Address,
@@ -160,22 +185,35 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
             .deposit(&account, &desired_a, &min_a, &desired_b, &min_b)
     }
 
-    fn swap_out(e: Env, account: Address, sell: Address, buy: Address, out: i128, in_max: i128) -> i128 {
+    fn swap_out(
+        e: Env,
+        account: Address,
+        sell: Address,
+        buy: Address,
+        out: i128,
+        in_max: i128,
+    ) -> i128 {
         account.require_auth();
         let (token_a, token_b) = sort(&sell, &buy);
-        let pool_id = Self::get_pool(e.clone(), token_a.clone(), token_b);
+        let (pool_exists, pool_id) = Self::get_pool(e.clone(), token_a.clone(), token_b);
+        if !pool_exists {
+            panic!("pool not exists")
+        }
 
         LiquidityPoolClient::new(&e, &pool_id).swap(&account, &(buy == token_a), &out, &in_max)
     }
 
     fn estimate_swap_out(e: Env, sell: Address, buy: Address, out: i128) -> i128 {
         let (token_a, token_b) = sort(&sell, &buy);
-        let pool_id = Self::get_pool(e.clone(), token_a.clone(), token_b);
+        let (pool_exists, pool_id) = Self::get_pool(e.clone(), token_a.clone(), token_b);
+        if !pool_exists {
+            panic!("pool not exists")
+        }
 
         LiquidityPoolClient::new(&e, &pool_id).estimate_swap_out(&(buy == token_a), &out)
     }
 
-    fn sf_withdrw(
+    fn withdraw(
         e: Env,
         account: Address,
         token_a: Address,
@@ -185,7 +223,10 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         min_b: i128,
     ) -> (i128, i128) {
         account.require_auth();
-        let pool_id = Self::get_pool(e.clone(), token_a, token_b);
+        let (pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
+        if !pool_exists {
+            panic!("pool not exists")
+        }
 
         let pool_client = LiquidityPoolClient::new(&e, &pool_id);
 
@@ -197,45 +238,35 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         (amount_a, amount_b)
     }
 
-    fn get_pool(e: Env, token_a: Address, token_b: Address) -> Address {
+    fn get_pool(e: Env, token_a: Address, token_b: Address) -> (bool, Address) {
         let salt = pool_salt(&e, &token_a, &token_b);
-        get_pool_id(&e, &salt)
+        (has_pool(&e, &salt), get_pool_id(&e, &salt))
     }
 
-    fn get_or_create_pool(
-        e: Env,
-        liquidity_pool_wasm_hash: BytesN<32>,
-        token_wasm_hash: BytesN<32>,
-        token_a: Address,
-        token_b: Address,
-    ) -> Address {
-        let salt = pool_salt(&e, &token_a, &token_b);
-
-        if !has_pool(&e, &salt) {
-            let pool_contract_id = e
-                .deployer()
-                .with_current_contract(salt.clone())
-                .deploy(liquidity_pool_wasm_hash);
-
-            put_pool(&e, &salt, &pool_contract_id);
-
-            LiquidityPoolClient::new(&e, &pool_contract_id).initialize(
-                &token_wasm_hash,
-                &token_a,
-                &token_b,
-            );
-        }
-
-        get_pool_id(&e, &salt)
-    }
-
-    fn get_reserves(
-        e: Env,
-        token_a: Address,
-        token_b: Address,
-    ) -> (i128, i128) {
+    fn get_reserves(e: Env, token_a: Address, token_b: Address) -> (i128, i128) {
         let (a, b) = sort(&token_a, &token_b);
-        let pool_id = Self::get_pool(e.clone(), a, b);
+        let (pool_exists, pool_id) = Self::get_pool(e.clone(), a, b);
+        if !pool_exists {
+            panic!("pool not exists")
+        }
         LiquidityPoolClient::new(&e, &pool_id).get_rsrvs()
+    }
+}
+
+#[contractimpl]
+impl UpgradeableContract for LiquidityPoolRouter {
+    fn init_admin(e: Env, account: Address) {
+        if !has_admin(&e) {
+            set_admin(&e, &account)
+        }
+    }
+
+    fn version() -> u32 {
+        5
+    }
+
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        require_admin(&e);
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

@@ -1,8 +1,10 @@
 #![no_std]
 
+mod admin;
 mod test;
 mod token;
 
+use crate::admin::{has_admin, require_admin, set_admin};
 use num_integer::Roots;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, Address, BytesN, ConversionError, Env, IntoVal,
@@ -19,6 +21,7 @@ pub enum DataKey {
     TotalShares = 3,
     ReserveA = 4,
     ReserveB = 5,
+    Admin = 6,
 }
 
 impl TryFromVal<Env, DataKey> for Val {
@@ -170,7 +173,13 @@ contractmeta!(
 
 pub trait LiquidityPoolTrait {
     // Sets the token contract addresses for this pool
-    fn initialize(e: Env, token_wasm_hash: BytesN<32>, token_a: Address, token_b: Address);
+    fn initialize(
+        e: Env,
+        admin: Address,
+        token_wasm_hash: BytesN<32>,
+        token_a: Address,
+        token_b: Address,
+    );
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
@@ -178,7 +187,14 @@ pub trait LiquidityPoolTrait {
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
     // the actual balance of token_a and token_b for this contract.
-    fn deposit(e: Env, to: Address, desired_a: i128, min_a: i128, desired_b: i128, min_b: i128) -> (i128, i128);
+    fn deposit(
+        e: Env,
+        to: Address,
+        desired_a: i128,
+        min_a: i128,
+        desired_b: i128,
+        min_b: i128,
+    ) -> (i128, i128);
 
     // If "buy_a" is true, the swap will buy token_a and sell token_b. This is flipped if "buy_a" is false.
     // "out" is the amount being bought, with in_max being a safety to make sure you receive at least that amount.
@@ -192,6 +208,9 @@ pub trait LiquidityPoolTrait {
     fn withdraw(e: Env, to: Address, share_amount: i128, min_a: i128, min_b: i128) -> (i128, i128);
 
     fn get_rsrvs(e: Env) -> (i128, i128);
+
+    fn version() -> u32;
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
 }
 
 #[contract]
@@ -199,7 +218,19 @@ struct LiquidityPool;
 
 #[contractimpl]
 impl LiquidityPoolTrait for LiquidityPool {
-    fn initialize(e: Env, token_wasm_hash: BytesN<32>, token_a: Address, token_b: Address) {
+    fn initialize(
+        e: Env,
+        admin: Address,
+        token_wasm_hash: BytesN<32>,
+        token_a: Address,
+        token_b: Address,
+    ) {
+        if has_admin(&e) {
+            panic!("already initialized")
+        }
+
+        set_admin(&e, &admin);
+
         if token_a >= token_b {
             panic!("token_a must be less than token_b");
         }
@@ -224,7 +255,14 @@ impl LiquidityPoolTrait for LiquidityPool {
         get_token_share(&e)
     }
 
-    fn deposit(e: Env, to: Address, desired_a: i128, min_a: i128, desired_b: i128, min_b: i128) -> (i128, i128) {
+    fn deposit(
+        e: Env,
+        to: Address,
+        desired_a: i128,
+        min_a: i128,
+        desired_b: i128,
+        min_b: i128,
+    ) -> (i128, i128) {
         // Depositor needs to authorize the deposit
         to.require_auth();
 
@@ -236,8 +274,18 @@ impl LiquidityPoolTrait for LiquidityPool {
         let token_a_client = token::Client::new(&e, &get_token_a(&e));
         let token_b_client = token::Client::new(&e, &get_token_b(&e));
 
-        token_a_client.transfer_from(&e.current_contract_address(), &to, &e.current_contract_address(), &amounts.0);
-        token_b_client.transfer_from(&e.current_contract_address(), &to, &e.current_contract_address(), &amounts.1);
+        token_a_client.transfer_from(
+            &e.current_contract_address(),
+            &to,
+            &e.current_contract_address(),
+            &amounts.0,
+        );
+        token_b_client.transfer_from(
+            &e.current_contract_address(),
+            &to,
+            &e.current_contract_address(),
+            &amounts.1,
+        );
 
         // Now calculate how many new pool shares to mint
         let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
@@ -283,7 +331,12 @@ impl LiquidityPoolTrait for LiquidityPool {
             get_token_a(&e)
         };
         let sell_token_client = token::Client::new(&e, &sell_token);
-        sell_token_client.transfer_from(&e.current_contract_address(), &to, &e.current_contract_address(), &sell_amount);
+        sell_token_client.transfer_from(
+            &e.current_contract_address(),
+            &to,
+            &e.current_contract_address(),
+            &sell_amount,
+        );
 
         let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
 
@@ -345,7 +398,12 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = token::Client::new(&e, &get_token_share(&e));
-        share_token_client.transfer_from(&e.current_contract_address(), &to, &e.current_contract_address(), &share_amount);
+        share_token_client.transfer_from(
+            &e.current_contract_address(),
+            &to,
+            &e.current_contract_address(),
+            &share_amount,
+        );
 
         let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
         let balance_shares = get_balance_shares(&e);
@@ -371,5 +429,14 @@ impl LiquidityPoolTrait for LiquidityPool {
 
     fn get_rsrvs(e: Env) -> (i128, i128) {
         (get_reserve_a(&e), get_reserve_b(&e))
+    }
+
+    fn version() -> u32 {
+        1
+    }
+
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        require_admin(&e);
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

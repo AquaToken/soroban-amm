@@ -62,14 +62,12 @@ fn test() {
     liqpool.deposit(&user1, &100, &100, &100, &100);
     assert_eq!(
         e.auths(),
-        [
-            (
-                user1.clone(),
-                liqpool.address.clone(),
-                Symbol::short("deposit"),
-                (&user1, 100_i128, 100_i128, 100_i128, 100_i128).into_val(&e)
-            ),
-        ]
+        [(
+            user1.clone(),
+            liqpool.address.clone(),
+            Symbol::short("deposit"),
+            (&user1, 100_i128, 100_i128, 100_i128, 100_i128).into_val(&e)
+        ),]
     );
 
     assert_eq!(token_share.balance(&user1), 100);
@@ -79,21 +77,16 @@ fn test() {
     assert_eq!(token2.balance(&user1), 900);
     assert_eq!(token2.balance(&liqpool.address), 100);
 
-    assert_eq!(
-        liqpool.estimate_swap_out(&false, &49),
-        97_i128,
-    );
+    assert_eq!(liqpool.estimate_swap_out(&false, &49), 97_i128,);
     liqpool.swap(&user1, &false, &49, &100);
     assert_eq!(
         e.auths(),
-        [
-            (
-                user1.clone(),
-                liqpool.address.clone(),
-                Symbol::short("swap"),
-                (&user1, false, 49_i128, 100_i128).into_val(&e)
-            )
-        ]
+        [(
+            user1.clone(),
+            liqpool.address.clone(),
+            Symbol::short("swap"),
+            (&user1, false, 49_i128, 100_i128).into_val(&e)
+        )]
     );
 
     assert_eq!(token1.balance(&user1), 803);
@@ -106,14 +99,12 @@ fn test() {
     liqpool.withdraw(&user1, &100, &197, &51);
     assert_eq!(
         e.auths(),
-        [
-            (
-                user1.clone(),
-                liqpool.address.clone(),
-                Symbol::short("withdraw"),
-                (&user1, 100_i128, 197_i128, 51_i128).into_val(&e)
-            )
-        ]
+        [(
+            user1.clone(),
+            liqpool.address.clone(),
+            Symbol::short("withdraw"),
+            (&user1, 100_i128, 197_i128, 51_i128).into_val(&e)
+        )]
     );
 
     assert_eq!(token1.balance(&user1), 1000);
