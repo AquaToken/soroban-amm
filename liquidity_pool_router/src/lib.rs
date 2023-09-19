@@ -5,6 +5,7 @@ mod pool_contract;
 mod storage;
 mod test;
 pub mod testutils;
+mod storage_types;
 
 use crate::admin::{get_admin, has_admin, require_admin, set_admin};
 use crate::storage::{
@@ -21,16 +22,6 @@ mod token {
     soroban_sdk::contractimport!(
         file = "../token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
     );
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub enum DataKey {
-    Pool(BytesN<32>),
-    Admin,
-    TokenHash,
-    PoolHash,
-    PoolsList, // temp key to handle list of pools to upgrade them
 }
 
 pub trait LiquidityPoolRouterTrait {

@@ -11,12 +11,13 @@ fn create_token_contract<'a>(e: &Env, admin: &Address) -> token::Client<'a> {
 
 fn create_liqpool_contract<'a>(
     e: &Env,
+    admin: &Address,
     token_wasm_hash: &BytesN<32>,
     token_a: &Address,
     token_b: &Address,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
-    liqpool.initialize(token_wasm_hash, token_a, token_b);
+    liqpool.initialize(admin, token_wasm_hash, token_a, token_b);
     liqpool
 }
 
@@ -44,6 +45,7 @@ fn test() {
     let user1 = Address::random(&e);
     let liqpool = create_liqpool_contract(
         &e,
+        &user1,
         &install_token_wasm(&e),
         &token1.address,
         &token2.address,
@@ -56,8 +58,8 @@ fn test() {
 
     token2.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1), 1000);
-    token1.increase_allowance(&user1, &liqpool.address, &1000);
-    token2.increase_allowance(&user1, &liqpool.address, &1000);
+    token1.approve(&user1, &liqpool.address, &1000);
+    token2.approve(&user1, &liqpool.address, &1000);
 
     liqpool.deposit(&user1, &100, &100, &100, &100);
     assert_eq!(
@@ -94,7 +96,7 @@ fn test() {
     assert_eq!(token2.balance(&user1), 949);
     assert_eq!(token2.balance(&liqpool.address), 51);
 
-    token_share.increase_allowance(&user1, &liqpool.address, &100);
+    token_share.approve(&user1, &liqpool.address, &100);
 
     liqpool.withdraw(&user1, &100, &197, &51);
     assert_eq!(

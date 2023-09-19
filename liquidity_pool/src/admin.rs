@@ -1,18 +1,18 @@
-use crate::DataKey;
 use soroban_sdk::{Address, Env};
+use crate::storage_types::{DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
 
 pub fn has_admin(e: &Env) -> bool {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().has(&DataKey::Admin)
 }
 
 pub fn get_admin(e: &Env) -> Address {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().get(&DataKey::Admin).unwrap()
 }
 
 pub fn set_admin(e: &Env, admin: &Address) {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&DataKey::Admin, admin)
 }
 

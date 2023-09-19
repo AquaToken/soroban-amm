@@ -3,6 +3,7 @@
 mod admin;
 mod test;
 mod token;
+mod storage_types;
 
 use crate::admin::{has_admin, require_admin, set_admin};
 use num_integer::Roots;
@@ -11,18 +12,7 @@ use soroban_sdk::{
     TryFromVal, Val,
 };
 use token::create_contract;
-
-#[derive(Clone, Copy)]
-#[repr(u32)]
-pub enum DataKey {
-    TokenA = 0,
-    TokenB = 1,
-    TokenShare = 2,
-    TotalShares = 3,
-    ReserveA = 4,
-    ReserveB = 5,
-    Admin = 6,
-}
+use crate::storage_types::{DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
 
 impl TryFromVal<Env, DataKey> for Val {
     type Error = ConversionError;
@@ -33,37 +23,37 @@ impl TryFromVal<Env, DataKey> for Val {
 }
 
 fn get_token_a(e: &Env) -> Address {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().get(&DataKey::TokenA).unwrap()
 }
 
 fn get_token_b(e: &Env) -> Address {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().get(&DataKey::TokenB).unwrap()
 }
 
 fn get_token_share(e: &Env) -> Address {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().get(&DataKey::TokenShare).unwrap()
 }
 
 fn get_total_shares(e: &Env) -> i128 {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().get(&DataKey::TotalShares).unwrap()
 }
 
 fn get_reserve_a(e: &Env) -> i128 {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().get(&DataKey::ReserveA).unwrap()
 }
 
 fn get_reserve_b(e: &Env) -> i128 {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().get(&DataKey::ReserveB).unwrap()
 }
 
 fn get_balance(e: &Env, contract: Address) -> i128 {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     token::Client::new(e, &contract).balance(&e.current_contract_address())
 }
 
@@ -80,32 +70,32 @@ fn get_balance_shares(e: &Env) -> i128 {
 }
 
 fn put_token_a(e: &Env, contract: Address) {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&DataKey::TokenA, &contract);
 }
 
 fn put_token_b(e: &Env, contract: Address) {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&DataKey::TokenB, &contract);
 }
 
 fn put_token_share(e: &Env, contract: Address) {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&DataKey::TokenShare, &contract);
 }
 
 fn put_total_shares(e: &Env, amount: i128) {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&DataKey::TotalShares, &amount)
 }
 
 fn put_reserve_a(e: &Env, amount: i128) {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&DataKey::ReserveA, &amount)
 }
 
 fn put_reserve_b(e: &Env, amount: i128) {
-    e.storage().instance().bump(6_312_000);
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&DataKey::ReserveB, &amount)
 }
 
