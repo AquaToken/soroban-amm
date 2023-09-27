@@ -5,7 +5,7 @@ use soroban_sdk::{contracttype, Address, Env};
 #[derive(Clone)]
 #[contracttype]
 pub struct PoolRewardConfig {
-    pub tps: u64,
+    pub tps: i128,
     pub expired_at: u64,
 }
 

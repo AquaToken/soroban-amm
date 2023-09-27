@@ -3,6 +3,7 @@ use crate::rewards::manager as rewards_manager;
 use crate::rewards::storage as rewards_storage;
 use crate::token::create_contract;
 use crate::{pool, storage, token};
+use cast::i128 as to_i128;
 use num_integer::Roots;
 use soroban_sdk::{contract, contractimpl, contractmeta, Address, BytesN, Env, IntoVal};
 
@@ -57,7 +58,7 @@ pub trait LiquidityPoolTrait {
 
     fn version() -> u32;
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
-    fn set_rewards_config(e: Env, expired_at: u64, tps: u64);
+    fn set_rewards_config(e: Env, expired_at: u64, amount: i128);
     fn claim(e: Env, user: Address) -> i128;
 }
 
@@ -315,13 +316,16 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn set_rewards_config(
         e: Env,
         expired_at: u64, // timestamp
-        tps: u64,        // value with 7 decimal places. example: 17_5400000
+        amount: i128,    // value with 7 decimal places. example: 600_0000000
     ) {
         require_admin(&e);
 
         rewards_manager::update_rewards_data(&e);
 
-        let config = rewards_storage::PoolRewardConfig { tps, expired_at };
+        let config = rewards_storage::PoolRewardConfig {
+            tps: amount / to_i128(expired_at - e.ledger().timestamp()),
+            expired_at,
+        };
         storage::bump_instance(&e);
         rewards_storage::set_pool_reward_config(&e, &config);
     }

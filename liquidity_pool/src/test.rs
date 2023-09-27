@@ -71,7 +71,7 @@ fn test() {
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
     let total_reward_1 = 10_5000000_i128 * 60;
-    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(60), &10_5000000_u64);
+    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(60), &total_reward_1);
 
     let token_share = token::Client::new(&e, &liqpool.share_id());
 
@@ -111,10 +111,10 @@ fn test() {
 
     // more rewards added with different configs
     let total_reward_2 = 20_0000000_i128 * 100;
-    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(100), &20_0000000_u64);
+    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(100), &total_reward_2);
     jump(&e, 105);
     let total_reward_3 = 6_0000000_i128 * 50;
-    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(50), &6_0000000_u64);
+    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(50), &total_reward_3);
     jump(&e, 500);
     // two rewards available for the user
     assert_eq!(liqpool.claim(&user1), total_reward_2 + total_reward_3);
@@ -215,7 +215,7 @@ fn test_two_users_rewards() {
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
     let total_reward_1 = 10_5000000_i128 * 60;
-    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(60), &10_5000000_u64);
+    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(60), &total_reward_1);
 
     for user in [&user1, &user2] {
         token1.mint(user, &1000);
