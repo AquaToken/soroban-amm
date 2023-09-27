@@ -1,4 +1,4 @@
-use crate::storage_types::{DataKey, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD};
+use crate::storage_types::{DataKey, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
 use soroban_sdk::{Address, Env};
 
 pub fn read_balance(e: &Env, addr: Address) -> i128 {
@@ -32,4 +32,26 @@ pub fn spend_balance(e: &Env, addr: Address, amount: i128) {
         panic!("insufficient balance");
     }
     write_balance(e, addr, balance - amount);
+}
+
+pub fn read_total_balance(e: &Env) -> i128 {
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage().instance().get(&DataKey::TotalBalance).unwrap()
+}
+
+pub fn write_total_balance(e: &Env, amount: i128) {
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage().instance().set(&DataKey::TotalBalance, &amount);
+}
+
+pub fn increase_total_balance(e: &Env, amount: i128) {
+    let mut total_balance = read_total_balance(e);
+    total_balance += amount;
+    write_total_balance(e, total_balance);
+}
+
+pub fn decrease_total_balance(e: &Env, amount: i128) {
+    let mut total_balance = read_total_balance(e);
+    total_balance -= amount;
+    write_total_balance(e, total_balance);
 }

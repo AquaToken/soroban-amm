@@ -149,6 +149,7 @@ fn test_burn() {
 
     token.mint(&user1, &1000);
     assert_eq!(token.balance(&user1), 1000);
+    assert_eq!(token.total_balance(), 1000);
 
     token.approve(&user1, &user2, &500, &200);
     assert_eq!(token.allowance(&user1, &user2), 500);
@@ -172,6 +173,7 @@ fn test_burn() {
     assert_eq!(token.allowance(&user1, &user2), 0);
     assert_eq!(token.balance(&user1), 500);
     assert_eq!(token.balance(&user2), 0);
+    assert_eq!(token.total_balance(), 500);
 
     token.burn(&user1, &500);
     assert_eq!(
@@ -191,6 +193,7 @@ fn test_burn() {
 
     assert_eq!(token.balance(&user1), 0);
     assert_eq!(token.balance(&user2), 0);
+    assert_eq!(token.total_balance(), 0);
 }
 
 #[test]
