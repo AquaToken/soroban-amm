@@ -12,7 +12,6 @@ pub enum DataKey {
     TokenB,
     RewardToken,
     TokenShare,
-    TotalShares,
     ReserveA,
     ReserveB,
     Admin,
@@ -56,12 +55,6 @@ pub fn get_token_share(e: &Env) -> Address {
     e.storage().instance().get(&DataKey::TokenShare).unwrap()
 }
 
-pub fn get_total_shares(e: &Env) -> i128 {
-    token::get_total_shares(e)
-    // bump_instance(e);
-    // e.storage().instance().get(&DataKey::TotalShares).unwrap()
-}
-
 pub fn get_reserve_a(e: &Env) -> i128 {
     bump_instance(e);
     e.storage().instance().get(&DataKey::ReserveA).unwrap()
@@ -90,11 +83,6 @@ pub fn put_reward_token(e: &Env, contract: Address) {
 pub fn put_token_share(e: &Env, contract: Address) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::TokenShare, &contract);
-}
-
-pub fn put_total_shares(e: &Env, amount: i128) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::TotalShares, &amount)
 }
 
 pub fn put_reserve_a(e: &Env, amount: i128) {

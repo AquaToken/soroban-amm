@@ -45,25 +45,17 @@ pub fn get_user_balance_shares(e: &Env, user: &Address) -> i128 {
 
 pub fn get_total_shares(e: &Env) -> i128 {
     let share_token = storage::get_token_share(e);
-    storage::bump_instance(e);
     Client::new(e, &share_token).total_balance()
 }
 
 pub fn burn_shares(e: &Env, amount: i128) {
-    let total = storage::get_total_shares(e);
     let share_contract = storage::get_token_share(e);
-
     Client::new(e, &share_contract).burn(&e.current_contract_address(), &amount);
-    storage::put_total_shares(e, total - amount);
 }
 
 pub fn mint_shares(e: &Env, to: Address, amount: i128) {
-    let total = storage::get_total_shares(e);
     let share_contract_id = storage::get_token_share(e);
-
     Client::new(e, &share_contract_id).mint(&to, &amount);
-
-    storage::put_total_shares(e, total + amount);
 }
 
 fn transfer(e: &Env, token: Address, to: Address, amount: i128) {

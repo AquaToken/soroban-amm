@@ -54,7 +54,7 @@ pub fn update_user_reward(e: &Env, pool_data: &PoolRewardData, user: &Address) -
             return new_data;
         }
 
-        let total_shares = storage::get_total_shares(e);
+        let total_shares = token::get_total_shares(e);
         let new_reward =
             (pool_data.accumulated - user_data.pool_accumulated) * user_shares / total_shares;
         let new_data = UserRewardData {

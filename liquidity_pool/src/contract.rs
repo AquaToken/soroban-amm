@@ -94,7 +94,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         storage::put_token_b(&e, token_b);
         storage::put_reward_token(&e, reward_token);
         storage::put_token_share(&e, share_contract.try_into().unwrap());
-        storage::put_total_shares(&e, 0);
         storage::put_reserve_a(&e, 0);
         storage::put_reserve_b(&e, 0);
         rewards_storage::set_pool_reward_config(
@@ -157,7 +156,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // Now calculate how many new pool shares to mint
         let (balance_a, balance_b) = (token::get_balance_a(&e), token::get_balance_b(&e));
-        let total_shares = storage::get_total_shares(&e);
+        let total_shares = token::get_total_shares(&e);
 
         let zero = 0;
         let new_total_shares = if reserve_a > zero && reserve_b > zero {
@@ -281,7 +280,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let (balance_a, balance_b) = (token::get_balance_a(&e), token::get_balance_b(&e));
         let balance_shares = token::get_balance_shares(&e);
 
-        let total_shares = storage::get_total_shares(&e);
+        let total_shares = token::get_total_shares(&e);
 
         // Now calculate the withdraw amounts
         let out_a = (balance_a * balance_shares) / total_shares;
