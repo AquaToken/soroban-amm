@@ -23,6 +23,16 @@ pub fn set_admin(e: &Env, admin: &Address) {
     e.storage().instance().set(&DataKey::Admin, admin)
 }
 
+pub fn check_admin(e: &Env, user: &Address) {
+    if !has_admin(&e) {
+        panic!("admin not set")
+    }
+    let admin = get_admin(e);
+    if admin != user.clone() {
+        panic!("user is not admin")
+    }
+}
+
 pub fn require_admin(e: &Env) {
     if !has_admin(&e) {
         panic!("admin not set")

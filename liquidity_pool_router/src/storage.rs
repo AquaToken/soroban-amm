@@ -37,6 +37,24 @@ pub fn set_token_hash(e: &Env, token_hash: &BytesN<32>) {
     e.storage().instance().set(&DataKey::TokenHash, token_hash)
 }
 
+// reward token
+
+pub fn get_reward_token(e: &Env) -> Address {
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    let reward_token = e.storage().instance().get(&DataKey::RewardToken);
+    match reward_token {
+        Some(value) => value,
+        None => {
+            panic!("reward token not initialized")
+        }
+    }
+}
+
+pub fn set_reward_token(e: &Env, reward_token: &Address) {
+    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage().instance().set(&DataKey::RewardToken, reward_token)
+}
+
 // pool
 
 pub fn get_pool_id(e: &Env, salt: &BytesN<32>) -> Address {

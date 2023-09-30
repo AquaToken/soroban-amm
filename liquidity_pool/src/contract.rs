@@ -1,4 +1,4 @@
-use crate::admin::{has_admin, require_admin, set_admin};
+use crate::admin::{check_admin, has_admin, require_admin, set_admin};
 use crate::rewards::manager as rewards_manager;
 use crate::rewards::storage as rewards_storage;
 use crate::token::create_contract;
@@ -6,6 +6,7 @@ use crate::{pool, storage, token};
 use cast::i128 as to_i128;
 use num_integer::Roots;
 use soroban_sdk::{contract, contractimpl, contractmeta, Address, BytesN, Env, IntoVal};
+use crate::rewards::storage::{get_pool_reward_config, get_pool_reward_data};
 
 // Metadata that is added on to the WASM custom section
 contractmeta!(
@@ -26,6 +27,7 @@ pub trait LiquidityPoolTrait {
         token_a: Address,
         token_b: Address,
         reward_token: Address,
+        reward_storage: Address,
     );
 
     // Returns the token contract address for the pool share token
@@ -58,7 +60,10 @@ pub trait LiquidityPoolTrait {
 
     fn version() -> u32;
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
-    fn set_rewards_config(e: Env, expired_at: u64, amount: i128);
+    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, amount: i128);
+    fn get_rewards_expiration(e: Env) -> u64;
+    fn get_rewards_accumulated(e: Env) -> i128;
+    fn get_user_reward(e: Env, user: Address) -> i128;
     fn claim(e: Env, user: Address) -> i128;
 }
 
@@ -71,6 +76,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         token_a: Address,
         token_b: Address,
         reward_token: Address,
+        reward_storage: Address,
     ) {
         if has_admin(&e) {
             panic!("already initialized")
@@ -93,6 +99,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         storage::put_token_a(&e, token_a);
         storage::put_token_b(&e, token_b);
         storage::put_reward_token(&e, reward_token);
+        storage::put_reward_storage(&e, reward_storage);
         storage::put_token_share(&e, share_contract.try_into().unwrap());
         storage::put_reserve_a(&e, 0);
         storage::put_reserve_b(&e, 0);
@@ -314,10 +321,12 @@ impl LiquidityPoolTrait for LiquidityPool {
 
     fn set_rewards_config(
         e: Env,
+        admin: Address,
         expired_at: u64, // timestamp
         amount: i128,    // value with 7 decimal places. example: 600_0000000
     ) {
-        require_admin(&e);
+        admin.require_auth();
+        check_admin(&e, &admin);
 
         rewards_manager::update_rewards_data(&e);
 
@@ -327,6 +336,18 @@ impl LiquidityPoolTrait for LiquidityPool {
         };
         storage::bump_instance(&e);
         rewards_storage::set_pool_reward_config(&e, &config);
+    }
+
+    fn get_rewards_expiration(e: Env) -> u64 {
+        get_pool_reward_config(&e).expired_at
+    }
+
+    fn get_rewards_accumulated(e: Env) -> i128 {
+        get_pool_reward_data(&e).accumulated
+    }
+
+    fn get_user_reward(e: Env, user: Address) -> i128 {
+        rewards_manager::get_amount_to_claim(&e, &user)
     }
 
     fn claim(e: Env, user: Address) -> i128 {

@@ -6,6 +6,7 @@ use crate::token::Client;
 use crate::{storage, token};
 use cast::i128;
 use soroban_sdk::{Address, Env};
+use crate::storage::get_reward_storage;
 
 pub fn update_rewards_data(e: &Env) -> PoolRewardData {
     let config = get_pool_reward_config(e);
@@ -74,6 +75,13 @@ pub fn update_user_reward(e: &Env, pool_data: &PoolRewardData, user: &Address) -
     }
 }
 
+pub fn get_amount_to_claim(e: &Env, user: &Address) -> i128 {
+    // update pool data & calculate reward
+    let pool_data = update_rewards_data(e);
+    let user_reward = update_user_reward(e, &pool_data, user);
+    user_reward.to_claim
+}
+
 pub fn claim_reward(e: &Env, user: &Address) -> i128 {
     // update pool data & calculate reward
     let pool_data = update_rewards_data(e);
@@ -82,7 +90,12 @@ pub fn claim_reward(e: &Env, user: &Address) -> i128 {
 
     // transfer reward
     let reward_token = storage::get_reward_token(e);
-    Client::new(e, &reward_token).transfer(&e.current_contract_address(), &user, &reward_amount);
+    Client::new(e, &reward_token).transfer_from(
+        &e.current_contract_address(),
+        &get_reward_storage(e),
+        &user,
+        &reward_amount
+    );
 
     // set available reward to zero
     let new_data = UserRewardData {

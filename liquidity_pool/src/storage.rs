@@ -2,7 +2,6 @@ use crate::constants::{
     INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT,
     PERSISTENT_LIFETIME_THRESHOLD,
 };
-use crate::token;
 use soroban_sdk::{contracttype, Address, Env, IntoVal, Val};
 
 #[derive(Clone)]
@@ -11,6 +10,7 @@ pub enum DataKey {
     TokenA,
     TokenB,
     RewardToken,
+    RewardStorage,
     TokenShare,
     ReserveA,
     ReserveB,
@@ -50,6 +50,11 @@ pub fn get_reward_token(e: &Env) -> Address {
     e.storage().instance().get(&DataKey::RewardToken).unwrap()
 }
 
+pub fn get_reward_storage(e: &Env) -> Address {
+    bump_instance(e);
+    e.storage().instance().get(&DataKey::RewardStorage).unwrap()
+}
+
 pub fn get_token_share(e: &Env) -> Address {
     bump_instance(e);
     e.storage().instance().get(&DataKey::TokenShare).unwrap()
@@ -78,6 +83,11 @@ pub fn put_token_b(e: &Env, contract: Address) {
 pub fn put_reward_token(e: &Env, contract: Address) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::RewardToken, &contract);
+}
+
+pub fn put_reward_storage(e: &Env, contract: Address) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::RewardStorage, &contract);
 }
 
 pub fn put_token_share(e: &Env, contract: Address) {
