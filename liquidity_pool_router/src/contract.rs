@@ -1,8 +1,11 @@
-use soroban_sdk::{Address, BytesN, contract, contractimpl, Env, Vec};
 use crate::admin::{get_admin, has_admin, require_admin, set_admin};
 use crate::pool_contract::LiquidityPoolClient;
-use crate::storage::{get_pool_hash, get_pool_id, get_pools_list, get_reward_token, get_token_hash, has_pool, put_pool, set_pool_hash, set_reward_token, set_token_hash};
+use crate::storage::{
+    get_pool_hash, get_pool_id, get_pools_list, get_reward_token, get_token_hash, has_pool,
+    put_pool, set_pool_hash, set_reward_token, set_token_hash,
+};
 use crate::token;
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, Symbol, Vec};
 
 pub trait LiquidityPoolRouterTrait {
     fn init_pool(e: Env, token_a: Address, token_b: Address) -> Address;
@@ -55,9 +58,20 @@ pub trait LiquidityPoolRouterTrait {
 
     // get pool reserves amount. it may differ from pool balance
     fn get_reserves(e: Env, token_a: Address, token_b: Address) -> (i128, i128);
-    fn set_rewards_config(e: Env, token_a: Address, token_b: Address, admin: Address, expired_at: u64, amount: i128);
-    fn get_rewards_expiration(e: Env, token_a: Address, token_b: Address) -> u64;
-    fn get_rewards_accumulated(e: Env, token_a: Address, token_b: Address) -> i128;
+    fn set_rewards_config(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        admin: Address,
+        expired_at: u64,
+        amount: i128,
+    );
+    fn get_rewards_info(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        user: Address,
+    ) -> Map<Symbol, i128>;
     fn get_user_reward(e: Env, token_a: Address, token_b: Address, user: Address) -> i128;
     fn claim(e: Env, token_a: Address, token_b: Address, user: Address) -> i128;
 }
@@ -222,8 +236,14 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         LiquidityPoolClient::new(&e, &pool_id).get_rsrvs()
     }
 
-
-    fn set_rewards_config(e: Env, token_a: Address, token_b: Address, admin: Address, expired_at: u64, amount: i128) {
+    fn set_rewards_config(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        admin: Address,
+        expired_at: u64,
+        amount: i128,
+    ) {
         admin.require_auth();
         let (a, b) = crate::utils::sort(&token_a, &token_b);
         let (pool_exists, pool_id) = Self::get_pool(e.clone(), a, b);
@@ -233,24 +253,18 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         LiquidityPoolClient::new(&e, &pool_id).set_rewards_config(&admin, &expired_at, &amount)
     }
 
-
-    fn get_rewards_expiration(e: Env, token_a: Address, token_b: Address) -> u64 {
+    fn get_rewards_info(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        user: Address,
+    ) -> Map<Symbol, i128> {
         let (a, b) = crate::utils::sort(&token_a, &token_b);
         let (pool_exists, pool_id) = Self::get_pool(e.clone(), a, b);
         if !pool_exists {
             panic!("pool not exists")
         }
-        LiquidityPoolClient::new(&e, &pool_id).get_rewards_expiration()
-    }
-
-
-    fn get_rewards_accumulated(e: Env, token_a: Address, token_b: Address) -> i128 {
-        let (a, b) = crate::utils::sort(&token_a, &token_b);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), a, b);
-        if !pool_exists {
-            panic!("pool not exists")
-        }
-        LiquidityPoolClient::new(&e, &pool_id).get_rewards_accumulated()
+        LiquidityPoolClient::new(&e, &pool_id).get_rewards_info(&user)
     }
 
     fn get_user_reward(e: Env, token_a: Address, token_b: Address, user: Address) -> i128 {
@@ -275,7 +289,7 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
             &e.current_contract_address(),
             &pool_id,
             &reward_amount,
-            &(e.ledger().sequence() + 1)
+            &(e.ledger().sequence() + 1),
         );
         pool_client.claim(&user)
     }

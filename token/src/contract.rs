@@ -2,7 +2,10 @@
 //! interface.
 use crate::admin::{has_administrator, read_administrator, write_administrator};
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
-use crate::balance::{read_balance, receive_balance, spend_balance, increase_total_balance, decrease_total_balance, read_total_balance, write_total_balance};
+use crate::balance::{
+    decrease_total_balance, increase_total_balance, read_balance, read_total_balance,
+    receive_balance, spend_balance, write_total_balance,
+};
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
 use crate::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
 use soroban_sdk::token::{self, Interface as _};

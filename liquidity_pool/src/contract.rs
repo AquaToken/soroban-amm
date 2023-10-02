@@ -1,12 +1,14 @@
 use crate::admin::{check_admin, has_admin, require_admin, set_admin};
 use crate::rewards::manager as rewards_manager;
 use crate::rewards::storage as rewards_storage;
+use crate::rewards::storage::{get_pool_reward_config, get_pool_reward_data};
 use crate::token::create_contract;
 use crate::{pool, storage, token};
 use cast::i128 as to_i128;
 use num_integer::Roots;
-use soroban_sdk::{contract, contractimpl, contractmeta, Address, BytesN, Env, IntoVal};
-use crate::rewards::storage::{get_pool_reward_config, get_pool_reward_data};
+use soroban_sdk::{
+    contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol,
+};
 
 // Metadata that is added on to the WASM custom section
 contractmeta!(
@@ -61,8 +63,7 @@ pub trait LiquidityPoolTrait {
     fn version() -> u32;
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
     fn set_rewards_config(e: Env, admin: Address, expired_at: u64, amount: i128);
-    fn get_rewards_expiration(e: Env) -> u64;
-    fn get_rewards_accumulated(e: Env) -> i128;
+    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
     fn get_user_reward(e: Env, user: Address) -> i128;
     fn claim(e: Env, user: Address) -> i128;
 }
@@ -338,12 +339,21 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards_storage::set_pool_reward_config(&e, &config);
     }
 
-    fn get_rewards_expiration(e: Env) -> u64 {
-        get_pool_reward_config(&e).expired_at
-    }
-
-    fn get_rewards_accumulated(e: Env) -> i128 {
-        get_pool_reward_data(&e).accumulated
+    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
+        let config = get_pool_reward_config(&e);
+        let pool_data = rewards_manager::update_rewards_data(&e);
+        let user_data = rewards_manager::update_user_reward(&e, &pool_data, &user);
+        let mut result = Map::new(&e);
+        result.set(symbol_short!("tps"), to_i128(config.tps));
+        result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
+        result.set(symbol_short!("acc"), to_i128(pool_data.accumulated));
+        result.set(symbol_short!("last_time"), to_i128(pool_data.last_time));
+        result.set(
+            symbol_short!("pool_acc"),
+            to_i128(user_data.pool_accumulated),
+        );
+        result.set(symbol_short!("to_claim"), to_i128(user_data.to_claim));
+        result
     }
 
     fn get_user_reward(e: Env, user: Address) -> i128 {

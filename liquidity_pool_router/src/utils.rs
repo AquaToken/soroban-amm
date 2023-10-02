@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, Bytes, BytesN, Env};
 use soroban_sdk::xdr::ToXdr;
+use soroban_sdk::{Address, Bytes, BytesN, Env};
 
 pub fn sort(a: &Address, b: &Address) -> (Address, Address) {
     if a < b {

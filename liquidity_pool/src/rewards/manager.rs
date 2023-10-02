@@ -2,11 +2,11 @@ use crate::rewards::storage::{
     get_pool_reward_config, get_pool_reward_data, get_user_reward_data, set_pool_reward_data,
     set_user_reward_data, PoolRewardData, UserRewardData,
 };
+use crate::storage::get_reward_storage;
 use crate::token::Client;
 use crate::{storage, token};
 use cast::i128;
 use soroban_sdk::{Address, Env};
-use crate::storage::get_reward_storage;
 
 pub fn update_rewards_data(e: &Env) -> PoolRewardData {
     let config = get_pool_reward_config(e);
@@ -94,7 +94,7 @@ pub fn claim_reward(e: &Env, user: &Address) -> i128 {
         &e.current_contract_address(),
         &get_reward_storage(e),
         &user,
-        &reward_amount
+        &reward_amount,
     );
 
     // set available reward to zero

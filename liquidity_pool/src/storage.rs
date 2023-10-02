@@ -87,7 +87,9 @@ pub fn put_reward_token(e: &Env, contract: Address) {
 
 pub fn put_reward_storage(e: &Env, contract: Address) {
     bump_instance(e);
-    e.storage().instance().set(&DataKey::RewardStorage, &contract);
+    e.storage()
+        .instance()
+        .set(&DataKey::RewardStorage, &contract);
 }
 
 pub fn put_token_share(e: &Env, contract: Address) {

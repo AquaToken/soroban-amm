@@ -1,10 +1,15 @@
+use crate::storage_types::{
+    DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT,
+    POOL_LIFETIME_THRESHOLD,
+};
 use soroban_sdk::{Address, BytesN, Env, Vec};
-use crate::storage_types::{DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT, POOL_LIFETIME_THRESHOLD};
 
 // pool hash
 
 pub fn get_pool_hash(e: &Env) -> BytesN<32> {
-    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     let hash = e.storage().instance().get(&DataKey::PoolHash);
     match hash {
         Some(value) => value,
@@ -15,14 +20,18 @@ pub fn get_pool_hash(e: &Env) -> BytesN<32> {
 }
 
 pub fn set_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
-    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&DataKey::PoolHash, pool_hash)
 }
 
 // token hash
 
 pub fn get_token_hash(e: &Env) -> BytesN<32> {
-    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     let hash = e.storage().instance().get(&DataKey::TokenHash);
     match hash {
         Some(value) => value,
@@ -33,14 +42,18 @@ pub fn get_token_hash(e: &Env) -> BytesN<32> {
 }
 
 pub fn set_token_hash(e: &Env, token_hash: &BytesN<32>) {
-    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&DataKey::TokenHash, token_hash)
 }
 
 // reward token
 
 pub fn get_reward_token(e: &Env) -> Address {
-    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     let reward_token = e.storage().instance().get(&DataKey::RewardToken);
     match reward_token {
         Some(value) => value,
@@ -51,22 +64,30 @@ pub fn get_reward_token(e: &Env) -> Address {
 }
 
 pub fn set_reward_token(e: &Env, reward_token: &Address) {
-    e.storage().instance().bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    e.storage().instance().set(&DataKey::RewardToken, reward_token)
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage()
+        .instance()
+        .set(&DataKey::RewardToken, reward_token)
 }
 
 // pool
 
 pub fn get_pool_id(e: &Env, salt: &BytesN<32>) -> Address {
     let key = DataKey::Pool(salt.clone());
-    e.storage().persistent().bump(&key, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
+    e.storage()
+        .persistent()
+        .bump(&key, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
     e.storage().persistent().get(&key).unwrap()
 }
 
 pub fn put_pool(e: &Env, salt: &BytesN<32>, pool: &Address) {
     let key = DataKey::Pool(salt.clone());
     e.storage().persistent().set(&key, pool);
-    e.storage().persistent().bump(&key, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
+    e.storage()
+        .persistent()
+        .bump(&key, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
 }
 
 pub fn has_pool(e: &Env, salt: &BytesN<32>) -> bool {
@@ -78,9 +99,11 @@ pub fn add_pool_to_list(e: &Env, pool: &Address) {
     let pairs_list: Option<Vec<Address>> = e.storage().persistent().get(&DataKey::PoolsList);
     match pairs_list {
         Some(value) => {
-            e.storage()
-                .persistent()
-                .bump(&DataKey::PoolsList, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
+            e.storage().persistent().bump(
+                &DataKey::PoolsList,
+                POOL_LIFETIME_THRESHOLD,
+                POOL_BUMP_AMOUNT,
+            );
             let mut new_value = value.clone();
             new_value.append(&Vec::from_array(&e, [pool.clone()]));
             e.storage()
@@ -97,8 +120,10 @@ pub fn add_pool_to_list(e: &Env, pool: &Address) {
 }
 
 pub fn get_pools_list(e: &Env) -> Vec<Address> {
-    e.storage()
-        .persistent()
-        .bump(&DataKey::PoolsList, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
+    e.storage().persistent().bump(
+        &DataKey::PoolsList,
+        POOL_LIFETIME_THRESHOLD,
+        POOL_BUMP_AMOUNT,
+    );
     e.storage().persistent().get(&DataKey::PoolsList).unwrap()
 }
