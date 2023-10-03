@@ -114,6 +114,15 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
                 &reward_token,
                 &e.current_contract_address(),
             );
+
+            e.events().publish(
+                (
+                    Symbol::new(&e, "init_pool"),
+                    token_a.clone(),
+                    token_b.clone(),
+                ),
+                (pool_contract_id,),
+            );
         }
         let (_pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
         pool_id
@@ -165,8 +174,15 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
         let pool_id = get_pool_id(&e, &salt);
 
-        LiquidityPoolClient::new(&e, &pool_id)
-            .deposit(&account, &desired_a, &min_a, &desired_b, &min_b)
+        let (amount_a, amount_b) = LiquidityPoolClient::new(&e, &pool_id)
+            .deposit(&account, &desired_a, &min_a, &desired_b, &min_b);
+
+        e.events().publish(
+            (Symbol::new(&e, "deposit"), token_a, token_b, account),
+            (pool_id, amount_a, amount_b),
+        );
+
+        (amount_a, amount_b)
     }
 
     fn swap_out(
@@ -179,12 +195,20 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
     ) -> i128 {
         account.require_auth();
         let (token_a, token_b) = crate::utils::sort(&sell, &buy);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), token_a.clone(), token_b);
+        let (pool_exists, pool_id) = Self::get_pool(e.clone(), token_a.clone(), token_b.clone());
         if !pool_exists {
             panic!("pool not exists")
         }
 
-        LiquidityPoolClient::new(&e, &pool_id).swap(&account, &(buy == token_a), &out, &in_max)
+        let in_amt =
+            LiquidityPoolClient::new(&e, &pool_id).swap(&account, &(buy == token_a), &out, &in_max);
+
+        e.events().publish(
+            (Symbol::new(&e, "swap_out"), token_a, token_b, account),
+            (pool_id, sell, buy, out, in_amt),
+        );
+
+        in_amt
     }
 
     fn estimate_swap_out(e: Env, sell: Address, buy: Address, out: i128) -> i128 {
@@ -207,7 +231,7 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         min_b: i128,
     ) -> (i128, i128) {
         account.require_auth();
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
+        let (pool_exists, pool_id) = Self::get_pool(e.clone(), token_a.clone(), token_b.clone());
         if !pool_exists {
             panic!("pool not exists")
         }
@@ -219,6 +243,12 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         if amount_a < min_a || amount_b < min_b {
             panic!("min not satisfied");
         }
+
+        e.events().publish(
+            (Symbol::new(&e, "withdraw"), token_a, token_b, account),
+            (pool_id, share_amount, amount_a, amount_b),
+        );
+
         (amount_a, amount_b)
     }
 
@@ -250,7 +280,14 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         if !pool_exists {
             panic!("pool not exists")
         }
-        LiquidityPoolClient::new(&e, &pool_id).set_rewards_config(&admin, &expired_at, &amount)
+        LiquidityPoolClient::new(&e, &pool_id).set_rewards_config(&admin, &expired_at, &amount);
+
+        let reward_token = get_reward_token(&e);
+
+        e.events().publish(
+            (Symbol::new(&e, "set_rewards_config"), token_a, token_b),
+            (pool_id, reward_token, amount, expired_at),
+        );
     }
 
     fn get_rewards_info(
@@ -283,7 +320,8 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
             panic!("pool not exists")
         }
         let pool_client = LiquidityPoolClient::new(&e, &pool_id);
-        let token_client = token::token::Client::new(&e, &get_reward_token(&e));
+        let reward_token = get_reward_token(&e);
+        let token_client = token::token::Client::new(&e, &reward_token);
         let reward_amount = pool_client.get_user_reward(&user);
         token_client.approve(
             &e.current_contract_address(),
@@ -291,7 +329,14 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
             &reward_amount,
             &(e.ledger().sequence() + 1),
         );
-        pool_client.claim(&user)
+        let claimed_amt = pool_client.claim(&user);
+
+        e.events().publish(
+            (Symbol::new(&e, "claim"), token_a, token_b, user),
+            (pool_id, reward_token, claimed_amt),
+        );
+
+        claimed_amt
     }
 }
 
@@ -304,7 +349,7 @@ impl UpgradeableContract for LiquidityPoolRouter {
     }
 
     fn version() -> u32 {
-        5
+        7
     }
 
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
