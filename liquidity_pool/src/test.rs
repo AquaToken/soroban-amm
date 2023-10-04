@@ -19,7 +19,7 @@ fn create_liqpool_contract<'a>(
     token_reward: &Address,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
-    liqpool.initialize(admin, token_wasm_hash, token_a, token_b, token_reward);
+    liqpool.initialize(admin, token_wasm_hash, token_a, token_b, token_reward, &liqpool.address);
     liqpool
 }
 
@@ -71,7 +71,8 @@ fn test() {
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
     let total_reward_1 = 10_5000000_i128 * 60;
-    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(60), &total_reward_1);
+    liqpool.set_rewards_config(&user1, &e.ledger().timestamp().saturating_add(60), &total_reward_1);
+    token_reward.approve(&liqpool.address, &liqpool.address, &1_000_000_0000000, &99999);
 
     let token_share = token::Client::new(&e, &liqpool.share_id());
 
@@ -111,10 +112,10 @@ fn test() {
 
     // more rewards added with different configs
     let total_reward_2 = 20_0000000_i128 * 100;
-    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(100), &total_reward_2);
+    liqpool.set_rewards_config(&user1, &e.ledger().timestamp().saturating_add(100), &total_reward_2);
     jump(&e, 105);
     let total_reward_3 = 6_0000000_i128 * 50;
-    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(50), &total_reward_3);
+    liqpool.set_rewards_config(&user1, &e.ledger().timestamp().saturating_add(50), &total_reward_3);
     jump(&e, 500);
     // two rewards available for the user
     assert_eq!(liqpool.claim(&user1), total_reward_2 + total_reward_3);
@@ -215,7 +216,8 @@ fn test_two_users_rewards() {
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
     let total_reward_1 = 10_5000000_i128 * 60;
-    liqpool.set_rewards_config(&e.ledger().timestamp().saturating_add(60), &total_reward_1);
+    liqpool.set_rewards_config(&user1, &e.ledger().timestamp().saturating_add(60), &total_reward_1);
+    token_reward.approve(&liqpool.address, &liqpool.address, &1_000_000_0000000, &99999);
 
     for user in [&user1, &user2] {
         token1.mint(user, &1000);
