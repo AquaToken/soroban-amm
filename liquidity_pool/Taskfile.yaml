@@ -1,0 +1,28 @@
+version: '3'
+tasks:
+  clean:
+    cmd: cargo clean
+
+  fmt:
+    cmd: cargo fmt --all
+
+  build:
+    cmds:
+      - soroban contract build
+      - ls -l target/wasm32-unknown-unknown/release/*.wasm
+
+  test:
+    deps:
+      - build
+    cmd: cargo test
+
+  default:
+    cmds:
+      - task: build
+
+  all:
+    cmds:
+      - task: clean
+      - task: fmt
+      - task: build
+      - task: test
