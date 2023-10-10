@@ -12,6 +12,7 @@ pub struct PoolRewardConfig {
 #[derive(Clone)]
 #[contracttype]
 pub struct PoolRewardData {
+    pub block: u64,
     pub accumulated: i128,
     pub last_time: u64,
 }
@@ -21,6 +22,7 @@ pub struct PoolRewardData {
 pub struct UserRewardData {
     pub pool_accumulated: i128,
     pub to_claim: i128,
+    pub last_block: u64,
 }
 
 // pool reward config

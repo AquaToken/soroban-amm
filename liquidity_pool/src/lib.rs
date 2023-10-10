@@ -4,6 +4,7 @@ mod admin;
 mod test;
 mod token;
 
+mod assertions;
 mod constants;
 mod contract;
 mod pool;

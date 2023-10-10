@@ -1,7 +1,7 @@
 use crate::admin::{check_admin, has_admin, require_admin, set_admin};
 use crate::rewards::manager as rewards_manager;
 use crate::rewards::storage as rewards_storage;
-use crate::rewards::storage::{get_pool_reward_config, get_pool_reward_data};
+use crate::rewards::storage::get_pool_reward_config;
 use crate::token::create_contract;
 use crate::{pool, storage, token};
 use cast::i128 as to_i128;
@@ -114,6 +114,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards_storage::set_pool_reward_data(
             &e,
             &rewards_storage::PoolRewardData {
+                block: 0,
                 accumulated: 0,
                 last_time: 0,
             },
