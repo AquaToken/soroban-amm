@@ -6,8 +6,8 @@ use crate::rewards::storage::{
 use crate::storage::{get_reward_storage, DataKey};
 use crate::token::Client;
 use crate::{storage, token};
-use cast::i128;
-use soroban_sdk::{Address, Env};
+use cast::i128 as to_i128;
+use soroban_sdk::{Address, Env, Map};
 
 pub fn update_reward_inv(e: &Env, accumulated: i128) {
     let total_shares = token::get_total_shares(e);
@@ -18,19 +18,48 @@ pub fn update_reward_inv(e: &Env, accumulated: i128) {
     };
 
     let data = get_pool_reward_data(e);
-    let key = DataKey::RewardInvData(data.block);
-
-    e.storage().persistent().set(&key, &reward_per_share);
-    e.storage()
-        .persistent()
-        .bump(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+    add_reward_inv(e, data.block, reward_per_share as u64);
 }
 
-pub fn get_reward_inv(e: &Env, block: u64) -> i128 {
-    // todo: optimize memory usage with vector/hashmap
-    let key = DataKey::RewardInvData(block);
+pub fn add_reward_inv(e: &Env, block: u64, value: u64) {
+    // todo: optimize map key/value size
+    let mut reward_inv_data: Map<u64, u64> = e
+        .storage()
+        .persistent()
+        .get(&DataKey::RewardInvData)
+        .unwrap();
+    reward_inv_data.set(block, value);
+    set_reward_inv(e, &reward_inv_data);
+    e.storage().persistent().bump(
+        &DataKey::RewardInvData,
+        PERSISTENT_LIFETIME_THRESHOLD,
+        PERSISTENT_BUMP_AMOUNT,
+    );
+}
+
+pub fn set_reward_inv(e: &Env, value: &Map<u64, u64>) {
+    e.storage().persistent().set(&DataKey::RewardInvData, value);
+    e.storage().persistent().bump(
+        &DataKey::RewardInvData,
+        PERSISTENT_LIFETIME_THRESHOLD,
+        PERSISTENT_BUMP_AMOUNT,
+    );
+}
+
+pub fn get_reward_inv(e: &Env) -> Map<u64, u64> {
+    // todo: optimize memory usage
     // todo: do we need default here?
-    e.storage().persistent().get(&key).unwrap()
+    let reward_inv_data = e
+        .storage()
+        .persistent()
+        .get(&DataKey::RewardInvData)
+        .unwrap();
+    e.storage().persistent().bump(
+        &DataKey::RewardInvData,
+        PERSISTENT_LIFETIME_THRESHOLD,
+        PERSISTENT_BUMP_AMOUNT,
+    );
+    reward_inv_data
 }
 
 pub fn update_rewards_data(e: &Env) -> PoolRewardData {
@@ -46,7 +75,7 @@ pub fn update_rewards_data(e: &Env) -> PoolRewardData {
     return if now < config.expired_at {
         let reward_timestamp = now;
 
-        let generated_tokens = i128(reward_timestamp - data.last_time) * i128(config.tps);
+        let generated_tokens = to_i128(reward_timestamp - data.last_time) * to_i128(config.tps);
         let new_data = PoolRewardData {
             block: data.block + 1,
             accumulated: data.accumulated + generated_tokens,
@@ -70,7 +99,7 @@ pub fn update_rewards_data(e: &Env) -> PoolRewardData {
             // catchup up to config expiration
             let reward_timestamp = config.expired_at;
 
-            let generated_tokens = i128(reward_timestamp - data.last_time) * i128(config.tps);
+            let generated_tokens = to_i128(reward_timestamp - data.last_time) * to_i128(config.tps);
             let catchup_data = PoolRewardData {
                 block: data.block + 1,
                 accumulated: data.accumulated + generated_tokens,
@@ -94,17 +123,16 @@ pub fn update_rewards_data(e: &Env) -> PoolRewardData {
 
 pub fn calculate_user_reward(
     e: &Env,
-    user: &Address,
     start_block: u64,
     end_block: u64,
     user_share: i128,
 ) -> i128 {
     let mut reward_inv = 0;
     for block in start_block..end_block + 1 {
-        let block_inv = get_reward_inv(e, block);
+        let block_inv = get_reward_inv(e).get(block).unwrap();
         reward_inv += block_inv;
     }
-    reward_inv * user_share
+    (reward_inv) as i128 * user_share
 }
 
 pub fn update_user_reward(e: &Env, pool_data: &PoolRewardData, user: &Address) -> UserRewardData {
@@ -128,7 +156,6 @@ pub fn update_user_reward(e: &Env, pool_data: &PoolRewardData, user: &Address) -
 
         let reward = calculate_user_reward(
             e,
-            user,
             user_data.last_block + 1,
             pool_data.block,
             user_shares,

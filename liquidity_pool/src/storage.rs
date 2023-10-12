@@ -18,7 +18,7 @@ pub enum DataKey {
     PoolRewardConfig,
     PoolRewardData,
     UserRewardData(Address),
-    RewardInvData(u64),
+    RewardInvData,
 }
 
 pub fn bump_instance(e: &Env) {

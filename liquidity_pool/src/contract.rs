@@ -104,6 +104,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         storage::put_token_share(&e, share_contract.try_into().unwrap());
         storage::put_reserve_a(&e, 0);
         storage::put_reserve_b(&e, 0);
+        rewards_manager::set_reward_inv(&e, &Map::from_array(&e, [(0_u64, 0_u64)]));
         rewards_storage::set_pool_reward_config(
             &e,
             &rewards_storage::PoolRewardConfig {
@@ -353,6 +354,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             symbol_short!("pool_acc"),
             to_i128(user_data.pool_accumulated),
         );
+        result.set(symbol_short!("block"), to_i128(pool_data.block));
+        result.set(symbol_short!("usr_block"), to_i128(user_data.last_block));
         result.set(symbol_short!("to_claim"), to_i128(user_data.to_claim));
         result
     }
