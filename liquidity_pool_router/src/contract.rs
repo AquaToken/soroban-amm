@@ -1,11 +1,11 @@
 use crate::admin::{get_admin, has_admin, require_admin, set_admin};
 use crate::pool_contract::LiquidityPoolClient;
 use crate::storage::{
-    get_pool_hash, get_pool_id, get_pools_list, get_reward_token, get_token_hash, has_pool,
-    put_pool, set_pool_hash, set_reward_token, set_token_hash,
+    get_constant_product_pool_hash, get_pool_id, get_pools_list, get_reward_token, get_token_hash,
+    has_pool, put_pool, set_constant_product_pool_hash, set_reward_token, set_token_hash,
 };
 use crate::token;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, Symbol, Vec};
 
 pub trait LiquidityPoolRouterTrait {
     fn init_pool(e: Env, token_a: Address, token_b: Address) -> Address;
@@ -90,7 +90,7 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
     fn init_pool(e: Env, token_a: Address, token_b: Address) -> Address {
         let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
         if !has_pool(&e, &salt) {
-            let liquidity_pool_wasm_hash = get_pool_hash(&e);
+            let liquidity_pool_wasm_hash = get_constant_product_pool_hash(&e);
             let token_wasm_hash = get_token_hash(&e);
             let reward_token = get_reward_token(&e);
             let admin = get_admin(&e);
@@ -106,7 +106,8 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
             //  this is unsafe as we can store limited amount of records
             // add_pool_to_list(&e, &get_pool_id(&e, &salt));
 
-            LiquidityPoolClient::new(&e, &pool_contract_id).initialize(
+            let liq_pool_client = LiquidityPoolClient::new(&e, &pool_contract_id);
+            liq_pool_client.initialize(
                 &admin,
                 &token_wasm_hash,
                 &token_a,
@@ -114,6 +115,11 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
                 &reward_token,
                 &e.current_contract_address(),
             );
+            // fee fraction is hardcoded so far.
+            //  we'll need to add support for multiple pools and allow different types of them
+            //  pools can be: constant product & stable swap.
+            //      constant product: 0.1%, 0.3%, 1%
+            liq_pool_client.initialize_fee_fraction(&30);
 
             e.events().publish(
                 (
@@ -121,7 +127,7 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
                     token_a.clone(),
                     token_b.clone(),
                 ),
-                (pool_contract_id,),
+                (pool_contract_id, symbol_short!("constant"), 30),
             );
         }
         let (_pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
@@ -133,12 +139,12 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
     }
 
     fn get_pool_hash(e: Env) -> BytesN<32> {
-        get_pool_hash(&e)
+        get_constant_product_pool_hash(&e)
     }
 
     fn set_pool_hash(e: Env, new_hash: BytesN<32>) {
         require_admin(&e);
-        set_pool_hash(&e, &new_hash);
+        set_constant_product_pool_hash(&e, &new_hash);
     }
 
     fn get_token_hash(e: Env) -> BytesN<32> {

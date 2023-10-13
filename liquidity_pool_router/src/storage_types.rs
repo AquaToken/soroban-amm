@@ -14,6 +14,6 @@ pub enum DataKey {
     Admin,
     TokenHash,
     RewardToken,
-    PoolHash,
+    ConstantPoolHash,
     PoolsList, // temp key to handle list of pools to upgrade them
 }

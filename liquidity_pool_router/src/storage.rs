@@ -6,11 +6,11 @@ use soroban_sdk::{Address, BytesN, Env, Vec};
 
 // pool hash
 
-pub fn get_pool_hash(e: &Env) -> BytesN<32> {
+pub fn get_constant_product_pool_hash(e: &Env) -> BytesN<32> {
     e.storage()
         .instance()
         .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    let hash = e.storage().instance().get(&DataKey::PoolHash);
+    let hash = e.storage().instance().get(&DataKey::ConstantPoolHash);
     match hash {
         Some(value) => value,
         None => {
@@ -19,11 +19,13 @@ pub fn get_pool_hash(e: &Env) -> BytesN<32> {
     }
 }
 
-pub fn set_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
+pub fn set_constant_product_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
     e.storage()
         .instance()
         .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    e.storage().instance().set(&DataKey::PoolHash, pool_hash)
+    e.storage()
+        .instance()
+        .set(&DataKey::ConstantPoolHash, pool_hash)
 }
 
 // token hash

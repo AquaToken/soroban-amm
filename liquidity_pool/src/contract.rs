@@ -13,7 +13,7 @@ use soroban_sdk::{
 // Metadata that is added on to the WASM custom section
 contractmeta!(
     key = "Description",
-    val = "Constant product AMM with a .3% swap fee"
+    val = "Constant product AMM with configurable swap fee"
 );
 
 #[contract]
@@ -31,6 +31,7 @@ pub trait LiquidityPoolTrait {
         reward_token: Address,
         reward_storage: Address,
     );
+    fn initialize_fee_fraction(e: Env, fee_fraction: u32);
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
@@ -66,6 +67,7 @@ pub trait LiquidityPoolTrait {
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
     fn get_user_reward(e: Env, user: Address) -> i128;
     fn claim(e: Env, user: Address) -> i128;
+    fn get_fee_fraction(e: Env) -> u32;
 }
 
 #[contractimpl]
@@ -120,6 +122,14 @@ impl LiquidityPoolTrait for LiquidityPool {
                 last_time: 0,
             },
         );
+    }
+
+    fn initialize_fee_fraction(e: Env, fee_fraction: u32) {
+        // 0.01% = 1; 1% = 100; 0.3% = 30
+        if fee_fraction > 9999 {
+            panic!("fee cannot be equal or greater than 100%");
+        }
+        storage::put_fee_fraction(&e, fee_fraction);
     }
 
     fn share_id(e: Env) -> Address {
@@ -193,9 +203,11 @@ impl LiquidityPoolTrait for LiquidityPool {
             (reserve_a, reserve_b)
         };
 
+        let fee_fraction = storage::get_fee_fraction(&e);
+
         // First calculate how much needs to be sold to buy amount out from the pool
-        let n = reserve_sell * out * 1000;
-        let d = (reserve_buy - out) * 997;
+        let n = reserve_sell * out * 10000;
+        let d = (reserve_buy - out) * (10000 - fee_fraction as i128);
         let sell_amount = (n / d) + 1;
         if sell_amount > in_max {
             panic!("in amount is over max")
@@ -219,8 +231,8 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by 1000 to avoid fractions
-        let residue_numerator = 997;
-        let residue_denominator = 1000;
+        let residue_numerator = 10000 - fee_fraction as i128;
+        let residue_denominator = 10000;
         let zero = 0;
 
         let new_invariant_factor = |balance: i128, reserve: i128, out: i128| {
@@ -263,9 +275,11 @@ impl LiquidityPoolTrait for LiquidityPool {
             (reserve_a, reserve_b)
         };
 
+        let fee_fraction = storage::get_fee_fraction(&e);
+
         // Calculate how much needs to be sold to buy amount out from the pool
-        let n = reserve_sell * out * 1000;
-        let d = (reserve_buy - out) * 997;
+        let n = reserve_sell * out * 10000;
+        let d = (reserve_buy - out) * (10000 - fee_fraction as i128);
         let sell_amount = (n / d) + 1;
         sell_amount
     }
@@ -368,5 +382,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reward = rewards_manager::claim_reward(&e, &user);
         rewards_storage::bump_user_reward_data(&e, &user);
         reward
+    }
+
+    fn get_fee_fraction(e: Env) -> u32 {
+        // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
+        storage::get_fee_fraction(&e)
     }
 }

@@ -121,12 +121,7 @@ pub fn update_rewards_data(e: &Env) -> PoolRewardData {
     };
 }
 
-pub fn calculate_user_reward(
-    e: &Env,
-    start_block: u64,
-    end_block: u64,
-    user_share: i128,
-) -> i128 {
+pub fn calculate_user_reward(e: &Env, start_block: u64, end_block: u64, user_share: i128) -> i128 {
     let mut reward_inv = 0;
     for block in start_block..end_block + 1 {
         let block_inv = get_reward_inv(e).get(block).unwrap();
@@ -154,12 +149,8 @@ pub fn update_user_reward(e: &Env, pool_data: &PoolRewardData, user: &Address) -
             return new_data;
         }
 
-        let reward = calculate_user_reward(
-            e,
-            user_data.last_block + 1,
-            pool_data.block,
-            user_shares,
-        );
+        let reward =
+            calculate_user_reward(e, user_data.last_block + 1, pool_data.block, user_shares);
         // let new_reward =
         //     (pool_data.accumulated - user_data.pool_accumulated) * user_shares / total_shares;
         let new_data = UserRewardData {

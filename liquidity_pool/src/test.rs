@@ -18,6 +18,7 @@ fn create_liqpool_contract<'a>(
     token_a: &Address,
     token_b: &Address,
     token_reward: &Address,
+    fee_fraction: u32,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize(
@@ -28,6 +29,7 @@ fn create_liqpool_contract<'a>(
         token_reward,
         &liqpool.address,
     );
+    liqpool.initialize_fee_fraction(&fee_fraction);
     liqpool
 }
 
@@ -75,6 +77,7 @@ fn test() {
         &token1.address,
         &token2.address,
         &token_reward.address,
+        30,
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
@@ -212,6 +215,64 @@ fn test() {
 }
 
 #[test]
+fn test_custom_fee() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let user1 = Address::random(&e);
+
+    token1.mint(&user1, &1000000_0000000);
+    token2.mint(&user1, &1000000_0000000);
+
+    // we're checking fraction against value required to swap 1 token
+    for fee_config in [
+        (0, 1_0101011_i128),        // 0%
+        (10, 1_0111122_i128),       // 0.1%
+        (30, 1_0131405_i128),       // 0.3%
+        (100, 1_0203041_i128),      // 1%
+        (1000, 1_1223345_i128),     // 10%
+        (3000, 1_4430015_i128),     // 30%
+        (9900, 101_0101011_i128),   // 99%
+        (9999, 10101_0101011_i128), // 99.99% - maximum fee
+    ] {
+        let liqpool = create_liqpool_contract(
+            &e,
+            &user1,
+            &install_token_wasm(&e),
+            &token1.address,
+            &token2.address,
+            &token_reward.address,
+            fee_config.0, // ten percent
+        );
+        token1.approve(&user1, &liqpool.address, &100000_0000000, &99999);
+        token2.approve(&user1, &liqpool.address, &100000_0000000, &99999);
+        liqpool.deposit(
+            &user1,
+            &100_0000000,
+            &100_0000000,
+            &100_0000000,
+            &100_0000000,
+        );
+        assert_eq!(liqpool.estimate_swap_out(&false, &1_0000000), fee_config.1,);
+        assert_eq!(
+            liqpool.swap(&user1, &false, &1_0000000, &100000_0000000),
+            fee_config.1
+        );
+    }
+}
+
+#[test]
 fn test_simple_ongoing_reward() {
     let e = Env::default();
     e.mock_all_auths();
@@ -235,6 +296,7 @@ fn test_simple_ongoing_reward() {
         &token1.address,
         &token2.address,
         &token_reward.address,
+        30,
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
@@ -294,6 +356,7 @@ fn test_simple_reward() {
         &token1.address,
         &token2.address,
         &token_reward.address,
+        30,
     );
 
     token1.mint(&user1, &1000);
@@ -363,6 +426,7 @@ fn test_two_users_rewards() {
         &token1.address,
         &token2.address,
         &token_reward.address,
+        30,
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
@@ -433,6 +497,7 @@ fn test_lazy_user_rewards() {
         &token1.address,
         &token2.address,
         &token_reward.address,
+        30,
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
@@ -507,6 +572,7 @@ fn test_deposit_ddos() {
         &token1.address,
         &token2.address,
         &token_reward.address,
+        30,
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
