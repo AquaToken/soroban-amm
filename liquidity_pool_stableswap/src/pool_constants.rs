@@ -1,13 +1,10 @@
-// # This can (and needs to) be changed at compile time
-use soroban_sdk::{Vec, vec};
-
 // pool constants
 // todo: cleanup
 // pub const N_COINS: usize = 3;  // <- change
-pub const N_COINS: usize = 2;  // <- change
+pub const N_COINS: usize = 2; // <- change
 pub const FEE_DENOMINATOR: u128 = 10 ^ 4;
 pub const LENDING_PRECISION: u128 = 10 ^ 7;
-pub const PRECISION: u128 = 10 ^ 7;  // The precision to convert to
+pub const PRECISION: u128 = 10 ^ 7; // The precision to convert to
 pub const PRECISION_MUL: [u128; N_COINS] = [1, 1];
 pub const RATES: [u128; N_COINS] = [1_0000000, 1_0000000];
 // pub const FEE_INDEX: int128 = 2;  // Which coin may potentially have fees (USDT)

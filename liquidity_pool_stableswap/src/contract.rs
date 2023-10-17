@@ -1,9 +1,10 @@
 use crate::admin::{has_admin, set_admin};
+use crate::pool_constants::{
+    FEE_DENOMINATOR, KILL_DEADLINE_DT, LENDING_PRECISION, N_COINS, PRECISION, PRECISION_MUL, RATES,
+};
 use crate::token::create_contract;
 use crate::{storage, token};
-use soroban_sdk::{contractmeta, Address, BytesN, Env, IntoVal, Vec, contractimpl, contract};
-use soroban_sdk::arbitrary::std::println;
-use crate::pool_constants::{FEE_DENOMINATOR, KILL_DEADLINE_DT, LENDING_PRECISION, N_COINS, PRECISION, PRECISION_MUL, RATES};
+use soroban_sdk::{contract, contractimpl, contractmeta, Address, BytesN, Env, IntoVal, Vec};
 
 contractmeta!(
     key = "Description",
@@ -38,10 +39,11 @@ pub trait LiquidityPoolTrait {
     fn get_virtual_price(e: Env) -> u128;
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128;
     fn add_liquidity(e: Env, user: Address, amounts: Vec<u128>, min_mint_amount: u128);
-    fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128> ) -> u128;
+    fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128>) -> u128;
     fn get_dy(e: Env, i: i128, j: i128, dx: u128) -> u128;
     fn get_dy_underlying(e: Env, i: i128, j: i128, dx: u128) -> u128;
     fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128);
+    fn remove_liquidity(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>);
 
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
@@ -88,8 +90,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         a: u128,
         fee: u128,
         admin_fee: u128,
-        reward_token: Address,
-        reward_storage: Address,
+        _reward_token: Address,
+        _reward_storage: Address,
     ) {
         if has_admin(&e) {
             panic!("already initialized")
@@ -117,11 +119,12 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // pool config
         storage::put_initial_a(&e, a);
-        storage::put_initial_a_time(&e, e.ledger().timestamp());  // todo: is it correct value?
+        storage::put_initial_a_time(&e, e.ledger().timestamp()); // todo: is it correct value?
         storage::put_future_a(&e, a);
-        storage::put_future_a_time(&e, e.ledger().timestamp());// todo: is it correct value?
+        storage::put_future_a_time(&e, e.ledger().timestamp()); // todo: is it correct value?
         storage::put_fee(&e, fee);
-        storage::put_kill_deadline(&e, e.ledger().timestamp() + KILL_DEADLINE_DT);  // todo: do we need kill deadline?
+        storage::put_kill_deadline(&e, e.ledger().timestamp() + KILL_DEADLINE_DT);
+        // todo: do we need kill deadline?
 
         // rewards_manager::set_reward_inv(&e, &Map::from_array(&e, [(0_u64, 0_u64)]));
         // rewards_storage::set_pool_reward_config(
@@ -168,7 +171,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             } else {
                 return a0 - (a0 - a1) * (now - t0) / (t1 - t0);
             }
-        } else {   // when t1 == 0 or block.timestamp >= t1
+        } else {
+            // when t1 == 0 or block.timestamp >= t1
             return a1;
         }
     }
@@ -177,7 +181,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserves = storage::get_reserves(&e);
         let mut result = Vec::from_array(&e, RATES);
         for i in 0..N_COINS as u32 {
-            result.set(i, result.get(i).unwrap() * reserves.get(i).unwrap() / LENDING_PRECISION);
+            result.set(
+                i,
+                result.get(i).unwrap() * reserves.get(i).unwrap() / LENDING_PRECISION,
+            );
         }
         return result;
     }
@@ -186,13 +193,16 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn xp_mem(e: Env, reserves: Vec<u128>) -> Vec<u128> {
         let mut result = Vec::from_array(&e, RATES);
         for i in 0..N_COINS as u32 {
-            result.set(i, result.get(i).unwrap() * reserves.get(i).unwrap() / PRECISION);
+            result.set(
+                i,
+                result.get(i).unwrap() * reserves.get(i).unwrap() / PRECISION,
+            );
         }
         return result;
     }
 
     // xp size = N_COINS
-    fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128 {
+    fn get_d(_e: Env, xp: Vec<u128>, amp: u128) -> u128 {
         let mut s = 0;
         for x in xp.clone() {
             s += x;
@@ -201,16 +211,17 @@ impl LiquidityPoolTrait for LiquidityPool {
             return 0;
         }
 
-        let mut d_prev = 0;
+        let mut d_prev;
         let mut d = s;
         let ann = amp * N_COINS as u128;
         for _i in 0..255 {
             let mut d_p = d;
             for _x in xp.clone() {
-                d_p = d_p * d / (_x * N_COINS as u128)  // If division by 0, this will be borked: only withdrawal will work. And that is good
+                d_p = d_p * d / (_x * N_COINS as u128) // If division by 0, this will be borked: only withdrawal will work. And that is good
             }
             d_prev = d;
-            d = (ann * s + d_p * N_COINS as u128) * d / ((ann - 1) * d + (N_COINS as u128 + 1) * d_p);
+            d = (ann * s + d_p * N_COINS as u128) * d
+                / ((ann - 1) * d + (N_COINS as u128 + 1) * d_p);
             // // Equality with the precision of 1
             if d > d_prev {
                 if d - d_prev <= 1 {
@@ -229,7 +240,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         Self::get_d(e.clone(), Self::xp_mem(e.clone(), balances), amp)
     }
 
-    fn get_virtual_price(e: Env) -> u128{
+    fn get_virtual_price(e: Env) -> u128 {
         // Returns portfolio virtual price (for calculating profit) scaled up by 1e7
 
         let d = Self::get_d(e.clone(), Self::xp(e.clone()), Self::a(e.clone()));
@@ -237,7 +248,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         // When balanced, D = n * x_u - total virtual value of the portfolio
         // let token_supply = self.token.totalSupply()
         let token_supply = token::get_total_shares(&e);
-        return d * PRECISION / token_supply as u128
+        return d * PRECISION / token_supply as u128;
     }
 
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128 {
@@ -258,16 +269,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
         let d1 = Self::get_d_mem(e.clone(), balances, amp);
         let token_amount = token::get_total_shares(&e);
-        let mut diff = 0;
-        if deposit {
-            diff = d1 - d0;
-        } else {
-            diff = d0 - d1;
-        }
+        let diff = if deposit { d1 - d0 } else { d0 - d1 };
         return diff * token_amount as u128 / d0;
     }
 
-    fn add_liquidity(e: Env, user: Address, amounts: Vec<u128>, min_mint_amount: u128){
+    fn add_liquidity(e: Env, user: Address, amounts: Vec<u128>, min_mint_amount: u128) {
+        user.require_auth();
         // assert not self.is_killed  // dev: is killed
 
         let mut fees: Vec<u128> = Vec::new(&e);
@@ -285,7 +292,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let mut new_balances: Vec<u128> = old_balances.clone();
         let coins = storage::get_tokens(&e);
 
-        for i in 0..N_COINS as u32{
+        for i in 0..N_COINS as u32 {
             let in_amount = amounts.get(i).unwrap();
             if token_supply == 0 {
                 // assert in_amount > 0  // dev: initial deposit requires all coins
@@ -294,10 +301,6 @@ impl LiquidityPoolTrait for LiquidityPool {
 
             // Take coins from the sender
             if in_amount > 0 {
-                // if i == FEE_INDEX {
-                //     in_amount = ERC20(in_coin).balanceOf(self);
-                // }
-
                 let token_client = token::Client::new(&e, &in_coin);
                 token_client.transfer_from(
                     &e.current_contract_address(),
@@ -305,25 +308,6 @@ impl LiquidityPoolTrait for LiquidityPool {
                     &e.current_contract_address(),
                     &(amounts.get(i).unwrap() as i128),
                 );
-
-                // "safeTransferFrom" which works for ERC20s which return bool or not
-                // _response: Bytes[32] = raw_call(
-                //     in_coin,
-                //     concat(
-                //         method_id("transferFrom(address,address,u128)"),
-                //         convert(msg.sender, bytes32),
-                //         convert(self, bytes32),
-                //         convert(amounts[i], bytes32),
-                //     ),
-                //     max_outsize = 32,
-                // );  // dev: failed transfer
-                // if len(_response) > 0 {
-                //     // assert convert(_response, bool)  // dev: failed transfer
-                // }
-
-                // if i == FEE_INDEX {
-                //     in_amount = ERC20(in_coin).balanceOf(self) - in_amount
-                // }
             }
 
             new_balances.set(i, old_balances.get(i).unwrap() + in_amount);
@@ -343,15 +327,18 @@ impl LiquidityPoolTrait for LiquidityPool {
             // Only account for fees if we are not the first to deposit
             for i in 0..N_COINS as u32 {
                 let ideal_balance = d1 * old_balances.get(i).unwrap() / d0;
-                let mut difference = 0;
-                if ideal_balance > new_balances.get(i).unwrap() {
-                    difference = ideal_balance - new_balances.get(i).unwrap();
+                let difference = if ideal_balance > new_balances.get(i).unwrap() {
+                    ideal_balance - new_balances.get(i).unwrap()
                 } else {
-                    difference = new_balances.get(i).unwrap() - ideal_balance;
-                }
+                    new_balances.get(i).unwrap() - ideal_balance
+                };
                 fees.set(i, fee * difference / FEE_DENOMINATOR);
 
-                result.set(i,new_balances.get(i).unwrap() - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR));
+                result.set(
+                    i,
+                    new_balances.get(i).unwrap()
+                        - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR),
+                );
                 new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
             }
             d2 = Self::get_d_mem(e.clone(), new_balances, amp);
@@ -362,12 +349,11 @@ impl LiquidityPoolTrait for LiquidityPool {
         storage::put_reserves(&e, &balances);
 
         // Calculate, how much pool tokens to mint
-        let mut mint_amount = 0;
-        if token_supply == 0 {
-            mint_amount = d1;  // Take the dust if there was any
+        let mint_amount = if token_supply == 0 {
+            d1 // Take the dust if there was any
         } else {
-            mint_amount = token_supply * (d2 - d0) / d0;
-        }
+            token_supply * (d2 - d0) / d0
+        };
 
         if mint_amount < min_mint_amount {
             panic!("Slippage screwed you");
@@ -375,21 +361,28 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // Mint pool tokens
         token::mint_shares(&e, user, mint_amount as i128);
-
-        // log AddLiquidity(msg.sender, amounts, fees, D1, token_supply + mint_amount)
     }
 
-    fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128>) -> u128{
+    fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128>) -> u128 {
         // x in the input is converted to the same price/precision
 
-        if !(i != j) {panic!("same coin")}       // dev: same coin
-        if !(j >= 0) {panic!("j below zero")}       // dev: j below zero
-        if !(j < N_COINS as i128) {panic!("j above N_COINS")}  // dev: j above N_COINS
-
+        if !(i != j) {
+            panic!("same coin")
+        } // dev: same coin
+        if !(j >= 0) {
+            panic!("j below zero")
+        } // dev: j below zero
+        if !(j < N_COINS as i128) {
+            panic!("j above N_COINS")
+        } // dev: j above N_COINS
 
         // should be unreachable, but good for safety
-        if !(i >= 0) {panic!("bad arguments")}
-        if !(i < N_COINS as i128) {panic!("bad arguments")}
+        if !(i >= 0) {
+            panic!("bad arguments")
+        }
+        if !(i < N_COINS as i128) {
+            panic!("bad arguments")
+        }
 
         let amp = Self::a(e.clone());
         let d = Self::get_d(e.clone(), xp_.clone(), amp);
@@ -410,8 +403,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             c = c * d / (_x * N_COINS as u128);
         }
         c = c * d / (ann * N_COINS as u128);
-        let b = s + d / ann;  // - D
-        let mut y_prev = 0;
+        let b = s + d / ann; // - D
+        let mut y_prev;
         let mut y = d;
         for _i in 0..255 {
             y_prev = y;
@@ -430,7 +423,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         return y;
     }
 
-    fn get_dy(e: Env, i: i128, j: i128, dx: u128) -> u128{
+    fn get_dy(e: Env, i: i128, j: i128, dx: u128) -> u128 {
         // dx and dy in c-units
         let rates = RATES;
         let xp = Self::xp(e.clone());
@@ -439,7 +432,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
         let dy = (xp.get(j as u32).unwrap() - y - 1) * PRECISION / rates[j as usize];
         let _fee = storage::get_fee(&e) * dy / FEE_DENOMINATOR;
-        return dy - _fee
+        return dy - _fee;
     }
 
     fn get_dy_underlying(e: Env, i: i128, j: i128, dx: u128) -> u128 {
@@ -453,8 +446,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let fee = storage::get_fee(&e) * dy / FEE_DENOMINATOR;
         return dy - fee;
     }
-    
-    fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128){
+
+    fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128) {
+        user.require_auth();
         // assert not self.is_killed  // dev: is killed
         let rates = RATES;
 
@@ -462,12 +456,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let xp = Self::xp_mem(e.clone(), old_balances.clone());
 
         // Handling an unexpected charge of a fee on transfer (USDT, PAXG)
-        let mut dx_w_fee = dx;
+        let dx_w_fee = dx;
         let coins = storage::get_tokens(&e);
         let input_coin = coins.get(i as u32).unwrap();
-
-        // if i == FEE_INDEX:
-        //     dx_w_fee = ERC20(input_coin).balanceOf(self)
 
         let token_client = token::Client::new(&e, &input_coin);
         token_client.transfer_from(
@@ -477,32 +468,17 @@ impl LiquidityPoolTrait for LiquidityPool {
             &(dx as i128),
         );
 
-        // "safeTransferFrom" which works for ERC20s which return bool or not
-        // _response: Bytes[32] = raw_call(
-        //     input_coin,
-        //     concat(
-        //         method_id("transferFrom(address,address,uint256)"),
-        //         convert(msg.sender, bytes32),
-        //         convert(self, bytes32),
-        //         convert(dx, bytes32),
-        //     ),
-        //     max_outsize=32,
-        // )  // dev: failed transfer
-        // if len(_response) > 0:
-        //     assert convert(_response, bool)  // dev: failed transfer
-
-        // if i == FEE_INDEX:
-        //     dx_w_fee = ERC20(input_coin).balanceOf(self) - dx_w_fee
-
         let x = xp.get(i as u32).unwrap() + dx_w_fee * rates[i as usize] / PRECISION;
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
 
-        let dy = xp.get(j as u32).unwrap() - y - 1;  // -1 just in case there were some rounding errors
+        let dy = xp.get(j as u32).unwrap() - y - 1; // -1 just in case there were some rounding errors
         let dy_fee = dy * storage::get_fee(&e) / FEE_DENOMINATOR;
 
         // Convert all to real units
         let dy = (dy - dy_fee) * PRECISION / rates[j as usize];
-        if !(dy >= min_dy) {panic!("Exchange resulted in fewer coins than expected")}
+        if !(dy >= min_dy) {
+            panic!("Exchange resulted in fewer coins than expected")
+        }
 
         let mut dy_admin_fee = dy_fee * storage::get_admin_fee(&e) / FEE_DENOMINATOR;
         dy_admin_fee = dy_admin_fee * PRECISION / rates[j as usize];
@@ -511,33 +487,45 @@ impl LiquidityPoolTrait for LiquidityPool {
         let mut reserves = storage::get_reserves(&e);
         reserves.set(i as u32, old_balances.get(i as u32).unwrap() + dx_w_fee);
         // When rounding errors happen, we undercharge admin fee in favor of LP
-        reserves.set(j as u32, old_balances.get(j as u32).unwrap() - dy - dy_admin_fee);
+        reserves.set(
+            j as u32,
+            old_balances.get(j as u32).unwrap() - dy - dy_admin_fee,
+        );
         storage::put_reserves(&e, &reserves);
 
         let token_client = token::Client::new(&e, &coins.get(j as u32).unwrap());
-        token_client.transfer(
-            &e.current_contract_address(),
-            &user,
-            &(dy as i128),
-        );
-
-        // "safeTransfer" which works for ERC20s which return bool or not
-        // _response = raw_call(
-        //     self.coins[j],
-        //     concat(
-        //         method_id("transfer(address,uint256)"),
-        //         convert(msg.sender, bytes32),
-        //         convert(dy, bytes32),
-        //     ),
-        //     max_outsize=32,
-        // )  // dev: failed transfer
-        // if len(_response) > 0:
-        //     assert convert(_response, bool)  // dev: failed transfer
-
-        // log TokenExchange(msg.sender, i, dx, j, dy)
+        token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
     }
 
+    fn remove_liquidity(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) {
+        user.require_auth();
+        let total_supply = token::get_total_shares(&e) as u128;
+        let mut amounts = Vec::from_array(&e, [0; N_COINS]);
+        let mut reserves = storage::get_reserves(&e);
+        let coins = storage::get_tokens(&e);
 
+        for i in 0..N_COINS as u32 {
+            let value = reserves.get(i).unwrap() * share_amount / total_supply;
+            if !(value >= min_amounts.get(i).unwrap()) {
+                panic!("Withdrawal resulted in fewer coins than expected")
+            }
+            reserves.set(i, reserves.get(i).unwrap() - value);
+            amounts.set(i, value);
+
+            let token_client = token::Client::new(&e, &coins.get(i).unwrap());
+            token_client.transfer(&e.current_contract_address(), &user, &(value as i128));
+        }
+
+        // First transfer the pool shares that need to be redeemed
+        let share_token_client = token::Client::new(&e, &storage::get_token_share(&e));
+        share_token_client.transfer_from(
+            &e.current_contract_address(),
+            &user,
+            &e.current_contract_address(),
+            &(share_amount as i128),
+        );
+        token::burn_shares(&e, share_amount as i128);
+    }
 
     // fn deposit(
     //     e: Env,

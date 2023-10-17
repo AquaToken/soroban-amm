@@ -23,7 +23,6 @@ pub enum DataKey {
     RewardInvData,
     FeeFraction, // 1 = 0.01%
 
-
     InitialA,
     InitialATime,
     FutureA,

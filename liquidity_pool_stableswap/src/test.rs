@@ -4,8 +4,8 @@ extern crate std;
 use crate::{token, LiquidityPoolClient};
 
 // use crate::assertions::assert_approx_eq_abs;
-use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Map, Symbol, vec, Vec};
+use soroban_sdk::testutils::{Ledger, LedgerInfo};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> token::Client<'a> {
     token::Client::new(e, &e.register_stellar_asset_contract(admin.clone()))
@@ -89,20 +89,6 @@ fn test_happy_flow() {
         &token_reward.address,
     );
 
-    // token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    // let total_reward_1 = 10_5000000_i128 * 60;
-    // liqpool.set_rewards_config(
-    //     &user1,
-    //     &e.ledger().timestamp().saturating_add(60),
-    //     &total_reward_1,
-    // );
-    // token_reward.approve(
-    //     &liqpool.address,
-    //     &liqpool.address,
-    //     &1_000_000_0000000,
-    //     &99999,
-    // );
-
     let token_share = token::Client::new(&e, &liqpool.share_id());
 
     token1.mint(&user1, &1000_0000000);
@@ -113,9 +99,14 @@ fn test_happy_flow() {
     token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
     token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
-    liqpool.add_liquidity(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &100_0000000);
+    liqpool.add_liquidity(
+        &user1,
+        &Vec::from_array(&e, [100_0000000, 100_0000000]),
+        &100_0000000,
+    );
 
-    assert_eq!(token_share.balance(&user1), 153846153_8461538);
+    let share_token_amount = 153846153_8461538;
+    assert_eq!(token_share.balance(&user1), share_token_amount);
     assert_eq!(token_share.balance(&liqpool.address), 0);
     assert_eq!(token1.balance(&user1), 900_0000000);
     assert_eq!(token1.balance(&liqpool.address), 100_0000000);
@@ -130,17 +121,18 @@ fn test_happy_flow() {
     assert_eq!(token2.balance(&user1), 909_9994952 - fee);
     assert_eq!(token2.balance(&liqpool.address), 90_0005048 + fee);
 
-    // token_share.approve(&user1, &liqpool.address, &100, &99999);
-    //
-    // liqpool.withdraw(&user1, &100, &197, &51);
-    //
-    // jump(&e, 600);
-    // assert_eq!(liqpool.claim(&user1), 0);
-    //
-    // assert_eq!(token1.balance(&user1), 1000);
-    // assert_eq!(token2.balance(&user1), 1000);
-    // assert_eq!(token_share.balance(&user1), 0);
-    // assert_eq!(token1.balance(&liqpool.address), 0);
-    // assert_eq!(token2.balance(&liqpool.address), 0);
-    // assert_eq!(token_share.balance(&liqpool.address), 0);
+    token_share.approve(&user1, &liqpool.address, &share_token_amount, &99999);
+
+    liqpool.remove_liquidity(
+        &user1,
+        &(share_token_amount as u128),
+        &Vec::from_array(&e, [0, 0]),
+    );
+
+    assert_eq!(token1.balance(&user1), 1000_0000000);
+    assert_eq!(token2.balance(&user1), 1000_0000000);
+    assert_eq!(token_share.balance(&user1), 0);
+    assert_eq!(token1.balance(&liqpool.address), 0);
+    assert_eq!(token2.balance(&liqpool.address), 0);
+    assert_eq!(token_share.balance(&liqpool.address), 0);
 }
