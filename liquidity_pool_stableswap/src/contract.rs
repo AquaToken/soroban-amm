@@ -1,4 +1,4 @@
-use crate::admin::{has_admin, set_admin};
+use crate::admin::{has_admin, require_admin, set_admin};
 use crate::pool_constants::{
     FEE_DENOMINATOR, KILL_DEADLINE_DT, LENDING_PRECISION, N_COINS, PRECISION, PRECISION_MUL, RATES,
 };
@@ -44,6 +44,17 @@ pub trait LiquidityPoolTrait {
     fn get_dy_underlying(e: Env, i: i128, j: i128, dx: u128) -> u128;
     fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128);
     fn remove_liquidity(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>);
+    fn remove_liquidity_imbalance(e: Env, user: Address, amounts: Vec<u128>, max_burn_amount: u128);
+    fn get_y_d(e: Env, a: u128, i: i128, xp: Vec<u128>, d: u128) -> u128;
+    fn internal_calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> (u128, u128);
+    fn calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> u128;
+    fn remove_liquidity_one_coin(
+        e: Env,
+        user: Address,
+        _token_amount: u128,
+        i: i128,
+        min_amount: u128,
+    );
 
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
@@ -68,16 +79,14 @@ pub trait LiquidityPoolTrait {
     // Returns amount of both tokens withdrawn
     // fn withdraw(e: Env, to: Address, share_amount: i128, min_a: i128, min_b: i128) -> (i128, i128);
 
-    // fn get_rsrvs(e: Env) -> Vec<i128>;
+    // Get amount of reserves of each token in pool
+    fn get_rsrvs(e: Env) -> Vec<i128>;
 
+    // Get contract current version
     fn version() -> u32;
-    // fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
-    // fn set_rewards_config(e: Env, admin: Address, expired_at: u64, amount: i128);
-    // fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
-    // fn get_user_reward(e: Env, user: Address) -> i128;
-    // fn claim(e: Env, user: Address) -> i128;
-    // fn get_fee_fraction(e: Env) -> u32;
-    // xp size = N_COINS
+
+    // Upgrade contract with new code
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
 }
 
 #[contractimpl]
@@ -515,6 +524,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             let token_client = token::Client::new(&e, &coins.get(i).unwrap());
             token_client.transfer(&e.current_contract_address(), &user, &(value as i128));
         }
+        storage::put_reserves(&e, &reserves);
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = token::Client::new(&e, &storage::get_token_share(&e));
@@ -527,206 +537,241 @@ impl LiquidityPoolTrait for LiquidityPool {
         token::burn_shares(&e, share_amount as i128);
     }
 
-    // fn deposit(
-    //     e: Env,
-    //     to: Address,
-    //     desired_a: i128,
-    //     min_a: i128,
-    //     desired_b: i128,
-    //     min_b: i128,
-    // ) -> (i128, i128) {
-    //     // Depositor needs to authorize the deposit
-    //     to.require_auth();
-    //
-    //     let (reserve_a, reserve_b) = (storage::get_reserve_a(&e), storage::get_reserve_b(&e));
-    //
-    //     // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
-    //     let pool_data = rewards_manager::update_rewards_data(&e);
-    //     rewards_manager::update_user_reward(&e, &pool_data, &to);
-    //     rewards_storage::bump_user_reward_data(&e, &to);
-    //
-    //     // Calculate deposit amounts
-    //     let amounts =
-    //         pool::get_deposit_amounts(desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
-    //
-    //     let token_a_client = token::Client::new(&e, &storage::get_token_a(&e));
-    //     let token_b_client = token::Client::new(&e, &storage::get_token_b(&e));
-    //
-    //     token_a_client.transfer_from(
-    //         &e.current_contract_address(),
-    //         &to,
-    //         &e.current_contract_address(),
-    //         &amounts.0,
-    //     );
-    //     token_b_client.transfer_from(
-    //         &e.current_contract_address(),
-    //         &to,
-    //         &e.current_contract_address(),
-    //         &amounts.1,
-    //     );
-    //
-    //     // Now calculate how many new pool shares to mint
-    //     let (balance_a, balance_b) = (token::get_balance_a(&e), token::get_balance_b(&e));
-    //     let total_shares = token::get_total_shares(&e);
-    //
-    //     let zero = 0;
-    //     let new_total_shares = if reserve_a > zero && reserve_b > zero {
-    //         let shares_a = (balance_a * total_shares) / reserve_a;
-    //         let shares_b = (balance_b * total_shares) / reserve_b;
-    //         shares_a.min(shares_b)
-    //     } else {
-    //         (balance_a * balance_b).sqrt()
-    //     };
-    //
-    //     token::mint_shares(&e, to, new_total_shares - total_shares);
-    //     storage::put_reserve_a(&e, balance_a);
-    //     storage::put_reserve_b(&e, balance_b);
-    //     (amounts.0, amounts.1)
-    // }
-    //
-    // fn swap(e: Env, to: Address, buy_a: bool, out: i128, in_max: i128) -> i128 {
-    //     to.require_auth();
-    //
-    //     let (reserve_a, reserve_b) = (storage::get_reserve_a(&e), storage::get_reserve_b(&e));
-    //     let (reserve_sell, reserve_buy) = if buy_a {
-    //         (reserve_b, reserve_a)
-    //     } else {
-    //         (reserve_a, reserve_b)
-    //     };
-    //
-    //     let fee_fraction = storage::get_fee_fraction(&e);
-    //
-    //     // First calculate how much needs to be sold to buy amount out from the pool
-    //     let n = reserve_sell * out * 10000;
-    //     let d = (reserve_buy - out) * (10000 - fee_fraction as i128);
-    //     let sell_amount = (n / d) + 1;
-    //     if sell_amount > in_max {
-    //         panic!("in amount is over max")
-    //     }
-    //
-    //     // Transfer the amount being sold to the contract
-    //     let sell_token = if buy_a {
-    //         storage::get_token_b(&e)
-    //     } else {
-    //         storage::get_token_a(&e)
-    //     };
-    //     let sell_token_client = token::Client::new(&e, &sell_token);
-    //     sell_token_client.transfer_from(
-    //         &e.current_contract_address(),
-    //         &to,
-    //         &e.current_contract_address(),
-    //         &sell_amount,
-    //     );
-    //
-    //     let (balance_a, balance_b) = (token::get_balance_a(&e), token::get_balance_b(&e));
-    //
-    //     // residue_numerator and residue_denominator are the amount that the invariant considers after
-    //     // deducting the fee, scaled up by 1000 to avoid fractions
-    //     let residue_numerator = 10000 - fee_fraction as i128;
-    //     let residue_denominator = 10000;
-    //     let zero = 0;
-    //
-    //     let new_invariant_factor = |balance: i128, reserve: i128, out: i128| {
-    //         let delta = balance - reserve - out;
-    //         let adj_delta = if delta > zero {
-    //             residue_numerator * delta
-    //         } else {
-    //             residue_denominator * delta
-    //         };
-    //         residue_denominator * reserve + adj_delta
-    //     };
-    //
-    //     let (out_a, out_b) = if buy_a { (out, 0) } else { (0, out) };
-    //
-    //     let new_inv_a = new_invariant_factor(balance_a, reserve_a, out_a);
-    //     let new_inv_b = new_invariant_factor(balance_b, reserve_b, out_b);
-    //     let old_inv_a = residue_denominator * reserve_a;
-    //     let old_inv_b = residue_denominator * reserve_b;
-    //
-    //     if new_inv_a * new_inv_b < old_inv_a * old_inv_b {
-    //         panic!("constant product invariant does not hold");
-    //     }
-    //
-    //     if buy_a {
-    //         token::transfer_a(&e, to, out_a);
-    //     } else {
-    //         token::transfer_b(&e, to, out_b);
-    //     }
-    //
-    //     storage::put_reserve_a(&e, balance_a - out_a);
-    //     storage::put_reserve_b(&e, balance_b - out_b);
-    //     sell_amount
-    // }
-    //
-    // fn estimate_swap_out(e: Env, buy_a: bool, out: i128) -> i128 {
-    //     let (reserve_a, reserve_b) = (storage::get_reserve_a(&e), storage::get_reserve_b(&e));
-    //     let (reserve_sell, reserve_buy) = if buy_a {
-    //         (reserve_b, reserve_a)
-    //     } else {
-    //         (reserve_a, reserve_b)
-    //     };
-    //
-    //     let fee_fraction = storage::get_fee_fraction(&e);
-    //
-    //     // Calculate how much needs to be sold to buy amount out from the pool
-    //     let n = reserve_sell * out * 10000;
-    //     let d = (reserve_buy - out) * (10000 - fee_fraction as i128);
-    //     let sell_amount = (n / d) + 1;
-    //     sell_amount
-    // }
-    //
-    // fn withdraw(e: Env, to: Address, share_amount: i128, min_a: i128, min_b: i128) -> (i128, i128) {
-    //     to.require_auth();
-    //
-    //     // Before actual changes were made to the pool, update total rewards data and refresh user reward
-    //     let pool_data = rewards_manager::update_rewards_data(&e);
-    //     rewards_manager::update_user_reward(&e, &pool_data, &to);
-    //     rewards_storage::bump_user_reward_data(&e, &to);
-    //
-    //     // First transfer the pool shares that need to be redeemed
-    //     let share_token_client = token::Client::new(&e, &storage::get_token_share(&e));
-    //     share_token_client.transfer_from(
-    //         &e.current_contract_address(),
-    //         &to,
-    //         &e.current_contract_address(),
-    //         &share_amount,
-    //     );
-    //
-    //     let (balance_a, balance_b) = (token::get_balance_a(&e), token::get_balance_b(&e));
-    //     let balance_shares = token::get_balance_shares(&e);
-    //
-    //     let total_shares = token::get_total_shares(&e);
-    //
-    //     // Now calculate the withdraw amounts
-    //     let out_a = (balance_a * balance_shares) / total_shares;
-    //     let out_b = (balance_b * balance_shares) / total_shares;
-    //
-    //     if out_a < min_a || out_b < min_b {
-    //         panic!("min not satisfied");
-    //     }
-    //
-    //     token::burn_shares(&e, balance_shares);
-    //     token::transfer_a(&e, to.clone(), out_a);
-    //     token::transfer_b(&e, to, out_b);
-    //     storage::put_reserve_a(&e, balance_a - out_a);
-    //     storage::put_reserve_b(&e, balance_b - out_b);
-    //
-    //     (out_a, out_b)
-    // }
-    //
-    // fn get_rsrvs(e: Env) -> (i128, i128) {
-    //     (storage::get_reserve_a(&e), storage::get_reserve_b(&e))
-    // }
+    fn remove_liquidity_imbalance(
+        e: Env,
+        user: Address,
+        amounts: Vec<u128>,
+        max_burn_amount: u128,
+    ) {
+        // todo
+        //     // assert not self.is_killed  # dev: is killed
+        //
+
+        user.require_auth();
+
+        let token_supply = token::get_total_shares(&e) as u128;
+        if token_supply == 0 {
+            panic!("zero total supply")
+        }
+        let _fee = storage::get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let _admin_fee = storage::get_admin_fee(&e);
+        let amp = Self::a(e.clone());
+        let mut reserves = storage::get_reserves(&e);
+
+        let old_balances = reserves.clone();
+        let mut new_balances = old_balances.clone();
+
+        let d0 = Self::get_d_mem(e.clone(), old_balances.clone(), amp);
+        for i in 0..N_COINS as u32 {
+            new_balances.set(i, new_balances.get(i).unwrap() - amounts.get(i).unwrap());
+        }
+
+        let d1 = Self::get_d_mem(e.clone(), new_balances.clone(), amp);
+        let mut fees = Vec::from_array(&e, [0; N_COINS]);
+
+        for i in 0..N_COINS as u32 {
+            let ideal_balance = d1 * old_balances.get(i).unwrap() / d0;
+            let difference = if ideal_balance > new_balances.get(i).unwrap() {
+                ideal_balance - new_balances.get(i).unwrap()
+            } else {
+                new_balances.get(i).unwrap() - ideal_balance
+            };
+            fees.set(i, _fee * difference / FEE_DENOMINATOR);
+            reserves.set(
+                i,
+                new_balances.get(i).unwrap()
+                    - (fees.get(i).unwrap() * _admin_fee / FEE_DENOMINATOR),
+            );
+            new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
+        }
+        storage::put_reserves(&e, &reserves);
+
+        let d2 = Self::get_d_mem(e.clone(), new_balances, amp);
+
+        let mut token_amount = (d0 - d2) * token_supply / d0;
+        if token_amount == 0 {
+            panic!("zero tokens burned")
+        }
+        token_amount += 1; // In case of rounding errors - make it unfavorable for the "attacker"
+        if token_amount > max_burn_amount {
+            panic!("Slippage screwed you")
+        }
+
+        // First transfer the pool shares that need to be redeemed
+        let share_token_client = token::Client::new(&e, &storage::get_token_share(&e));
+        share_token_client.transfer_from(
+            &e.current_contract_address(),
+            &user,
+            &e.current_contract_address(),
+            &(token_amount as i128),
+        );
+        token::burn_shares(&e, token_amount as i128);
+
+        for i in 0..N_COINS as u32 {
+            if amounts.get(i).unwrap() != 0 {
+                let coins = storage::get_tokens(&e);
+                let token_client = token::Client::new(&e, &coins.get(i).unwrap());
+                token_client.transfer(
+                    &e.current_contract_address(),
+                    &user,
+                    &(amounts.get(i).unwrap() as i128),
+                );
+            }
+        }
+    }
+
+    fn get_y_d(_e: Env, a: u128, i: i128, xp: Vec<u128>, d: u128) -> u128 {
+        // Calculate x[i] if one reduces D from being calculated for xp to D
+        //
+        // Done by solving quadratic equation iteratively.
+        // x_1**2 + x1 * (sum' - (A*n**n - 1) * D / (A * n**n)) = D ** (n + 1) / (n ** (2 * n) * prod' * A)
+        // x_1**2 + b*x_1 = c
+        //
+        // x_1 = (x_1**2 + c) / (2*x_1 + b)
+
+        // x in the input is converted to the same price/precision
+
+        if !(i >= 0) {
+            panic!("i below zero")
+        }
+        if !(i < N_COINS as i128) {
+            panic!("i above N_COINS")
+        }
+
+        let mut c = d;
+        let mut s = 0;
+        let ann = a * N_COINS as u128;
+
+        let mut _x = 0;
+        for _i in 0..N_COINS as u32 {
+            if _i != i as u32 {
+                _x = xp.get(_i).unwrap();
+            } else {
+                continue;
+            }
+            s += _x;
+            c = c * d / (_x * N_COINS as u128);
+        }
+        c = c * d / (ann * N_COINS as u128);
+
+        let b = s + d / ann;
+        let mut y_prev;
+        let mut y = d;
+
+        for _i in 0..255 {
+            y_prev = y;
+            y = (y * y + c) / (2 * y + b - d);
+
+            // Equality with the precision of 1
+            if y > y_prev {
+                if y - y_prev <= 1 {
+                    break;
+                }
+            } else {
+                if y_prev - y <= 1 {
+                    break;
+                }
+            }
+        }
+        return y;
+    }
+
+    fn internal_calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> (u128, u128) {
+        // First, need to calculate
+        // * Get current D
+        // * Solve Eqn against y_i for D - _token_amount
+
+        let amp = Self::a(e.clone());
+        let _fee = storage::get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let precisions = PRECISION_MUL;
+        let total_supply = token::get_total_shares(&e) as u128;
+
+        let xp = Self::xp(e.clone());
+
+        let d0 = Self::get_d(e.clone(), xp.clone(), amp);
+        let d1 = d0 - _token_amount * d0 / total_supply;
+        let mut xp_reduced = xp.clone();
+
+        let new_y = Self::get_y_d(e.clone(), amp, i, xp.clone(), d1);
+        let dy_0 = (xp.get(i as u32).unwrap() - new_y) / precisions[i as usize]; // w/o fees;
+
+        for j in 0..N_COINS as u32 {
+            let dx_expected = if j == i as u32 {
+                xp.get(j).unwrap() * d1 / d0 - new_y
+            } else {
+                xp.get(j).unwrap() - xp.get(j).unwrap() * d1 / d0
+            };
+            xp_reduced.set(
+                j,
+                xp_reduced.get(j).unwrap() - _fee * dx_expected / FEE_DENOMINATOR,
+            );
+        }
+
+        let mut dy = xp_reduced.get(i as u32).unwrap()
+            - Self::get_y_d(e.clone(), amp, i, xp_reduced.clone(), d1);
+        dy = (dy - 1) / precisions[i as usize]; // Withdraw less to account for rounding errors
+
+        return (dy, dy_0 - dy);
+    }
+
+    fn calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> u128 {
+        return Self::internal_calc_withdraw_one_coin(e, _token_amount, i).0;
+    }
+
+    fn remove_liquidity_one_coin(
+        e: Env,
+        user: Address,
+        _token_amount: u128,
+        i: i128,
+        min_amount: u128,
+    ) {
+        // Remove _amount of liquidity all in a form of coin i
+
+        user.require_auth();
+
+        // assert not self.is_killed  # dev: is killed
+
+        let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), _token_amount, i);
+        if !(dy >= min_amount) {
+            panic!("Not enough coins removed")
+        }
+
+        let mut reserves = storage::get_reserves(&e);
+        reserves.set(
+            i as u32,
+            reserves.get(i as u32).unwrap()
+                - (dy + dy_fee * storage::get_admin_fee(&e) / FEE_DENOMINATOR),
+        );
+        storage::put_reserves(&e, &reserves);
+
+        // First transfer the pool shares that need to be redeemed
+        let share_token_client = token::Client::new(&e, &storage::get_token_share(&e));
+        share_token_client.transfer_from(
+            &e.current_contract_address(),
+            &user,
+            &e.current_contract_address(),
+            &(_token_amount as i128),
+        );
+        token::burn_shares(&e, _token_amount as i128);
+
+        let coins = storage::get_tokens(&e);
+        let token_client = token::Client::new(&e, &coins.get(i as u32).unwrap());
+        token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
+    }
+
+    fn get_rsrvs(e: Env) -> Vec<u128> {
+        storage::get_reserves(&e)
+    }
 
     fn version() -> u32 {
         1
     }
 
-    // fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
-    //     require_admin(&e);
-    //     e.deployer().update_current_contract_wasm(new_wasm_hash);
-    // }
-    //
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        require_admin(&e);
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
     // fn set_rewards_config(
     //     e: Env,
     //     admin: Address,
