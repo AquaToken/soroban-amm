@@ -17,6 +17,7 @@ pub enum DataKey {
     // ReserveA, // todo: remove
     // ReserveB, // todo: remove
     Admin,
+    FutureAdmin,
     PoolRewardConfig,
     PoolRewardData,
     UserRewardData(Address),
@@ -28,8 +29,13 @@ pub enum DataKey {
     FutureA,
     FutureATime,
     Fee,
+    FutureFee,
     AdminFee,
+    FutureAdminFee,
+    AdminActionsDeadline,
+    TransferOwnershipDeadline,
     KillDeadline,
+    IsKilled,
 }
 
 pub fn bump_instance(e: &Env) {
@@ -196,6 +202,54 @@ pub fn put_admin_fee(e: &Env, value: u128) {
     put_instance_value(e, &DataKey::AdminFee, &value);
 }
 
+// future_fee
+pub fn get_future_fee(e: &Env) -> u128 {
+    match get_instance_value(e, &DataKey::FutureFee) {
+        Some(value) => value,
+        None => panic!("please initialize future_fee"),
+    }
+}
+
+pub fn put_future_fee(e: &Env, value: u128) {
+    put_instance_value(e, &DataKey::FutureFee, &value);
+}
+
+// future_admin_fee
+pub fn get_future_admin_fee(e: &Env) -> u128 {
+    match get_instance_value(e, &DataKey::FutureAdminFee) {
+        Some(value) => value,
+        None => panic!("please initialize future_admin_fee"),
+    }
+}
+
+pub fn put_future_admin_fee(e: &Env, value: u128) {
+    put_instance_value(e, &DataKey::FutureAdminFee, &value);
+}
+
+// admin_actions_deadline
+pub fn get_admin_actions_deadline(e: &Env) -> u64 {
+    match get_instance_value(e, &DataKey::AdminActionsDeadline) {
+        Some(value) => value,
+        None => panic!("please initialize admin_actions_deadline"),
+    }
+}
+
+pub fn put_admin_actions_deadline(e: &Env, value: u64) {
+    put_instance_value(e, &DataKey::AdminActionsDeadline, &value);
+}
+
+// transfer_ownership_deadline
+pub fn get_transfer_ownership_deadline(e: &Env) -> u64 {
+    match get_instance_value(e, &DataKey::TransferOwnershipDeadline) {
+        Some(value) => value,
+        None => panic!("please initialize transfer_ownership_deadline"),
+    }
+}
+
+pub fn put_transfer_ownership_deadline(e: &Env, value: u64) {
+    put_instance_value(e, &DataKey::TransferOwnershipDeadline, &value);
+}
+
 // kill_deadline
 pub fn get_kill_deadline(e: &Env) -> u64 {
     match get_instance_value(e, &DataKey::KillDeadline) {
@@ -206,4 +260,16 @@ pub fn get_kill_deadline(e: &Env) -> u64 {
 
 pub fn put_kill_deadline(e: &Env, value: u64) {
     put_instance_value(e, &DataKey::KillDeadline, &value);
+}
+
+// is_killed
+pub fn get_is_killed(e: &Env) -> bool {
+    match get_instance_value(e, &DataKey::IsKilled) {
+        Some(value) => value,
+        None => panic!("please initialize is_killed"),
+    }
+}
+
+pub fn put_is_killed(e: &Env, value: bool) {
+    put_instance_value(e, &DataKey::IsKilled, &value);
 }

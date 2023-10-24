@@ -23,6 +23,20 @@ pub fn set_admin(e: &Env, admin: &Address) {
     e.storage().instance().set(&DataKey::Admin, admin)
 }
 
+pub fn get_future_admin(e: &Env) -> Address {
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage().instance().get(&DataKey::FutureAdmin).unwrap()
+}
+
+pub fn set_future_admin(e: &Env, admin: &Address) {
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage().instance().set(&DataKey::FutureAdmin, admin)
+}
+
 pub fn check_admin(e: &Env, user: &Address) {
     if !has_admin(&e) {
         panic!("admin not set")

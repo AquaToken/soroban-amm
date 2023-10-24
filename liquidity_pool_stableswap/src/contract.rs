@@ -1,9 +1,10 @@
 use crate::admin::{has_admin, require_admin, set_admin};
 use crate::pool_constants::{
-    FEE_DENOMINATOR, KILL_DEADLINE_DT, LENDING_PRECISION, N_COINS, PRECISION, PRECISION_MUL, RATES,
+    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, KILL_DEADLINE_DT, LENDING_PRECISION, MAX_A,
+    MAX_ADMIN_FEE, MAX_A_CHANGE, MAX_FEE, MIN_RAMP_TIME, N_COINS, PRECISION, PRECISION_MUL, RATES,
 };
 use crate::token::create_contract;
-use crate::{storage, token};
+use crate::{admin, storage, token};
 use soroban_sdk::{contract, contractimpl, contractmeta, Address, BytesN, Env, IntoVal, Vec};
 
 contractmeta!(
@@ -15,7 +16,13 @@ contractmeta!(
 pub struct LiquidityPool;
 
 pub trait LiquidityPoolTrait {
-    // Sets the token contract addresses for this pool
+    // initialize liquidity pool
+    //  a: The amplification co-efficient (“A”) determines a pool’s tolerance
+    //      for imbalance between the assets within it. A higher value means
+    //      that trades will incur slippage sooner as the assets
+    //      within the pool become imbalanced.
+    //  fee: pool fee
+    //  admin_fee: admin fee (expressed as a percentage of the pool fee)
     fn initialize(
         e: Env,
         admin: Address,
@@ -36,7 +43,14 @@ pub trait LiquidityPoolTrait {
     fn xp_mem(e: Env, balances: Vec<u128>) -> Vec<u128>;
     fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128;
     fn get_d_mem(e: Env, balances: Vec<u128>, amp: u128) -> u128;
+
+    // Returns portfolio virtual price (for calculating profit) scaled up by 1e7
     fn get_virtual_price(e: Env) -> u128;
+
+    // Simplified method to calculate addition or reduction in token supply at
+    // deposit or withdrawal without taking fees into account (but looking at
+    // slippage).
+    // Needed to prevent front-running, not for precise calculations!
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128;
     fn add_liquidity(e: Env, user: Address, amounts: Vec<u128>, min_mint_amount: u128);
     fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128>) -> u128;
@@ -44,17 +58,42 @@ pub trait LiquidityPoolTrait {
     fn get_dy_underlying(e: Env, i: i128, j: i128, dx: u128) -> u128;
     fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128);
     fn remove_liquidity(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>);
-    fn remove_liquidity_imbalance(e: Env, user: Address, amounts: Vec<u128>, max_burn_amount: u128);
+
+    // Withdraw coins from the pool in an imbalanced amount.
+    // amounts: List of amounts of underlying coins to withdraw
+    // max_burn_amount: Maximum amount of LP token to burn in the withdrawal
+    // Returns actual amount of the LP tokens burned in the withdrawal.
+    fn remove_liquidity_imbalance(
+        e: Env,
+        user: Address,
+        amounts: Vec<u128>,
+        max_burn_amount: u128,
+    ) -> u128;
     fn get_y_d(e: Env, a: u128, i: i128, xp: Vec<u128>, d: u128) -> u128;
     fn internal_calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> (u128, u128);
     fn calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> u128;
+
+    // Remove token_amount of liquidity all in a form of coin i
     fn remove_liquidity_one_coin(
         e: Env,
         user: Address,
-        _token_amount: u128,
+        token_amount: u128,
         i: i128,
         min_amount: u128,
     );
+    fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64);
+    fn stop_ramp_a(e: Env, admin: Address);
+    fn commit_new_fee(e: Env, admin: Address, new_fee: u128, new_admin_fee: u128);
+    fn apply_new_fee(e: Env, admin: Address);
+    fn revert_new_parameters(e: Env, admin: Address);
+    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address);
+    fn apply_transfer_ownership(e: Env, admin: Address);
+    fn revert_transfer_ownership(e: Env, admin: Address);
+    fn admin_balances(e: Env, i: u32) -> i128;
+    fn withdraw_admin_fees(e: Env, admin: Address);
+    fn donate_admin_fees(e: Env, admin: Address);
+    fn kill_me(e: Env, admin: Address);
+    fn unkill_me(e: Env, admin: Address);
 
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
@@ -80,7 +119,7 @@ pub trait LiquidityPoolTrait {
     // fn withdraw(e: Env, to: Address, share_amount: i128, min_a: i128, min_b: i128) -> (i128, i128);
 
     // Get amount of reserves of each token in pool
-    fn get_rsrvs(e: Env) -> Vec<i128>;
+    fn get_rsrvs(e: Env) -> Vec<u128>;
 
     // Get contract current version
     fn version() -> u32;
@@ -133,33 +172,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         storage::put_future_a_time(&e, e.ledger().timestamp()); // todo: is it correct value?
         storage::put_fee(&e, fee);
         storage::put_kill_deadline(&e, e.ledger().timestamp() + KILL_DEADLINE_DT);
-        // todo: do we need kill deadline?
-
-        // rewards_manager::set_reward_inv(&e, &Map::from_array(&e, [(0_u64, 0_u64)]));
-        // rewards_storage::set_pool_reward_config(
-        //     &e,
-        //     &rewards_storage::PoolRewardConfig {
-        //         tps: 0,
-        //         expired_at: 0,
-        //     },
-        // );
-        // rewards_storage::set_pool_reward_data(
-        //     &e,
-        //     &rewards_storage::PoolRewardData {
-        //         block: 0,
-        //         accumulated: 0,
-        //         last_time: 0,
-        //     },
-        // );
+        storage::put_admin_actions_deadline(&e, 0);
+        storage::put_transfer_ownership_deadline(&e, 0);
+        storage::put_is_killed(&e, false);
     }
-
-    // fn initialize_fee_fraction(e: Env, fee_fraction: u32) {
-    //     // 0.01% = 1; 1% = 100; 0.3% = 30
-    //     if fee_fraction > 9999 {
-    //         panic!("fee cannot be equal or greater than 100%");
-    //     }
-    //     storage::put_fee_fraction(&e, fee_fraction);
-    // }
 
     fn share_id(e: Env) -> Address {
         storage::get_token_share(&e)
@@ -250,22 +266,14 @@ impl LiquidityPoolTrait for LiquidityPool {
     }
 
     fn get_virtual_price(e: Env) -> u128 {
-        // Returns portfolio virtual price (for calculating profit) scaled up by 1e7
-
         let d = Self::get_d(e.clone(), Self::xp(e.clone()), Self::a(e.clone()));
         // D is in the units similar to DAI (e.g. converted to precision 1e7)
         // When balanced, D = n * x_u - total virtual value of the portfolio
-        // let token_supply = self.token.totalSupply()
         let token_supply = token::get_total_shares(&e);
         return d * PRECISION / token_supply as u128;
     }
 
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128 {
-        // Simplified method to calculate addition or reduction in token supply at
-        // deposit or withdrawal without taking fees into account (but looking at
-        // slippage).
-        // Needed to prevent front-running, not for precise calculations!
-
         let mut balances = storage::get_reserves(&e);
         let amp = Self::a(e.clone());
         let d0 = Self::get_d_mem(e.clone(), balances.clone(), amp);
@@ -284,9 +292,11 @@ impl LiquidityPoolTrait for LiquidityPool {
 
     fn add_liquidity(e: Env, user: Address, amounts: Vec<u128>, min_mint_amount: u128) {
         user.require_auth();
-        // assert not self.is_killed  // dev: is killed
+        if storage::get_is_killed(&e) {
+            panic!("is killed")
+        }
 
-        let mut fees: Vec<u128> = Vec::new(&e);
+        let mut fees: Vec<u128> = Vec::from_array(&e, [0; N_COINS]);
         let fee = storage::get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
         let admin_fee = storage::get_admin_fee(&e);
         let amp = Self::a(e.clone());
@@ -458,7 +468,9 @@ impl LiquidityPoolTrait for LiquidityPool {
 
     fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128) {
         user.require_auth();
-        // assert not self.is_killed  // dev: is killed
+        if storage::get_is_killed(&e) {
+            panic!("is killed")
+        }
         let rates = RATES;
 
         let old_balances = storage::get_reserves(&e);
@@ -542,12 +554,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         user: Address,
         amounts: Vec<u128>,
         max_burn_amount: u128,
-    ) {
-        // todo
-        //     // assert not self.is_killed  # dev: is killed
-        //
-
+    ) -> u128 {
         user.require_auth();
+
+        if storage::get_is_killed(&e) {
+            panic!("is killed")
+        }
 
         let token_supply = token::get_total_shares(&e) as u128;
         if token_supply == 0 {
@@ -618,6 +630,8 @@ impl LiquidityPoolTrait for LiquidityPool {
                 );
             }
         }
+
+        token_amount
     }
 
     fn get_y_d(_e: Env, a: u128, i: i128, xp: Vec<u128>, d: u128) -> u128 {
@@ -676,10 +690,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         return y;
     }
 
-    fn internal_calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> (u128, u128) {
+    fn internal_calc_withdraw_one_coin(e: Env, token_amount: u128, i: i128) -> (u128, u128) {
         // First, need to calculate
         // * Get current D
-        // * Solve Eqn against y_i for D - _token_amount
+        // * Solve Eqn against y_i for D - token_amount
 
         let amp = Self::a(e.clone());
         let _fee = storage::get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
@@ -689,7 +703,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let xp = Self::xp(e.clone());
 
         let d0 = Self::get_d(e.clone(), xp.clone(), amp);
-        let d1 = d0 - _token_amount * d0 / total_supply;
+        let d1 = d0 - token_amount * d0 / total_supply;
         let mut xp_reduced = xp.clone();
 
         let new_y = Self::get_y_d(e.clone(), amp, i, xp.clone(), d1);
@@ -714,24 +728,24 @@ impl LiquidityPoolTrait for LiquidityPool {
         return (dy, dy_0 - dy);
     }
 
-    fn calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> u128 {
-        return Self::internal_calc_withdraw_one_coin(e, _token_amount, i).0;
+    fn calc_withdraw_one_coin(e: Env, token_amount: u128, i: i128) -> u128 {
+        return Self::internal_calc_withdraw_one_coin(e, token_amount, i).0;
     }
 
     fn remove_liquidity_one_coin(
         e: Env,
         user: Address,
-        _token_amount: u128,
+        token_amount: u128,
         i: i128,
         min_amount: u128,
     ) {
-        // Remove _amount of liquidity all in a form of coin i
-
         user.require_auth();
 
-        // assert not self.is_killed  # dev: is killed
+        if storage::get_is_killed(&e) {
+            panic!("is killed")
+        }
 
-        let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), _token_amount, i);
+        let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), token_amount, i);
         if !(dy >= min_amount) {
             panic!("Not enough coins removed")
         }
@@ -750,13 +764,188 @@ impl LiquidityPoolTrait for LiquidityPool {
             &e.current_contract_address(),
             &user,
             &e.current_contract_address(),
-            &(_token_amount as i128),
+            &(token_amount as i128),
         );
-        token::burn_shares(&e, _token_amount as i128);
+        token::burn_shares(&e, token_amount as i128);
 
         let coins = storage::get_tokens(&e);
         let token_client = token::Client::new(&e, &coins.get(i as u32).unwrap());
         token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
+    }
+
+    fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+        if !(e.ledger().timestamp() >= storage::get_initial_a_time(&e) + MIN_RAMP_TIME) {
+            panic!("")
+        };
+        if !(future_time >= e.ledger().timestamp() + MIN_RAMP_TIME) {
+            panic!("insufficient time")
+        };
+
+        let initial_a = Self::a(e.clone());
+        if !((future_a > 0) && (future_a < MAX_A)) {
+            panic!("")
+        }
+        if !(((future_a >= initial_a) && (future_a <= initial_a * MAX_A_CHANGE))
+            || ((future_a < initial_a) && (future_a * MAX_A_CHANGE >= initial_a)))
+        {
+            panic!("")
+        }
+        storage::put_initial_a(&e, initial_a);
+        storage::put_future_a(&e, future_a);
+        storage::put_initial_a_time(&e, e.ledger().timestamp());
+        storage::put_future_a_time(&e, future_time);
+    }
+
+    fn stop_ramp_a(e: Env, admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        let current_a = Self::a(e.clone());
+        storage::put_initial_a(&e, current_a);
+        storage::put_future_a(&e, current_a);
+        storage::put_initial_a_time(&e, e.ledger().timestamp());
+        storage::put_future_a_time(&e, e.ledger().timestamp());
+
+        // now (block.timestamp < t1) is always False, so we return saved A
+    }
+
+    fn commit_new_fee(e: Env, admin: Address, new_fee: u128, new_admin_fee: u128) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        if !(storage::get_admin_actions_deadline(&e) == 0) {
+            panic!("active action")
+        }
+        if !(new_fee <= MAX_FEE) {
+            panic!("fee exceeds maximum")
+        }
+        if !(new_admin_fee <= MAX_ADMIN_FEE) {
+            panic!("admin fee exceeds maximum")
+        }
+
+        let _deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
+        storage::put_admin_actions_deadline(&e, _deadline);
+        storage::put_future_fee(&e, new_fee);
+        storage::put_future_admin_fee(&e, new_admin_fee);
+    }
+
+    fn apply_new_fee(e: Env, admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        if e.ledger().timestamp() >= storage::get_admin_actions_deadline(&e) {
+            panic!("insufficient time")
+        }
+        if storage::get_admin_actions_deadline(&e) != 0 {
+            panic!("no active action")
+        }
+
+        storage::put_admin_actions_deadline(&e, 0);
+        let fee = storage::get_future_fee(&e);
+        let admin_fee = storage::get_future_admin_fee(&e);
+        storage::put_fee(&e, fee);
+        storage::put_admin_fee(&e, admin_fee);
+    }
+
+    fn revert_new_parameters(e: Env, admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        storage::put_admin_actions_deadline(&e, 0);
+    }
+
+    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        // assert self.transfer_ownership_deadline == 0  # dev: active transfer
+
+        let deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
+        storage::put_transfer_ownership_deadline(&e, deadline);
+        admin::set_future_admin(&e, &new_admin);
+    }
+
+    fn apply_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        if e.ledger().timestamp() >= storage::get_transfer_ownership_deadline(&e) {
+            panic!("insufficient time")
+        }
+        if storage::get_transfer_ownership_deadline(&e) != 0 {
+            panic!("no active transfer")
+        }
+
+        storage::put_transfer_ownership_deadline(&e, 0);
+        set_admin(&e, &admin::get_future_admin(&e));
+    }
+
+    fn revert_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        storage::put_transfer_ownership_deadline(&e, 0);
+    }
+
+    fn admin_balances(e: Env, i: u32) -> i128 {
+        let coins = storage::get_tokens(&e);
+        let token_client = token::Client::new(&e, &coins.get(i).unwrap());
+        let balance = token_client.balance(&e.current_contract_address());
+        let reserves = storage::get_reserves(&e);
+
+        balance - reserves.get(i).unwrap() as i128
+    }
+
+    fn withdraw_admin_fees(e: Env, admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        let coins = storage::get_tokens(&e);
+        let reserves = storage::get_reserves(&e);
+
+        for i in 0..N_COINS as u32 {
+            let token_client = token::Client::new(&e, &coins.get(i).unwrap());
+            let balance = token_client.balance(&e.current_contract_address());
+
+            let value = balance - reserves.get(i).unwrap() as i128;
+            if value > 0 {
+                token_client.transfer(&e.current_contract_address(), &admin, &value);
+            }
+        }
+    }
+
+    fn donate_admin_fees(e: Env, admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        let coins = storage::get_tokens(&e);
+        let mut reserves = storage::get_reserves(&e);
+
+        for i in 0..N_COINS as u32 {
+            let token_client = token::Client::new(&e, &coins.get(i).unwrap());
+            let balance = token_client.balance(&e.current_contract_address());
+            reserves.set(i, balance as u128);
+        }
+        storage::put_reserves(&e, &reserves);
+    }
+
+    fn kill_me(e: Env, admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        if !(storage::get_kill_deadline(&e) > e.ledger().timestamp()) {
+            panic!("deadline has passed")
+        }
+        storage::put_is_killed(&e, true);
+    }
+
+    fn unkill_me(e: Env, admin: Address) {
+        admin.require_auth();
+        admin::check_admin(&e, &admin);
+
+        storage::put_is_killed(&e, false);
     }
 
     fn get_rsrvs(e: Env) -> Vec<u128> {
@@ -771,57 +960,4 @@ impl LiquidityPoolTrait for LiquidityPool {
         require_admin(&e);
         e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
-
-    // fn set_rewards_config(
-    //     e: Env,
-    //     admin: Address,
-    //     expired_at: u64, // timestamp
-    //     amount: i128,    // value with 7 decimal places. example: 600_0000000
-    // ) {
-    //     admin.require_auth();
-    //     check_admin(&e, &admin);
-    //
-    //     rewards_manager::update_rewards_data(&e);
-    //
-    //     let config = rewards_storage::PoolRewardConfig {
-    //         tps: amount / to_i128(expired_at - e.ledger().timestamp()),
-    //         expired_at,
-    //     };
-    //     storage::bump_instance(&e);
-    //     rewards_storage::set_pool_reward_config(&e, &config);
-    // }
-    //
-    // fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
-    //     let config = get_pool_reward_config(&e);
-    //     let pool_data = rewards_manager::update_rewards_data(&e);
-    //     let user_data = rewards_manager::update_user_reward(&e, &pool_data, &user);
-    //     let mut result = Map::new(&e);
-    //     result.set(symbol_short!("tps"), to_i128(config.tps));
-    //     result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
-    //     result.set(symbol_short!("acc"), to_i128(pool_data.accumulated));
-    //     result.set(symbol_short!("last_time"), to_i128(pool_data.last_time));
-    //     result.set(
-    //         symbol_short!("pool_acc"),
-    //         to_i128(user_data.pool_accumulated),
-    //     );
-    //     result.set(symbol_short!("block"), to_i128(pool_data.block));
-    //     result.set(symbol_short!("usr_block"), to_i128(user_data.last_block));
-    //     result.set(symbol_short!("to_claim"), to_i128(user_data.to_claim));
-    //     result
-    // }
-    //
-    // fn get_user_reward(e: Env, user: Address) -> i128 {
-    //     rewards_manager::get_amount_to_claim(&e, &user)
-    // }
-    //
-    // fn claim(e: Env, user: Address) -> i128 {
-    //     let reward = rewards_manager::claim_reward(&e, &user);
-    //     rewards_storage::bump_user_reward_data(&e, &user);
-    //     reward
-    // }
-    //
-    // fn get_fee_fraction(e: Env) -> u32 {
-    //     // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
-    //     storage::get_fee_fraction(&e)
-    // }
 }
