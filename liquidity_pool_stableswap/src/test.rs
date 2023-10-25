@@ -429,3 +429,68 @@ fn test_remove_liquidity_one_token() {
     assert_eq!(token_share.balance(&user1), 100_0000000);
     assert_eq!(token_share.balance(&liqpool.address), 0);
 }
+
+#[test]
+fn test_custom_fee() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let user1 = Address::random(&e);
+
+    token1.mint(&user1, &1000000_0000000);
+    token2.mint(&user1, &1000000_0000000);
+
+    // we're checking fraction against value required to swap 1 token
+    for fee_config in [
+        (0, 0, 9990916, 0, 0),         // fee = 0%, admin fee = 0%
+        (10, 0, 9980926, 0, 0),        // fee = 0.1%, admin fee = 0%
+        (30, 0, 9960944, 0, 0),        // fee = 0.3%, admin fee = 0%
+        (100, 0, 9891007, 0, 0),       // fee = 1%, admin fee = 0%
+        (1000, 0, 8991825, 0, 0),      // fee = 10%, admin fee = 0%
+        (3000, 0, 6993642, 0, 0),      // fee = 30%, admin fee = 0%
+        (9900, 0, 99910, 0, 0),        // fee = 99%, admin fee = 0%
+        (9999, 0, 1000, 0, 0),         // fee = 99.99% - maximum fee, admin fee = 0%
+        (100, 10, 9891007, 0, 99),       // fee = 0.1%, admin fee = 0.1%
+        (100, 100, 9891007, 0, 999),     // fee = 0.1%, admin fee = 1%
+        (100, 1000, 9891007, 0, 9990),   // fee = 0.1%, admin fee = 10%
+        (100, 2000, 9891007, 0, 19981),  // fee = 0.1%, admin fee = 20%
+        (100, 5000, 9891007, 0, 49954),  // fee = 0.1%, admin fee = 50%
+        (100, 10000, 9891007, 0, 99909), // fee = 0.1%, admin fee = 100%
+    ] {
+        let liqpool = create_liqpool_contract(
+            &e,
+            &user1,
+            &install_token_wasm(&e),
+            &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+            10,
+            fee_config.0,
+            fee_config.1,
+            &token_reward.address,
+        );
+        token1.approve(&user1, &liqpool.address, &100000_0000000, &99999);
+        token2.approve(&user1, &liqpool.address, &100000_0000000, &99999);
+        liqpool.add_liquidity(
+            &user1,
+            &Vec::from_array(&e, [100_0000000, 100_0000000]),
+            &100_0000000,
+        );
+        // assert_eq!(liqpool.estimate_swap_out(&false, &1_0000000), fee_config.1,);
+        assert_eq!(
+            liqpool.exchange(&user1, &0, &1, &1_0000000, &0),
+            fee_config.2
+        );
+        assert_eq!(liqpool.admin_balances(&0), fee_config.3);
+        assert_eq!(liqpool.admin_balances(&1), fee_config.4)
+    }
+}

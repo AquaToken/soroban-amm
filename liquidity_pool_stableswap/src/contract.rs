@@ -56,7 +56,7 @@ pub trait LiquidityPoolTrait {
     fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128>) -> u128;
     fn get_dy(e: Env, i: i128, j: i128, dx: u128) -> u128;
     fn get_dy_underlying(e: Env, i: i128, j: i128, dx: u128) -> u128;
-    fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128);
+    fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128) -> u128;
     fn remove_liquidity(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>);
 
     // Withdraw coins from the pool in an imbalanced amount.
@@ -466,7 +466,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         return dy - fee;
     }
 
-    fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128) {
+    fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128) -> u128 {
         user.require_auth();
         if storage::get_is_killed(&e) {
             panic!("is killed")
@@ -516,6 +516,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let token_client = token::Client::new(&e, &coins.get(j as u32).unwrap());
         token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
+        dy
     }
 
     fn remove_liquidity(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) {
