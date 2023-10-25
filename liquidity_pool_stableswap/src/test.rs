@@ -70,7 +70,6 @@ fn test_happy_flow() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::random(&e);
     let fee = 2000_i128;
-    // let admin_fee = 20_i128;
     let admin_fee = 0_i128;
     let liqpool = create_liqpool_contract(
         &e,
@@ -97,19 +96,20 @@ fn test_happy_flow() {
         &Vec::from_array(&e, [100_0000000, 100_0000000]),
         &100_0000000,
     );
-    // assert_eq!(liqpool.get_virtual_price(), 13);
+    assert_eq!(liqpool.get_virtual_price(), 1_0000000);
     liqpool.add_liquidity(
         &user1,
         &Vec::from_array(&e, [100_0000000, 100_0000000]),
         &100_0000000,
     );
-    // assert_eq!(liqpool.get_virtual_price(), 13);
+    assert_eq!(liqpool.get_virtual_price(), 1_0000000);
     let calculated_amount =
         liqpool.calc_token_amount(&Vec::from_array(&e, [10_0000000, 10_0000000]), &true);
 
-    let share_token_amount = 200_0000000;
-    assert_eq!(calculated_amount as i128, share_token_amount / 10);
-    assert_eq!(token_share.balance(&user1), share_token_amount * 2);
+    let total_share_token_amount = 400_0000000; // share amount after two deposits
+
+    assert_eq!(calculated_amount as i128, total_share_token_amount / 2 / 10);
+    assert_eq!(token_share.balance(&user1), total_share_token_amount);
     assert_eq!(token_share.balance(&liqpool.address), 0);
     assert_eq!(token1.balance(&user1), 800_0000000);
     assert_eq!(token1.balance(&liqpool.address), 200_0000000);
@@ -123,24 +123,24 @@ fn test_happy_flow() {
     assert_eq!(token2.balance(&user1), 807_9637267);
     assert_eq!(token2.balance(&liqpool.address), 192_0362733);
 
-    token_share.approve(&user1, &liqpool.address, &(share_token_amount * 2), &99999);
+    token_share.approve(&user1, &liqpool.address, &total_share_token_amount, &99999);
 
     liqpool.remove_liquidity(
         &user1,
-        &(share_token_amount as u128),
+        &((total_share_token_amount as u128) / 2),
         &Vec::from_array(&e, [0, 0]),
     );
 
     assert_eq!(token1.balance(&user1), 895_0000000);
     assert_eq!(token2.balance(&user1), 903_9818633);
-    assert_eq!(token_share.balance(&user1), share_token_amount);
+    assert_eq!(token_share.balance(&user1), total_share_token_amount / 2);
     assert_eq!(token1.balance(&liqpool.address), 105_0000000);
     assert_eq!(token2.balance(&liqpool.address), 96_0181367);
     assert_eq!(token_share.balance(&liqpool.address), 0);
 
     liqpool.remove_liquidity(
         &user1,
-        &(share_token_amount as u128),
+        &((total_share_token_amount as u128) / 2),
         &Vec::from_array(&e, [0, 0]),
     );
 
@@ -453,14 +453,14 @@ fn test_custom_fee() {
 
     // we're checking fraction against value required to swap 1 token
     for fee_config in [
-        (0, 0, 9990916, 0, 0),         // fee = 0%, admin fee = 0%
-        (10, 0, 9980926, 0, 0),        // fee = 0.1%, admin fee = 0%
-        (30, 0, 9960944, 0, 0),        // fee = 0.3%, admin fee = 0%
-        (100, 0, 9891007, 0, 0),       // fee = 1%, admin fee = 0%
-        (1000, 0, 8991825, 0, 0),      // fee = 10%, admin fee = 0%
-        (3000, 0, 6993642, 0, 0),      // fee = 30%, admin fee = 0%
-        (9900, 0, 99910, 0, 0),        // fee = 99%, admin fee = 0%
-        (9999, 0, 1000, 0, 0),         // fee = 99.99% - maximum fee, admin fee = 0%
+        (0, 0, 9990916, 0, 0),           // fee = 0%, admin fee = 0%
+        (10, 0, 9980926, 0, 0),          // fee = 0.1%, admin fee = 0%
+        (30, 0, 9960944, 0, 0),          // fee = 0.3%, admin fee = 0%
+        (100, 0, 9891007, 0, 0),         // fee = 1%, admin fee = 0%
+        (1000, 0, 8991825, 0, 0),        // fee = 10%, admin fee = 0%
+        (3000, 0, 6993642, 0, 0),        // fee = 30%, admin fee = 0%
+        (9900, 0, 99910, 0, 0),          // fee = 99%, admin fee = 0%
+        (9999, 0, 1000, 0, 0),           // fee = 99.99% - maximum fee, admin fee = 0%
         (100, 10, 9891007, 0, 99),       // fee = 0.1%, admin fee = 0.1%
         (100, 100, 9891007, 0, 999),     // fee = 0.1%, admin fee = 1%
         (100, 1000, 9891007, 0, 9990),   // fee = 0.1%, admin fee = 10%
@@ -493,4 +493,45 @@ fn test_custom_fee() {
         assert_eq!(liqpool.admin_balances(&0), fee_config.3);
         assert_eq!(liqpool.admin_balances(&1), fee_config.4)
     }
+}
+
+#[test]
+fn test_add_liquidity_inequal() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::random(&e);
+    let admin2 = Address::random(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::random(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    let token_share = token::Client::new(&e, &liqpool.share_id());
+
+    token1.mint(&user1, &1000_0000000);
+    token2.mint(&user1, &1000_0000000);
+    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+
+    liqpool.add_liquidity(
+        &user1,
+        &Vec::from_array(&e, [10_0000000, 100_0000000]),
+        &10_0000000,
+    );
+
+    assert_eq!(token_share.balance(&user1), 101_8767615);
+    assert_eq!(liqpool.get_virtual_price(), 1_0000000);
 }
