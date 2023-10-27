@@ -1,11 +1,18 @@
-use crate::admin::{has_admin, require_admin, set_admin};
+use crate::admin::{check_admin, has_admin, require_admin, set_admin};
 use crate::pool_constants::{
     ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, KILL_DEADLINE_DT, LENDING_PRECISION, MAX_A,
     MAX_ADMIN_FEE, MAX_A_CHANGE, MAX_FEE, MIN_RAMP_TIME, N_COINS, PRECISION, PRECISION_MUL, RATES,
 };
+use crate::rewards::manager as rewards_manager;
+use crate::rewards::storage as rewards_storage;
+use crate::rewards::storage::get_pool_reward_config;
 use crate::token::create_contract;
 use crate::{admin, storage, token};
-use soroban_sdk::{contract, contractimpl, contractmeta, Address, BytesN, Env, IntoVal, Vec};
+use cast::i128 as to_i128;
+use soroban_sdk::{
+    contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol,
+    Vec,
+};
 
 contractmeta!(
     key = "Description",
@@ -126,6 +133,11 @@ pub trait LiquidityPoolTrait {
 
     // Upgrade contract with new code
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
+
+    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, amount: i128);
+    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
+    fn get_user_reward(e: Env, user: Address) -> i128;
+    fn claim(e: Env, user: Address) -> i128;
 }
 
 #[contractimpl]
@@ -138,8 +150,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         a: u128,
         fee: u128,
         admin_fee: u128,
-        _reward_token: Address,
-        _reward_storage: Address,
+        reward_token: Address,
+        reward_storage: Address,
     ) {
         if has_admin(&e) {
             panic!("already initialized")
@@ -175,6 +187,25 @@ impl LiquidityPoolTrait for LiquidityPool {
         storage::put_admin_actions_deadline(&e, 0);
         storage::put_transfer_ownership_deadline(&e, 0);
         storage::put_is_killed(&e, false);
+
+        storage::put_reward_token(&e, reward_token);
+        storage::put_reward_storage(&e, reward_storage);
+        rewards_manager::set_reward_inv(&e, &Map::from_array(&e, [(0_u64, 0_u64)]));
+        rewards_storage::set_pool_reward_config(
+            &e,
+            &rewards_storage::PoolRewardConfig {
+                tps: 0,
+                expired_at: 0,
+            },
+        );
+        rewards_storage::set_pool_reward_data(
+            &e,
+            &rewards_storage::PoolRewardData {
+                block: 0,
+                accumulated: 0,
+                last_time: 0,
+            },
+        );
     }
 
     fn share_id(e: Env) -> Address {
@@ -295,6 +326,11 @@ impl LiquidityPoolTrait for LiquidityPool {
         if storage::get_is_killed(&e) {
             panic!("is killed")
         }
+
+        // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
+        let pool_data = rewards_manager::update_rewards_data(&e);
+        rewards_manager::update_user_reward(&e, &pool_data, &user);
+        rewards_storage::bump_user_reward_data(&e, &user);
 
         let mut fees: Vec<u128> = Vec::from_array(&e, [0; N_COINS]);
         let fee = storage::get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
@@ -521,6 +557,12 @@ impl LiquidityPoolTrait for LiquidityPool {
 
     fn remove_liquidity(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) {
         user.require_auth();
+
+        // Before actual changes were made to the pool, update total rewards data and refresh user reward
+        let pool_data = rewards_manager::update_rewards_data(&e);
+        rewards_manager::update_user_reward(&e, &pool_data, &user);
+        rewards_storage::bump_user_reward_data(&e, &user);
+
         let total_supply = token::get_total_shares(&e) as u128;
         let mut amounts = Vec::from_array(&e, [0; N_COINS]);
         let mut reserves = storage::get_reserves(&e);
@@ -557,6 +599,11 @@ impl LiquidityPoolTrait for LiquidityPool {
         max_burn_amount: u128,
     ) -> u128 {
         user.require_auth();
+
+        // Before actual changes were made to the pool, update total rewards data and refresh user reward
+        let pool_data = rewards_manager::update_rewards_data(&e);
+        rewards_manager::update_user_reward(&e, &pool_data, &user);
+        rewards_storage::bump_user_reward_data(&e, &user);
 
         if storage::get_is_killed(&e) {
             panic!("is killed")
@@ -741,6 +788,11 @@ impl LiquidityPoolTrait for LiquidityPool {
         min_amount: u128,
     ) {
         user.require_auth();
+
+        // Before actual changes were made to the pool, update total rewards data and refresh user reward
+        let pool_data = rewards_manager::update_rewards_data(&e);
+        rewards_manager::update_user_reward(&e, &pool_data, &user);
+        rewards_storage::bump_user_reward_data(&e, &user);
 
         if storage::get_is_killed(&e) {
             panic!("is killed")
@@ -960,5 +1012,53 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
         require_admin(&e);
         e.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
+    fn set_rewards_config(
+        e: Env,
+        admin: Address,
+        expired_at: u64, // timestamp
+        amount: i128,    // value with 7 decimal places. example: 600_0000000
+    ) {
+        admin.require_auth();
+        check_admin(&e, &admin);
+
+        rewards_manager::update_rewards_data(&e);
+
+        let config = rewards_storage::PoolRewardConfig {
+            tps: amount / to_i128(expired_at - e.ledger().timestamp()),
+            expired_at,
+        };
+        storage::bump_instance(&e);
+        rewards_storage::set_pool_reward_config(&e, &config);
+    }
+
+    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
+        let config = get_pool_reward_config(&e);
+        let pool_data = rewards_manager::update_rewards_data(&e);
+        let user_data = rewards_manager::update_user_reward(&e, &pool_data, &user);
+        let mut result = Map::new(&e);
+        result.set(symbol_short!("tps"), to_i128(config.tps));
+        result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
+        result.set(symbol_short!("acc"), to_i128(pool_data.accumulated));
+        result.set(symbol_short!("last_time"), to_i128(pool_data.last_time));
+        result.set(
+            symbol_short!("pool_acc"),
+            to_i128(user_data.pool_accumulated),
+        );
+        result.set(symbol_short!("block"), to_i128(pool_data.block));
+        result.set(symbol_short!("usr_block"), to_i128(user_data.last_block));
+        result.set(symbol_short!("to_claim"), to_i128(user_data.to_claim));
+        result
+    }
+
+    fn get_user_reward(e: Env, user: Address) -> i128 {
+        rewards_manager::get_amount_to_claim(&e, &user)
+    }
+
+    fn claim(e: Env, user: Address) -> i128 {
+        let reward = rewards_manager::claim_reward(&e, &user);
+        rewards_storage::bump_user_reward_data(&e, &user);
+        reward
     }
 }

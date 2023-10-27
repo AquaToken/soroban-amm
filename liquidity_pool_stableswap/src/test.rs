@@ -3,6 +3,7 @@ extern crate std;
 
 use crate::{token, LiquidityPoolClient};
 
+use crate::assertions::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Ledger, LedgerInfo};
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 
@@ -534,4 +535,266 @@ fn test_add_liquidity_inequal() {
 
     assert_eq!(token_share.balance(&user1), 101_8767615);
     assert_eq!(liqpool.get_virtual_price(), 1_0000000);
+}
+
+#[test]
+fn test_simple_ongoing_reward() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::random(&e);
+    let admin2 = Address::random(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let user1 = Address::random(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    let total_reward_1 = 10_5000000_i128 * 60;
+    liqpool.set_rewards_config(
+        &user1,
+        &e.ledger().timestamp().saturating_add(60),
+        &total_reward_1,
+    );
+    token_reward.approve(
+        &liqpool.address,
+        &liqpool.address,
+        &1_000_000_0000000,
+        &99999,
+    );
+
+    token1.mint(&user1, &1000);
+    assert_eq!(token1.balance(&user1), 1000);
+
+    token2.mint(&user1, &1000);
+    assert_eq!(token2.balance(&user1), 1000);
+    token1.approve(&user1, &liqpool.address, &1000, &99999);
+    token2.approve(&user1, &liqpool.address, &1000, &99999);
+
+    // 10 seconds passed since config, user depositing
+    jump(&e, 10);
+    liqpool.add_liquidity(&user1, &Vec::from_array(&e, [100, 100]), &100);
+
+    assert_eq!(token_reward.balance(&user1), 0);
+    // 30 seconds passed, half of the reward is available for the user
+    jump(&e, 30);
+    assert_eq!(liqpool.claim(&user1), total_reward_1 / 2);
+    assert_eq!(token_reward.balance(&user1), total_reward_1 / 2);
+}
+
+#[test]
+fn test_simple_reward() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::random(&e);
+    let admin2 = Address::random(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let user1 = Address::random(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    token1.mint(&user1, &1000);
+    assert_eq!(token1.balance(&user1), 1000);
+
+    token2.mint(&user1, &1000);
+    assert_eq!(token2.balance(&user1), 1000);
+    token1.approve(&user1, &liqpool.address, &1000, &99999);
+    token2.approve(&user1, &liqpool.address, &1000, &99999);
+
+    // 10 seconds. user depositing
+    jump(&e, 10);
+    liqpool.add_liquidity(&user1, &Vec::from_array(&e, [100, 100]), &100);
+
+    // 20 seconds. rewards set up for 60 seconds
+    jump(&e, 10);
+    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    let total_reward_1 = 10_5000000_i128 * 60;
+    liqpool.set_rewards_config(
+        &user1,
+        &e.ledger().timestamp().saturating_add(60),
+        &total_reward_1,
+    );
+    token_reward.approve(
+        &liqpool.address,
+        &liqpool.address,
+        &1_000_000_0000000,
+        &99999,
+    );
+
+    // 90 seconds. rewards ended.
+    jump(&e, 70);
+    // calling set rewards config to checkpoint. should be removed
+    liqpool.set_rewards_config(&user1, &e.ledger().timestamp().saturating_add(60), &0_i128);
+
+    // 100 seconds. user claim reward
+    jump(&e, 10);
+    assert_eq!(token_reward.balance(&user1), 0);
+    // full reward should be available to the user
+    assert_eq!(liqpool.claim(&user1), total_reward_1);
+    assert_eq!(token_reward.balance(&user1), total_reward_1);
+}
+
+#[test]
+fn test_two_users_rewards() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::random(&e);
+    let admin2 = Address::random(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let user1 = Address::random(&e);
+    let user2 = Address::random(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    let total_reward_1 = 10_5000000_i128 * 60;
+    liqpool.set_rewards_config(
+        &user1,
+        &e.ledger().timestamp().saturating_add(60),
+        &total_reward_1,
+    );
+    token_reward.approve(
+        &liqpool.address,
+        &liqpool.address,
+        &1_000_000_0000000,
+        &99999,
+    );
+
+    for user in [&user1, &user2] {
+        token1.mint(user, &1000);
+        assert_eq!(token1.balance(user), 1000);
+
+        token2.mint(user, &1000);
+        assert_eq!(token2.balance(user), 1000);
+
+        token1.approve(user, &liqpool.address, &1000, &99999);
+        token2.approve(user, &liqpool.address, &1000, &99999);
+    }
+
+    // two users make deposit for equal value. second after 30 seconds after rewards start,
+    //  so it gets only 1/4 of total reward
+    liqpool.add_liquidity(&user1, &Vec::from_array(&e, [100, 100]), &100);
+    jump(&e, 30);
+    assert_eq!(liqpool.claim(&user1), total_reward_1 / 2);
+    liqpool.add_liquidity(&user2, &Vec::from_array(&e, [100, 100]), &100);
+    jump(&e, 100);
+    assert_eq!(liqpool.claim(&user1), total_reward_1 / 4);
+    assert_eq!(liqpool.claim(&user2), total_reward_1 / 4);
+    assert_eq!(token_reward.balance(&user1), total_reward_1 / 4 * 3);
+    assert_eq!(token_reward.balance(&user2), total_reward_1 / 4);
+}
+
+#[test]
+fn test_lazy_user_rewards() {
+    // first user comes as initial liquidity provider and expects to get maximum reward
+    //  second user comes at the end makes huge deposit
+    //  first should receive almost full reward
+
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::random(&e);
+    let admin2 = Address::random(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let user1 = Address::random(&e);
+    let user2 = Address::random(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    let total_reward_1 = 10_5000000_i128 * 60;
+    liqpool.set_rewards_config(
+        &user1,
+        &e.ledger().timestamp().saturating_add(60),
+        &total_reward_1,
+    );
+    token_reward.approve(
+        &liqpool.address,
+        &liqpool.address,
+        &1_000_000_0000000,
+        &99999,
+    );
+
+    for user in [&user1, &user2] {
+        token1.mint(user, &1000);
+        assert_eq!(token1.balance(user), 1000);
+
+        token2.mint(user, &1000);
+        assert_eq!(token2.balance(user), 1000);
+
+        token1.approve(user, &liqpool.address, &1000, &99999);
+        token2.approve(user, &liqpool.address, &1000, &99999);
+    }
+
+    liqpool.add_liquidity(&user1, &Vec::from_array(&e, [100, 100]), &100);
+    jump(&e, 59);
+    liqpool.add_liquidity(&user2, &Vec::from_array(&e, [1000, 1000]), &100);
+    jump(&e, 100);
+    let user1_claim = liqpool.claim(&user1);
+    let user2_claim = liqpool.claim(&user2);
+    assert_approx_eq_abs(
+        user1_claim,
+        total_reward_1 * 59 / 60 + total_reward_1 / 1100 * 100 / 60,
+        1000,
+    );
+    assert_approx_eq_abs(user2_claim, total_reward_1 / 1100 * 1000 / 60, 1000);
+    assert_approx_eq_abs(token_reward.balance(&user1), user1_claim, 1000);
+    assert_approx_eq_abs(token_reward.balance(&user2), user2_claim, 1000);
+    assert_approx_eq_abs(user1_claim + user2_claim, total_reward_1, 1000);
 }

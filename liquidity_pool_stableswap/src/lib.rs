@@ -5,6 +5,7 @@ mod assertions;
 mod constants;
 mod contract;
 mod pool_constants;
+mod rewards;
 mod storage;
 mod test;
 mod token;

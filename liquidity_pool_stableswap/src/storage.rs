@@ -2,28 +2,23 @@ use crate::constants::{
     INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT,
     PERSISTENT_LIFETIME_THRESHOLD,
 };
+use crate::pool_constants::N_COINS;
 use soroban_sdk::{contracttype, Address, Env, IntoVal, TryFromVal, Val, Vec};
 
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    // TokenA, // todo: remove
-    // TokenB, // todo: remove
     Tokens,
     Reserves,
     RewardToken,
     RewardStorage,
     TokenShare,
-    // ReserveA, // todo: remove
-    // ReserveB, // todo: remove
     Admin,
     FutureAdmin,
     PoolRewardConfig,
     PoolRewardData,
     UserRewardData(Address),
     RewardInvData,
-    FeeFraction, // 1 = 0.01%
-
     InitialA,
     InitialATime,
     FutureA,
@@ -75,10 +70,6 @@ pub fn get_tokens(e: &Env) -> Vec<Address> {
     get_instance_value(e, &DataKey::Tokens).unwrap()
 }
 
-// pub fn get_token_b(e: &Env) -> Address {
-//     get_instance_value(e, &DataKey::TokenB).unwrap()
-// }
-
 pub fn get_reward_token(e: &Env) -> Address {
     get_instance_value(e, &DataKey::RewardToken).unwrap()
 }
@@ -96,15 +87,12 @@ pub fn get_reserves(e: &Env) -> Vec<u128> {
 }
 
 pub fn put_tokens(e: &Env, contracts: &Vec<Address>) {
-    // todo: validate size
-    // put_instance_value(e, &DataKey::Tokens, &contracts);
+    if contracts.len() != N_COINS as u32 {
+        panic!("wrong vector size")
+    }
     bump_instance(e);
     e.storage().instance().set(&DataKey::Tokens, contracts);
 }
-
-// pub fn put_token_b(e: &Env, contract: Address) {
-//     put_instance_value(e, &DataKey::TokenB, &contract);
-// }
 
 pub fn put_reward_token(e: &Env, contract: Address) {
     put_instance_value(e, &DataKey::RewardToken, &contract);
@@ -119,21 +107,11 @@ pub fn put_token_share(e: &Env, contract: Address) {
 }
 
 pub fn put_reserves(e: &Env, amounts: &Vec<u128>) {
-    // todo: validate size
-    // put_instance_value(e, &DataKey::Reserves, &amounts)
+    if amounts.len() != N_COINS as u32 {
+        panic!("wrong vector size")
+    }
     bump_instance(e);
     e.storage().instance().set(&DataKey::Reserves, amounts);
-}
-
-pub fn get_fee_fraction(e: &Env) -> u32 {
-    match get_instance_value(e, &DataKey::FeeFraction) {
-        Some(value) => value,
-        None => panic!("please initialize fee fraction"),
-    }
-}
-
-pub fn put_fee_fraction(e: &Env, value: u32) {
-    put_instance_value(e, &DataKey::FeeFraction, &value);
 }
 
 // initial_A
