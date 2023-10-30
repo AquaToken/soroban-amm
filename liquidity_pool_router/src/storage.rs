@@ -28,6 +28,29 @@ pub fn set_constant_product_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
         .set(&DataKey::ConstantPoolHash, pool_hash)
 }
 
+// pool hash
+pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    let hash = e.storage().instance().get(&DataKey::StableSwapPoolHash);
+    match hash {
+        Some(value) => value,
+        None => {
+            panic!("pool hash not initialized")
+        }
+    }
+}
+
+pub fn set_stableswap_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage()
+        .instance()
+        .set(&DataKey::StableSwapPoolHash, pool_hash)
+}
+
 // token hash
 
 pub fn get_token_hash(e: &Env) -> BytesN<32> {

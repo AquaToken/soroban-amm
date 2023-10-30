@@ -1,14 +1,12 @@
 use crate::admin::{check_admin, has_admin, require_admin, set_admin};
-use crate::rewards::manager as rewards_manager;
-use crate::rewards::storage as rewards_storage;
+use crate::pool_interface::{LiquidityPoolTrait, RewardsTrait};
 use crate::rewards::storage::get_pool_reward_config;
 use crate::token::create_contract;
-use crate::{pool, storage, token};
+use crate::{pool, rewards, storage, token};
 use cast::i128 as to_i128;
 use num_integer::Roots;
-use soroban_sdk::{
-    contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol,
-};
+use soroban_sdk::{contract, contractimpl, contractmeta, symbol_short, IntoVal, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol};
 
 // Metadata that is added on to the WASM custom section
 contractmeta!(
@@ -19,79 +17,29 @@ contractmeta!(
 #[contract]
 pub struct LiquidityPool;
 
-pub trait LiquidityPoolTrait {
-    // Sets the token contract addresses for this pool
-    // todo: add reward_storage address to transfer from one place instead of per-pool balance
-    fn initialize(
-        e: Env,
-        admin: Address,
-        token_wasm_hash: BytesN<32>,
-        token_a: Address,
-        token_b: Address,
-        reward_token: Address,
-        reward_storage: Address,
-    );
-    fn initialize_fee_fraction(e: Env, fee_fraction: u32);
-
-    // Returns the token contract address for the pool share token
-    fn share_id(e: Env) -> Address;
-
-    // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
-    // is determined based on the difference between the reserves stored by this contract, and
-    // the actual balance of token_a and token_b for this contract.
-    fn deposit(
-        e: Env,
-        to: Address,
-        desired_a: i128,
-        min_a: i128,
-        desired_b: i128,
-        min_b: i128,
-    ) -> (i128, i128);
-
-    // If "buy_a" is true, the swap will buy token_a and sell token_b. This is flipped if "buy_a" is false.
-    // "out" is the amount being bought, with in_max being a safety to make sure you receive at least that amount.
-    // swap will transfer the selling token "to" to this contract, and then the contract will transfer the buying token to "to".
-    fn swap(e: Env, to: Address, buy_a: bool, out: i128, in_max: i128) -> i128;
-    fn estimate_swap_out(e: Env, buy_a: bool, out: i128) -> i128;
-
-    // transfers share_amount of pool share tokens to this contract, burns all pools share tokens in this contracts, and sends the
-    // corresponding amount of token_a and token_b to "to".
-    // Returns amount of both tokens withdrawn
-    fn withdraw(e: Env, to: Address, share_amount: i128, min_a: i128, min_b: i128) -> (i128, i128);
-
-    fn get_rsrvs(e: Env) -> (i128, i128);
-
-    fn version() -> u32;
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
-    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, amount: i128);
-    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
-    fn get_user_reward(e: Env, user: Address) -> i128;
-    fn claim(e: Env, user: Address) -> i128;
-    fn get_fee_fraction(e: Env) -> u32;
-}
-
 #[contractimpl]
 impl LiquidityPoolTrait for LiquidityPool {
     fn initialize(
         e: Env,
         admin: Address,
-        token_wasm_hash: BytesN<32>,
-        token_a: Address,
-        token_b: Address,
-        reward_token: Address,
-        reward_storage: Address,
-    ) {
+        lp_token_wasm_hash: BytesN<32>,
+        tokens: Vec<Address>,
+        fee_fraction: u32,
+    ) -> bool {
         if has_admin(&e) {
             panic!("already initialized")
         }
 
         set_admin(&e, &admin);
 
+        let token_a = tokens.get(0).unwrap();
+        let token_b = tokens.get(1).unwrap();
+
         if token_a >= token_b {
             panic!("token_a must be less than token_b");
         }
 
-        let share_contract = create_contract(&e, token_wasm_hash, &token_a, &token_b);
+        let share_contract = create_contract(&e, lp_token_wasm_hash, &token_a, &token_b);
         token::Client::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
@@ -99,77 +47,91 @@ impl LiquidityPoolTrait for LiquidityPool {
             &"POOL".into_val(&e),
         );
 
-        storage::put_token_a(&e, token_a);
-        storage::put_token_b(&e, token_b);
-        storage::put_reward_token(&e, reward_token);
-        storage::put_reward_storage(&e, reward_storage);
-        storage::put_token_share(&e, share_contract.try_into().unwrap());
-        storage::put_reserve_a(&e, 0);
-        storage::put_reserve_b(&e, 0);
-        rewards_manager::set_reward_inv(&e, &Map::from_array(&e, [(0_u64, 0_u64)]));
-        rewards_storage::set_pool_reward_config(
-            &e,
-            &rewards_storage::PoolRewardConfig {
-                tps: 0,
-                expired_at: 0,
-            },
-        );
-        rewards_storage::set_pool_reward_data(
-            &e,
-            &rewards_storage::PoolRewardData {
-                block: 0,
-                accumulated: 0,
-                last_time: 0,
-            },
-        );
-    }
-
-    fn initialize_fee_fraction(e: Env, fee_fraction: u32) {
         // 0.01% = 1; 1% = 100; 0.3% = 30
         if fee_fraction > 9999 {
             panic!("fee cannot be equal or greater than 100%");
         }
         storage::put_fee_fraction(&e, fee_fraction);
+
+        storage::put_token_a(&e, token_a);
+        storage::put_token_b(&e, token_b);
+        storage::put_token_share(&e, share_contract.try_into().unwrap());
+        storage::put_reserve_a(&e, 0);
+        storage::put_reserve_b(&e, 0);
+
+        rewards::manager::set_reward_inv(&e, &Map::from_array(&e, [(0_u64, 0_u64)]));
+        rewards::storage::set_pool_reward_config(
+            &e,
+            &rewards::storage::PoolRewardConfig {
+                tps: 0,
+                expired_at: 0,
+            },
+        );
+        rewards::storage::set_pool_reward_data(
+            &e,
+            &rewards::storage::PoolRewardData {
+                block: 0,
+                accumulated: 0,
+                last_time: 0,
+            },
+        );
+        true
     }
 
     fn share_id(e: Env) -> Address {
         storage::get_token_share(&e)
     }
 
+    fn get_tokens(e: Env) -> Vec<Address> {
+        Vec::from_array(&e, [storage::get_token_a(&e), storage::get_token_b(&e)])
+    }
+
     fn deposit(
         e: Env,
-        to: Address,
-        desired_a: i128,
-        min_a: i128,
-        desired_b: i128,
-        min_b: i128,
-    ) -> (i128, i128) {
+        user: Address,
+        desired_amounts: Vec<i128>,
+        // min_amounts: Vec<i128>,
+    ) -> (Vec<i128>, i128) {
         // Depositor needs to authorize the deposit
-        to.require_auth();
+        user.require_auth();
 
         let (reserve_a, reserve_b) = (storage::get_reserve_a(&e), storage::get_reserve_b(&e));
 
         // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
-        let pool_data = rewards_manager::update_rewards_data(&e);
-        rewards_manager::update_user_reward(&e, &pool_data, &to);
-        rewards_storage::bump_user_reward_data(&e, &to);
+        let pool_data = rewards::manager::update_rewards_data(&e);
+        rewards::manager::update_user_reward(&e, &pool_data, &user);
+        rewards::storage::bump_user_reward_data(&e, &user);
+
+        let desired_a = desired_amounts.get(0).unwrap();
+        let desired_b = desired_amounts.get(1).unwrap();
+
+        // todo: return back after interface unify
+        // let min_a = min_amounts.get(0).unwrap();
+        // let min_b = min_amounts.get(1).unwrap();
+        let (min_a, min_b) = (0, 0);
 
         // Calculate deposit amounts
-        let amounts =
-            pool::get_deposit_amounts(desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
+        let amounts = pool::get_deposit_amounts(
+            desired_a as i128,
+            min_a,
+            desired_b as i128,
+            min_b,
+            reserve_a,
+            reserve_b,
+        );
 
         let token_a_client = token::Client::new(&e, &storage::get_token_a(&e));
         let token_b_client = token::Client::new(&e, &storage::get_token_b(&e));
 
         token_a_client.transfer_from(
             &e.current_contract_address(),
-            &to,
+            &user,
             &e.current_contract_address(),
             &amounts.0,
         );
         token_b_client.transfer_from(
             &e.current_contract_address(),
-            &to,
+            &user,
             &e.current_contract_address(),
             &amounts.1,
         );
@@ -187,44 +149,61 @@ impl LiquidityPoolTrait for LiquidityPool {
             (balance_a * balance_b).sqrt()
         };
 
-        token::mint_shares(&e, to, new_total_shares - total_shares);
+        let shares_to_mint = new_total_shares - total_shares;
+        token::mint_shares(&e, user, shares_to_mint);
         storage::put_reserve_a(&e, balance_a);
         storage::put_reserve_b(&e, balance_b);
-        (amounts.0, amounts.1)
+        (Vec::from_array(&e, [amounts.0, amounts.1]), shares_to_mint)
     }
 
-    fn swap(e: Env, to: Address, buy_a: bool, out: i128, in_max: i128) -> i128 {
-        to.require_auth();
+    fn swap(
+        e: Env,
+        user: Address,
+        in_idx: u32,
+        out_idx: u32,
+        in_amount: i128,
+        out_min: i128,
+    ) -> i128 {
+        user.require_auth();
 
-        let (reserve_a, reserve_b) = (storage::get_reserve_a(&e), storage::get_reserve_b(&e));
-        let (reserve_sell, reserve_buy) = if buy_a {
-            (reserve_b, reserve_a)
-        } else {
-            (reserve_a, reserve_b)
-        };
+        if in_idx == out_idx {
+            panic!("cannot swap token to same one")
+        }
+
+        if in_idx > 1 {
+            panic!("in_idx out of bounds");
+        }
+
+        if out_idx > 1 {
+            panic!("in_idx out of bounds");
+        }
+
+        let reserve_a = storage::get_reserve_a(&e);
+        let reserve_b = storage::get_reserve_b(&e);
+        let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
+        let tokens = Self::get_tokens(e.clone());
+        let reserve_sell = reserves.get(in_idx).unwrap();
+        let reserve_buy = reserves.get(out_idx).unwrap();
 
         let fee_fraction = storage::get_fee_fraction(&e);
 
-        // First calculate how much needs to be sold to buy amount out from the pool
-        let n = reserve_sell * out * 10000;
-        let d = (reserve_buy - out) * (10000 - fee_fraction as i128);
-        let sell_amount = (n / d) + 1;
-        if sell_amount > in_max {
-            panic!("in amount is over max")
+        // First calculate how much we can get with in_amount from the pool
+        let multiplier_with_fee = 10000 - fee_fraction as i128;
+        let n = in_amount * reserve_buy * multiplier_with_fee;
+        let d = reserve_sell * 10000 + in_amount * multiplier_with_fee;
+        let out = n / d;
+        if out < out_min {
+            panic!("out amount is less than min")
         }
 
         // Transfer the amount being sold to the contract
-        let sell_token = if buy_a {
-            storage::get_token_b(&e)
-        } else {
-            storage::get_token_a(&e)
-        };
+        let sell_token = tokens.get(in_idx).unwrap();
         let sell_token_client = token::Client::new(&e, &sell_token);
         sell_token_client.transfer_from(
             &e.current_contract_address(),
-            &to,
+            &user,
             &e.current_contract_address(),
-            &sell_amount,
+            &in_amount,
         );
 
         let (balance_a, balance_b) = (token::get_balance_a(&e), token::get_balance_b(&e));
@@ -245,7 +224,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             residue_denominator * reserve + adj_delta
         };
 
-        let (out_a, out_b) = if buy_a { (out, 0) } else { (0, out) };
+        let (out_a, out_b) = if out_idx == 0 { (out, 0) } else { (0, out) };
 
         let new_inv_a = new_invariant_factor(balance_a, reserve_a, out_a);
         let new_inv_b = new_invariant_factor(balance_b, reserve_b, out_b);
@@ -256,41 +235,53 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic!("constant product invariant does not hold");
         }
 
-        if buy_a {
-            token::transfer_a(&e, to, out_a);
+        if out_idx == 0 {
+            token::transfer_a(&e, user, out_a);
         } else {
-            token::transfer_b(&e, to, out_b);
+            token::transfer_b(&e, user, out_b);
         }
 
         storage::put_reserve_a(&e, balance_a - out_a);
         storage::put_reserve_b(&e, balance_b - out_b);
-        sell_amount
+        out
     }
 
-    fn estimate_swap_out(e: Env, buy_a: bool, out: i128) -> i128 {
-        let (reserve_a, reserve_b) = (storage::get_reserve_a(&e), storage::get_reserve_b(&e));
-        let (reserve_sell, reserve_buy) = if buy_a {
-            (reserve_b, reserve_a)
-        } else {
-            (reserve_a, reserve_b)
-        };
+    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: i128) -> i128 {
+        if in_idx == out_idx {
+            panic!("cannot swap token to same one")
+        }
+
+        if in_idx > 1 {
+            panic!("in_idx out of bounds");
+        }
+
+        if out_idx > 1 {
+            panic!("in_idx out of bounds");
+        }
+
+        let reserve_a = storage::get_reserve_a(&e);
+        let reserve_b = storage::get_reserve_b(&e);
+        let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
+        let reserve_sell = reserves.get(in_idx).unwrap();
+        let reserve_buy = reserves.get(out_idx).unwrap();
 
         let fee_fraction = storage::get_fee_fraction(&e);
 
-        // Calculate how much needs to be sold to buy amount out from the pool
-        let n = reserve_sell * out * 10000;
-        let d = (reserve_buy - out) * (10000 - fee_fraction as i128);
-        let sell_amount = (n / d) + 1;
-        sell_amount
+        // First calculate how much needs to be sold to buy amount out from the pool
+        let multiplier_with_fee = 10000 - fee_fraction as i128;
+        let n = in_amount * reserve_buy * multiplier_with_fee;
+        let d = reserve_sell * 10000 + in_amount * multiplier_with_fee;
+        let out = n / d;
+        out
     }
 
     fn withdraw(e: Env, to: Address, share_amount: i128, min_a: i128, min_b: i128) -> (i128, i128) {
         to.require_auth();
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
-        let pool_data = rewards_manager::update_rewards_data(&e);
-        rewards_manager::update_user_reward(&e, &pool_data, &to);
-        rewards_storage::bump_user_reward_data(&e, &to);
+        let pool_data = rewards::manager::update_rewards_data(&e);
+        rewards::manager::update_user_reward(&e, &pool_data, &to);
+        rewards::storage::bump_user_reward_data(&e, &to);
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = token::Client::new(&e, &storage::get_token_share(&e));
@@ -323,17 +314,39 @@ impl LiquidityPoolTrait for LiquidityPool {
         (out_a, out_b)
     }
 
-    fn get_rsrvs(e: Env) -> (i128, i128) {
-        (storage::get_reserve_a(&e), storage::get_reserve_b(&e))
+    fn get_reserves(e: Env) -> Vec<i128> {
+        Vec::from_array(&e, [storage::get_reserve_a(&e), storage::get_reserve_b(&e)])
     }
 
     fn version() -> u32 {
         1
     }
 
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) -> bool {
         require_admin(&e);
         e.deployer().update_current_contract_wasm(new_wasm_hash);
+        true
+    }
+
+    fn get_fee_fraction(e: Env) -> u32 {
+        // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
+        storage::get_fee_fraction(&e)
+    }
+}
+
+#[contractimpl]
+impl RewardsTrait for LiquidityPool {
+    fn initialize_rewards_config(
+        e: Env,
+        admin: Address,
+        reward_token: Address,
+        reward_storage: Address,
+    ) {
+        admin.require_auth();
+        check_admin(&e, &admin);
+
+        storage::put_reward_token(&e, reward_token);
+        storage::put_reward_storage(&e, reward_storage);
     }
 
     fn set_rewards_config(
@@ -341,24 +354,25 @@ impl LiquidityPoolTrait for LiquidityPool {
         admin: Address,
         expired_at: u64, // timestamp
         amount: i128,    // value with 7 decimal places. example: 600_0000000
-    ) {
+    ) -> bool {
         admin.require_auth();
         check_admin(&e, &admin);
 
-        rewards_manager::update_rewards_data(&e);
+        rewards::manager::update_rewards_data(&e);
 
-        let config = rewards_storage::PoolRewardConfig {
+        let config = rewards::storage::PoolRewardConfig {
             tps: amount / to_i128(expired_at - e.ledger().timestamp()),
             expired_at,
         };
         storage::bump_instance(&e);
-        rewards_storage::set_pool_reward_config(&e, &config);
+        rewards::storage::set_pool_reward_config(&e, &config);
+        true
     }
 
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
         let config = get_pool_reward_config(&e);
-        let pool_data = rewards_manager::update_rewards_data(&e);
-        let user_data = rewards_manager::update_user_reward(&e, &pool_data, &user);
+        let pool_data = rewards::manager::update_rewards_data(&e);
+        let user_data = rewards::manager::update_user_reward(&e, &pool_data, &user);
         let mut result = Map::new(&e);
         result.set(symbol_short!("tps"), to_i128(config.tps));
         result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
@@ -375,17 +389,12 @@ impl LiquidityPoolTrait for LiquidityPool {
     }
 
     fn get_user_reward(e: Env, user: Address) -> i128 {
-        rewards_manager::get_amount_to_claim(&e, &user)
+        rewards::manager::get_amount_to_claim(&e, &user)
     }
 
     fn claim(e: Env, user: Address) -> i128 {
-        let reward = rewards_manager::claim_reward(&e, &user);
-        rewards_storage::bump_user_reward_data(&e, &user);
+        let reward = rewards::manager::claim_reward(&e, &user);
+        rewards::storage::bump_user_reward_data(&e, &user);
         reward
-    }
-
-    fn get_fee_fraction(e: Env) -> u32 {
-        // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
-        storage::get_fee_fraction(&e)
     }
 }

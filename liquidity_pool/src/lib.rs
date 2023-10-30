@@ -9,6 +9,7 @@ mod assertions;
 mod constants;
 mod contract;
 mod pool;
+mod pool_interface;
 mod rewards;
 mod storage;
 

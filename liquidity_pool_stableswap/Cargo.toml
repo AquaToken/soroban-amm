@@ -1,5 +1,5 @@
 [package]
-name = "liquidity_pool_stableswap"
+name = "soroban-liquidity-pool-stableswap-contract"
 version = "0.0.0"
 edition = "2021"
 publish = false

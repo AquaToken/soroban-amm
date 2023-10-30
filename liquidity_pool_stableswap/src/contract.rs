@@ -41,7 +41,6 @@ pub trait LiquidityPoolTrait {
         reward_token: Address,
         reward_storage: Address,
     );
-    // fn initialize_fee_fraction(e: Env, fee_fraction: u32);
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
@@ -59,11 +58,11 @@ pub trait LiquidityPoolTrait {
     // slippage).
     // Needed to prevent front-running, not for precise calculations!
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128;
-    fn add_liquidity(e: Env, user: Address, amounts: Vec<u128>, min_mint_amount: u128);
+    fn deposit(e: Env, user: Address, amounts: Vec<i128>) -> (Vec<i128>, i128);
     fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128>) -> u128;
     fn get_dy(e: Env, i: i128, j: i128, dx: u128) -> u128;
     fn get_dy_underlying(e: Env, i: i128, j: i128, dx: u128) -> u128;
-    fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128) -> u128;
+    fn swap(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128) -> u128;
     fn remove_liquidity(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>);
 
     // Withdraw coins from the pool in an imbalanced amount.
@@ -321,7 +320,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         return diff * token_amount as u128 / d0;
     }
 
-    fn add_liquidity(e: Env, user: Address, amounts: Vec<u128>, min_mint_amount: u128) {
+    fn deposit(
+        e: Env,
+        user: Address,
+        amounts: Vec<u128>,
+        // min_mint_amount: u128
+    ) -> (Vec<u128>, u128) {
         user.require_auth();
         if storage::get_is_killed(&e) {
             panic!("is killed")
@@ -350,7 +354,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         for i in 0..N_COINS as u32 {
             let in_amount = amounts.get(i).unwrap();
             if token_supply == 0 {
-                // assert in_amount > 0  // dev: initial deposit requires all coins
+                panic!("initial deposit requires all coins")
             }
             let in_coin = coins.get(i).unwrap();
 
@@ -410,12 +414,15 @@ impl LiquidityPoolTrait for LiquidityPool {
             token_supply * (d2 - d0) / d0
         };
 
-        if mint_amount < min_mint_amount {
-            panic!("Slippage screwed you");
-        }
+        // todo: return back after interface unify
+        // if mint_amount < min_mint_amount {
+        //     panic!("Slippage screwed you");
+        // }
 
         // Mint pool tokens
         token::mint_shares(&e, user, mint_amount as i128);
+
+        (amounts, mint_amount)
     }
 
     fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128>) -> u128 {
@@ -502,7 +509,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         return dy - fee;
     }
 
-    fn exchange(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128) -> u128 {
+    fn swap(e: Env, user: Address, i: i128, j: i128, dx: u128, min_dy: u128) -> u128 {
         user.require_auth();
         if storage::get_is_killed(&e) {
             panic!("is killed")

@@ -1,14 +1,26 @@
 use crate::admin::{get_admin, has_admin, require_admin, set_admin};
-use crate::pool_contract::LiquidityPoolClient;
+use crate::pool_contract::{StableSwapLiquidityPoolClient, StandardLiquidityPoolClient};
 use crate::storage::{
-    get_constant_product_pool_hash, get_pool_id, get_pools_list, get_reward_token, get_token_hash,
-    has_pool, put_pool, set_constant_product_pool_hash, set_reward_token, set_token_hash,
+    get_constant_product_pool_hash, get_pool_id, get_pools_list, get_reward_token,
+    get_stableswap_pool_hash, get_token_hash, has_pool, put_pool, set_constant_product_pool_hash,
+    set_reward_token, set_token_hash,
 };
 use crate::token;
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, Symbol, Vec};
+use soroban_sdk::IntoVal;
+use soroban_sdk::{
+    contract, contractimpl, symbol_short, vec, Address, BytesN, Env, Map, Symbol, TryIntoVal, Vec,
+};
 
 pub trait LiquidityPoolRouterTrait {
     fn init_pool(e: Env, token_a: Address, token_b: Address) -> Address;
+    fn init_standard_pool(e: Env, token_a: Address, token_b: Address, fee_fraction: u32)
+        -> Address;
+    fn init_stableswap_pool(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        fee_fraction: u32,
+    ) -> Address;
 
     fn get_pools_list(e: Env) -> Vec<Address>;
 
@@ -85,50 +97,140 @@ pub trait UpgradeableContract {
 #[contract]
 struct LiquidityPoolRouter;
 
+enum PoolType {
+    Standard,
+    StableSwap,
+}
+
+fn deploy_pool(
+    e: &Env,
+    token_a: &Address,
+    token_b: &Address,
+    pool_type: PoolType,
+    fee_fraction: u32,
+) {
+    let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
+    let liquidity_pool_wasm_hash = match pool_type {
+        PoolType::Standard => get_constant_product_pool_hash(&e),
+        PoolType::StableSwap => get_stableswap_pool_hash(&e),
+    };
+
+    let pool_contract_id = e
+        .deployer()
+        .with_current_contract(salt.clone())
+        .deploy(liquidity_pool_wasm_hash);
+
+    put_pool(&e, &salt, &pool_contract_id);
+
+    // TODO: NOT FOR PRODUCTION
+    //  this is unsafe as we can store limited amount of records
+    // add_pool_to_list(&e, &get_pool_id(&e, &salt));
+
+    let pool_type_str;
+    match pool_type {
+        PoolType::Standard => {
+            init_standard_pool(e, token_a, token_b, &pool_contract_id, fee_fraction);
+            pool_type_str = symbol_short!("constant");
+        }
+        PoolType::StableSwap => {
+            // admin fee and a are hardcoded
+            init_stableswap_pool(e, token_a, token_b, 10, &pool_contract_id, fee_fraction, 0);
+            pool_type_str = symbol_short!("stable");
+        }
+    }
+
+    e.events().publish(
+        (
+            Symbol::new(&e, "init_pool"),
+            token_a.clone(),
+            token_b.clone(),
+        ),
+        (&pool_contract_id, pool_type_str, fee_fraction),
+    );
+}
+
+fn init_standard_pool(
+    e: &Env,
+    token_a: &Address,
+    token_b: &Address,
+    pool_contract_id: &Address,
+    fee_fraction: u32,
+) {
+    let token_wasm_hash = get_token_hash(&e);
+    let reward_token = get_reward_token(&e);
+    let admin = get_admin(&e);
+    let liq_pool_client = StandardLiquidityPoolClient::new(&e, pool_contract_id);
+    liq_pool_client.initialize(
+        &admin,
+        &token_wasm_hash,
+        &token_a,
+        &token_b,
+        &fee_fraction,
+        &reward_token,
+        &e.current_contract_address(),
+    );
+}
+
+fn init_stableswap_pool(
+    e: &Env,
+    token_a: &Address,
+    token_b: &Address,
+    a: u128,
+    pool_contract_id: &Address,
+    fee_fraction: u32,
+    admin_fee_fraction: u32,
+) {
+    let token_wasm_hash = get_token_hash(&e);
+    let reward_token = get_reward_token(&e);
+    let admin = get_admin(&e);
+    let liq_pool_client = StableSwapLiquidityPoolClient::new(&e, pool_contract_id);
+    liq_pool_client.initialize(
+        &admin,
+        &token_wasm_hash,
+        &Vec::from_array(&e, [token_a.clone(), token_b.clone()]),
+        &a,
+        &(fee_fraction as u128),
+        &(admin_fee_fraction as u128),
+        &reward_token,
+        &e.current_contract_address(),
+    );
+}
+
 #[contractimpl]
 impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
     fn init_pool(e: Env, token_a: Address, token_b: Address) -> Address {
+        // todo: allow multiple pools within pair of tokens
         let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
         if !has_pool(&e, &salt) {
-            let liquidity_pool_wasm_hash = get_constant_product_pool_hash(&e);
-            let token_wasm_hash = get_token_hash(&e);
-            let reward_token = get_reward_token(&e);
-            let admin = get_admin(&e);
+            deploy_pool(&e, &token_a, &token_b, PoolType::Standard, 30);
+        }
+        let (_pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
+        pool_id
+    }
 
-            let pool_contract_id = e
-                .deployer()
-                .with_current_contract(salt.clone())
-                .deploy(liquidity_pool_wasm_hash);
+    fn init_standard_pool(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        fee_fraction: u32,
+    ) -> Address {
+        let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
+        if !has_pool(&e, &salt) {
+            deploy_pool(&e, &token_a, &token_b, PoolType::Standard, fee_fraction);
+        }
+        let (_pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
+        pool_id
+    }
 
-            put_pool(&e, &salt, &pool_contract_id);
-
-            // TODO: NOT FOR PRODUCTION
-            //  this is unsafe as we can store limited amount of records
-            // add_pool_to_list(&e, &get_pool_id(&e, &salt));
-
-            let liq_pool_client = LiquidityPoolClient::new(&e, &pool_contract_id);
-            liq_pool_client.initialize(
-                &admin,
-                &token_wasm_hash,
-                &token_a,
-                &token_b,
-                &reward_token,
-                &e.current_contract_address(),
-            );
-            // fee fraction is hardcoded so far.
-            //  we'll need to add support for multiple pools and allow different types of them
-            //  pools can be: constant product & stable swap.
-            //      constant product: 0.1%, 0.3%, 1%
-            liq_pool_client.initialize_fee_fraction(&30);
-
-            e.events().publish(
-                (
-                    Symbol::new(&e, "init_pool"),
-                    token_a.clone(),
-                    token_b.clone(),
-                ),
-                (pool_contract_id, symbol_short!("constant"), 30),
-            );
+    fn init_stableswap_pool(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        fee_fraction: u32,
+    ) -> Address {
+        let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
+        if !has_pool(&e, &salt) {
+            deploy_pool(&e, &token_a, &token_b, PoolType::StableSwap, fee_fraction);
         }
         let (_pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
         pool_id
@@ -180,13 +282,23 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
         let pool_id = get_pool_id(&e, &salt);
 
-        let (amount_a, amount_b) = LiquidityPoolClient::new(&e, &pool_id)
-            .deposit(&account, &desired_a, &min_a, &desired_b, &min_b);
-
-        e.events().publish(
-            (Symbol::new(&e, "deposit"), token_a, token_b, account),
-            (pool_id, amount_a, amount_b),
+        let (amount_a, amount_b): (i128, i128) = e.invoke_contract(
+            &pool_id,
+            &symbol_short!("deposit"),
+            vec![
+                &e,
+                account.clone().try_into_val(&e).unwrap(),
+                desired_a.try_into_val(&e).unwrap(),
+                min_a.try_into_val(&e).unwrap(),
+                desired_b.try_into_val(&e).unwrap(),
+                min_b.try_into_val(&e).unwrap(),
+            ],
         );
+
+        // e.events().publish(
+        //     (Symbol::new(&e, "deposit"), token_a, token_b, account),
+        //     vec![&e, pool_id, amount_a, amount_b],
+        // );
 
         (amount_a, amount_b)
     }
@@ -206,8 +318,17 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
             panic!("pool not exists")
         }
 
-        let in_amt =
-            LiquidityPoolClient::new(&e, &pool_id).swap(&account, &(buy == token_a), &out, &in_max);
+        let in_amt = e.invoke_contract(
+            &pool_id,
+            &symbol_short!("swap"),
+            vec![
+                &e,
+                account.clone().try_into_val(&e).unwrap(),
+                (buy == token_a).try_into_val(&e).unwrap(),
+                out.try_into_val(&e).unwrap(),
+                in_max.try_into_val(&e).unwrap(),
+            ],
+        );
 
         e.events().publish(
             (Symbol::new(&e, "swap_out"), token_a, token_b, account),
@@ -224,7 +345,15 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
             panic!("pool not exists")
         }
 
-        LiquidityPoolClient::new(&e, &pool_id).estimate_swap_out(&(buy == token_a), &out)
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "estimate_swap_out"),
+            vec![
+                &e,
+                (buy == token_a).try_into_val(&e).unwrap(),
+                out.try_into_val(&e).unwrap(),
+            ],
+        )
     }
 
     fn withdraw(
@@ -242,9 +371,17 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
             panic!("pool not exists")
         }
 
-        let pool_client = LiquidityPoolClient::new(&e, &pool_id);
-
-        let (amount_a, amount_b) = pool_client.withdraw(&account, &share_amount, &min_a, &min_b);
+        let (amount_a, amount_b) = e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "withdraw"),
+            vec![
+                &e,
+                account.clone().try_into_val(&e).unwrap(),
+                share_amount.try_into_val(&e).unwrap(),
+                min_a.try_into_val(&e).unwrap(),
+                min_b.try_into_val(&e).unwrap(),
+            ],
+        );
 
         if amount_a < min_a || amount_b < min_b {
             panic!("min not satisfied");
@@ -269,7 +406,7 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         if !pool_exists {
             panic!("pool not exists")
         }
-        LiquidityPoolClient::new(&e, &pool_id).get_rsrvs()
+        e.invoke_contract(&pool_id, &symbol_short!("get_rsrvs"), Vec::new(&e))
     }
 
     fn set_rewards_config(
@@ -286,7 +423,16 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         if !pool_exists {
             panic!("pool not exists")
         }
-        LiquidityPoolClient::new(&e, &pool_id).set_rewards_config(&admin, &expired_at, &amount);
+        let _a: bool = e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "set_rewards_config"),
+            vec![
+                &e,
+                admin.clone().try_into_val(&e).unwrap(),
+                expired_at.try_into_val(&e).unwrap(),
+                amount.try_into_val(&e).unwrap(),
+            ],
+        );
 
         let reward_token = get_reward_token(&e);
 
@@ -307,7 +453,11 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         if !pool_exists {
             panic!("pool not exists")
         }
-        LiquidityPoolClient::new(&e, &pool_id).get_rewards_info(&user)
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_rewards_info"),
+            vec![&e, user.clone().into_val(&e)],
+        )
     }
 
     fn get_user_reward(e: Env, token_a: Address, token_b: Address, user: Address) -> i128 {
@@ -316,7 +466,11 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         if !pool_exists {
             panic!("pool not exists")
         }
-        LiquidityPoolClient::new(&e, &pool_id).get_user_reward(&user)
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_user_reward"),
+            vec![&e, user.clone().into_val(&e)],
+        )
     }
 
     fn claim(e: Env, token_a: Address, token_b: Address, user: Address) -> i128 {
@@ -325,17 +479,24 @@ impl LiquidityPoolRouterTrait for LiquidityPoolRouter {
         if !pool_exists {
             panic!("pool not exists")
         }
-        let pool_client = LiquidityPoolClient::new(&e, &pool_id);
         let reward_token = get_reward_token(&e);
         let token_client = token::token::Client::new(&e, &reward_token);
-        let reward_amount = pool_client.get_user_reward(&user);
+        let reward_amount = e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_user_reward"),
+            vec![&e, user.clone().into_val(&e)],
+        );
         token_client.approve(
             &e.current_contract_address(),
             &pool_id,
             &reward_amount,
             &(e.ledger().sequence() + 1),
         );
-        let claimed_amt = pool_client.claim(&user);
+        let claimed_amt = e.invoke_contract(
+            &pool_id,
+            &symbol_short!("claim"),
+            vec![&e, user.clone().into_val(&e)],
+        );
 
         e.events().publish(
             (Symbol::new(&e, "claim"), token_a, token_b, user),

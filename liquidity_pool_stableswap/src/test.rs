@@ -33,7 +33,6 @@ fn create_liqpool_contract<'a>(
         token_reward,
         &liqpool.address,
     );
-    // liqpool.initialize_fee_fraction(&fee_fraction);
     liqpool
 }
 
