@@ -5,8 +5,9 @@ use crate::{token, LiquidityPoolClient};
 
 use crate::assertions::assert_approx_eq_abs;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Map, Symbol, Vec, TryFromVal};
-use soroban_sdk::arbitrary::std::println;
+use soroban_sdk::{
+    testutils::Address as _, Address, BytesN, Env, IntoVal, Map, Symbol, Vec,
+};
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> token::Client<'a> {
     token::Client::new(e, &e.register_stellar_asset_contract(admin.clone()))
@@ -176,7 +177,7 @@ fn test() {
 
     token_share.approve(&user1, &liqpool.address, &100, &99999);
 
-    liqpool.withdraw(&user1, &100, &197, &51);
+    liqpool.withdraw(&user1, &100_i128, &Vec::from_array(&e, [197_i128, 51_i128]));
     assert_eq!(
         e.auths()[0],
         (
@@ -185,7 +186,14 @@ fn test() {
                 function: AuthorizedFunction::Contract((
                     liqpool.address.clone(),
                     Symbol::new(&e, "withdraw"),
-                    (&user1, 100_i128, 197_i128, 51_i128).into_val(&e)
+                    Vec::from_array(
+                        &e,
+                        [
+                            user1.clone().into_val(&e),
+                            100_i128.into_val(&e),
+                            Vec::from_array(&e, [197_i128, 51_i128]).into_val(&e)
+                        ]
+                    )
                 )),
                 sub_invocations: std::vec![],
             }

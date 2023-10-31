@@ -1,5 +1,5 @@
 use crate::admin::{check_admin, has_admin, require_admin, set_admin};
-use crate::pool_interface::{LiquidityPoolTrait, RewardsTrait};
+use crate::pool_interface::{LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait};
 use crate::rewards::storage::get_pool_reward_config;
 use crate::token::create_contract;
 use crate::{pool, rewards, storage, token};
@@ -25,7 +25,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
-    ) -> bool {
+    ) {
         if has_admin(&e) {
             panic!("already initialized")
         }
@@ -75,7 +75,6 @@ impl LiquidityPoolTrait for LiquidityPool {
                 last_time: 0,
             },
         );
-        true
     }
 
     fn share_id(e: Env) -> Address {
@@ -275,19 +274,19 @@ impl LiquidityPoolTrait for LiquidityPool {
         out
     }
 
-    fn withdraw(e: Env, to: Address, share_amount: i128, min_a: i128, min_b: i128) -> (i128, i128) {
-        to.require_auth();
+    fn withdraw(e: Env, user: Address, share_amount: i128, min_amounts: Vec<i128>) -> Vec<i128> {
+        user.require_auth();
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let pool_data = rewards::manager::update_rewards_data(&e);
-        rewards::manager::update_user_reward(&e, &pool_data, &to);
-        rewards::storage::bump_user_reward_data(&e, &to);
+        rewards::manager::update_user_reward(&e, &pool_data, &user);
+        rewards::storage::bump_user_reward_data(&e, &user);
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = token::Client::new(&e, &storage::get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
-            &to,
+            &user,
             &e.current_contract_address(),
             &share_amount,
         );
@@ -301,23 +300,33 @@ impl LiquidityPoolTrait for LiquidityPool {
         let out_a = (balance_a * balance_shares) / total_shares;
         let out_b = (balance_b * balance_shares) / total_shares;
 
+        let min_a = min_amounts.get(0).unwrap();
+        let min_b = min_amounts.get(1).unwrap();
+
         if out_a < min_a || out_b < min_b {
             panic!("min not satisfied");
         }
 
         token::burn_shares(&e, balance_shares);
-        token::transfer_a(&e, to.clone(), out_a);
-        token::transfer_b(&e, to, out_b);
+        token::transfer_a(&e, user.clone(), out_a);
+        token::transfer_b(&e, user, out_b);
         storage::put_reserve_a(&e, balance_a - out_a);
         storage::put_reserve_b(&e, balance_b - out_b);
 
-        (out_a, out_b)
+        Vec::from_array(&e, [out_a, out_b])
     }
 
     fn get_reserves(e: Env) -> Vec<i128> {
         Vec::from_array(&e, [storage::get_reserve_a(&e), storage::get_reserve_b(&e)])
     }
 
+    fn get_fee_fraction(e: Env) -> u32 {
+        // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
+        storage::get_fee_fraction(&e)
+    }
+}
+
+impl UpgradeableContractTrait for LiquidityPool {
     fn version() -> u32 {
         1
     }
@@ -326,11 +335,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         require_admin(&e);
         e.deployer().update_current_contract_wasm(new_wasm_hash);
         true
-    }
-
-    fn get_fee_fraction(e: Env) -> u32 {
-        // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
-        storage::get_fee_fraction(&e)
     }
 }
 
