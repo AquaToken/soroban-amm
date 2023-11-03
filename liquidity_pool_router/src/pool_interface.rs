@@ -17,7 +17,7 @@ pub trait LiquidityPoolInterfaceTrait {
         token_a: Address,
         token_b: Address,
         pool_index: BytesN<32>,
-    ) -> Vec<i128>;
+    ) -> Vec<u128>;
 
     // Getter for the array of swappable coins within the pool.
     fn get_tokens(
@@ -36,8 +36,8 @@ pub trait LiquidityPoolInterfaceTrait {
         token_a: Address,
         token_b: Address,
         pool_index: BytesN<32>,
-        desired_amounts: Vec<i128>,
-    ) -> (Vec<i128>, i128);
+        desired_amounts: Vec<u128>,
+    ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
     // token_in: token to send
@@ -51,17 +51,17 @@ pub trait LiquidityPoolInterfaceTrait {
         token_in: Address,
         token_out: Address,
         pool_index: BytesN<32>,
-        in_amount: i128,
-        out_min: i128,
-    ) -> i128;
+        in_amount: u128,
+        out_min: u128,
+    ) -> u128;
 
     fn estimate_swap(
         e: Env,
         token_in: Address,
         token_out: Address,
         pool_index: BytesN<32>,
-        in_amount: i128,
-    ) -> i128;
+        in_amount: u128,
+    ) -> u128;
 
     // Withdraw coins from the pool.
     // share_amount: Quantity of LP tokens to burn in the withdrawal
@@ -73,9 +73,9 @@ pub trait LiquidityPoolInterfaceTrait {
         token_a: Address,
         token_b: Address,
         pool_index: BytesN<32>,
-        share_amount: i128,
-        min_amounts: Vec<i128>,
-    ) -> Vec<i128>;
+        share_amount: u128,
+        min_amounts: Vec<u128>,
+    ) -> Vec<u128>;
 }
 
 pub trait RewardsInterfaceTrait {
@@ -85,7 +85,7 @@ pub trait RewardsInterfaceTrait {
         token_b: Address,
         pool_index: BytesN<32>,
         user: Address,
-    ) -> i128;
+    ) -> u128;
 
     fn claim(
         e: Env,
@@ -99,24 +99,34 @@ pub trait RewardsInterfaceTrait {
 pub trait PoolsManagementTrait {
     fn init_pool(e: Env, token_a: Address, token_b: Address) -> (BytesN<32>, Address);
 
-    // fn init_standard_pool(e: Env, token_a: Address, token_b: Address, fee_fraction: u32)
-    //     -> Address;
-    //
-    // fn init_stableswap_pool(
-    //     e: Env,
-    //     token_a: Address,
-    //     token_b: Address,
-    //     a: u128,
-    //     fee_fraction: u128,
-    //     admin_fee: u128,
-    // ) -> Address;
-    //
-    // // get pools for given pair
+    fn init_standard_pool(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        fee_fraction: u32,
+    ) -> (BytesN<32>, Address);
+
+    fn init_stableswap_pool(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        a: u128,
+        fee_fraction: u32,
+        admin_fee: u32,
+    ) -> (BytesN<32>, Address);
+
+    // get pools for given pair
     fn get_pools(e: Env, token_a: Address, token_b: Address) -> Map<BytesN<32>, Address>;
 
-    // // Add initialized custom pool to the list for given pair
-    // fn add_pool(e: Env, token_a: Address, token_b: Address, pool_address: Address, pool_description: Symbol);
-    //
-    // // remove pool from the list
-    // fn remove_pool(e: Env, token_a: Address, token_b: Address, pool_hash: BytesN<32>);
+    // Add initialized custom pool to the list for given pair
+    fn add_pool(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        pool_address: Address,
+        pool_description: Symbol,
+    );
+
+    // remove pool from the list
+    fn remove_pool(e: Env, token_a: Address, token_b: Address, pool_hash: BytesN<32>);
 }

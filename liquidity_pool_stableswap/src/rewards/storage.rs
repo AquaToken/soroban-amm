@@ -5,7 +5,7 @@ use soroban_sdk::{contracttype, Address, Env};
 #[derive(Clone)]
 #[contracttype]
 pub struct PoolRewardConfig {
-    pub tps: i128,
+    pub tps: u128,
     pub expired_at: u64,
 }
 
@@ -13,15 +13,15 @@ pub struct PoolRewardConfig {
 #[contracttype]
 pub struct PoolRewardData {
     pub block: u64,
-    pub accumulated: i128,
+    pub accumulated: u128,
     pub last_time: u64,
 }
 
 #[derive(Clone)]
 #[contracttype]
 pub struct UserRewardData {
-    pub pool_accumulated: i128,
-    pub to_claim: i128,
+    pub pool_accumulated: u128,
+    pub to_claim: u128,
     pub last_block: u64,
 }
 

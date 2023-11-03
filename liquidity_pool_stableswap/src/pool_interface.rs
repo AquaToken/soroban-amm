@@ -64,10 +64,10 @@ pub trait UpgradeableContractTrait {
 pub trait RewardsTrait {
     // todo: move rewards configuration to gauge
     fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
-    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, amount: i128) -> bool;
+    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, amount: u128) -> bool;
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
-    fn get_user_reward(e: Env, user: Address) -> i128;
-    fn claim(e: Env, user: Address) -> i128;
+    fn get_user_reward(e: Env, user: Address) -> u128;
+    fn claim(e: Env, user: Address) -> u128;
 }
 
 pub trait AdminInterfaceTrait {
@@ -79,7 +79,7 @@ pub trait AdminInterfaceTrait {
     fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address);
     fn apply_transfer_ownership(e: Env, admin: Address);
     fn revert_transfer_ownership(e: Env, admin: Address);
-    fn admin_balances(e: Env, i: u32) -> i128;
+    fn admin_balances(e: Env, i: u32) -> u128;
     fn withdraw_admin_fees(e: Env, admin: Address);
     fn donate_admin_fees(e: Env, admin: Address);
     fn kill_me(e: Env, admin: Address);
@@ -91,9 +91,9 @@ pub trait InternalInterfaceTrait {
     fn xp_mem(e: Env, balances: Vec<u128>) -> Vec<u128>;
     fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128;
     fn get_d_mem(e: Env, balances: Vec<u128>, amp: u128) -> u128;
-    fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128>) -> u128;
-    fn get_y_d(e: Env, a: u128, i: i128, xp: Vec<u128>, d: u128) -> u128;
-    fn internal_calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> (u128, u128);
+    fn get_y(e: Env, i: u32, j: u32, x: u128, xp_: Vec<u128>) -> u128;
+    fn get_y_d(e: Env, a: u128, i: u32, xp: Vec<u128>, d: u128) -> u128;
+    fn internal_calc_withdraw_one_coin(e: Env, _token_amount: u128, i: u32) -> (u128, u128);
 }
 
 pub trait LiquidityPoolTrait:
@@ -116,9 +116,9 @@ pub trait LiquidityPoolTrait:
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128;
 
     // Get the amount of coin j one would receive for swapping dx of coin i.
-    fn get_dy(e: Env, i: i128, j: i128, dx: u128) -> u128;
+    fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128;
 
-    fn get_dy_underlying(e: Env, i: i128, j: i128, dx: u128) -> u128;
+    fn get_dy_underlying(e: Env, i: u32, j: u32, dx: u128) -> u128;
 
     // Withdraw coins from the pool in an imbalanced amount.
     // amounts: List of amounts of underlying coins to withdraw
@@ -134,12 +134,12 @@ pub trait LiquidityPoolTrait:
     // Calculate the amount received when withdrawing a single coin.
     // token_amount: Amount of LP tokens to burn in the withdrawal
     // i: Index value of the coin to withdraw
-    fn calc_withdraw_one_coin(e: Env, _token_amount: u128, i: i128) -> u128;
+    fn calc_withdraw_one_coin(e: Env, _token_amount: u128, i: u32) -> u128;
 
     // Withdraw a single coin from the pool.
     // token_amount: Amount of LP tokens to burn in the withdrawal
     // i: Index value of the coin to withdraw
     // min_amount: Minimum amount of coin to receive
     // Returns the amount of coin i received.
-    fn withdraw_one_coin(e: Env, user: Address, token_amount: u128, i: i128, min_amount: u128);
+    fn withdraw_one_coin(e: Env, user: Address, token_amount: u128, i: u32, min_amount: u128);
 }

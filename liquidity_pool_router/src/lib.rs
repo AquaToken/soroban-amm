@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 mod admin;
+mod constants;
 mod contract;
 mod pool_contract;
 mod pool_interface;

@@ -1,7 +1,8 @@
-use crate::storage_types::{
-    DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, MAX_POOLS_FOR_PAIR,
-    POOL_BUMP_AMOUNT, POOL_LIFETIME_THRESHOLD,
+use crate::constants::{
+    INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, MAX_POOLS_FOR_PAIR, POOL_BUMP_AMOUNT,
+    POOL_LIFETIME_THRESHOLD,
 };
+use crate::storage_types::DataKey;
 use soroban_sdk::{Address, BytesN, Env, Map};
 
 // pool hash

@@ -72,7 +72,7 @@ fn test() {
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_i128 * 60;
+    let total_reward_1 = 10_5000000_u128 * 60;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(60),
@@ -116,21 +116,21 @@ fn test() {
     // 30 seconds passed, half of the reward is available for the user
     jump(&e, 30);
     assert_eq!(liqpool.claim(&user1), total_reward_1 / 2);
-    assert_eq!(token_reward.balance(&user1), total_reward_1 / 2);
+    assert_eq!(token_reward.balance(&user1) as u128, total_reward_1 / 2);
     // 60 seconds more passed. full reward was available though half already claimed
     jump(&e, 60);
     assert_eq!(liqpool.claim(&user1), total_reward_1 / 2);
-    assert_eq!(token_reward.balance(&user1), total_reward_1);
+    assert_eq!(token_reward.balance(&user1) as u128, total_reward_1);
 
     // more rewards added with different configs
-    let total_reward_2 = 20_0000000_i128 * 100;
+    let total_reward_2 = 20_0000000_u128 * 100;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(100),
         &total_reward_2,
     );
     jump(&e, 105);
-    let total_reward_3 = 6_0000000_i128 * 50;
+    let total_reward_3 = 6_0000000_u128 * 50;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(50),
@@ -140,7 +140,7 @@ fn test() {
     // two rewards available for the user
     assert_eq!(liqpool.claim(&user1), total_reward_2 + total_reward_3);
     assert_eq!(
-        token_reward.balance(&user1),
+        token_reward.balance(&user1) as u128,
         total_reward_1 + total_reward_2 + total_reward_3
     );
 
@@ -152,7 +152,7 @@ fn test() {
     assert_eq!(token2.balance(&liqpool.address), 100);
 
     assert_eq!(liqpool.estimate_swap(&0, &1, &97), 49);
-    assert_eq!(liqpool.swap(&user1, &0, &1, &97_i128, &49_i128), 49);
+    assert_eq!(liqpool.swap(&user1, &0, &1, &97_u128, &49_u128), 49);
     assert_eq!(
         e.auths()[0],
         (
@@ -161,7 +161,7 @@ fn test() {
                 function: AuthorizedFunction::Contract((
                     liqpool.address.clone(),
                     Symbol::new(&e, "swap"),
-                    (&user1, 0_u32, 1_u32, 97_i128, 49_i128).into_val(&e)
+                    (&user1, 0_u32, 1_u32, 97_u128, 49_u128).into_val(&e)
                 )),
                 sub_invocations: std::vec![],
             }
@@ -175,7 +175,7 @@ fn test() {
 
     token_share.approve(&user1, &liqpool.address, &100, &99999);
 
-    liqpool.withdraw(&user1, &100_i128, &Vec::from_array(&e, [197_i128, 51_i128]));
+    liqpool.withdraw(&user1, &100_u128, &Vec::from_array(&e, [197_u128, 51_u128]));
     assert_eq!(
         e.auths()[0],
         (
@@ -188,8 +188,8 @@ fn test() {
                         &e,
                         [
                             user1.clone().into_val(&e),
-                            100_i128.into_val(&e),
-                            Vec::from_array(&e, [197_i128, 51_i128]).into_val(&e)
+                            100_u128.into_val(&e),
+                            Vec::from_array(&e, [197_u128, 51_u128]).into_val(&e)
                         ]
                     )
                 )),
@@ -201,7 +201,7 @@ fn test() {
     jump(&e, 600);
     assert_eq!(liqpool.claim(&user1), 0);
     assert_eq!(
-        token_reward.balance(&user1),
+        token_reward.balance(&user1) as u128,
         total_reward_1 + total_reward_2 + total_reward_3
     );
 
@@ -236,14 +236,14 @@ fn test_custom_fee() {
 
     // we're checking fraction against value required to swap 1 token
     for fee_config in [
-        (0, 1_0101011_i128),        // 0%
-        (10, 1_0111122_i128),       // 0.1%
-        (30, 1_0131405_i128),       // 0.3%
-        (100, 1_0203041_i128),      // 1%
-        (1000, 1_1223345_i128),     // 10%
-        (3000, 1_4430015_i128),     // 30%
-        (9900, 101_0101011_i128),   // 99%
-        (9999, 10101_0101011_i128), // 99.99% - maximum fee
+        (0, 1_0101011_u128),        // 0%
+        (10, 1_0111122_u128),       // 0.1%
+        (30, 1_0131405_u128),       // 0.3%
+        (100, 1_0203041_u128),      // 1%
+        (1000, 1_1223345_u128),     // 10%
+        (3000, 1_4430015_u128),     // 30%
+        (9900, 101_0101011_u128),   // 99%
+        (9999, 10101_0101011_u128), // 99.99% - maximum fee
     ] {
         let liqpool = create_liqpool_contract(
             &e,
@@ -288,7 +288,7 @@ fn test_simple_ongoing_reward() {
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_i128 * 60;
+    let total_reward_1 = 10_5000000_u128 * 60;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(60),
@@ -317,7 +317,7 @@ fn test_simple_ongoing_reward() {
     // 30 seconds passed, half of the reward is available for the user
     jump(&e, 30);
     assert_eq!(liqpool.claim(&user1), total_reward_1 / 2);
-    assert_eq!(token_reward.balance(&user1), total_reward_1 / 2);
+    assert_eq!(token_reward.balance(&user1) as u128, total_reward_1 / 2);
 }
 
 #[test]
@@ -361,7 +361,7 @@ fn test_simple_reward() {
     // 20 seconds. rewards set up for 60 seconds
     jump(&e, 10);
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_i128 * 60;
+    let total_reward_1 = 10_5000000_u128 * 60;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(60),
@@ -377,14 +377,14 @@ fn test_simple_reward() {
     // 90 seconds. rewards ended.
     jump(&e, 70);
     // calling set rewards config to checkpoint. should be removed
-    liqpool.set_rewards_config(&user1, &e.ledger().timestamp().saturating_add(60), &0_i128);
+    liqpool.set_rewards_config(&user1, &e.ledger().timestamp().saturating_add(60), &0_u128);
 
     // 100 seconds. user claim reward
     jump(&e, 10);
     assert_eq!(token_reward.balance(&user1), 0);
     // full reward should be available to the user
     assert_eq!(liqpool.claim(&user1), total_reward_1);
-    assert_eq!(token_reward.balance(&user1), total_reward_1);
+    assert_eq!(token_reward.balance(&user1) as u128, total_reward_1);
 }
 
 #[test]
@@ -416,7 +416,7 @@ fn test_two_users_rewards() {
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_i128 * 60;
+    let total_reward_1 = 10_5000000_u128 * 60;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(60),
@@ -449,8 +449,8 @@ fn test_two_users_rewards() {
     jump(&e, 100);
     assert_eq!(liqpool.claim(&user1), total_reward_1 / 4);
     assert_eq!(liqpool.claim(&user2), total_reward_1 / 4);
-    assert_eq!(token_reward.balance(&user1), total_reward_1 / 4 * 3);
-    assert_eq!(token_reward.balance(&user2), total_reward_1 / 4);
+    assert_eq!(token_reward.balance(&user1) as u128, total_reward_1 / 4 * 3);
+    assert_eq!(token_reward.balance(&user2) as u128, total_reward_1 / 4);
 }
 
 #[test]
@@ -486,7 +486,7 @@ fn test_lazy_user_rewards() {
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_i128 * 60;
+    let total_reward_1 = 10_5000000_u128 * 60;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(60),
@@ -522,8 +522,8 @@ fn test_lazy_user_rewards() {
         1000,
     );
     assert_approx_eq_abs(user2_claim, total_reward_1 / 1100 * 1000 / 60, 1000);
-    assert_approx_eq_abs(token_reward.balance(&user1), user1_claim, 1000);
-    assert_approx_eq_abs(token_reward.balance(&user2), user2_claim, 1000);
+    assert_approx_eq_abs(token_reward.balance(&user1) as u128, user1_claim, 1000);
+    assert_approx_eq_abs(token_reward.balance(&user2) as u128, user2_claim, 1000);
     assert_approx_eq_abs(user1_claim + user2_claim, total_reward_1, 1000);
 }
 
@@ -560,7 +560,7 @@ fn test_deposit_ddos() {
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_i128 * 60;
+    let total_reward_1 = 10_5000000_u128 * 60;
     liqpool.set_rewards_config(
         &admin,
         &e.ledger().timestamp().saturating_add(users_to_simulate * 2),

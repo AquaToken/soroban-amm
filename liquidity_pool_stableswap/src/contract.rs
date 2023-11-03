@@ -13,6 +13,7 @@ use crate::rewards::storage::get_pool_reward_config;
 use crate::token::create_contract;
 use crate::{admin, storage, token};
 use cast::i128 as to_i128;
+use cast::u128 as to_u128;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol,
     Vec,
@@ -74,7 +75,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         return diff * token_amount as u128 / d0;
     }
 
-    fn get_dy(e: Env, i: i128, j: i128, dx: u128) -> u128 {
+    fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128 {
         // dx and dy in c-units
         let rates = RATES;
         let xp = Self::xp(e.clone());
@@ -86,7 +87,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         return dy - fee;
     }
 
-    fn get_dy_underlying(e: Env, i: i128, j: i128, dx: u128) -> u128 {
+    fn get_dy_underlying(e: Env, i: u32, j: u32, dx: u128) -> u128 {
         // dx and dy in underlying units
         let xp = Self::xp(e.clone());
         let precisions = PRECISION_MUL;
@@ -188,11 +189,11 @@ impl LiquidityPoolTrait for LiquidityPool {
         token_amount
     }
 
-    fn calc_withdraw_one_coin(e: Env, token_amount: u128, i: i128) -> u128 {
+    fn calc_withdraw_one_coin(e: Env, token_amount: u128, i: u32) -> u128 {
         return Self::internal_calc_withdraw_one_coin(e, token_amount, i).0;
     }
 
-    fn withdraw_one_coin(e: Env, user: Address, token_amount: u128, i: i128, min_amount: u128) {
+    fn withdraw_one_coin(e: Env, user: Address, token_amount: u128, i: u32, min_amount: u128) {
         user.require_auth();
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
@@ -297,7 +298,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         Self::get_d(e.clone(), Self::xp_mem(e.clone(), balances), amp)
     }
 
-    fn get_y(e: Env, i: i128, j: i128, x: u128, xp_: Vec<u128>) -> u128 {
+    fn get_y(e: Env, i: u32, j: u32, x: u128, xp_: Vec<u128>) -> u128 {
         // x in the input is converted to the same price/precision
 
         if !(i != j) {
@@ -306,7 +307,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         if !(j >= 0) {
             panic!("j below zero")
         } // dev: j below zero
-        if !(j < N_COINS as i128) {
+        if !(j < N_COINS as u32) {
             panic!("j above N_COINS")
         } // dev: j above N_COINS
 
@@ -314,7 +315,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         if !(i >= 0) {
             panic!("bad arguments")
         }
-        if !(i < N_COINS as i128) {
+        if !(i < N_COINS as u32) {
             panic!("bad arguments")
         }
 
@@ -325,11 +326,11 @@ impl InternalInterfaceTrait for LiquidityPool {
         let ann = amp * N_COINS as u128;
 
         let mut _x = 0;
-        for _i in 0..N_COINS as i128 {
+        for _i in 0..N_COINS as u32 {
             if _i == i {
                 _x = x;
             } else if _i != j {
-                _x = xp_.get(_i as u32).unwrap();
+                _x = xp_.get(_i).unwrap();
             } else {
                 continue;
             }
@@ -357,7 +358,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         return y;
     }
 
-    fn get_y_d(_e: Env, a: u128, i: i128, xp: Vec<u128>, d: u128) -> u128 {
+    fn get_y_d(_e: Env, a: u128, i: u32, xp: Vec<u128>, d: u128) -> u128 {
         // Calculate x[i] if one reduces D from being calculated for xp to D
         //
         // Done by solving quadratic equation iteratively.
@@ -371,7 +372,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         if !(i >= 0) {
             panic!("i below zero")
         }
-        if !(i < N_COINS as i128) {
+        if !(i < N_COINS as u32) {
             panic!("i above N_COINS")
         }
 
@@ -413,7 +414,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         return y;
     }
 
-    fn internal_calc_withdraw_one_coin(e: Env, token_amount: u128, i: i128) -> (u128, u128) {
+    fn internal_calc_withdraw_one_coin(e: Env, token_amount: u128, i: u32) -> (u128, u128) {
         // First, need to calculate
         // * Get current D
         // * Solve Eqn against y_i for D - token_amount
@@ -570,13 +571,13 @@ impl AdminInterfaceTrait for LiquidityPool {
         storage::put_transfer_ownership_deadline(&e, 0);
     }
 
-    fn admin_balances(e: Env, i: u32) -> i128 {
+    fn admin_balances(e: Env, i: u32) -> u128 {
         let coins = storage::get_tokens(&e);
         let token_client = token::Client::new(&e, &coins.get(i).unwrap());
-        let balance = token_client.balance(&e.current_contract_address());
+        let balance = token_client.balance(&e.current_contract_address()) as u128;
         let reserves = storage::get_reserves(&e);
 
-        balance - reserves.get(i).unwrap() as i128
+        balance - reserves.get(i).unwrap()
     }
 
     fn withdraw_admin_fees(e: Env, admin: Address) {
@@ -588,11 +589,11 @@ impl AdminInterfaceTrait for LiquidityPool {
 
         for i in 0..N_COINS as u32 {
             let token_client = token::Client::new(&e, &coins.get(i).unwrap());
-            let balance = token_client.balance(&e.current_contract_address());
+            let balance = token_client.balance(&e.current_contract_address()) as u128;
 
-            let value = balance - reserves.get(i).unwrap() as i128;
+            let value = balance - reserves.get(i).unwrap();
             if value > 0 {
-                token_client.transfer(&e.current_contract_address(), &admin, &value);
+                token_client.transfer(&e.current_contract_address(), &admin, &(value as i128));
             }
         }
     }
@@ -852,7 +853,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         );
 
         let x = xp.get(in_idx as u32).unwrap() + dx_w_fee * rates[in_idx as usize] / PRECISION;
-        let y = Self::get_y(e.clone(), in_idx as i128, out_idx as i128, x, xp.clone());
+        let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = xp.get(out_idx as u32).unwrap() - y - 1; // -1 just in case there were some rounding errors
         let dy_fee = dy * storage::get_fee(&e) / FEE_DENOMINATOR;
@@ -894,7 +895,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let dx_w_fee = in_amount;
 
         let x = xp.get(in_idx as u32).unwrap() + dx_w_fee * rates[in_idx as usize] / PRECISION;
-        let y = Self::get_y(e.clone(), in_idx as i128, out_idx as i128, x, xp.clone());
+        let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = xp.get(out_idx as u32).unwrap() - y - 1; // -1 just in case there were some rounding errors
         let dy_fee = dy * storage::get_fee(&e) / FEE_DENOMINATOR;
@@ -979,15 +980,19 @@ impl RewardsTrait for LiquidityPool {
         e: Env,
         admin: Address,
         expired_at: u64, // timestamp
-        amount: i128,    // value with 7 decimal places. example: 600_0000000
+        amount: u128,    // value with 7 decimal places. example: 600_0000000
     ) -> bool {
         admin.require_auth();
         check_admin(&e, &admin);
 
+        if expired_at < e.ledger().timestamp() {
+            panic!("cannot set expiration time to the past");
+        }
+
         rewards_manager::update_rewards_data(&e);
 
         let config = rewards_storage::PoolRewardConfig {
-            tps: amount / to_i128(expired_at - e.ledger().timestamp()),
+            tps: amount / to_u128(expired_at - e.ledger().timestamp()),
             expired_at,
         };
         storage::bump_instance(&e);
@@ -1000,25 +1005,31 @@ impl RewardsTrait for LiquidityPool {
         let pool_data = rewards_manager::update_rewards_data(&e);
         let user_data = rewards_manager::update_user_reward(&e, &pool_data, &user);
         let mut result = Map::new(&e);
-        result.set(symbol_short!("tps"), to_i128(config.tps));
+        result.set(symbol_short!("tps"), to_i128(config.tps).unwrap());
         result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
-        result.set(symbol_short!("acc"), to_i128(pool_data.accumulated));
+        result.set(
+            symbol_short!("acc"),
+            to_i128(pool_data.accumulated).unwrap(),
+        );
         result.set(symbol_short!("last_time"), to_i128(pool_data.last_time));
         result.set(
             symbol_short!("pool_acc"),
-            to_i128(user_data.pool_accumulated),
+            to_i128(user_data.pool_accumulated).unwrap(),
         );
         result.set(symbol_short!("block"), to_i128(pool_data.block));
         result.set(symbol_short!("usr_block"), to_i128(user_data.last_block));
-        result.set(symbol_short!("to_claim"), to_i128(user_data.to_claim));
+        result.set(
+            symbol_short!("to_claim"),
+            to_i128(user_data.to_claim).unwrap(),
+        );
         result
     }
 
-    fn get_user_reward(e: Env, user: Address) -> i128 {
+    fn get_user_reward(e: Env, user: Address) -> u128 {
         rewards_manager::get_amount_to_claim(&e, &user)
     }
 
-    fn claim(e: Env, user: Address) -> i128 {
+    fn claim(e: Env, user: Address) -> u128 {
         let reward = rewards_manager::claim_reward(&e, &user);
         rewards_storage::bump_user_reward_data(&e, &user);
         reward

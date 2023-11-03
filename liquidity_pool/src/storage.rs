@@ -86,11 +86,11 @@ pub fn get_token_share(e: &Env) -> Address {
     get_instance_value(e, &DataKey::TokenShare).unwrap()
 }
 
-pub fn get_reserve_a(e: &Env) -> i128 {
+pub fn get_reserve_a(e: &Env) -> u128 {
     get_instance_value(e, &DataKey::ReserveA).unwrap()
 }
 
-pub fn get_reserve_b(e: &Env) -> i128 {
+pub fn get_reserve_b(e: &Env) -> u128 {
     get_instance_value(e, &DataKey::ReserveB).unwrap()
 }
 
@@ -114,11 +114,11 @@ pub fn put_token_share(e: &Env, contract: Address) {
     put_instance_value(e, &DataKey::TokenShare, &contract);
 }
 
-pub fn put_reserve_a(e: &Env, amount: i128) {
+pub fn put_reserve_a(e: &Env, amount: u128) {
     put_instance_value(e, &DataKey::ReserveA, &amount)
 }
 
-pub fn put_reserve_b(e: &Env, amount: i128) {
+pub fn put_reserve_b(e: &Env, amount: u128) {
     put_instance_value(e, &DataKey::ReserveB, &amount)
 }
 

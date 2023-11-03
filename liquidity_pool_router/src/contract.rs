@@ -1,4 +1,5 @@
 use crate::admin::{has_admin, require_admin, set_admin};
+use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::pool_interface::{LiquidityPoolInterfaceTrait, PoolsManagementTrait};
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::{pool_utils, storage};
@@ -39,7 +40,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         token_a: Address,
         token_b: Address,
         pool_index: BytesN<32>,
-    ) -> Vec<i128> {
+    ) -> Vec<u128> {
         let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
         let (pool_exists, pool_id) =
             Self::get_pool(e.clone(), token_a.clone(), token_b.clone(), pool_index);
@@ -72,14 +73,14 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         token_a: Address,
         token_b: Address,
         pool_index: BytesN<32>,
-        desired_amounts: Vec<i128>,
-    ) -> (Vec<i128>, i128) {
+        desired_amounts: Vec<u128>,
+    ) -> (Vec<u128>, u128) {
         user.require_auth();
 
         let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
         let pool_id = storage::get_pool(&e, &salt, pool_index);
 
-        let (amounts, share_amount): (Vec<i128>, i128) = e.invoke_contract(
+        let (amounts, share_amount): (Vec<u128>, u128) = e.invoke_contract(
             &pool_id,
             &symbol_short!("deposit"),
             Vec::from_array(
@@ -102,9 +103,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         token_in: Address,
         token_out: Address,
         pool_index: BytesN<32>,
-        in_amount: i128,
-        out_min: i128,
-    ) -> i128 {
+        in_amount: u128,
+        out_min: u128,
+    ) -> u128 {
         user.require_auth();
         let (token_a, token_b) = crate::utils::sort(&token_in, &token_out);
         let (pool_exists, pool_id) = Self::get_pool(
@@ -157,8 +158,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         token_in: Address,
         token_out: Address,
         pool_index: BytesN<32>,
-        in_amount: i128,
-    ) -> i128 {
+        in_amount: u128,
+    ) -> u128 {
         let (token_a, token_b) = crate::utils::sort(&token_in, &token_out);
         let (pool_exists, pool_id) = Self::get_pool(
             e.clone(),
@@ -202,9 +203,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         token_a: Address,
         token_b: Address,
         pool_index: BytesN<32>,
-        share_amount: i128,
-        min_amounts: Vec<i128>,
-    ) -> Vec<i128> {
+        share_amount: u128,
+        min_amounts: Vec<u128>,
+    ) -> Vec<u128> {
         user.require_auth();
         let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
         let (pool_exists, pool_id) = Self::get_pool(
@@ -217,7 +218,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             panic!("pool not exists")
         }
 
-        let amounts: Vec<i128> = e.invoke_contract(
+        let amounts: Vec<u128> = e.invoke_contract(
             &pool_id,
             &symbol_short!("withdraw"),
             Vec::from_array(
@@ -269,6 +270,11 @@ impl AdminInterface for LiquidityPoolRouter {
         storage::set_constant_product_pool_hash(&e, &new_hash);
     }
 
+    fn set_stableswap_pool_hash(e: Env, new_hash: BytesN<32>) {
+        require_admin(&e);
+        storage::set_stableswap_pool_hash(&e, &new_hash);
+    }
+
     fn set_reward_token(e: Env, reward_token: Address) {
         require_admin(&e);
         storage::set_reward_token(&e, &reward_token);
@@ -288,46 +294,71 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
     }
 
-    // fn init_standard_pool(
-    //     e: Env,
-    //     token_a: Address,
-    //     token_b: Address,
-    //     fee_fraction: u32,
-    // ) -> Address {
-    //     let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
-    //     if !has_pool(&e, &salt) {
-    //         pool_utils::deploy_standard_pool(&e, &token_a, &token_b, PoolType::Standard, fee_fraction);
-    //     }
-    //     let (_pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
-    //     pool_id
-    // }
-    //
-    // fn init_stableswap_pool(
-    //     e: Env,
-    //     token_a: Address,
-    //     token_b: Address,
-    //     a: u128,
-    //     fee_fraction: u32,
-    //     admin_fee: u32,
-    // ) -> Address {
-    //     let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
-    //     if !has_pool(&e, &salt) {
-    //         pool_utils::deploy_stableswap_pool(&e, &token_a, &token_b, PoolType::StableSwap, a, fee_fraction, admin_fee);
-    //     }
-    //     let (_pool_exists, pool_id) = Self::get_pool(e.clone(), token_a, token_b);
-    //     pool_id
-    // }
-    //
+    fn init_standard_pool(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        fee_fraction: u32,
+    ) -> (BytesN<32>, Address) {
+        if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
+            panic!("non-standard fee");
+        }
+
+        let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
+        let pools = storage::get_pools(&e, &salt);
+        let pool_index = pool_utils::get_standard_pool_salt(&e, fee_fraction);
+
+        match pools.get(pool_index.clone()) {
+            Some(pool_address) => (pool_index, pool_address),
+            None => pool_utils::deploy_standard_pool(&e, &token_a, &token_b, fee_fraction),
+        }
+    }
+
+    fn init_stableswap_pool(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        a: u128,
+        fee_fraction: u32,
+        admin_fee: u32,
+    ) -> (BytesN<32>, Address) {
+        require_admin(&e);
+
+        let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
+        let pools = storage::get_pools(&e, &salt);
+        let pool_index = pool_utils::get_stableswap_pool_salt(&e, a, fee_fraction, admin_fee);
+
+        match pools.get(pool_index.clone()) {
+            Some(pool_address) => (pool_index, pool_address),
+            None => pool_utils::deploy_stableswap_pool(
+                &e,
+                &token_a,
+                &token_b,
+                a,
+                fee_fraction,
+                admin_fee,
+            ),
+        }
+    }
+
     fn get_pools(e: Env, token_a: Address, token_b: Address) -> Map<BytesN<32>, Address> {
         let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
         storage::get_pools(&e, &salt)
     }
 
-    // fn add_pool(e: Env, token_a: Address, token_b: Address, pool_address: Address, pool_description: Symbol) {
-    //     todo!()
-    // }
-    //
-    // fn remove_pool(e: Env, token_a: Address, token_b: Address, pool_hash: BytesN<32>) {
-    //     todo!()
-    // }
+    fn add_pool(
+        e: Env,
+        token_a: Address,
+        token_b: Address,
+        pool_address: Address,
+        pool_description: Symbol,
+    ) {
+        require_admin(&e);
+        todo!()
+    }
+
+    fn remove_pool(e: Env, token_a: Address, token_b: Address, pool_hash: BytesN<32>) {
+        require_admin(&e);
+        todo!()
+    }
 }

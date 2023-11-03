@@ -1,4 +1,5 @@
-use crate::storage_types::{DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
+use crate::constants::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
+use crate::storage_types::DataKey;
 use soroban_sdk::{Address, Env};
 
 pub fn has_admin(e: &Env) -> bool {

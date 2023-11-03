@@ -1,11 +1,11 @@
 pub fn get_deposit_amounts(
-    desired_a: i128,
-    min_a: i128,
-    desired_b: i128,
-    min_b: i128,
-    reserve_a: i128,
-    reserve_b: i128,
-) -> (i128, i128) {
+    desired_a: u128,
+    min_a: u128,
+    desired_b: u128,
+    min_b: u128,
+    reserve_a: u128,
+    reserve_b: u128,
+) -> (u128, u128) {
     if reserve_a == 0 && reserve_b == 0 {
         return (desired_a, desired_b);
     }

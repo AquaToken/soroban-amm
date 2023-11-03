@@ -6,10 +6,10 @@ use crate::rewards::storage::{
 use crate::storage::{get_reward_storage, DataKey};
 use crate::token::Client;
 use crate::{storage, token};
-use cast::i128 as to_i128;
+use cast::u128 as to_u128;
 use soroban_sdk::{Address, Env, Map};
 
-pub fn update_reward_inv(e: &Env, accumulated: i128) {
+pub fn update_reward_inv(e: &Env, accumulated: u128) {
     let total_shares = token::get_total_shares(e);
     let reward_per_share = if total_shares > 0 {
         accumulated / total_shares
@@ -75,7 +75,7 @@ pub fn update_rewards_data(e: &Env) -> PoolRewardData {
     return if now < config.expired_at {
         let reward_timestamp = now;
 
-        let generated_tokens = to_i128(reward_timestamp - data.last_time) * to_i128(config.tps);
+        let generated_tokens = to_u128(reward_timestamp - data.last_time) * config.tps;
         let new_data = PoolRewardData {
             block: data.block + 1,
             accumulated: data.accumulated + generated_tokens,
@@ -99,7 +99,7 @@ pub fn update_rewards_data(e: &Env) -> PoolRewardData {
             // catchup up to config expiration
             let reward_timestamp = config.expired_at;
 
-            let generated_tokens = to_i128(reward_timestamp - data.last_time) * to_i128(config.tps);
+            let generated_tokens = to_u128(reward_timestamp - data.last_time) * config.tps;
             let catchup_data = PoolRewardData {
                 block: data.block + 1,
                 accumulated: data.accumulated + generated_tokens,
@@ -121,13 +121,13 @@ pub fn update_rewards_data(e: &Env) -> PoolRewardData {
     };
 }
 
-pub fn calculate_user_reward(e: &Env, start_block: u64, end_block: u64, user_share: i128) -> i128 {
+pub fn calculate_user_reward(e: &Env, start_block: u64, end_block: u64, user_share: u128) -> u128 {
     let mut reward_inv = 0;
     for block in start_block..end_block + 1 {
         let block_inv = get_reward_inv(e).get(block).unwrap();
         reward_inv += block_inv;
     }
-    (reward_inv) as i128 * user_share
+    (reward_inv) as u128 * user_share
 }
 
 pub fn update_user_reward(e: &Env, pool_data: &PoolRewardData, user: &Address) -> UserRewardData {
@@ -172,14 +172,14 @@ pub fn update_user_reward(e: &Env, pool_data: &PoolRewardData, user: &Address) -
     };
 }
 
-pub fn get_amount_to_claim(e: &Env, user: &Address) -> i128 {
+pub fn get_amount_to_claim(e: &Env, user: &Address) -> u128 {
     // update pool data & calculate reward
     let pool_data = update_rewards_data(e);
     let user_reward = update_user_reward(e, &pool_data, user);
     user_reward.to_claim
 }
 
-pub fn claim_reward(e: &Env, user: &Address) -> i128 {
+pub fn claim_reward(e: &Env, user: &Address) -> u128 {
     // update pool data & calculate reward
     let pool_data = update_rewards_data(e);
     let user_reward = update_user_reward(e, &pool_data, user);
@@ -191,7 +191,7 @@ pub fn claim_reward(e: &Env, user: &Address) -> i128 {
         &e.current_contract_address(),
         &get_reward_storage(e),
         &user,
-        &reward_amount,
+        &(reward_amount as i128),
     );
 
     // set available reward to zero
