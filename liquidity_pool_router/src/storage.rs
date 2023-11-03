@@ -1,8 +1,8 @@
 use crate::storage_types::{
-    DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT,
-    POOL_LIFETIME_THRESHOLD,
+    DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, MAX_POOLS_FOR_PAIR,
+    POOL_BUMP_AMOUNT, POOL_LIFETIME_THRESHOLD,
 };
-use soroban_sdk::{Address, BytesN, Env, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, Vec};
 
 // pool hash
 
@@ -99,56 +99,49 @@ pub fn set_reward_token(e: &Env, reward_token: &Address) {
 
 // pool
 
-pub fn get_pool_id(e: &Env, salt: &BytesN<32>) -> Address {
-    let key = DataKey::Pool(salt.clone());
-    e.storage()
-        .persistent()
-        .bump(&key, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
-    e.storage().persistent().get(&key).unwrap()
-}
-
-pub fn put_pool(e: &Env, salt: &BytesN<32>, pool: &Address) {
-    let key = DataKey::Pool(salt.clone());
-    e.storage().persistent().set(&key, pool);
-    e.storage()
-        .persistent()
-        .bump(&key, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
-}
-
-pub fn has_pool(e: &Env, salt: &BytesN<32>) -> bool {
-    e.storage().persistent().has(&DataKey::Pool(salt.clone()))
-}
-
-pub fn add_pool_to_list(e: &Env, pool: &Address) {
-    // todo: improve pairs storage or get rid of them
-    let pairs_list: Option<Vec<Address>> = e.storage().persistent().get(&DataKey::PoolsList);
-    match pairs_list {
+pub fn get_pools(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, Address> {
+    let key = DataKey::TokensPairPools(salt.clone());
+    match e.storage().persistent().get(&key) {
         Some(value) => {
-            e.storage().persistent().bump(
-                &DataKey::PoolsList,
-                POOL_LIFETIME_THRESHOLD,
-                POOL_BUMP_AMOUNT,
-            );
-            let mut new_value = value.clone();
-            new_value.append(&Vec::from_array(&e, [pool.clone()]));
             e.storage()
                 .persistent()
-                .set(&DataKey::PoolsList, &new_value);
+                .bump(&key, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
+            value
         }
-        None => {
-            let new_value = Vec::from_array(&e, [pool.clone()]);
-            e.storage()
-                .persistent()
-                .set(&DataKey::PoolsList, &new_value);
-        }
+        None => Map::new(&e),
     }
 }
 
-pub fn get_pools_list(e: &Env) -> Vec<Address> {
-    e.storage().persistent().bump(
-        &DataKey::PoolsList,
-        POOL_LIFETIME_THRESHOLD,
-        POOL_BUMP_AMOUNT,
-    );
-    e.storage().persistent().get(&DataKey::PoolsList).unwrap()
+pub fn put_pools(e: &Env, salt: &BytesN<32>, pools: &Map<BytesN<32>, Address>) {
+    let key = DataKey::TokensPairPools(salt.clone());
+    e.storage().persistent().set(&key, pools);
+    e.storage()
+        .persistent()
+        .bump(&key, POOL_LIFETIME_THRESHOLD, POOL_BUMP_AMOUNT);
+}
+
+pub fn has_pools(e: &Env, salt: &BytesN<32>) -> bool {
+    let pools = get_pools(e, salt);
+    pools.len() > 0
+}
+
+pub fn has_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) -> bool {
+    let pools = get_pools(e, salt);
+    pools.contains_key(pool_index)
+}
+
+pub fn get_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) -> Address {
+    let pools = get_pools(e, salt);
+    pools
+        .get(pool_index)
+        .unwrap_or(Address::from_contract_id(&BytesN::from_array(&e, &[0; 32])))
+}
+
+pub fn add_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>, pool_address: Address) {
+    let mut pools = get_pools(e, salt);
+    pools.set(pool_index, pool_address);
+    if pools.len() > MAX_POOLS_FOR_PAIR {
+        panic!("pools amount is over max")
+    }
+    put_pools(e, salt, &pools);
 }

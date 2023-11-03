@@ -24,7 +24,7 @@ fn create_liqpool_contract<'a>(
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize(&admin, token_wasm_hash, coins, &a, &fee, &admin_fee);
-    liqpool.initialize_rewards_config(&admin, token_reward, &liqpool.address);
+    liqpool.initialize_rewards_config(token_reward, &liqpool.address);
     liqpool
 }
 

@@ -46,6 +46,13 @@ where
     e.storage().instance().get(key)
 }
 
+fn has_instance_value<K>(e: &Env, key: &K) -> bool
+where
+    K: IntoVal<Env, Val>,
+{
+    e.storage().instance().has(key)
+}
+
 fn put_instance_value<K, V>(e: &Env, key: &K, value: &V)
 where
     K: IntoVal<Env, Val>,
@@ -61,6 +68,10 @@ pub fn get_token_a(e: &Env) -> Address {
 
 pub fn get_token_b(e: &Env) -> Address {
     get_instance_value(e, &DataKey::TokenB).unwrap()
+}
+
+pub fn has_reward_token(e: &Env) -> bool {
+    has_instance_value(e, &DataKey::RewardToken)
 }
 
 pub fn get_reward_token(e: &Env) -> Address {

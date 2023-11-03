@@ -63,12 +63,7 @@ pub trait UpgradeableContractTrait {
 
 pub trait RewardsTrait {
     // todo: move rewards configuration to gauge
-    fn initialize_rewards_config(
-        e: Env,
-        admin: Address,
-        reward_token: Address,
-        reward_storage: Address,
-    );
+    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
     fn set_rewards_config(e: Env, admin: Address, expired_at: u64, amount: i128) -> bool;
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
     fn get_user_reward(e: Env, user: Address) -> i128;

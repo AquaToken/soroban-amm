@@ -961,13 +961,16 @@ impl UpgradeableContractTrait for LiquidityPool {
 impl RewardsTrait for LiquidityPool {
     fn initialize_rewards_config(
         e: Env,
-        admin: Address,
+        // admin: Address,
         reward_token: Address,
         reward_storage: Address,
     ) {
-        admin.require_auth();
-        check_admin(&e, &admin);
+        // admin.require_auth();
+        // check_admin(&e, &admin);
 
+        if storage::has_reward_token(&e) {
+            panic!("rewards config already initialized")
+        }
         storage::put_reward_token(&e, reward_token);
         storage::put_reward_storage(&e, reward_storage);
     }

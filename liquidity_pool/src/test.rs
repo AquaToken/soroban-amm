@@ -5,9 +5,7 @@ use crate::{token, LiquidityPoolClient};
 
 use crate::assertions::assert_approx_eq_abs;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo};
-use soroban_sdk::{
-    testutils::Address as _, Address, BytesN, Env, IntoVal, Map, Symbol, Vec,
-};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Map, Symbol, Vec};
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> token::Client<'a> {
     token::Client::new(e, &e.register_stellar_asset_contract(admin.clone()))
@@ -23,7 +21,7 @@ fn create_liqpool_contract<'a>(
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize(&admin, token_wasm_hash, tokens, &fee_fraction);
-    liqpool.initialize_rewards_config(&admin, token_reward, &liqpool.address);
+    liqpool.initialize_rewards_config(token_reward, &liqpool.address);
     liqpool
 }
 
