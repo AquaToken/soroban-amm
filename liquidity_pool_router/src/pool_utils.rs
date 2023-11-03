@@ -7,7 +7,7 @@ use crate::storage::{
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, Symbol, Vec};
 
-pub fn get_standard_pool_hash(e: &Env, fee_fraction: u32) -> BytesN<32> {
+pub fn get_standard_pool_index(e: &Env, fee_fraction: u32) -> BytesN<32> {
     // fixme: fee_fraction is mutable for pool. hash collision is possible to happen
     let mut salt = Bytes::new(e);
     salt.append(&symbol_short!("standard").to_xdr(&e));
@@ -17,14 +17,16 @@ pub fn get_standard_pool_hash(e: &Env, fee_fraction: u32) -> BytesN<32> {
     e.crypto().sha256(&salt)
 }
 
-// pub fn get_stableswap_pool_hash(e: &Env, a: u32, fee_fraction: u32) -> BytesN<32> {
-//     let mut salt = Bytes::new(e);
-//     salt.append(&symbol_short!("standard").to_xdr(&e));
-//     salt.append(&symbol_short!("0x00").to_xdr(&e));
-//     salt.append(&fee_fraction.to_xdr(&e));
-//     salt.append(&symbol_short!("0x00").to_xdr(&e));
-//     e.crypto().sha256(&salt)
-// }
+pub fn get_stableswap_pool_index(e: &Env, a: u32, fee_fraction: u32) -> BytesN<32> {
+    let mut salt = Bytes::new(e);
+    salt.append(&symbol_short!("stable").to_xdr(&e));
+    salt.append(&symbol_short!("0x00").to_xdr(&e));
+    salt.append(&fee_fraction.to_xdr(&e));
+    salt.append(&symbol_short!("0x00").to_xdr(&e));
+    salt.append(&a.to_xdr(&e));
+    salt.append(&symbol_short!("0x00").to_xdr(&e));
+    e.crypto().sha256(&salt)
+}
 
 pub fn deploy_standard_pool(
     e: &Env,
@@ -41,7 +43,7 @@ pub fn deploy_standard_pool(
         .deploy(liquidity_pool_wasm_hash);
     init_standard_pool(e, token_a, token_b, &pool_contract_id, fee_fraction);
 
-    let pool_hash = get_standard_pool_hash(&e, fee_fraction);
+    let pool_hash = get_standard_pool_index(&e, fee_fraction);
 
     storage::add_pool(&e, &salt, pool_hash.clone(), pool_contract_id.clone());
 

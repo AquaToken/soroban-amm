@@ -1,6 +1,6 @@
 use crate::admin::{has_admin, require_admin, set_admin};
 use crate::pool_interface::{LiquidityPoolInterfaceTrait, PoolsManagementTrait};
-use crate::router_interface::{AdminInterface, LiquidityPoolRouterTrait, UpgradeableContract};
+use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::{pool_utils, storage};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
 use soroban_sdk::{symbol_short, IntoVal, Map, Symbol, Vec};
@@ -216,12 +216,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         if !pool_exists {
             panic!("pool not exists")
         }
-        let tokens: Vec<Address> = Self::get_tokens(
-            e.clone(),
-            token_a.clone(),
-            token_b.clone(),
-            pool_index.clone(),
-        );
 
         let amounts: Vec<i128> = e.invoke_contract(
             &pool_id,
