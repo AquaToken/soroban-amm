@@ -146,3 +146,9 @@ pub fn add_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>, pool_address
     }
     put_pools(e, salt, &pools);
 }
+
+pub fn remove_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) {
+    let mut pools = get_pools(e, salt);
+    pools.remove(pool_index);
+    put_pools(e, salt, &pools);
+}

@@ -3,7 +3,7 @@ use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::pool_interface::{LiquidityPoolInterfaceTrait, PoolsManagementTrait};
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::{pool_utils, storage};
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Val};
 use soroban_sdk::{symbol_short, IntoVal, Map, Symbol, Vec};
 
 #[contract]
@@ -346,19 +346,41 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         storage::get_pools(&e, &salt)
     }
 
-    fn add_pool(
+    fn add_custom_pool(
         e: Env,
         token_a: Address,
         token_b: Address,
         pool_address: Address,
-        pool_description: Symbol,
-    ) {
+        pool_type: Symbol,
+        init_args: Vec<Val>,
+    ) -> BytesN<32> {
         require_admin(&e);
-        todo!()
+        let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
+        let subpool_salt = pool_utils::get_custom_salt(&e, &pool_type, &init_args);
+
+        if storage::has_pool(&e, &salt, subpool_salt.clone()) {
+            panic!("pool already exists")
+        }
+
+        storage::add_pool(&e, &salt, subpool_salt.clone(), pool_address.clone());
+
+        e.events().publish(
+            (
+                Symbol::new(&e, "add_pool"),
+                token_a.clone(),
+                token_b.clone(),
+            ),
+            (pool_address, pool_type, subpool_salt.clone(), init_args),
+        );
+
+        subpool_salt
     }
 
     fn remove_pool(e: Env, token_a: Address, token_b: Address, pool_hash: BytesN<32>) {
         require_admin(&e);
-        todo!()
+        let salt = crate::utils::pool_salt(&e, &token_a, &token_b);
+        if storage::has_pool(&e, &salt, pool_hash.clone()) {
+            storage::remove_pool(&e, &salt, pool_hash)
+        }
     }
 }

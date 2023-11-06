@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
 pub trait LiquidityPoolInterfaceTrait {
     fn get_pool(
@@ -119,13 +119,14 @@ pub trait PoolsManagementTrait {
     fn get_pools(e: Env, token_a: Address, token_b: Address) -> Map<BytesN<32>, Address>;
 
     // Add initialized custom pool to the list for given pair
-    fn add_pool(
+    fn add_custom_pool(
         e: Env,
         token_a: Address,
         token_b: Address,
         pool_address: Address,
-        pool_description: Symbol,
-    );
+        pool_type: Symbol,
+        init_args: Vec<Val>,
+    ) -> BytesN<32>;
 
     // remove pool from the list
     fn remove_pool(e: Env, token_a: Address, token_b: Address, pool_hash: BytesN<32>);

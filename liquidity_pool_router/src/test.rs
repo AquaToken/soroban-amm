@@ -3,7 +3,7 @@ extern crate std;
 
 use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::{Ledger, LedgerInfo};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
+use soroban_sdk::{symbol_short, testutils::Address as _, Address, BytesN, Env, IntoVal, Val, Vec};
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
@@ -153,7 +153,7 @@ fn test_constant_product_pool() {
             &token2.address,
             &pool_hash,
             &97_u128,
-            &49_u128
+            &49_u128,
         ),
         49
     );
@@ -274,7 +274,7 @@ fn test_stableswap_pool() {
             &token2.address,
             &pool_hash,
             &97_0000000_u128,
-            &80_4573706_u128
+            &80_4573706_u128,
         ),
         80_4573706
     );
@@ -353,4 +353,101 @@ fn test_init_pool_twice() {
 
     router.init_standard_pool(&token1.address, &token2.address, &10);
     assert_eq!(router.get_pools(&token1.address, &token2.address).len(), 3);
+}
+
+#[test]
+fn test_custom_pool() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+
+    let reward_admin = Address::random(&e);
+    let admin = Address::random(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::random(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let stableswap_pool_hash = install_stableswap_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&stableswap_pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+
+    let (original_pool_hash, pool_address) =
+        router.init_standard_pool(&token1.address, &token2.address, &30);
+
+    let pool_hash = router.add_custom_pool(
+        &token1.address,
+        &token2.address,
+        &pool_address,
+        &symbol_short!("custom"),
+        &Vec::<Val>::from_array(&e, [42_i128.into_val(&e)]),
+    );
+
+    let pools = router.get_pools(&token1.address, &token2.address);
+
+    assert_eq!(pools.len(), 2);
+
+    let token_share = test_token::Client::new(
+        &e,
+        &router.share_id(&token1.address, &token2.address, &pool_hash),
+    );
+
+    token1.mint(&user1, &1000);
+    assert_eq!(token1.balance(&user1), 1000);
+
+    token2.mint(&user1, &1000);
+    assert_eq!(token2.balance(&user1), 1000);
+    token1.approve(&user1, &pool_address, &1000, &99999);
+    token2.approve(&user1, &pool_address, &1000, &99999);
+
+    assert_eq!(token_share.balance(&user1), 0);
+
+    let desired_amounts = Vec::from_array(&e, [100, 100]);
+    router.deposit(
+        &user1,
+        &token1.address,
+        &token2.address,
+        &pool_hash,
+        &desired_amounts,
+    );
+
+    assert_eq!(
+        router.swap(
+            &user1,
+            &token1.address,
+            &token2.address,
+            &pool_hash,
+            &97_u128,
+            &49_u128,
+        ),
+        49
+    );
+    token_share.approve(&user1, &pool_address, &100, &99999);
+    assert_eq!(
+        router.withdraw(
+            &user1,
+            &token1.address,
+            &token2.address,
+            &pool_hash,
+            &100_u128,
+            &Vec::from_array(&e, [197_u128, 51_u128]),
+        ),
+        Vec::from_array(&e, [197_u128, 51_u128]),
+    );
 }
