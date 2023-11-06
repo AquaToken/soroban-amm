@@ -388,7 +388,7 @@ fn test_custom_pool() {
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
 
-    let (original_pool_hash, pool_address) =
+    let (_original_pool_hash, pool_address) =
         router.init_standard_pool(&token1.address, &token2.address, &30);
 
     let pool_hash = router.add_custom_pool(
@@ -450,4 +450,80 @@ fn test_custom_pool() {
         ),
         Vec::from_array(&e, [197_u128, 51_u128]),
     );
+}
+
+#[test]
+fn test_simple_ongoing_reward() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+
+    let reward_admin = Address::random(&e);
+    let admin = Address::random(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::random(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let stableswap_pool_hash = install_stableswap_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&stableswap_pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+
+    let (pool_hash, pool_address) =
+        router.init_standard_pool(&token1.address, &token2.address, &30);
+
+    reward_token.mint(&router.address, &1_000_000_0000000);
+    let total_reward_1 = 10_5000000_u128 * 60;
+    router.set_rewards_config(
+        &admin,
+        &token1.address,
+        &token2.address,
+        &pool_hash,
+        &e.ledger().timestamp().saturating_add(60),
+        &total_reward_1,
+    );
+    reward_token.approve(&router.address, &pool_address, &1_000_000_0000000, &99999);
+
+    token1.mint(&user1, &1000);
+    assert_eq!(token1.balance(&user1), 1000);
+
+    token2.mint(&user1, &1000);
+    assert_eq!(token2.balance(&user1), 1000);
+    token1.approve(&user1, &pool_address, &1000, &99999);
+    token2.approve(&user1, &pool_address, &1000, &99999);
+
+    // 10 seconds passed since config, user depositing
+    jump(&e, 10);
+    router.deposit(
+        &user1,
+        &token1.address,
+        &token2.address,
+        &pool_hash,
+        &Vec::from_array(&e, [100, 100]),
+    );
+
+    assert_eq!(reward_token.balance(&user1), 0);
+    // 30 seconds passed, half of the reward is available for the user
+    jump(&e, 30);
+    assert_eq!(
+        router.claim(&user1, &token1.address, &token2.address, &pool_hash),
+        total_reward_1 / 2
+    );
+    assert_eq!(reward_token.balance(&user1) as u128, total_reward_1 / 2);
 }

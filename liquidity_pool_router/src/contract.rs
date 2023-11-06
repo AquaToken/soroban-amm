@@ -1,6 +1,8 @@
 use crate::admin::{has_admin, require_admin, set_admin};
 use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
-use crate::pool_interface::{LiquidityPoolInterfaceTrait, PoolsManagementTrait};
+use crate::pool_interface::{
+    LiquidityPoolInterfaceTrait, PoolsManagementTrait, RewardsInterfaceTrait,
+};
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::{pool_utils, storage};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Val};
@@ -278,6 +280,122 @@ impl AdminInterface for LiquidityPoolRouter {
     fn set_reward_token(e: Env, reward_token: Address) {
         require_admin(&e);
         storage::set_reward_token(&e, &reward_token);
+    }
+}
+
+#[contractimpl]
+impl RewardsInterfaceTrait for LiquidityPoolRouter {
+    fn set_rewards_config(
+        e: Env,
+        admin: Address,
+        token_a: Address,
+        token_b: Address,
+        pool_index: BytesN<32>,
+        expired_at: u64,
+        amount: u128,
+    ) -> bool {
+        // require_admin(&e);
+        admin.require_auth();
+
+        let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
+        let (pool_exists, pool_id) = Self::get_pool(
+            e.clone(),
+            token_a.clone(),
+            token_b.clone(),
+            pool_index.clone(),
+        );
+        if !pool_exists {
+            panic!("pool not exists")
+        }
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "set_rewards_config"),
+            Vec::from_array(
+                &e,
+                [
+                    admin.into_val(&e),
+                    expired_at.into_val(&e),
+                    amount.into_val(&e),
+                ],
+            ),
+        )
+    }
+
+    fn get_rewards_info(
+        e: Env,
+        user: Address,
+        token_a: Address,
+        token_b: Address,
+        pool_index: BytesN<32>,
+    ) -> Map<Symbol, i128> {
+        let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
+        let (pool_exists, pool_id) = Self::get_pool(
+            e.clone(),
+            token_a.clone(),
+            token_b.clone(),
+            pool_index.clone(),
+        );
+        if !pool_exists {
+            panic!("pool not exists")
+        }
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_rewards_info"),
+            Vec::from_array(&e, [user.clone().into_val(&e)]),
+        )
+    }
+
+    fn get_user_reward(
+        e: Env,
+        user: Address,
+        token_a: Address,
+        token_b: Address,
+        pool_index: BytesN<32>,
+    ) -> u128 {
+        let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
+        let (pool_exists, pool_id) = Self::get_pool(
+            e.clone(),
+            token_a.clone(),
+            token_b.clone(),
+            pool_index.clone(),
+        );
+        if !pool_exists {
+            panic!("pool not exists")
+        }
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_user_reward"),
+            Vec::from_array(&e, [user.clone().into_val(&e)]),
+        )
+    }
+
+    fn claim(
+        e: Env,
+        user: Address,
+        token_a: Address,
+        token_b: Address,
+        pool_index: BytesN<32>,
+    ) -> u128 {
+        user.require_auth();
+        let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
+        let (pool_exists, pool_id) = Self::get_pool(
+            e.clone(),
+            token_a.clone(),
+            token_b.clone(),
+            pool_index.clone(),
+        );
+        if !pool_exists {
+            panic!("pool not exists")
+        }
+
+        e.invoke_contract(
+            &pool_id,
+            &symbol_short!("claim"),
+            Vec::from_array(&e, [user.clone().into_val(&e)]),
+        )
     }
 }
 

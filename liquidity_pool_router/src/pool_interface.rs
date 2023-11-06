@@ -79,21 +79,39 @@ pub trait LiquidityPoolInterfaceTrait {
 }
 
 pub trait RewardsInterfaceTrait {
-    fn get_user_reward(
+    fn set_rewards_config(
         e: Env,
+        admin: Address,
         token_a: Address,
         token_b: Address,
         pool_index: BytesN<32>,
+        expired_at: u64,
+        amount: u128,
+    ) -> bool;
+
+    fn get_rewards_info(
+        e: Env,
         user: Address,
+        token_a: Address,
+        token_b: Address,
+        pool_index: BytesN<32>,
+    ) -> Map<Symbol, i128>;
+
+    fn get_user_reward(
+        e: Env,
+        user: Address,
+        token_a: Address,
+        token_b: Address,
+        pool_index: BytesN<32>,
     ) -> u128;
 
     fn claim(
         e: Env,
+        user: Address,
         token_a: Address,
         token_b: Address,
         pool_index: BytesN<32>,
-        user: Address,
-    ) -> BytesN<32>;
+    ) -> u128;
 }
 
 pub trait PoolsManagementTrait {
