@@ -292,10 +292,10 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         token_b: Address,
         pool_index: BytesN<32>,
         expired_at: u64,
-        amount: u128,
+        tps: u128,
     ) -> bool {
-        // require_admin(&e);
         admin.require_auth();
+        require_admin(&e);
 
         let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
         let (pool_exists, pool_id) = Self::get_pool(
@@ -316,7 +316,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
                 [
                     admin.into_val(&e),
                     expired_at.into_val(&e),
-                    amount.into_val(&e),
+                    tps.into_val(&e),
                 ],
             ),
         )

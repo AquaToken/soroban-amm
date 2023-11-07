@@ -86,7 +86,7 @@ pub trait RewardsInterfaceTrait {
         token_b: Address,
         pool_index: BytesN<32>,
         expired_at: u64,
-        amount: u128,
+        tps: u128,
     ) -> bool;
 
     fn get_rewards_info(

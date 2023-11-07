@@ -573,11 +573,12 @@ fn test_simple_ongoing_reward() {
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_u128 * 60;
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(60),
-        &total_reward_1,
+        &reward_1_tps,
     );
     token_reward.approve(
         &liqpool.address,
@@ -653,11 +654,12 @@ fn test_simple_reward() {
     // 20 seconds. rewards set up for 60 seconds
     jump(&e, 10);
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_u128 * 60;
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(60),
-        &total_reward_1,
+        &reward_1_tps,
     );
     token_reward.approve(
         &liqpool.address,
@@ -707,11 +709,12 @@ fn test_two_users_rewards() {
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_u128 * 60;
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(60),
-        &total_reward_1,
+        &reward_1_tps,
     );
     token_reward.approve(
         &liqpool.address,
@@ -784,11 +787,12 @@ fn test_lazy_user_rewards() {
     );
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_u128 * 60;
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
     liqpool.set_rewards_config(
         &user1,
         &e.ledger().timestamp().saturating_add(60),
-        &total_reward_1,
+        &reward_1_tps,
     );
     token_reward.approve(
         &liqpool.address,

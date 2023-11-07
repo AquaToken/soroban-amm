@@ -980,7 +980,7 @@ impl RewardsTrait for LiquidityPool {
         e: Env,
         admin: Address,
         expired_at: u64, // timestamp
-        amount: u128,    // value with 7 decimal places. example: 600_0000000
+        tps: u128,       // value with 7 decimal places. example: 600_0000000
     ) -> bool {
         admin.require_auth();
         check_admin(&e, &admin);
@@ -991,10 +991,7 @@ impl RewardsTrait for LiquidityPool {
 
         rewards_manager::update_rewards_data(&e);
 
-        let config = rewards_storage::PoolRewardConfig {
-            tps: amount / to_u128(expired_at - e.ledger().timestamp()),
-            expired_at,
-        };
+        let config = rewards_storage::PoolRewardConfig { tps, expired_at };
         storage::bump_instance(&e);
         rewards_storage::set_pool_reward_config(&e, &config);
         true

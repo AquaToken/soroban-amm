@@ -489,14 +489,15 @@ fn test_simple_ongoing_reward() {
         router.init_standard_pool(&token1.address, &token2.address, &30);
 
     reward_token.mint(&router.address, &1_000_000_0000000);
-    let total_reward_1 = 10_5000000_u128 * 60;
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
     router.set_rewards_config(
         &admin,
         &token1.address,
         &token2.address,
         &pool_hash,
         &e.ledger().timestamp().saturating_add(60),
-        &total_reward_1,
+        &reward_1_tps,
     );
     reward_token.approve(&router.address, &pool_address, &1_000_000_0000000, &99999);
 
