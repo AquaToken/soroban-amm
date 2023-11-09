@@ -28,3 +28,8 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
+
+[features]
+default = []
+tokens_2 = []
+tokens_3 = []

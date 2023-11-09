@@ -30,11 +30,17 @@ pub fn set_constant_product_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
 }
 
 // pool hash
-pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
+pub fn get_stableswap_pool_hash(e: &Env, num_tokens: u32) -> BytesN<32> {
+    if num_tokens == 1 || num_tokens > 3 {
+        panic!("unable to find hash for this amount of tokens")
+    }
+
+    let key = DataKey::StableSwapPoolHash(num_tokens);
+
     e.storage()
         .instance()
         .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    let hash = e.storage().instance().get(&DataKey::StableSwapPoolHash);
+    let hash = e.storage().instance().get(&key);
     match hash {
         Some(value) => value,
         None => {
@@ -43,13 +49,13 @@ pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
     }
 }
 
-pub fn set_stableswap_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
+pub fn set_stableswap_pool_hash(e: &Env, num_tokens: u32, pool_hash: &BytesN<32>) {
+    let key = DataKey::StableSwapPoolHash(num_tokens);
+
     e.storage()
         .instance()
         .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    e.storage()
-        .instance()
-        .set(&DataKey::StableSwapPoolHash, pool_hash)
+    e.storage().instance().set(&key, pool_hash)
 }
 
 // token hash

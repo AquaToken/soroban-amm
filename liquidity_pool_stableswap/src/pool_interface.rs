@@ -10,7 +10,7 @@ pub trait LiquidityPoolInterfaceTrait {
         a: u128,
         fee_fraction: u128,
         admin_fee: u128,
-    );
+    ) -> bool;
 
     // The pool swap fee, as an integer with 1e4 precision. 0.01% = 1; 0.3% = 30; 1% = 100;
     fn get_fee_fraction(e: Env) -> u32;
@@ -63,7 +63,7 @@ pub trait UpgradeableContractTrait {
 
 pub trait RewardsTrait {
     // todo: move rewards configuration to gauge
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
+    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) -> bool;
     fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128) -> bool;
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
     fn get_user_reward(e: Env, user: Address) -> u128;

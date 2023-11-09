@@ -26,7 +26,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
-    ) {
+    ) -> bool {
         if has_admin(&e) {
             panic!("already initialized")
         }
@@ -76,6 +76,8 @@ impl LiquidityPoolTrait for LiquidityPool {
                 last_time: 0,
             },
         );
+
+        true
     }
 
     fn share_id(e: Env) -> Address {
@@ -333,7 +335,7 @@ impl UpgradeableContractTrait for LiquidityPool {
 
 #[contractimpl]
 impl RewardsTrait for LiquidityPool {
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) {
+    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) -> bool {
         // admin.require_auth();
         // check_admin(&e, &admin);
 
@@ -343,6 +345,7 @@ impl RewardsTrait for LiquidityPool {
 
         storage::put_reward_token(&e, reward_token);
         storage::put_reward_storage(&e, reward_storage);
+        true
     }
 
     fn set_rewards_config(

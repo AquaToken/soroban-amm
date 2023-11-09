@@ -13,7 +13,6 @@ use crate::rewards::storage::get_pool_reward_config;
 use crate::token::create_contract;
 use crate::{admin, storage, token};
 use cast::i128 as to_i128;
-use cast::u128 as to_u128;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol,
     Vec,
@@ -35,19 +34,19 @@ impl LiquidityPoolTrait for LiquidityPool {
         let a1 = storage::get_future_a(&e);
         let now = e.ledger().timestamp() as u128;
 
-        if now < t1 {
+        return if now < t1 {
             let a0 = storage::get_initial_a(&e);
             let t0 = storage::get_initial_a_time(&e) as u128;
             // Expressions in u128 cannot have negative numbers, thus "if"
             if a1 > a0 {
-                return a0 + (a1 - a0) * (now - t0) / (t1 - t0);
+                a0 + (a1 - a0) * (now - t0) / (t1 - t0)
             } else {
-                return a0 - (a0 - a1) * (now - t0) / (t1 - t0);
+                a0 - (a0 - a1) * (now - t0) / (t1 - t0)
             }
         } else {
             // when t1 == 0 or block.timestamp >= t1
-            return a1;
-        }
+            a1
+        };
     }
 
     fn get_virtual_price(e: Env) -> u128 {
@@ -641,7 +640,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         a: u128,
         fee: u128,
         admin_fee: u128,
-    ) {
+    ) -> bool {
         if has_admin(&e) {
             panic!("already initialized")
         }
@@ -693,6 +692,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
                 last_time: 0,
             },
         );
+
+        true
     }
 
     fn get_fee_fraction(e: Env) -> u32 {
@@ -909,6 +910,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
         user.require_auth();
 
+        if min_amounts.len() != N_COINS as u32 {
+            panic!("wrong min_amounts vector size")
+        }
+
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let pool_data = rewards_manager::update_rewards_data(&e);
         rewards_manager::update_user_reward(&e, &pool_data, &user);
@@ -965,7 +970,7 @@ impl RewardsTrait for LiquidityPool {
         // admin: Address,
         reward_token: Address,
         reward_storage: Address,
-    ) {
+    ) -> bool {
         // admin.require_auth();
         // check_admin(&e, &admin);
 
@@ -974,6 +979,8 @@ impl RewardsTrait for LiquidityPool {
         }
         storage::put_reward_token(&e, reward_token);
         storage::put_reward_storage(&e, reward_storage);
+
+        true
     }
 
     fn set_rewards_config(
