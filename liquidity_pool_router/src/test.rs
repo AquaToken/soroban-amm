@@ -3,7 +3,9 @@ extern crate std;
 
 use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::{Ledger, LedgerInfo};
-use soroban_sdk::{symbol_short, testutils::Address as _, Address, BytesN, Env, IntoVal, Val, Vec};
+use soroban_sdk::{
+    symbol_short, testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Val, Vec,
+};
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
@@ -100,6 +102,10 @@ fn test_constant_product_pool() {
     router.set_reward_token(&reward_token.address);
 
     let (pool_hash, pool_address) = router.init_standard_pool(&tokens, &30);
+    assert_eq!(
+        router.pool_type(&tokens, &pool_hash),
+        Symbol::new(&e, "constant_product")
+    );
 
     let pools = router.get_pools(&tokens);
 
@@ -212,6 +218,10 @@ fn test_stableswap_pool() {
     router.set_reward_token(&reward_token.address);
 
     let (pool_hash, pool_address) = router.init_stableswap_pool(&tokens, &10, &30, &0);
+    assert_eq!(
+        router.pool_type(&tokens, &pool_hash),
+        Symbol::new(&e, "stable")
+    );
 
     let pools = router.get_pools(&tokens);
 
@@ -349,6 +359,10 @@ fn test_stableswap_3_pool() {
     router.set_reward_token(&reward_token.address);
 
     let (pool_hash, pool_address) = router.init_stableswap_pool(&tokens, &10, &30, &0);
+    assert_eq!(
+        router.pool_type(&tokens, &pool_hash),
+        Symbol::new(&e, "stable_3")
+    );
 
     let pools = router.get_pools(&tokens);
 

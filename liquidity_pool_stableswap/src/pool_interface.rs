@@ -1,6 +1,8 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
 
 pub trait LiquidityPoolInterfaceTrait {
+    fn pool_type(e: Env) -> Symbol;
+
     // Sets the token contract addresses for this pool
     fn initialize(
         e: Env,

@@ -12,6 +12,8 @@ tasks:
       - mv target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_2_tokens.wasm
       - soroban contract build --features=tokens_3
       - mv target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_3_tokens.wasm
+      - soroban contract build --features=tokens_4
+      - mv target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_4_tokens.wasm
       - ls -l target/wasm32-unknown-unknown/release/*.wasm
 
   test:
@@ -20,6 +22,7 @@ tasks:
     cmds:
       - cargo test --features=tokens_2
       - cargo test --features=tokens_3
+      - cargo test --features=tokens_4
 
   default:
     cmds:

@@ -632,6 +632,15 @@ impl AdminInterfaceTrait for LiquidityPool {
 
 #[contractimpl]
 impl LiquidityPoolInterfaceTrait for LiquidityPool {
+    fn pool_type(e: Env) -> Symbol {
+        match N_COINS {
+            2 => Symbol::new(&e, "stable"),
+            3 => Symbol::new(&e, "stable_3"),
+            4 => Symbol::new(&e, "stable_4"),
+            _ => panic!("unable to calculate pool type"),
+        }
+    }
+
     fn initialize(
         e: Env,
         admin: Address,

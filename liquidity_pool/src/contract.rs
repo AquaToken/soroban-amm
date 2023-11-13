@@ -20,6 +20,10 @@ pub struct LiquidityPool;
 
 #[contractimpl]
 impl LiquidityPoolTrait for LiquidityPool {
+    fn pool_type(e: Env) -> Symbol {
+        Symbol::new(&e, "constant_product")
+    }
+
     fn initialize(
         e: Env,
         admin: Address,

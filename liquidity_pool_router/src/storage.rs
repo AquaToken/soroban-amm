@@ -3,7 +3,7 @@ use crate::constants::{
     POOL_LIFETIME_THRESHOLD,
 };
 use crate::storage_types::DataKey;
-use soroban_sdk::{Address, BytesN, Env, Map};
+use soroban_sdk::{Address, BytesN, Env, Map, Vec};
 
 // pool hash
 
@@ -137,11 +137,19 @@ pub fn has_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) -> bool {
     pools.contains_key(pool_index)
 }
 
-pub fn get_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) -> Address {
+pub fn get_pool_safe(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) -> Address {
     let pools = get_pools(e, salt);
     pools
         .get(pool_index)
         .unwrap_or(Address::from_contract_id(&BytesN::from_array(&e, &[0; 32])))
+}
+
+pub fn get_pool(e: &Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
+    let salt = crate::utils::pool_salt(&e, tokens);
+    if !has_pool(&e, &salt, pool_index.clone()) {
+        panic!("pool not exists")
+    }
+    get_pool_safe(&e, &salt, pool_index)
 }
 
 pub fn add_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>, pool_address: Address) {

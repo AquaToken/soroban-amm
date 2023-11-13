@@ -2,6 +2,8 @@
 pub use crate::pool_2_constants::{N_COINS, PRECISION_MUL, RATES};
 #[cfg(feature = "tokens_3")]
 pub use crate::pool_3_constants::{N_COINS, PRECISION_MUL, RATES};
+#[cfg(feature = "tokens_4")]
+pub use crate::pool_4_constants::{N_COINS, PRECISION_MUL, RATES};
 
 pub const FEE_DENOMINATOR: u128 = 10000; // 0.01% = 0.0001 = 1 / 10000
 pub const LENDING_PRECISION: u128 = 1_0000000;

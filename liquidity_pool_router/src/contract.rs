@@ -13,41 +13,31 @@ pub struct LiquidityPoolRouter;
 
 #[contractimpl]
 impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
+    fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol {
+        let pool_id = storage::get_pool(&e, tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "pool_type"), Vec::new(&e))
+    }
+
     fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> (bool, Address) {
         let salt = crate::utils::pool_salt(&e, tokens);
         (
             storage::has_pool(&e, &salt, pool_index.clone()),
-            storage::get_pool(&e, &salt, pool_index),
+            storage::get_pool_safe(&e, &salt, pool_index),
         )
     }
 
     fn share_id(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
-        // let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens, pool_index);
-        if !pool_exists {
-            panic!("pool not exists")
-        }
-
+        let pool_id = storage::get_pool(&e, tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "share_id"), Vec::new(&e))
     }
 
     fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128> {
-        // let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens, pool_index);
-        if !pool_exists {
-            panic!("pool not exists")
-        }
-
+        let pool_id = storage::get_pool(&e, tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
     }
 
     fn get_tokens(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<Address> {
-        // let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens, pool_index);
-        if !pool_exists {
-            panic!("pool not exists")
-        }
-
+        let pool_id = storage::get_pool(&e, tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_tokens"), Vec::new(&e))
     }
 
@@ -61,7 +51,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         user.require_auth();
 
         let salt = crate::utils::pool_salt(&e, tokens.clone());
-        let pool_id = storage::get_pool(&e, &salt, pool_index);
+        let pool_id = storage::get_pool_safe(&e, &salt, pool_index);
 
         let (amounts, share_amount): (Vec<u128>, u128) = e.invoke_contract(
             &pool_id,
@@ -91,11 +81,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
-        // let (token_a, token_b) = crate::utils::sort(&token_in, &token_out);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens.clone(), pool_index.clone());
-        if !pool_exists {
-            panic!("pool not exists")
-        }
+
+        let pool_id = storage::get_pool(&e, tokens.clone(), pool_index.clone());
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         let out_amt = e.invoke_contract(
@@ -135,11 +122,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         pool_index: BytesN<32>,
         in_amount: u128,
     ) -> u128 {
-        // let (token_a, token_b) = crate::utils::sort(&token_in, &token_out);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens.clone(), pool_index.clone());
-        if !pool_exists {
-            panic!("pool not exists")
-        }
+        let pool_id = storage::get_pool(&e, tokens.clone(), pool_index.clone());
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         e.invoke_contract(
@@ -171,11 +154,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         min_amounts: Vec<u128>,
     ) -> Vec<u128> {
         user.require_auth();
-        // let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens.clone(), pool_index.clone());
-        if !pool_exists {
-            panic!("pool not exists")
-        }
+
+        let pool_id = storage::get_pool(&e, tokens.clone(), pool_index.clone());
 
         let amounts: Vec<u128> = e.invoke_contract(
             &pool_id,
@@ -253,11 +233,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         admin.require_auth();
         require_admin(&e);
 
-        // let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens, pool_index.clone());
-        if !pool_exists {
-            panic!("pool not exists")
-        }
+        let pool_id = storage::get_pool(&e, tokens.clone(), pool_index.clone());
 
         e.invoke_contract(
             &pool_id,
@@ -279,11 +255,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
     ) -> Map<Symbol, i128> {
-        // let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens, pool_index.clone());
-        if !pool_exists {
-            panic!("pool not exists")
-        }
+        let pool_id = storage::get_pool(&e, tokens.clone(), pool_index.clone());
 
         e.invoke_contract(
             &pool_id,
@@ -298,11 +270,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
     ) -> u128 {
-        // let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens, pool_index.clone());
-        if !pool_exists {
-            panic!("pool not exists")
-        }
+        let pool_id = storage::get_pool(&e, tokens.clone(), pool_index.clone());
 
         e.invoke_contract(
             &pool_id,
@@ -313,11 +281,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
     fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         user.require_auth();
-        // let (token_a, token_b) = crate::utils::sort(&token_a, &token_b);
-        let (pool_exists, pool_id) = Self::get_pool(e.clone(), tokens, pool_index.clone());
-        if !pool_exists {
-            panic!("pool not exists")
-        }
+        let pool_id = storage::get_pool(&e, tokens.clone(), pool_index.clone());
 
         e.invoke_contract(
             &pool_id,

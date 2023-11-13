@@ -333,6 +333,142 @@ fn test_happy_flow_3_tokens() {
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
 }
 
+#[cfg(feature = "tokens_4")]
+#[test]
+fn test_happy_flow_4_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::random(&e);
+    let admin2 = Address::random(&e);
+    let admin3 = Address::random(&e);
+    let admin4 = Address::random(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token3 = create_token_contract(&e, &admin3);
+    let token4 = create_token_contract(&e, &admin4);
+
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::random(&e);
+    let fee = 2000_u128;
+    let admin_fee = 0_u128;
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(
+            &e,
+            [
+                token1.address.clone(),
+                token2.address.clone(),
+                token3.address.clone(),
+                token4.address.clone(),
+            ],
+        ),
+        10,
+        fee as u128,
+        admin_fee as u128,
+        &token_reward.address,
+    );
+
+    let token_share = token::Client::new(&e, &liqpool.share_id());
+
+    token1.mint(&user1, &1000_0000000);
+    token2.mint(&user1, &1000_0000000);
+    token3.mint(&user1, &1000_0000000);
+    token4.mint(&user1, &1000_0000000);
+    assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
+    assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
+    assert_eq!(token3.balance(&user1) as u128, 1000_0000000);
+    assert_eq!(token4.balance(&user1) as u128, 1000_0000000);
+    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+    token3.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+    token4.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [100_0000000, 100_0000000, 100_0000000, 100_0000000]),
+        // &100_0000000,
+    );
+    assert_eq!(liqpool.get_virtual_price(), 1_0000000);
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [100_0000000, 100_0000000, 100_0000000, 100_0000000]),
+        // &100_0000000,
+    );
+    assert_eq!(liqpool.get_virtual_price(), 1_0000000); // ???
+    let calculated_amount = liqpool.calc_token_amount(
+        &Vec::from_array(&e, [10_0000000, 10_0000000, 10_0000000, 10_0000000]),
+        &true,
+    );
+
+    let total_share_token_amount = 800_0000000_u128; // share amount after two deposits
+
+    assert_eq!(calculated_amount, total_share_token_amount / 2 / 10);
+    assert_eq!(
+        token_share.balance(&user1) as u128,
+        total_share_token_amount
+    );
+    assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
+    assert_eq!(token1.balance(&user1) as u128, 800_0000000);
+    assert_eq!(token1.balance(&liqpool.address) as u128, 200_0000000);
+    assert_eq!(token2.balance(&user1) as u128, 800_0000000);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 200_0000000);
+    assert_eq!(token3.balance(&user1) as u128, 800_0000000);
+    assert_eq!(token3.balance(&liqpool.address) as u128, 200_0000000);
+    assert_eq!(token4.balance(&user1) as u128, 800_0000000);
+    assert_eq!(token4.balance(&liqpool.address) as u128, 200_0000000);
+
+    liqpool.swap(&user1, &0, &1, &10_0000000, &1_0000000);
+
+    assert_eq!(token1.balance(&user1) as u128, 790_0000000);
+    assert_eq!(token1.balance(&liqpool.address) as u128, 210_0000000);
+    assert_eq!(token2.balance(&user1) as u128, 807_9637267);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362733);
+    assert_eq!(token3.balance(&user1) as u128, 800_0000000);
+    assert_eq!(token3.balance(&liqpool.address) as u128, 200_0000000);
+    assert_eq!(token4.balance(&user1) as u128, 800_0000000);
+    assert_eq!(token4.balance(&liqpool.address) as u128, 200_0000000);
+
+    liqpool.swap(&user1, &3, &0, &20_0000000, &1_0000000);
+
+    assert_eq!(token1.balance(&user1) as u128, 805_9304932);
+    assert_eq!(token1.balance(&liqpool.address) as u128, 194_0695068);
+    assert_eq!(token2.balance(&user1) as u128, 807_9637267);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362733);
+    assert_eq!(token3.balance(&user1) as u128, 800_0000000);
+    assert_eq!(token3.balance(&liqpool.address) as u128, 200_0000000);
+    assert_eq!(token4.balance(&user1) as u128, 780_0000000);
+    assert_eq!(token4.balance(&liqpool.address) as u128, 220_0000000);
+
+    token_share.approve(
+        &user1,
+        &liqpool.address,
+        &(total_share_token_amount as i128),
+        &99999,
+    );
+
+    liqpool.withdraw(
+        &user1,
+        &(total_share_token_amount),
+        &Vec::from_array(&e, [0, 0, 0, 0]),
+    );
+
+    assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
+    assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
+    assert_eq!(token3.balance(&user1) as u128, 1000_0000000);
+    assert_eq!(token4.balance(&user1) as u128, 1000_0000000);
+    assert_eq!(token_share.balance(&user1) as u128, 0);
+    assert_eq!(token1.balance(&liqpool.address) as u128, 0);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 0);
+    assert_eq!(token3.balance(&liqpool.address) as u128, 0);
+    assert_eq!(token4.balance(&liqpool.address) as u128, 0);
+    assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
+}
+
 #[cfg(feature = "tokens_2")]
 #[test]
 fn test_withdraw_partial() {
