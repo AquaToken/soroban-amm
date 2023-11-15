@@ -102,7 +102,7 @@ fn test_constant_product_pool() {
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
 
-    let (pool_hash, pool_address) = router.init_standard_pool(&tokens, &30);
+    let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "constant_product")
@@ -219,10 +219,12 @@ fn test_stableswap_pools_amount_over_max() {
 
     // init constant product pools to make sure we don't affect stableswap counter
     for fee_fraction in CONSTANT_PRODUCT_FEE_AVAILABLE {
-        router.init_standard_pool(&tokens, &fee_fraction);
+        router.init_standard_pool(&admin, &tokens, &fee_fraction);
     }
+    reward_token.mint(&admin, &10000000_0000000);
+    reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
     for _i in 0..STABLE_SWAP_MAX_POOLS {
-        router.init_stableswap_pool(&tokens, &10, &30, &0);
+        router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
     }
 }
 
@@ -260,11 +262,49 @@ fn test_stableswap_pools_amount_ok() {
 
     // init constant product pools to make sure we don't affect stableswap counter
     for fee_fraction in CONSTANT_PRODUCT_FEE_AVAILABLE {
-        router.init_standard_pool(&tokens, &fee_fraction);
+        router.init_standard_pool(&admin, &tokens, &fee_fraction);
     }
+    reward_token.mint(&admin, &10000000_0000000);
+    reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
     for _i in 0..STABLE_SWAP_MAX_POOLS - 1 {
-        router.init_stableswap_pool(&tokens, &10, &30, &0);
+        router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
     }
+}
+
+#[test]
+#[should_panic(expected = "not enough allowance to spend")]
+fn test_stableswap_pool_no_allowance() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::random(&e);
+    let admin = Address::random(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+
+    router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
 }
 
 #[test]
@@ -301,7 +341,9 @@ fn test_stableswap_pool() {
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
 
-    let (pool_hash, pool_address) = router.init_stableswap_pool(&tokens, &10, &30, &0);
+    reward_token.mint(&user1, &10000000_0000000);
+    reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
+    let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable")
@@ -442,7 +484,9 @@ fn test_stableswap_3_pool() {
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
 
-    let (pool_hash, pool_address) = router.init_stableswap_pool(&tokens, &10, &30, &0);
+    reward_token.mint(&user1, &10000000_0000000);
+    reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
+    let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable_3")
@@ -582,20 +626,20 @@ fn test_init_pool_twice() {
     router.set_reward_token(&reward_token.address);
 
     let (pool_hash1, pool_address1) = router.init_pool(&tokens);
-    let (pool_hash2, pool_address2) = router.init_standard_pool(&tokens, &30);
+    let (pool_hash2, pool_address2) = router.init_standard_pool(&admin, &tokens, &30);
     assert_eq!(pool_hash1, pool_hash2);
     assert_eq!(pool_address1, pool_address2);
 
     let pools = router.get_pools(&tokens);
     assert_eq!(pools.len(), 1);
 
-    router.init_standard_pool(&tokens, &10);
+    router.init_standard_pool(&admin, &tokens, &10);
     assert_eq!(router.get_pools(&tokens).len(), 2);
 
-    router.init_standard_pool(&tokens, &100);
+    router.init_standard_pool(&admin, &tokens, &100);
     assert_eq!(router.get_pools(&tokens).len(), 3);
 
-    router.init_standard_pool(&tokens, &10);
+    router.init_standard_pool(&admin, &tokens, &10);
     assert_eq!(router.get_pools(&tokens).len(), 3);
 }
 
@@ -633,9 +677,10 @@ fn test_custom_pool() {
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
 
-    let (_original_pool_hash, pool_address) = router.init_standard_pool(&tokens, &30);
+    let (_original_pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
 
     let pool_hash = router.add_custom_pool(
+        &admin,
         &tokens,
         &pool_address,
         &symbol_short!("custom"),
@@ -720,7 +765,7 @@ fn test_simple_ongoing_reward() {
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
 
-    let (pool_hash, pool_address) = router.init_standard_pool(&tokens, &30);
+    let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
 
     reward_token.mint(&router.address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;

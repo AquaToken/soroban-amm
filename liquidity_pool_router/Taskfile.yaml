@@ -8,6 +8,7 @@ tasks:
 
   build:
     cmds:
+      - task -d ../token build || exit 1
       - task -d ../liquidity_pool build || exit 1
       - task -d ../liquidity_pool_stableswap build || exit 1
       - soroban contract build

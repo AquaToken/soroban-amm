@@ -1,10 +1,11 @@
-use crate::admin::{has_admin, require_admin, set_admin};
-use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
+use crate::admin::{check_admin, has_admin, require_admin, set_admin};
+use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, POOL_CREATION_FEE};
 use crate::pool_interface::{
     LiquidityPoolInterfaceTrait, PoolsManagementTrait, RewardsInterfaceTrait,
 };
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::LiquidityPoolType;
+use crate::token::token;
 use crate::{pool_utils, storage};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Val};
 use soroban_sdk::{symbol_short, IntoVal, Map, Symbol, Vec};
@@ -307,9 +308,12 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
     fn init_standard_pool(
         e: Env,
+        user: Address,
         tokens: Vec<Address>,
         fee_fraction: u32,
     ) -> (BytesN<32>, Address) {
+        user.require_auth();
+
         if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
             panic!("non-standard fee");
         }
@@ -326,11 +330,24 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
     fn init_stableswap_pool(
         e: Env,
+        user: Address,
         tokens: Vec<Address>,
         a: u128,
         fee_fraction: u32,
         admin_fee: u32,
     ) -> (BytesN<32>, Address) {
+        user.require_auth();
+
+        // ask user to pay for pool creation
+        // todo: configure token separately instead of reward_token
+        let reward_token = storage::get_reward_token(&e);
+        token::Client::new(&e, &reward_token).transfer_from(
+            &e.current_contract_address(),
+            &user,
+            &e.current_contract_address(),
+            &POOL_CREATION_FEE,
+        );
+
         let salt = crate::utils::pool_salt(&e, tokens.clone());
         let pools = storage::get_pools_plain(&e, &salt);
         let pool_index = pool_utils::get_stableswap_pool_salt(&e);
@@ -348,12 +365,15 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
     fn add_custom_pool(
         e: Env,
+        user: Address,
         tokens: Vec<Address>,
         pool_address: Address,
         pool_type: Symbol,
         init_args: Vec<Val>,
     ) -> BytesN<32> {
-        require_admin(&e);
+        user.require_auth();
+        check_admin(&e, &user);
+
         let salt = crate::utils::pool_salt(&e, tokens.clone());
         let subpool_salt = pool_utils::get_custom_salt(&e, &pool_type, &init_args);
 
@@ -377,8 +397,10 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         subpool_salt
     }
 
-    fn remove_pool(e: Env, tokens: Vec<Address>, pool_hash: BytesN<32>) {
-        require_admin(&e);
+    fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>) {
+        user.require_auth();
+        check_admin(&e, &user);
+
         let salt = crate::utils::pool_salt(&e, tokens.clone());
         if storage::has_pool(&e, &salt, pool_hash.clone()) {
             storage::remove_pool(&e, &salt, pool_hash)

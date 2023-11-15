@@ -91,11 +91,16 @@ pub trait RewardsInterfaceTrait {
 pub trait PoolsManagementTrait {
     fn init_pool(e: Env, tokens: Vec<Address>) -> (BytesN<32>, Address);
 
-    fn init_standard_pool(e: Env, tokens: Vec<Address>, fee_fraction: u32)
-        -> (BytesN<32>, Address);
+    fn init_standard_pool(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        fee_fraction: u32,
+    ) -> (BytesN<32>, Address);
 
     fn init_stableswap_pool(
         e: Env,
+        user: Address,
         tokens: Vec<Address>,
         a: u128,
         fee_fraction: u32,
@@ -108,6 +113,7 @@ pub trait PoolsManagementTrait {
     // Add initialized custom pool to the list for given pair
     fn add_custom_pool(
         e: Env,
+        user: Address,
         tokens: Vec<Address>,
         pool_address: Address,
         pool_type: Symbol,
@@ -115,5 +121,5 @@ pub trait PoolsManagementTrait {
     ) -> BytesN<32>;
 
     // remove pool from the list
-    fn remove_pool(e: Env, tokens: Vec<Address>, pool_hash: BytesN<32>);
+    fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>);
 }
