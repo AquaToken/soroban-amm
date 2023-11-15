@@ -4,6 +4,7 @@ use crate::pool_interface::{
     LiquidityPoolInterfaceTrait, PoolsManagementTrait, RewardsInterfaceTrait,
 };
 use crate::router_interface::{AdminInterface, UpgradeableContract};
+use crate::storage::LiquidityPoolType;
 use crate::{pool_utils, storage};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Val};
 use soroban_sdk::{symbol_short, IntoVal, Map, Symbol, Vec};
@@ -295,7 +296,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 impl PoolsManagementTrait for LiquidityPoolRouter {
     fn init_pool(e: Env, tokens: Vec<Address>) -> (BytesN<32>, Address) {
         let salt = crate::utils::pool_salt(&e, tokens.clone());
-        let pools = storage::get_pools(&e, &salt);
+        let pools = storage::get_pools_plain(&e, &salt);
         if pools.is_empty() {
             pool_utils::deploy_standard_pool(&e, tokens, 30)
         } else {
@@ -314,7 +315,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
 
         let salt = crate::utils::pool_salt(&e, tokens.clone());
-        let pools = storage::get_pools(&e, &salt);
+        let pools = storage::get_pools_plain(&e, &salt);
         let pool_index = pool_utils::get_standard_pool_salt(&e, fee_fraction);
 
         match pools.get(pool_index.clone()) {
@@ -330,11 +331,9 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         fee_fraction: u32,
         admin_fee: u32,
     ) -> (BytesN<32>, Address) {
-        require_admin(&e);
-
         let salt = crate::utils::pool_salt(&e, tokens.clone());
-        let pools = storage::get_pools(&e, &salt);
-        let pool_index = pool_utils::get_stableswap_pool_salt(&e, a, fee_fraction, admin_fee);
+        let pools = storage::get_pools_plain(&e, &salt);
+        let pool_index = pool_utils::get_stableswap_pool_salt(&e);
 
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),
@@ -344,7 +343,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address> {
         let salt = crate::utils::pool_salt(&e, tokens);
-        storage::get_pools(&e, &salt)
+        storage::get_pools_plain(&e, &salt)
     }
 
     fn add_custom_pool(
@@ -362,7 +361,13 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             panic!("pool already exists")
         }
 
-        storage::add_pool(&e, &salt, subpool_salt.clone(), pool_address.clone());
+        storage::add_pool(
+            &e,
+            &salt,
+            subpool_salt.clone(),
+            LiquidityPoolType::Custom as u32,
+            pool_address.clone(),
+        );
 
         e.events().publish(
             (Symbol::new(&e, "add_pool"), tokens),

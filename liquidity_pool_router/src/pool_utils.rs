@@ -3,12 +3,12 @@ use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::storage;
 use crate::storage::{
     get_constant_product_pool_hash, get_reward_token, get_stableswap_pool_hash, get_token_hash,
+    LiquidityPoolType,
 };
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec};
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: u32) -> BytesN<32> {
-    // fixme: fee_fraction is mutable for pool. hash collision is possible to happen
     let mut salt = Bytes::new(e);
     salt.append(&symbol_short!("standard").to_xdr(&e));
     salt.append(&symbol_short!("0x00").to_xdr(&e));
@@ -17,16 +17,10 @@ pub fn get_standard_pool_salt(e: &Env, fee_fraction: u32) -> BytesN<32> {
     e.crypto().sha256(&salt)
 }
 
-pub fn get_stableswap_pool_salt(e: &Env, a: u128, fee_fraction: u32, admin_fee: u32) -> BytesN<32> {
-    // fixme: fee_fraction is mutable for pool. hash collision is possible to happen
+pub fn get_stableswap_pool_salt(e: &Env) -> BytesN<32> {
     let mut salt = Bytes::new(e);
-    salt.append(&symbol_short!("stable").to_xdr(e));
     salt.append(&symbol_short!("0x00").to_xdr(e));
-    salt.append(&fee_fraction.to_xdr(e));
-    salt.append(&symbol_short!("0x00").to_xdr(e));
-    salt.append(&admin_fee.to_xdr(e));
-    salt.append(&symbol_short!("0x00").to_xdr(e));
-    salt.append(&a.to_xdr(e));
+    salt.append(&storage::get_stable_swap_next_counter(e).to_xdr(&e));
     salt.append(&symbol_short!("0x00").to_xdr(e));
     e.crypto().sha256(&salt)
 }
@@ -64,7 +58,13 @@ pub fn deploy_standard_pool(
         .deploy(liquidity_pool_wasm_hash);
     init_standard_pool(e, &tokens, &pool_contract_id, fee_fraction);
 
-    storage::add_pool(e, &salt, subpool_salt.clone(), pool_contract_id.clone());
+    storage::add_pool(
+        e,
+        &salt,
+        subpool_salt.clone(),
+        LiquidityPoolType::ConstantProduct as u32,
+        pool_contract_id.clone(),
+    );
 
     e.events().publish(
         (Symbol::new(e, "add_pool"), tokens.clone()),
@@ -89,7 +89,7 @@ pub fn deploy_stableswap_pool(
     let salt = crate::utils::pool_salt(&e, tokens.clone());
 
     let liquidity_pool_wasm_hash = get_stableswap_pool_hash(&e, tokens.len());
-    let subpool_salt = get_stableswap_pool_salt(&e, a, fee_fraction, admin_fee);
+    let subpool_salt = get_stableswap_pool_salt(&e);
 
     let pool_contract_id = e
         .deployer()
@@ -97,7 +97,14 @@ pub fn deploy_stableswap_pool(
         .deploy(liquidity_pool_wasm_hash);
     init_stableswap_pool(e, &tokens, &pool_contract_id, a, fee_fraction, admin_fee);
 
-    storage::add_pool(&e, &salt, subpool_salt.clone(), pool_contract_id.clone());
+    // if STABLE_SWAP_MAX_POOLS
+    storage::add_pool(
+        &e,
+        &salt,
+        subpool_salt.clone(),
+        LiquidityPoolType::StableSwap as u32,
+        pool_contract_id.clone(),
+    );
 
     e.events().publish(
         (Symbol::new(&e, "add_pool"), tokens.clone()),

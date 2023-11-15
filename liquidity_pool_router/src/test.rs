@@ -1,6 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLE_SWAP_MAX_POOLS};
 use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::{Ledger, LedgerInfo};
 use soroban_sdk::{
@@ -181,6 +182,89 @@ fn test_constant_product_pool() {
     assert_eq!(token1.balance(&pool_address), 0);
     assert_eq!(token2.balance(&pool_address), 0);
     assert_eq!(token_share.balance(&pool_address), 0);
+}
+
+#[test]
+#[should_panic(expected = "stableswap pools amount is over max")]
+fn test_stableswap_pools_amount_over_max() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::random(&e);
+    let admin = Address::random(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+
+    // init constant product pools to make sure we don't affect stableswap counter
+    for fee_fraction in CONSTANT_PRODUCT_FEE_AVAILABLE {
+        router.init_standard_pool(&tokens, &fee_fraction);
+    }
+    for _i in 0..STABLE_SWAP_MAX_POOLS {
+        router.init_stableswap_pool(&tokens, &10, &30, &0);
+    }
+}
+
+#[test]
+fn test_stableswap_pools_amount_ok() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::random(&e);
+    let admin = Address::random(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+
+    // init constant product pools to make sure we don't affect stableswap counter
+    for fee_fraction in CONSTANT_PRODUCT_FEE_AVAILABLE {
+        router.init_standard_pool(&tokens, &fee_fraction);
+    }
+    for _i in 0..STABLE_SWAP_MAX_POOLS - 1 {
+        router.init_stableswap_pool(&tokens, &10, &30, &0);
+    }
 }
 
 #[test]

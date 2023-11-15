@@ -9,4 +9,5 @@ pub enum DataKey {
     RewardToken,
     ConstantPoolHash,
     StableSwapPoolHash(u32),
+    StableSwapCounter,
 }
