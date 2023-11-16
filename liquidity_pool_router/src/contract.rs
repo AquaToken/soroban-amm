@@ -1,5 +1,5 @@
 use crate::admin::{check_admin, has_admin, require_admin, set_admin};
-use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, POOL_CREATION_FEE};
+use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::pool_interface::{
     LiquidityPoolInterfaceTrait, PoolsManagementTrait, RewardsInterfaceTrait,
 };
@@ -66,7 +66,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
 
         e.events().publish(
             (Symbol::new(&e, "deposit"), tokens, user),
-            (pool_id, amounts.clone(), share_amount),
+            (pool_id, amounts.clone(), share_amount.clone()),
         );
 
         (amounts, share_amount)
@@ -216,6 +216,12 @@ impl AdminInterface for LiquidityPoolRouter {
         storage::set_stableswap_pool_hash(&e, num_tokens, &new_hash);
     }
 
+    fn configure_init_pool_payment(e: Env, token: Address, amount: i128) {
+        require_admin(&e);
+        storage::set_init_pool_payment_token(&e, &token);
+        storage::set_init_pool_payment_amount(&e, &amount);
+    }
+
     fn set_reward_token(e: Env, reward_token: Address) {
         require_admin(&e);
         storage::set_reward_token(&e, &reward_token);
@@ -320,7 +326,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
         let salt = crate::utils::pool_salt(&e, tokens.clone());
         let pools = storage::get_pools_plain(&e, &salt);
-        let pool_index = pool_utils::get_standard_pool_salt(&e, fee_fraction);
+        let pool_index = pool_utils::get_standard_pool_salt(&e, &fee_fraction);
 
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),
@@ -338,14 +344,14 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     ) -> (BytesN<32>, Address) {
         user.require_auth();
 
-        // ask user to pay for pool creation
-        // todo: configure token separately instead of reward_token
-        let reward_token = storage::get_reward_token(&e);
-        token::Client::new(&e, &reward_token).transfer_from(
+        // pay for pool creation
+        let init_pool_token = storage::get_init_pool_payment_token(&e);
+        let init_pool_amount = storage::get_init_pool_payment_amount(&e);
+        token::Client::new(&e, &init_pool_token).transfer_from(
             &e.current_contract_address(),
             &user,
             &e.current_contract_address(),
-            &POOL_CREATION_FEE,
+            &init_pool_amount,
         );
 
         let salt = crate::utils::pool_salt(&e, tokens.clone());

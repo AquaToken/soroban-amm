@@ -115,6 +115,52 @@ pub fn set_reward_token(e: &Env, reward_token: &Address) {
         .set(&DataKey::RewardToken, reward_token)
 }
 
+// pool payment config
+
+pub fn get_init_pool_payment_token(e: &Env) -> Address {
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    let token = e.storage().instance().get(&DataKey::InitPoolPaymentToken);
+    match token {
+        Some(value) => value,
+        None => {
+            panic!("init pool payment token not initialized")
+        }
+    }
+}
+
+pub fn set_init_pool_payment_token(e: &Env, token: &Address) {
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage()
+        .instance()
+        .set(&DataKey::InitPoolPaymentToken, token)
+}
+
+pub fn get_init_pool_payment_amount(e: &Env) -> i128 {
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    let token = e.storage().instance().get(&DataKey::InitPoolPaymentAmount);
+    match token {
+        Some(value) => value,
+        None => {
+            panic!("init pool payment token not initialized")
+        }
+    }
+}
+
+pub fn set_init_pool_payment_amount(e: &Env, amount: &i128) {
+    e.storage()
+        .instance()
+        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    e.storage()
+        .instance()
+        .set(&DataKey::InitPoolPaymentAmount, amount)
+}
+
 // pool
 
 pub fn get_pools(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, (u32, Address)> {

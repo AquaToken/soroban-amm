@@ -216,6 +216,7 @@ fn test_stableswap_pools_amount_over_max() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
 
     // init constant product pools to make sure we don't affect stableswap counter
     for fee_fraction in CONSTANT_PRODUCT_FEE_AVAILABLE {
@@ -259,6 +260,7 @@ fn test_stableswap_pools_amount_ok() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
 
     // init constant product pools to make sure we don't affect stableswap counter
     for fee_fraction in CONSTANT_PRODUCT_FEE_AVAILABLE {
@@ -303,6 +305,7 @@ fn test_stableswap_pool_no_allowance() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
 
     router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
 }
@@ -340,6 +343,7 @@ fn test_stableswap_pool() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
 
     reward_token.mint(&user1, &10000000_0000000);
     reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
@@ -483,6 +487,7 @@ fn test_stableswap_3_pool() {
     router.set_stableswap_pool_hash(&3, &stableswap_pool_3_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
 
     reward_token.mint(&user1, &10000000_0000000);
     reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);

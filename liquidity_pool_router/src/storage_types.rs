@@ -6,6 +6,8 @@ pub enum DataKey {
     TokensPairPools(BytesN<32>),
     Admin,
     TokenHash,
+    InitPoolPaymentToken,
+    InitPoolPaymentAmount,
     RewardToken,
     ConstantPoolHash,
     StableSwapPoolHash(u32),

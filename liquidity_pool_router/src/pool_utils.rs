@@ -8,7 +8,7 @@ use crate::storage::{
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec};
 
-pub fn get_standard_pool_salt(e: &Env, fee_fraction: u32) -> BytesN<32> {
+pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
     let mut salt = Bytes::new(e);
     salt.append(&symbol_short!("standard").to_xdr(&e));
     salt.append(&symbol_short!("0x00").to_xdr(&e));
@@ -50,7 +50,7 @@ pub fn deploy_standard_pool(
 ) -> (BytesN<32>, Address) {
     let salt = crate::utils::pool_salt(e, tokens.clone());
     let liquidity_pool_wasm_hash = get_constant_product_pool_hash(&e);
-    let subpool_salt = get_standard_pool_salt(e, fee_fraction);
+    let subpool_salt = get_standard_pool_salt(e, &fee_fraction);
 
     let pool_contract_id = e
         .deployer()
