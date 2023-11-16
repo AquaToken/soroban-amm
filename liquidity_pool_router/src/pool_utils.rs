@@ -62,7 +62,7 @@ pub fn deploy_standard_pool(
         e,
         &salt,
         subpool_salt.clone(),
-        LiquidityPoolType::ConstantProduct as u32,
+        LiquidityPoolType::ConstantProduct,
         pool_contract_id.clone(),
     );
 
@@ -102,7 +102,7 @@ pub fn deploy_stableswap_pool(
         &e,
         &salt,
         subpool_salt.clone(),
-        LiquidityPoolType::StableSwap as u32,
+        LiquidityPoolType::StableSwap,
         pool_contract_id.clone(),
     );
 

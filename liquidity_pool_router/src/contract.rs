@@ -391,7 +391,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             &e,
             &salt,
             subpool_salt.clone(),
-            LiquidityPoolType::Custom as u32,
+            LiquidityPoolType::Custom,
             pool_address.clone(),
         );
 
