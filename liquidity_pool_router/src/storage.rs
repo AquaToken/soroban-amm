@@ -3,6 +3,7 @@ use crate::constants::{
     POOL_LIFETIME_THRESHOLD, STABLE_SWAP_MAX_POOLS,
 };
 use crate::storage_types::DataKey;
+use paste::paste;
 use soroban_sdk::{contracttype, Address, BytesN, Env, Map, Vec};
 
 // todo: replace `as u32` usages with something more meaningful
@@ -16,29 +17,91 @@ pub enum LiquidityPoolType {
     Custom = 3,
 }
 
-// pool hash
-
-pub fn get_constant_product_pool_hash(e: &Env) -> BytesN<32> {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    let hash = e.storage().instance().get(&DataKey::ConstantPoolHash);
-    match hash {
-        Some(value) => value,
-        None => {
-            panic!("pool hash not initialized")
+// todo: try to move it out
+macro_rules! generate_instance_storage_setter {
+    ($attr_name:ident, $key:expr, $data_type:ty) => {
+        paste! {
+            pub fn [<set_ $attr_name>](e: &Env, $attr_name: &$data_type) {
+                e.storage()
+                    .instance()
+                    .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+                e.storage()
+                    .instance()
+                    .set(&$key, $attr_name)
+            }
         }
-    }
+    };
 }
 
-pub fn set_constant_product_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    e.storage()
-        .instance()
-        .set(&DataKey::ConstantPoolHash, pool_hash)
+macro_rules! generate_instance_storage_getter {
+    ($attr_name:ident, $key:expr, $data_type:ty) => {
+        paste! {
+            pub fn [<get_ $attr_name>](e: &Env) -> $data_type {
+                    e.storage()
+                    .instance()
+                    .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+                let value_result = e.storage().instance().get(&$key);
+                match value_result {
+                    Some(value) => value,
+                    None => {
+                        panic!("{} not initialized", stringify!($attr_name))
+                    }
+                }
+            }
+        }
+    };
 }
+
+macro_rules! generate_instance_storage_getter_with_default {
+    ($attr_name:ident, $key:expr, $data_type:ty, $default:expr) => {
+        paste! {
+            pub fn [<get_ $attr_name>](e: &Env) -> $data_type {
+                    e.storage()
+                    .instance()
+                    .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+                e.storage().instance().get(&$key).unwrap_or($default)
+            }
+        }
+    };
+}
+
+macro_rules! generate_instance_storage_getter_and_setter {
+    ($attr_name:ident, $key:expr, $data_type:ty) => {
+        generate_instance_storage_getter!($attr_name, $key, $data_type);
+        generate_instance_storage_setter!($attr_name, $key, $data_type);
+    };
+}
+
+macro_rules! generate_instance_storage_getter_and_setter_with_default {
+    ($attr_name:ident, $key:expr, $data_type:ty, $default:expr) => {
+        generate_instance_storage_getter_with_default!($attr_name, $key, $data_type, $default);
+        generate_instance_storage_setter!($attr_name, $key, $data_type);
+    };
+}
+
+generate_instance_storage_getter_and_setter!(
+    constant_product_pool_hash,
+    DataKey::ConstantPoolHash,
+    BytesN<32>
+);
+generate_instance_storage_getter_and_setter!(token_hash, DataKey::TokenHash, BytesN<32>);
+generate_instance_storage_getter_and_setter!(reward_token, DataKey::RewardToken, Address);
+generate_instance_storage_getter_and_setter!(
+    init_pool_payment_token,
+    DataKey::InitPoolPaymentToken,
+    Address
+);
+generate_instance_storage_getter_and_setter!(
+    init_pool_payment_amount,
+    DataKey::InitPoolPaymentAmount,
+    i128
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    stableswap_counter,
+    DataKey::StableSwapCounter,
+    u128,
+    0
+);
 
 // pool hash
 pub fn get_stableswap_pool_hash(e: &Env, num_tokens: u32) -> BytesN<32> {
@@ -67,98 +130,6 @@ pub fn set_stableswap_pool_hash(e: &Env, num_tokens: u32, pool_hash: &BytesN<32>
         .instance()
         .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     e.storage().instance().set(&key, pool_hash)
-}
-
-// token hash
-
-pub fn get_token_hash(e: &Env) -> BytesN<32> {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    let hash = e.storage().instance().get(&DataKey::TokenHash);
-    match hash {
-        Some(value) => value,
-        None => {
-            panic!("token hash not initialized")
-        }
-    }
-}
-
-pub fn set_token_hash(e: &Env, token_hash: &BytesN<32>) {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    e.storage().instance().set(&DataKey::TokenHash, token_hash)
-}
-
-// reward token
-
-pub fn get_reward_token(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    let reward_token = e.storage().instance().get(&DataKey::RewardToken);
-    match reward_token {
-        Some(value) => value,
-        None => {
-            panic!("reward token not initialized")
-        }
-    }
-}
-
-pub fn set_reward_token(e: &Env, reward_token: &Address) {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    e.storage()
-        .instance()
-        .set(&DataKey::RewardToken, reward_token)
-}
-
-// pool payment config
-
-pub fn get_init_pool_payment_token(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    let token = e.storage().instance().get(&DataKey::InitPoolPaymentToken);
-    match token {
-        Some(value) => value,
-        None => {
-            panic!("init pool payment token not initialized")
-        }
-    }
-}
-
-pub fn set_init_pool_payment_token(e: &Env, token: &Address) {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    e.storage()
-        .instance()
-        .set(&DataKey::InitPoolPaymentToken, token)
-}
-
-pub fn get_init_pool_payment_amount(e: &Env) -> i128 {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    let token = e.storage().instance().get(&DataKey::InitPoolPaymentAmount);
-    match token {
-        Some(value) => value,
-        None => {
-            panic!("init pool payment token not initialized")
-        }
-    }
-}
-
-pub fn set_init_pool_payment_amount(e: &Env, amount: &i128) {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    e.storage()
-        .instance()
-        .set(&DataKey::InitPoolPaymentAmount, amount)
 }
 
 // pool
@@ -257,16 +228,7 @@ pub fn remove_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) {
 }
 
 pub fn get_stable_swap_next_counter(e: &Env) -> u128 {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-    let value = e
-        .storage()
-        .instance()
-        .get(&DataKey::StableSwapCounter)
-        .unwrap_or(0);
-    e.storage()
-        .instance()
-        .set(&DataKey::StableSwapCounter, &(value.clone() + 1));
+    let value = get_stableswap_counter(e);
+    set_stableswap_counter(e, &(value.clone() + 1));
     value
 }

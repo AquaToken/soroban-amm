@@ -963,6 +963,7 @@ name = "soroban-liquidity-pool-router-contract"
 version = "0.0.0"
 dependencies = [
  "num-integer",
+ "paste",
  "soroban-sdk",
 ]
 
