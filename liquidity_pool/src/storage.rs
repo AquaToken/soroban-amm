@@ -18,7 +18,7 @@ pub enum DataKey {
     PoolRewardConfig,
     PoolRewardData,
     UserRewardData(Address),
-    RewardInvData,
+    RewardInvData(u32, u64),
     FeeFraction, // 1 = 0.01%
 }
 

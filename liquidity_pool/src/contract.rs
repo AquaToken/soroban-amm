@@ -64,22 +64,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         storage::put_reserve_a(&e, 0);
         storage::put_reserve_b(&e, 0);
 
-        rewards::manager::set_reward_inv(&e, &Map::from_array(&e, [(0_u64, 0_u64)]));
-        rewards::storage::set_pool_reward_config(
-            &e,
-            &rewards::storage::PoolRewardConfig {
-                tps: 0,
-                expired_at: 0,
-            },
-        );
-        rewards::storage::set_pool_reward_data(
-            &e,
-            &rewards::storage::PoolRewardData {
-                block: 0,
-                accumulated: 0,
-                last_time: 0,
-            },
-        );
+        rewards::manager::initialize(&e);
 
         true
     }

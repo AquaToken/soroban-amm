@@ -555,7 +555,7 @@ fn test_deposit_ddos() {
         std::mem::swap(&mut admin1, &mut admin2);
     }
     let admin = Address::random(&e);
-    let users_to_simulate = 100;
+    let users_to_simulate = 250;
 
     let liqpool = create_liqpool_contract(
         &e,
