@@ -4,7 +4,6 @@ use crate::rewards::storage::get_pool_reward_config;
 use crate::token::create_contract;
 use crate::{pool, rewards, storage, token};
 use cast::i128 as to_i128;
-use cast::u128 as to_u128;
 use num_integer::Roots;
 use soroban_sdk::{contract, contractimpl, contractmeta, symbol_short, IntoVal, Vec};
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol};

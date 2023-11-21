@@ -325,6 +325,66 @@ fn test_simple_ongoing_reward() {
 }
 
 #[test]
+fn test_estimate_ongoing_reward() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let user1 = Address::random(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &token_reward.address,
+        30,
+    );
+
+    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    liqpool.set_rewards_config(
+        &user1,
+        &e.ledger().timestamp().saturating_add(60),
+        &reward_1_tps,
+    );
+    token_reward.approve(
+        &liqpool.address,
+        &liqpool.address,
+        &1_000_000_0000000,
+        &99999,
+    );
+
+    token1.mint(&user1, &1000);
+    assert_eq!(token1.balance(&user1), 1000);
+
+    token2.mint(&user1, &1000);
+    assert_eq!(token2.balance(&user1), 1000);
+    token1.approve(&user1, &liqpool.address, &1000, &99999);
+    token2.approve(&user1, &liqpool.address, &1000, &99999);
+
+    // 10 seconds passed since config, user depositing
+    jump(&e, 10);
+    liqpool.deposit(&user1, &Vec::from_array(&e, [100, 100]));
+
+    assert_eq!(token_reward.balance(&user1), 0);
+    // 30 seconds passed, half of the reward is available for the user
+    jump(&e, 30);
+    assert_eq!(liqpool.get_user_reward(&user1), total_reward_1 / 2);
+    assert_eq!(token_reward.balance(&user1) as u128, 0);
+}
+
+#[test]
 fn test_simple_reward() {
     let e = Env::default();
     e.mock_all_auths();
@@ -555,7 +615,7 @@ fn test_deposit_ddos() {
         std::mem::swap(&mut admin1, &mut admin2);
     }
     let admin = Address::random(&e);
-    let users_to_simulate = 250;
+    let users_to_simulate = 300;
 
     let liqpool = create_liqpool_contract(
         &e,
@@ -601,7 +661,9 @@ fn test_deposit_ddos() {
     jump(&e, 100);
     e.budget().reset_default();
     e.budget().reset_tracker();
+    // println!("claim start");
     let user1_claim = liqpool.claim(&users.get(0).unwrap());
+    // println!("claim end");
     e.budget().print();
     assert!(
         user1_claim > 0,

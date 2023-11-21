@@ -303,17 +303,17 @@ impl InternalInterfaceTrait for LiquidityPool {
         if !(i != j) {
             panic!("same coin")
         } // dev: same coin
-        if !(j >= 0) {
-            panic!("j below zero")
-        } // dev: j below zero
+          // if !(j >= 0) {
+          //     panic!("j below zero")
+          // } // dev: j below zero
         if !(j < N_COINS as u32) {
             panic!("j above N_COINS")
         } // dev: j above N_COINS
 
         // should be unreachable, but good for safety
-        if !(i >= 0) {
-            panic!("bad arguments")
-        }
+        // if !(i >= 0) {
+        //     panic!("bad arguments")
+        // }
         if !(i < N_COINS as u32) {
             panic!("bad arguments")
         }
@@ -368,9 +368,9 @@ impl InternalInterfaceTrait for LiquidityPool {
 
         // x in the input is converted to the same price/precision
 
-        if !(i >= 0) {
-            panic!("i below zero")
-        }
+        // if !(i >= 0) {
+        //     panic!("i below zero")
+        // }
         if !(i < N_COINS as u32) {
             panic!("i above N_COINS")
         }
@@ -685,22 +685,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         storage::put_transfer_ownership_deadline(&e, 0);
         storage::put_is_killed(&e, false);
 
-        rewards_manager::set_reward_inv(&e, &Map::from_array(&e, [(0_u64, 0_u64)]));
-        rewards_storage::set_pool_reward_config(
-            &e,
-            &rewards_storage::PoolRewardConfig {
-                tps: 0,
-                expired_at: 0,
-            },
-        );
-        rewards_storage::set_pool_reward_data(
-            &e,
-            &rewards_storage::PoolRewardData {
-                block: 0,
-                accumulated: 0,
-                last_time: 0,
-            },
-        );
+        rewards_manager::initialize(&e);
 
         true
     }

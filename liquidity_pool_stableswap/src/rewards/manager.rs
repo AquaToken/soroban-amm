@@ -1,11 +1,11 @@
-use crate::constants::{PERSISTENT_BUMP_AMOUNT, PERSISTENT_LIFETIME_THRESHOLD};
+use crate::rewards::constants::PAGE_SIZE;
 use crate::rewards::storage::{
-    get_pool_reward_config, get_pool_reward_data, get_user_reward_data, set_pool_reward_data,
-    set_user_reward_data, PoolRewardData, UserRewardData,
+    get_pool_reward_config, get_pool_reward_data, get_user_reward_data, set_pool_reward_config,
+    set_pool_reward_data, set_user_reward_data, PoolRewardConfig, PoolRewardData, UserRewardData,
 };
-use crate::storage::{get_reward_storage, DataKey};
+use crate::storage::get_reward_storage;
 use crate::token::Client;
-use crate::{storage, token};
+use crate::{rewards, storage, token};
 use cast::u128 as to_u128;
 use soroban_sdk::{Address, Env, Map};
 
@@ -21,45 +21,100 @@ pub fn update_reward_inv(e: &Env, accumulated: u128) {
     add_reward_inv(e, data.block, reward_per_share as u64);
 }
 
+pub fn calculate_reward(e: &Env, start_block: u64, end_block: u64, use_max_pow: bool) -> u64 {
+    // calculate result from start_block to end_block [...]
+    // use_max_pow disabled during aggregation process
+    //  since we don't have such information and can be enabled after
+    let mut result = 0;
+    let mut block = start_block;
+
+    let mut max_pow = 0;
+    for pow in 1..255 {
+        if start_block + PAGE_SIZE.pow(pow) - 1 > end_block {
+            break;
+        }
+        max_pow = pow;
+    }
+
+    while block <= end_block {
+        if block % PAGE_SIZE == 0 {
+            // check possibilities to skip
+            let mut block_increased = false;
+            let mut max_block_pow = 0;
+            for i in (1..max_pow + 1).rev() {
+                if block % PAGE_SIZE.pow(i) == 0 {
+                    max_block_pow = i;
+                    break;
+                }
+            }
+            if !use_max_pow {
+                // value not precalculated yet
+                max_block_pow -= 1;
+            }
+
+            for l_pow in (1..max_block_pow + 1).rev() {
+                let next_block = block + PAGE_SIZE.pow(l_pow);
+                if next_block > end_block {
+                    continue;
+                }
+
+                let page_number = block / PAGE_SIZE.pow(l_pow + 1);
+                // println!("skipping {} -> {} (page {}, pow {})", block, next_block, page_number, l_pow);
+                let page = rewards::storage::get_reward_inv_page(e, l_pow, page_number);
+                result += page.get(block).expect("unknown block");
+                block = next_block;
+                block_increased = true;
+                break;
+            }
+            if !block_increased {
+                // couldn't find shortcut, looks like we're close to the tail. go one by one
+                // println!("skipping {} -> {} (page {}, pow {})", block, block + 1, block / PAGE_SIZE, 0);
+                let page = rewards::storage::get_reward_inv_page(e, 0, block / PAGE_SIZE);
+                result += page.get(block).expect("unknown block");
+                block += 1;
+            }
+        } else {
+            // println!("skipping {} -> {} (page {}, pow {})", block, block + 1, block / PAGE_SIZE, 0);
+            let page = rewards::storage::get_reward_inv_page(e, 0, block / PAGE_SIZE);
+            result += page.get(block).expect("unknown block");
+            block += 1;
+        }
+    }
+    result
+}
+
+pub fn write_reward_inv_to_page(e: &Env, pow: u32, start_block: u64, value: u64) {
+    let page_number = start_block / PAGE_SIZE.pow(pow + 1);
+    let mut page = match start_block % PAGE_SIZE.pow(pow + 1) {
+        0 => Map::new(e),
+        _ => rewards::storage::get_reward_inv_page(e, pow, page_number),
+    };
+    page.set(start_block, value);
+    if pow > 0 {
+        // println!("writing {} -> {} (page {}, pow {})", start_block, start_block + PAGE_SIZE.pow(pow) - 1, page_number, pow);
+    } else {
+        // println!("writing {} (page {})", start_block, page_number);
+    }
+    rewards::storage::set_reward_inv_page(e, pow, page_number, &page);
+}
+
 pub fn add_reward_inv(e: &Env, block: u64, value: u64) {
-    // todo: optimize map key/value size
-    let mut reward_inv_data: Map<u64, u64> = e
-        .storage()
-        .persistent()
-        .get(&DataKey::RewardInvData)
-        .unwrap();
-    reward_inv_data.set(block, value);
-    set_reward_inv(e, &reward_inv_data);
-    e.storage().persistent().bump(
-        &DataKey::RewardInvData,
-        PERSISTENT_LIFETIME_THRESHOLD,
-        PERSISTENT_BUMP_AMOUNT,
-    );
-}
+    // write zero level page first
+    write_reward_inv_to_page(e, 0, block, value);
 
-pub fn set_reward_inv(e: &Env, value: &Map<u64, u64>) {
-    e.storage().persistent().set(&DataKey::RewardInvData, value);
-    e.storage().persistent().bump(
-        &DataKey::RewardInvData,
-        PERSISTENT_LIFETIME_THRESHOLD,
-        PERSISTENT_BUMP_AMOUNT,
-    );
-}
-
-pub fn get_reward_inv(e: &Env) -> Map<u64, u64> {
-    // todo: optimize memory usage
-    // todo: do we need default here?
-    let reward_inv_data = e
-        .storage()
-        .persistent()
-        .get(&DataKey::RewardInvData)
-        .unwrap();
-    e.storage().persistent().bump(
-        &DataKey::RewardInvData,
-        PERSISTENT_LIFETIME_THRESHOLD,
-        PERSISTENT_BUMP_AMOUNT,
-    );
-    reward_inv_data
+    if (block + 1) % PAGE_SIZE == 0 {
+        // page end, at least one aggregation should be applicable
+        for pow in 1..255 {
+            let aggregation_size = PAGE_SIZE.pow(pow);
+            if (block + 1) % aggregation_size != 0 {
+                // aggregation level not applicable
+                break;
+            }
+            let agg_page_start = block - block % aggregation_size;
+            let aggregation = calculate_reward(e, agg_page_start, block, false);
+            write_reward_inv_to_page(e, pow, agg_page_start, aggregation);
+        }
+    }
 }
 
 pub fn update_rewards_data(e: &Env) -> PoolRewardData {
@@ -122,12 +177,8 @@ pub fn update_rewards_data(e: &Env) -> PoolRewardData {
 }
 
 pub fn calculate_user_reward(e: &Env, start_block: u64, end_block: u64, user_share: u128) -> u128 {
-    let mut reward_inv = 0;
-    for block in start_block..end_block + 1 {
-        let block_inv = get_reward_inv(e).get(block).unwrap();
-        reward_inv += block_inv;
-    }
-    (reward_inv) as u128 * user_share
+    let result = calculate_reward(e, start_block, end_block, true);
+    (result) as u128 * user_share
 }
 
 pub fn update_user_reward(e: &Env, pool_data: &PoolRewardData, user: &Address) -> UserRewardData {
@@ -203,4 +254,23 @@ pub fn claim_reward(e: &Env, user: &Address) -> u128 {
     set_user_reward_data(e, user, &new_data);
 
     reward_amount
+}
+
+pub fn initialize(e: &Env) {
+    add_reward_inv(&e, 0, 0);
+    set_pool_reward_data(
+        &e,
+        &PoolRewardData {
+            block: 0,
+            accumulated: 0,
+            last_time: 0,
+        },
+    );
+    set_pool_reward_config(
+        &e,
+        &PoolRewardConfig {
+            tps: 0,
+            expired_at: 0,
+        },
+    );
 }

@@ -1,5 +1,6 @@
+use crate::constants::{PERSISTENT_BUMP_AMOUNT, PERSISTENT_LIFETIME_THRESHOLD};
 use crate::storage::{bump_persistent, DataKey};
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, Env, Map};
 
 // Rewards configuration for specific pool
 #[derive(Clone)]
@@ -71,4 +72,26 @@ pub fn set_user_reward_data(e: &Env, user: &Address, config: &UserRewardData) {
     e.storage()
         .persistent()
         .set(&DataKey::UserRewardData(user.clone()), config)
+}
+
+pub fn set_reward_inv_page(e: &Env, pow: u32, page_number: u64, value: &Map<u64, u64>) {
+    let key = DataKey::RewardInvData(pow, page_number);
+    e.storage().persistent().set(&key, value);
+    e.storage()
+        .persistent()
+        .bump(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+}
+
+pub fn get_reward_inv_page(e: &Env, pow: u32, page_number: u64) -> Map<u64, u64> {
+    // println!("get_reward_inv_page: ({}, {})", pow, page_number);
+    let key = DataKey::RewardInvData(pow, page_number);
+    let reward_inv_data = e
+        .storage()
+        .persistent()
+        .get(&key)
+        .expect("unknown storage key");
+    e.storage()
+        .persistent()
+        .bump(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+    reward_inv_data
 }
