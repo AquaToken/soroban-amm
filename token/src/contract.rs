@@ -1,17 +1,17 @@
 //! This contract demonstrates a sample implementation of the Soroban token
 //! interface.
-use crate::admin::{has_administrator, read_administrator, write_administrator};
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::balance::{
     decrease_total_balance, increase_total_balance, read_balance, read_total_balance,
     receive_balance, spend_balance, write_total_balance,
 };
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
-use crate::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
+use access_control::access::{AccessControl, AccessControlTrait};
 use soroban_sdk::token::{self, Interface as _};
 use soroban_sdk::{contract, contractimpl, Address, Env, String};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
+use utils::bump::bump_instance;
 
 fn check_nonnegative_amount(amount: i128) {
     if amount < 0 {
@@ -25,10 +25,11 @@ pub struct Token;
 #[contractimpl]
 impl Token {
     pub fn initialize(e: Env, admin: Address, decimal: u32, name: String, symbol: String) {
-        if has_administrator(&e) {
+        let access_control = AccessControl::new(&e);
+        if access_control.has_admin() {
             panic!("already initialized")
         }
-        write_administrator(&e, &admin);
+        access_control.set_admin(&admin);
         if decimal > u8::MAX.into() {
             panic!("Decimal must fit in a u8");
         }
@@ -46,12 +47,11 @@ impl Token {
 
     pub fn mint(e: Env, to: Address, amount: i128) {
         check_nonnegative_amount(amount);
-        let admin = read_administrator(&e);
+        let access_control = AccessControl::new(&e);
+        let admin = access_control.get_admin().unwrap();
         admin.require_auth();
 
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
 
         receive_balance(&e, to.clone(), amount);
         increase_total_balance(&e, amount);
@@ -59,14 +59,13 @@ impl Token {
     }
 
     pub fn set_admin(e: Env, new_admin: Address) {
-        let admin = read_administrator(&e);
+        let access_control = AccessControl::new(&e);
+        let admin = access_control.get_admin().unwrap();
         admin.require_auth();
 
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
 
-        write_administrator(&e, &new_admin);
+        access_control.set_admin(&admin);
         TokenUtils::new(&e).events().set_admin(admin, new_admin);
     }
 
@@ -78,9 +77,7 @@ impl Token {
 #[contractimpl]
 impl token::Interface for Token {
     fn allowance(e: Env, from: Address, spender: Address) -> i128 {
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
         read_allowance(&e, from, spender).amount
     }
 
@@ -89,9 +86,7 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(amount);
 
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
 
         write_allowance(&e, from.clone(), spender.clone(), amount, expiration_ledger);
         TokenUtils::new(&e)
@@ -100,16 +95,12 @@ impl token::Interface for Token {
     }
 
     fn balance(e: Env, id: Address) -> i128 {
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
         read_balance(&e, id)
     }
 
     fn spendable_balance(e: Env, id: Address) -> i128 {
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
         read_balance(&e, id)
     }
 
@@ -118,9 +109,7 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(amount);
 
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
 
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
@@ -132,9 +121,7 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(amount);
 
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
@@ -147,9 +134,7 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(amount);
 
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
 
         spend_balance(&e, from.clone(), amount);
         decrease_total_balance(&e, amount);
@@ -161,9 +146,7 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(amount);
 
-        e.storage()
-            .instance()
-            .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        bump_instance(&e);
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);

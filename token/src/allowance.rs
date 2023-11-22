@@ -1,22 +1,43 @@
-use crate::storage_types::{AllowanceDataKey, AllowanceValue, DataKey};
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, contracttype};
 
-pub fn read_allowance(e: &Env, from: Address, spender: Address) -> AllowanceValue {
-    let key = DataKey::Allowance(AllowanceDataKey { from, spender });
-    if let Some(allowance) = e.storage().temporary().get::<_, AllowanceValue>(&key) {
-        if allowance.expiration_ledger < e.ledger().sequence() {
-            AllowanceValue {
-                amount: 0,
-                expiration_ledger: allowance.expiration_ledger,
-            }
-        } else {
-            allowance
-        }
-    } else {
+#[derive(Clone)]
+#[contracttype]
+enum DataKey {
+    Allowance(AllowanceDataKey),
+}
+
+#[derive(Clone)]
+#[contracttype]
+struct AllowanceDataKey {
+    from: Address,
+    spender: Address,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AllowanceValue {
+    pub amount: i128,
+    pub expiration_ledger: u32,
+}
+
+impl Default for AllowanceValue {
+    fn default() -> Self {
         AllowanceValue {
             amount: 0,
             expiration_ledger: 0,
         }
+    }
+}
+
+pub fn read_allowance(e: &Env, from: Address, spender: Address) -> AllowanceValue {
+    let key = DataKey::Allowance(AllowanceDataKey { from, spender });
+    match e.storage().temporary().get::<_, AllowanceValue>(&key) {
+        Some(allowance) if allowance.expiration_ledger < e.ledger().sequence() => AllowanceValue {
+            amount: 0,
+            expiration_ledger: allowance.expiration_ledger,
+        },
+        Some(allowance) => allowance,
+        None => AllowanceValue::default(),
     }
 }
 
