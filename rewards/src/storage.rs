@@ -140,7 +140,7 @@ impl RewardsStorageTrait for Storage {
             .storage()
             .persistent()
             .set(&DataKey::RewardInvData, value);
-        self.bump_reward_inv_data();
+        self.bump_reward_inv_data(); // when set need bump
     }
 
     fn bump_reward_inv_data(&self) {

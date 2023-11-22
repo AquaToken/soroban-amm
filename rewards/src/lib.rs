@@ -29,6 +29,6 @@ impl Rewards {
     }
 
     pub fn manager(&self) -> Manager {
-        Manager::new(&self.0)
+        Manager::new(&self.0, self.storage())
     }
 }

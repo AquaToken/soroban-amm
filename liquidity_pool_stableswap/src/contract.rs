@@ -728,7 +728,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         let rewards = Rewards::new(&e);
         rewards
-            .manager()
+            .storage()
             .set_reward_inv(&Map::from_array(&e, [(0_u64, 0_u64)]));
         rewards.storage().set_pool_reward_config(&PoolRewardConfig {
             tps: 0,
