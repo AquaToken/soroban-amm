@@ -1,12 +1,8 @@
 #![no_std]
 #![allow(dead_code)]
-mod admin;
-mod assertions;
-mod constants;
 mod contract;
 mod pool_constants;
 mod pool_interface;
-mod rewards;
 mod storage;
 mod test;
 mod token;
@@ -21,9 +17,9 @@ compile_error!("only one feature with tokens number should be specified");
 compile_error!("only one feature with tokens number should be specified");
 
 #[cfg(all(
-    not(feature = "tokens_2"),
-    not(feature = "tokens_3"),
-    not(feature = "tokens_4")
+not(feature = "tokens_2"),
+not(feature = "tokens_3"),
+not(feature = "tokens_4")
 ))]
 compile_error!("please specify tokens number feature");
 

@@ -10,7 +10,10 @@ crate-type = ["cdylib"]
 [dependencies]
 soroban-sdk = { version = "20.0.0-rc2" }
 num-integer = { version = "0.1.45", default-features = false, features = ["i128"] }
-cast = {version = "0.3.0"}
+cast = { version = "0.3.0" }
+access_control = { path = "../access_control" }
+rewards = { path = "../rewards" }
+token_share = { path = "../token_share" }
 
 [dev_dependencies]
 soroban-sdk = { version = "20.0.0-rc2", features = ["testutils"] }
