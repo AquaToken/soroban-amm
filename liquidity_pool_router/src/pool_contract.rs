@@ -4,4 +4,4 @@ mod standard_pool_client {
     );
 }
 
-pub type StandardLiquidityPoolClient<'a> = standard_pool_client::Client<'a>;
+pub use crate::pool_contract::standard_pool_client::Client as StandardLiquidityPoolClient;

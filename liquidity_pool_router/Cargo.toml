@@ -1,6 +1,6 @@
 [package]
 name = "soroban-liquidity-pool-router-contract"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 publish = false
 
@@ -10,7 +10,10 @@ crate-type = ["cdylib"]
 [dependencies]
 soroban-sdk = { version = "20.0.0-rc2" }
 num-integer = { version = "0.1.45", default-features = false, features = ["i128"] }
-paste = { version = "1.0.14" }
+access_control = { path = "../access_control" }
+utils = { path = "../utils" }
+rewards = { path = "../rewards" }
+token_share = { path = "../token_share" }
 
 [dev_dependencies]
 soroban-sdk = { version = "20.0.0-rc2", features = ["testutils"] }
