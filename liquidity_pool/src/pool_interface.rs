@@ -12,11 +12,9 @@ pub trait LiquidityPoolTrait {
         fee_fraction: u32,
     ) -> bool;
 
-    fn get_fee_fraction(e: Env) -> u32;
-
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
-    fn get_reserves(e: Env) -> Vec<u128>;
+
     fn get_tokens(e: Env) -> Vec<Address>;
 
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
@@ -40,6 +38,10 @@ pub trait LiquidityPoolTrait {
     // corresponding amount of tokens"user".
     // Returns amount of tokens withdrawn
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128>;
+
+    fn get_reserves(e: Env) -> Vec<u128>;
+
+    fn get_fee_fraction(e: Env) -> u32;
 }
 
 pub trait UpgradeableContractTrait {

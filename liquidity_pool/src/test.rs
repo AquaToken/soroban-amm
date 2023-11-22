@@ -1,14 +1,15 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{token, LiquidityPoolClient};
+use crate::LiquidityPoolClient;
+use token_share::Client;
 
-use crate::assertions::assert_approx_eq_abs;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo};
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Map, Symbol, Vec};
+use utils::test_utils::assert_approx_eq_abs;
 
-fn create_token_contract<'a>(e: &Env, admin: &Address) -> token::Client<'a> {
-    token::Client::new(e, &e.register_stellar_asset_contract(admin.clone()))
+fn create_token_contract<'a>(e: &Env, admin: &Address) -> Client<'a> {
+    Client::new(e, &e.register_stellar_asset_contract(admin.clone()))
 }
 
 fn create_liqpool_contract<'a>(
@@ -88,7 +89,7 @@ fn test() {
         &99999,
     );
 
-    let token_share = token::Client::new(&e, &liqpool.share_id());
+    let token_share = Client::new(&e, &liqpool.share_id());
 
     token1.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1), 1000);
@@ -215,6 +216,40 @@ fn test() {
     assert_eq!(token2.balance(&liqpool.address), 0);
     assert_eq!(token_share.balance(&liqpool.address), 0);
 }
+
+// #[test]
+// #[should_panic(expected = "Error(Contract, #1)")]
+// fn initialize_already_initialized() {
+//     let e = Env::default();
+//     let admin = Address::random(&e);
+//     let admin2 = Address::random(&e);
+//     let admin3 = Address::random(&e);
+//     let token1 = create_token_contract(&e, &admin);
+//     let token2 = create_token_contract(&e, &admin2);
+//     let token_reward = create_token_contract(&e, &admin3);
+//
+//     let liq_pool =  create_liqpool_contract(
+//         &e,
+//         &admin,
+//         &install_token_wasm(&e),
+//         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+//         &token_reward.address,
+//         30,
+//     );
+//
+//     let admin4 = Address::random(&e);
+//     let admin5 = Address::random(&e);
+//     let admin6 = Address::random(&e);
+//     let token1 = create_token_contract(&e, &admin5);
+//     let token2 = create_token_contract(&e, &admin6);
+//
+//     liq_pool.initialize(
+//         &admin4,
+//         &install_token_wasm(&e),
+//         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+//         &10_u32,
+//     );
+// }
 
 #[test]
 fn test_custom_fee() {

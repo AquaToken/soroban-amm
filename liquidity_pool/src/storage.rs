@@ -1,134 +1,77 @@
-use crate::constants::{
-    INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT,
-    PERSISTENT_LIFETIME_THRESHOLD,
-};
-use soroban_sdk::{contracttype, Address, Env, IntoVal, TryFromVal, Val};
+use soroban_sdk::{contracttype, Address, Env};
+pub use utils::bump::bump_instance;
 
 #[derive(Clone)]
 #[contracttype]
-pub enum DataKey {
+enum DataKey {
     TokenA,
     TokenB,
-    RewardToken,
-    RewardStorage,
-    TokenShare,
     ReserveA,
     ReserveB,
-    Admin,
-    PoolRewardConfig,
-    PoolRewardData,
-    UserRewardData(Address),
-    RewardInvData,
     FeeFraction, // 1 = 0.01%
 }
 
-pub fn bump_instance(e: &Env) {
+pub fn get_token_a(e: &Env) -> Address {
+    bump_instance(&e);
     e.storage()
         .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-}
-
-pub fn bump_persistent<K>(e: &Env, key: &K)
-where
-    K: IntoVal<Env, Val>,
-{
-    e.storage()
-        .persistent()
-        .bump(key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
-}
-
-fn get_instance_value<K, V>(e: &Env, key: &K) -> Option<V>
-where
-    K: IntoVal<Env, Val>,
-    V: TryFromVal<Env, Val>,
-{
-    bump_instance(e);
-    e.storage().instance().get(key)
-}
-
-fn has_instance_value<K>(e: &Env, key: &K) -> bool
-where
-    K: IntoVal<Env, Val>,
-{
-    e.storage().instance().has(key)
-}
-
-fn put_instance_value<K, V>(e: &Env, key: &K, value: &V)
-where
-    K: IntoVal<Env, Val>,
-    V: IntoVal<Env, Val>,
-{
-    bump_instance(e);
-    e.storage().instance().set(key, value)
-}
-
-pub fn get_token_a(e: &Env) -> Address {
-    get_instance_value(e, &DataKey::TokenA).unwrap()
+        .get(&DataKey::TokenA)
+        .expect("Trying to get Token A")
 }
 
 pub fn get_token_b(e: &Env) -> Address {
-    get_instance_value(e, &DataKey::TokenB).unwrap()
-}
-
-pub fn has_reward_token(e: &Env) -> bool {
-    has_instance_value(e, &DataKey::RewardToken)
-}
-
-pub fn get_reward_token(e: &Env) -> Address {
-    get_instance_value(e, &DataKey::RewardToken).unwrap()
-}
-
-pub fn get_reward_storage(e: &Env) -> Address {
-    get_instance_value(e, &DataKey::RewardStorage).unwrap()
-}
-
-pub fn get_token_share(e: &Env) -> Address {
-    get_instance_value(e, &DataKey::TokenShare).unwrap()
+    bump_instance(&e);
+    e.storage()
+        .instance()
+        .get(&DataKey::TokenB)
+        .expect("Trying to get Token B")
 }
 
 pub fn get_reserve_a(e: &Env) -> u128 {
-    get_instance_value(e, &DataKey::ReserveA).unwrap()
+    bump_instance(&e);
+    e.storage()
+        .instance()
+        .get(&DataKey::ReserveA)
+        .expect("Trying to get Reserve A")
 }
 
 pub fn get_reserve_b(e: &Env) -> u128 {
-    get_instance_value(e, &DataKey::ReserveB).unwrap()
+    bump_instance(&e);
+    e.storage()
+        .instance()
+        .get(&DataKey::ReserveB)
+        .expect("Trying to get Reserve B")
 }
 
 pub fn put_token_a(e: &Env, contract: Address) {
-    put_instance_value(e, &DataKey::TokenA, &contract);
+    bump_instance(&e);
+    e.storage().instance().set(&DataKey::TokenA, &contract)
 }
 
 pub fn put_token_b(e: &Env, contract: Address) {
-    put_instance_value(e, &DataKey::TokenB, &contract);
-}
-
-pub fn put_reward_token(e: &Env, contract: Address) {
-    put_instance_value(e, &DataKey::RewardToken, &contract);
-}
-
-pub fn put_reward_storage(e: &Env, contract: Address) {
-    put_instance_value(e, &DataKey::RewardStorage, &contract);
-}
-
-pub fn put_token_share(e: &Env, contract: Address) {
-    put_instance_value(e, &DataKey::TokenShare, &contract);
+    bump_instance(&e);
+    e.storage().instance().set(&DataKey::TokenB, &contract)
 }
 
 pub fn put_reserve_a(e: &Env, amount: u128) {
-    put_instance_value(e, &DataKey::ReserveA, &amount)
+    bump_instance(&e);
+    e.storage().instance().set(&DataKey::ReserveA, &amount)
 }
 
 pub fn put_reserve_b(e: &Env, amount: u128) {
-    put_instance_value(e, &DataKey::ReserveB, &amount)
+    bump_instance(&e);
+    e.storage().instance().set(&DataKey::ReserveB, &amount)
 }
 
 pub fn get_fee_fraction(e: &Env) -> u32 {
-    match get_instance_value(e, &DataKey::FeeFraction) {
-        Some(value) => value,
-        None => panic!("please initialize fee fraction"),
-    }
+    bump_instance(&e);
+    e.storage()
+        .instance()
+        .get(&DataKey::FeeFraction)
+        .expect("Please initialize fee fraction")
 }
 
 pub fn put_fee_fraction(e: &Env, value: u32) {
-    put_instance_value(e, &DataKey::FeeFraction, &value);
+    bump_instance(&e);
+    e.storage().instance().set(&DataKey::FeeFraction, &value)
 }
