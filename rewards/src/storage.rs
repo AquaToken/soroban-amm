@@ -1,5 +1,5 @@
 use soroban_sdk::{contracttype, Address, Env, Map};
-use utils::constant::{PERSISTENT_BUMP_AMOUNT, PERSISTENT_LIFETIME_THRESHOLD};
+use utils::bump::bump_persistent;
 
 // Rewards configuration for specific pool
 #[derive(Clone)]
@@ -120,11 +120,7 @@ impl RewardsStorageTrait for Storage {
     }
 
     fn bump_user_reward_data(&self, user: &Address) {
-        self.env.storage().persistent().bump(
-            &DataKey::UserRewardData(user.clone()),
-            PERSISTENT_LIFETIME_THRESHOLD,
-            PERSISTENT_BUMP_AMOUNT,
-        );
+        bump_persistent(&self.env, &DataKey::UserRewardData(user.clone()))
     }
 
     fn get_reward_inv_data(&self, pow: u32, page_number: u64) -> Map<u64, u64> {
@@ -144,11 +140,7 @@ impl RewardsStorageTrait for Storage {
     }
 
     fn bump_reward_inv_data(&self, pow: u32, page_number: u64) {
-        self.env.storage().persistent().bump(
-            &DataKey::RewardInvData(pow, page_number),
-            PERSISTENT_LIFETIME_THRESHOLD,
-            PERSISTENT_BUMP_AMOUNT,
-        );
+        bump_persistent(&self.env, &DataKey::RewardInvData(pow, page_number))
     }
 
     fn get_reward_storage(&self) -> Address {
