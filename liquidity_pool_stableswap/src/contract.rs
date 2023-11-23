@@ -23,7 +23,6 @@ use token_share::{
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
 use rewards::{
-    manager::ManagerTrait,
     storage::RewardsStorageTrait,
     storage::{PoolRewardConfig, PoolRewardData},
     utils::bump::bump_instance,
@@ -729,7 +728,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let rewards = Rewards::new(&e);
         rewards
             .storage()
-            .set_reward_inv(&Map::from_array(&e, [(0_u64, 0_u64)]));
+            .set_reward_inv_data(&Map::from_array(&e, [(0_u64, 0_u64)]));
         rewards.storage().set_pool_reward_config(&PoolRewardConfig {
             tps: 0,
             expired_at: 0,

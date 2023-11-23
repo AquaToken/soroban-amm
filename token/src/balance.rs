@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, contracttype};
+use soroban_sdk::{contracttype, Address, Env};
 use utils::bump::{bump_instance, bump_persistent};
 
 #[derive(Clone)]

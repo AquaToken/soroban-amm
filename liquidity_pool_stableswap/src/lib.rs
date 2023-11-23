@@ -17,9 +17,9 @@ compile_error!("only one feature with tokens number should be specified");
 compile_error!("only one feature with tokens number should be specified");
 
 #[cfg(all(
-not(feature = "tokens_2"),
-not(feature = "tokens_3"),
-not(feature = "tokens_4")
+    not(feature = "tokens_2"),
+    not(feature = "tokens_3"),
+    not(feature = "tokens_4")
 ))]
 compile_error!("please specify tokens number feature");
 
