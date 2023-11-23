@@ -725,7 +725,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_transfer_ownership_deadline(&e, &0);
         put_is_killed(&e, &false);
 
-        rewards_manager::initialize(&e);
+        let rewards = Rewards::new(&e);
+        rewards.manager().initialize();
 
         true
     }

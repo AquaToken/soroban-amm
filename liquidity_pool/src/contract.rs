@@ -85,7 +85,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_a(&e, 0);
         put_reserve_b(&e, 0);
 
-        rewards::manager::initialize(&e);
+        let rewards = Rewards::new(&e);
+        rewards.manager().initialize();
 
         true
     }

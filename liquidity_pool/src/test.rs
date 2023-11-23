@@ -5,7 +5,7 @@ use crate::LiquidityPoolClient;
 use token_share::Client;
 
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Map, Symbol, Vec};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Vec};
 use utils::test_utils::assert_approx_eq_abs;
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> Client<'a> {
@@ -217,39 +217,45 @@ fn test() {
     assert_eq!(token_share.balance(&liqpool.address), 0);
 }
 
-// #[test]
-// #[should_panic(expected = "Error(Contract, #1)")]
-// fn initialize_already_initialized() {
-//     let e = Env::default();
-//     let admin = Address::random(&e);
-//     let admin2 = Address::random(&e);
-//     let admin3 = Address::random(&e);
-//     let token1 = create_token_contract(&e, &admin);
-//     let token2 = create_token_contract(&e, &admin2);
-//     let token_reward = create_token_contract(&e, &admin3);
-//
-//     let liq_pool =  create_liqpool_contract(
-//         &e,
-//         &admin,
-//         &install_token_wasm(&e),
-//         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-//         &token_reward.address,
-//         30,
-//     );
-//
-//     let admin4 = Address::random(&e);
-//     let admin5 = Address::random(&e);
-//     let admin6 = Address::random(&e);
-//     let token1 = create_token_contract(&e, &admin5);
-//     let token2 = create_token_contract(&e, &admin6);
-//
-//     liq_pool.initialize(
-//         &admin4,
-//         &install_token_wasm(&e),
-//         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-//         &10_u32,
-//     );
-// }
+#[test]
+#[should_panic(expected = "Error(Contract, #201)")]
+fn initialize_already_initialized() {
+    let e = Env::default();
+
+    let admin = Address::random(&e);
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+
+    let liq_pool = create_liqpool_contract(
+        &e,
+        &admin,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &token_reward.address,
+        30,
+    );
+
+    let admin4 = Address::random(&e);
+    let admin5 = Address::random(&e);
+    let admin6 = Address::random(&e);
+    let token1 = create_token_contract(&e, &admin5);
+    let token2 = create_token_contract(&e, &admin6);
+
+    liq_pool.initialize(
+        &admin4,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &10_u32,
+    );
+}
 
 #[test]
 fn test_custom_fee() {
@@ -665,9 +671,12 @@ fn test_deposit_ddos() {
     let reward_1_tps = 10_5000000_u128;
     liqpool.set_rewards_config(
         &admin,
-        &e.ledger().timestamp().saturating_add(users_to_simulate * 2),
+        &e.ledger()
+            .timestamp()
+            .saturating_add(users_to_simulate * 2 + 10),
         &reward_1_tps,
     );
+    jump(&e, 10);
     token_reward.approve(
         &liqpool.address,
         &liqpool.address,
@@ -675,36 +684,32 @@ fn test_deposit_ddos() {
         &99999,
     );
 
-    let mut users = Map::new(&e);
+    // we have this because of last jump(100)
+    let mut expected_reward = 100 * reward_1_tps / users_to_simulate as u128 / 1000 * 1000;
+    for i in 0..users_to_simulate as u128 {
+        expected_reward += reward_1_tps / (i + 1) / 1000 * 1000;
+    }
+
+    let mut first_user: Option<Address> = None;
     for i in 0..users_to_simulate {
         let user = Address::random(&e);
-        users.set(i, user.clone());
-
+        if i == 0 {
+            first_user = Some(user.clone());
+        }
         token1.mint(&user, &1000);
-        assert_eq!(token1.balance(&user), 1000);
-
         token2.mint(&user, &1000);
-        assert_eq!(token2.balance(&user), 1000);
-
         token1.approve(&user, &liqpool.address, &1000, &99999);
         token2.approve(&user, &liqpool.address, &1000, &99999);
-
-        jump(&e, 1);
         liqpool.deposit(&user, &Vec::from_array(&e, [1000, 1000]));
+        jump(&e, 1);
     }
 
     jump(&e, 100);
     e.budget().reset_default();
     e.budget().reset_tracker();
     // println!("claim start");
-    let user1_claim = liqpool.claim(&users.get(0).unwrap());
+    let user1_claim = liqpool.claim(&first_user.unwrap());
     // println!("claim end");
     e.budget().print();
-    assert!(
-        user1_claim > 0,
-        "assertion failed: `(left < right)` \
-         (left: `{:?}`, right: `{:?}``)",
-        user1_claim,
-        0,
-    );
+    assert_eq!(user1_claim, expected_reward);
 }

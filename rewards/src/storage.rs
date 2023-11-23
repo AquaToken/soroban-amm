@@ -31,7 +31,7 @@ enum DataKey {
     PoolRewardConfig,
     PoolRewardData,
     UserRewardData(Address),
-    RewardInvData,
+    RewardInvData(u32, u64),
     RewardStorage,
     RewardToken,
 }
@@ -57,9 +57,9 @@ pub trait RewardsStorageTrait {
     fn set_user_reward_data(&self, user: &Address, config: &UserRewardData);
     fn bump_user_reward_data(&self, user: &Address);
 
-    fn get_reward_inv_data(&self) -> Map<u64, u64>;
-    fn set_reward_inv_data(&self, value: &Map<u64, u64>);
-    fn bump_reward_inv_data(&self);
+    fn get_reward_inv_data(&self, pow: u32, page_number: u64) -> Map<u64, u64>;
+    fn set_reward_inv_data(&self, pow: u32, page_number: u64, value: &Map<u64, u64>);
+    fn bump_reward_inv_data(&self, pow: u32, page_number: u64);
 
     fn get_reward_storage(&self) -> Address;
     fn put_reward_storage(&self, contract: Address);
@@ -127,25 +127,25 @@ impl RewardsStorageTrait for Storage {
         );
     }
 
-    fn get_reward_inv_data(&self) -> Map<u64, u64> {
+    fn get_reward_inv_data(&self, pow: u32, page_number: u64) -> Map<u64, u64> {
         self.env
             .storage()
             .persistent()
-            .get(&DataKey::RewardInvData)
+            .get(&DataKey::RewardInvData(pow, page_number))
             .expect("Please, initialize reward inv data")
     }
 
-    fn set_reward_inv_data(&self, value: &Map<u64, u64>) {
+    fn set_reward_inv_data(&self, pow: u32, page_number: u64, value: &Map<u64, u64>) {
         self.env
             .storage()
             .persistent()
-            .set(&DataKey::RewardInvData, value);
-        self.bump_reward_inv_data(); // when set need bump
+            .set(&DataKey::RewardInvData(pow, page_number), value);
+        self.bump_reward_inv_data(pow, page_number); // when set need bump
     }
 
-    fn bump_reward_inv_data(&self) {
+    fn bump_reward_inv_data(&self, pow: u32, page_number: u64) {
         self.env.storage().persistent().bump(
-            &DataKey::RewardInvData,
+            &DataKey::RewardInvData(pow, page_number),
             PERSISTENT_LIFETIME_THRESHOLD,
             PERSISTENT_BUMP_AMOUNT,
         );
