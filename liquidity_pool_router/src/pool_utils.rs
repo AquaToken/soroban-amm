@@ -1,3 +1,4 @@
+use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::storage::{
     add_pool, get_constant_product_pool_hash, get_stable_swap_next_counter,
@@ -68,14 +69,12 @@ pub fn deploy_standard_pool(
         pool_contract_id.clone(),
     );
 
-    e.events().publish(
-        (Symbol::new(e, "add_pool"), tokens.clone()),
-        (
-            &pool_contract_id,
-            symbol_short!("constant"),
-            subpool_salt.clone(),
-            Vec::<Val>::from_array(e, [fee_fraction.into_val(e)]),
-        ),
+    Events::new(&e).add_pool(
+        tokens,
+        pool_contract_id.clone(),
+        symbol_short!("constant"),
+        subpool_salt.clone(),
+        Vec::<Val>::from_array(e, [fee_fraction.into_val(e)]),
     );
 
     (subpool_salt, pool_contract_id)
@@ -108,20 +107,18 @@ pub fn deploy_stableswap_pool(
         pool_contract_id.clone(),
     );
 
-    e.events().publish(
-        (Symbol::new(&e, "add_pool"), tokens.clone()),
-        (
-            &pool_contract_id,
-            symbol_short!("stable"),
-            subpool_salt.clone(),
-            Vec::<Val>::from_array(
-                e,
-                [
-                    fee_fraction.into_val(e),
-                    a.into_val(e),
-                    admin_fee.into_val(e),
-                ],
-            ),
+    Events::new(&e).add_pool(
+        tokens,
+        pool_contract_id.clone(),
+        symbol_short!("stable"),
+        subpool_salt.clone(),
+        Vec::<Val>::from_array(
+            e,
+            [
+                fee_fraction.into_val(e),
+                a.into_val(e),
+                admin_fee.into_val(e),
+            ],
         ),
     );
 
