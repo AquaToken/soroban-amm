@@ -3,6 +3,14 @@
 version = 3
 
 [[package]]
+name = "access_control"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -112,6 +120,12 @@ dependencies = [
  "quote",
  "syn 2.0.15",
 ]
+
+[[package]]
+name = "cast"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
@@ -1110,8 +1124,10 @@ dependencies = [
 name = "soroban-token-contract"
 version = "0.0.6"
 dependencies = [
+ "access_control",
  "soroban-sdk",
  "soroban-token-sdk",
+ "utils",
 ]
 
 [[package]]
@@ -1289,6 +1305,14 @@ name = "unicode-width"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0edd1e5b14653f783770bce4a4dabb4a5108a5370a5f5d8cfe8710c361f6c8b"
+
+[[package]]
+name = "utils"
+version = "0.1.0"
+dependencies = [
+ "cast",
+ "soroban-sdk",
+]
 
 [[package]]
 name = "version_check"

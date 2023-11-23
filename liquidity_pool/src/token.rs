@@ -1,11 +1,6 @@
-#![allow(unused)]
-use crate::constants::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
-use crate::storage;
+use crate::storage::{get_token_a, get_token_b};
 use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env};
-
-soroban_sdk::contractimport!(
-    file = "../token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
-);
+use token_share::{get_balance, Client};
 
 pub fn create_contract(
     e: &Env,
@@ -22,40 +17,12 @@ pub fn create_contract(
         .deploy(token_wasm_hash)
 }
 
-fn get_balance(e: &Env, contract: Address) -> u128 {
-    storage::bump_instance(e);
-    Client::new(e, &contract).balance(&e.current_contract_address()) as u128
-}
-
 pub fn get_balance_a(e: &Env) -> u128 {
-    get_balance(e, storage::get_token_a(e))
+    get_balance(e, get_token_a(e))
 }
 
 pub fn get_balance_b(e: &Env) -> u128 {
-    get_balance(e, storage::get_token_b(e))
-}
-
-pub fn get_balance_shares(e: &Env) -> u128 {
-    get_balance(e, storage::get_token_share(e))
-}
-
-pub fn get_user_balance_shares(e: &Env, user: &Address) -> u128 {
-    Client::new(e, &storage::get_token_share(e)).balance(user) as u128
-}
-
-pub fn get_total_shares(e: &Env) -> u128 {
-    let share_token = storage::get_token_share(e);
-    Client::new(e, &share_token).total_balance() as u128
-}
-
-pub fn burn_shares(e: &Env, amount: i128) {
-    let share_contract = storage::get_token_share(e);
-    Client::new(e, &share_contract).burn(&e.current_contract_address(), &amount);
-}
-
-pub fn mint_shares(e: &Env, to: Address, amount: i128) {
-    let share_contract_id = storage::get_token_share(e);
-    Client::new(e, &share_contract_id).mint(&to, &amount);
+    get_balance(e, get_token_b(e))
 }
 
 fn transfer(e: &Env, token: Address, to: Address, amount: i128) {
@@ -63,9 +30,9 @@ fn transfer(e: &Env, token: Address, to: Address, amount: i128) {
 }
 
 pub fn transfer_a(e: &Env, to: Address, amount: u128) {
-    transfer(e, storage::get_token_a(e), to, amount as i128);
+    transfer(e, get_token_a(e), to, amount as i128);
 }
 
 pub fn transfer_b(e: &Env, to: Address, amount: u128) {
-    transfer(e, storage::get_token_b(e), to, amount as i128);
+    transfer(e, get_token_b(e), to, amount as i128);
 }

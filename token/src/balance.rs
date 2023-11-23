@@ -1,27 +1,28 @@
-use crate::storage_types::{
-    DataKey, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT,
-    INSTANCE_LIFETIME_THRESHOLD,
-};
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{contracttype, Address, Env};
+use utils::bump::{bump_instance, bump_persistent};
 
-pub fn read_balance(e: &Env, addr: Address) -> i128 {
-    let key = DataKey::Balance(addr);
-    if let Some(balance) = e.storage().persistent().get::<DataKey, i128>(&key) {
-        e.storage()
-            .persistent()
-            .bump(&key, BALANCE_LIFETIME_THRESHOLD, BALANCE_BUMP_AMOUNT);
-        balance
-    } else {
-        0
-    }
+#[derive(Clone)]
+#[contracttype]
+enum DataKey {
+    Balance(Address),
+    TotalBalance,
 }
 
 fn write_balance(e: &Env, addr: Address, amount: i128) {
     let key = DataKey::Balance(addr);
     e.storage().persistent().set(&key, &amount);
-    e.storage()
-        .persistent()
-        .bump(&key, BALANCE_LIFETIME_THRESHOLD, BALANCE_BUMP_AMOUNT);
+    bump_persistent(&e, &key);
+}
+
+pub fn read_balance(e: &Env, addr: Address) -> i128 {
+    let key = DataKey::Balance(addr);
+    match e.storage().persistent().get::<DataKey, i128>(&key) {
+        Some(balance) => {
+            bump_persistent(&e, &key);
+            balance
+        }
+        None => 0,
+    }
 }
 
 pub fn receive_balance(e: &Env, addr: Address, amount: i128) {
@@ -38,16 +39,12 @@ pub fn spend_balance(e: &Env, addr: Address, amount: i128) {
 }
 
 pub fn read_total_balance(e: &Env) -> i128 {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    bump_instance(&e);
     e.storage().instance().get(&DataKey::TotalBalance).unwrap()
 }
 
 pub fn write_total_balance(e: &Env, amount: i128) {
-    e.storage()
-        .instance()
-        .bump(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    bump_instance(&e);
     e.storage().instance().set(&DataKey::TotalBalance, &amount);
 }
 

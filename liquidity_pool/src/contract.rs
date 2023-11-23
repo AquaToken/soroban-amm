@@ -1,18 +1,40 @@
-use crate::admin::{check_admin, has_admin, require_admin, set_admin};
+use crate::pool;
 use crate::pool_interface::{LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait};
-use crate::rewards::storage::get_pool_reward_config;
-use crate::token::create_contract;
-use crate::{pool, rewards, storage, token};
+use crate::storage::{
+    get_fee_fraction, get_reserve_a, get_reserve_b, get_token_a, get_token_b, put_fee_fraction,
+    put_reserve_a, put_reserve_b, put_token_a, put_token_b,
+};
+use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
+use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
 use num_integer::Roots;
-use soroban_sdk::{contract, contractimpl, contractmeta, symbol_short, IntoVal, Vec};
+use rewards::{
+    storage::{PoolRewardConfig, PoolRewardData, RewardsStorageTrait},
+    Rewards,
+};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, IntoVal,
+    Vec,
+};
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol};
+use token_share::{
+    burn_shares, get_balance_shares, get_token_share, get_total_shares, get_user_balance_shares,
+    mint_shares, put_token_share, Client,
+};
+use utils::bump::bump_instance;
 
 // Metadata that is added on to the WASM custom section
 contractmeta!(
     key = "Description",
     val = "Constant product AMM with configurable swap fee"
 );
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum LiquidityPoolError {
+    AlreadyInitialized = 201,
+}
 
 #[contract]
 pub struct LiquidityPool;
@@ -30,11 +52,11 @@ impl LiquidityPoolTrait for LiquidityPool {
         tokens: Vec<Address>,
         fee_fraction: u32,
     ) -> bool {
-        if has_admin(&e) {
-            panic!("already initialized")
+        let access_control = AccessControl::new(&e);
+        if access_control.has_admin() {
+            panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
         }
-
-        set_admin(&e, &admin);
+        access_control.set_admin(&admin);
 
         let token_a = tokens.get(0).unwrap();
         let token_b = tokens.get(1).unwrap();
@@ -44,7 +66,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let share_contract = create_contract(&e, lp_token_wasm_hash, &token_a, &token_b);
-        token::Client::new(&e, &share_contract).initialize(
+        Client::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
             &"Pool Share Token".into_val(&e),
@@ -55,13 +77,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         if fee_fraction > 9999 {
             panic!("fee cannot be equal or greater than 100%");
         }
-        storage::put_fee_fraction(&e, fee_fraction);
+        put_fee_fraction(&e, fee_fraction);
 
-        storage::put_token_a(&e, token_a);
-        storage::put_token_b(&e, token_b);
-        storage::put_token_share(&e, share_contract.try_into().unwrap());
-        storage::put_reserve_a(&e, 0);
-        storage::put_reserve_b(&e, 0);
+        put_token_a(&e, token_a);
+        put_token_b(&e, token_b);
+        put_token_share(&e, share_contract.try_into().unwrap());
+        put_reserve_a(&e, 0);
+        put_reserve_b(&e, 0);
 
         rewards::manager::initialize(&e);
 
@@ -69,11 +91,11 @@ impl LiquidityPoolTrait for LiquidityPool {
     }
 
     fn share_id(e: Env) -> Address {
-        storage::get_token_share(&e)
+        get_token_share(&e)
     }
 
     fn get_tokens(e: Env) -> Vec<Address> {
-        Vec::from_array(&e, [storage::get_token_a(&e), storage::get_token_b(&e)])
+        Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
     }
 
     fn deposit(
@@ -85,12 +107,17 @@ impl LiquidityPoolTrait for LiquidityPool {
         // Depositor needs to authorize the deposit
         user.require_auth();
 
-        let (reserve_a, reserve_b) = (storage::get_reserve_a(&e), storage::get_reserve_b(&e));
+        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
-        let pool_data = rewards::manager::update_rewards_data(&e);
-        rewards::manager::update_user_reward(&e, &pool_data, &user);
-        rewards::storage::bump_user_reward_data(&e, &user);
+        let rewards = Rewards::new(&e);
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+        let pool_data = rewards.manager().update_rewards_data(total_shares);
+        rewards
+            .manager()
+            .update_user_reward(&pool_data, &user, user_shares);
+        rewards.storage().bump_user_reward_data(&user);
 
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
@@ -104,8 +131,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let amounts =
             pool::get_deposit_amounts(desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
 
-        let token_a_client = token::Client::new(&e, &storage::get_token_a(&e));
-        let token_b_client = token::Client::new(&e, &storage::get_token_b(&e));
+        let token_a_client = Client::new(&e, &get_token_a(&e));
+        let token_b_client = Client::new(&e, &get_token_b(&e));
 
         token_a_client.transfer_from(
             &e.current_contract_address(),
@@ -121,8 +148,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         );
 
         // Now calculate how many new pool shares to mint
-        let (balance_a, balance_b) = (token::get_balance_a(&e), token::get_balance_b(&e));
-        let total_shares = token::get_total_shares(&e);
+        let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
+        let total_shares = get_total_shares(&e);
 
         let zero = 0;
         let new_total_shares = if reserve_a > zero && reserve_b > zero {
@@ -134,9 +161,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         };
 
         let shares_to_mint = new_total_shares - total_shares;
-        token::mint_shares(&e, user, shares_to_mint as i128);
-        storage::put_reserve_a(&e, balance_a);
-        storage::put_reserve_b(&e, balance_b);
+        mint_shares(&e, user, shares_to_mint as i128);
+        put_reserve_a(&e, balance_a);
+        put_reserve_b(&e, balance_b);
         (Vec::from_array(&e, [amounts.0, amounts.1]), shares_to_mint)
     }
 
@@ -162,14 +189,14 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic!("in_idx out of bounds");
         }
 
-        let reserve_a = storage::get_reserve_a(&e);
-        let reserve_b = storage::get_reserve_b(&e);
+        let reserve_a = get_reserve_a(&e);
+        let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
         let tokens = Self::get_tokens(e.clone());
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        let fee_fraction = storage::get_fee_fraction(&e);
+        let fee_fraction = get_fee_fraction(&e);
 
         // First calculate how much we can get with in_amount from the pool
         let multiplier_with_fee = 10000 - fee_fraction as u128;
@@ -182,7 +209,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // Transfer the amount being sold to the contract
         let sell_token = tokens.get(in_idx).unwrap();
-        let sell_token_client = token::Client::new(&e, &sell_token);
+        let sell_token_client = Client::new(&e, &sell_token);
         sell_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -190,7 +217,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             &(in_amount as i128),
         );
 
-        let (balance_a, balance_b) = (token::get_balance_a(&e), token::get_balance_b(&e));
+        let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by 10000 to avoid fractions
@@ -218,13 +245,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         if out_idx == 0 {
-            token::transfer_a(&e, user, out_a);
+            transfer_a(&e, user, out_a);
         } else {
-            token::transfer_b(&e, user, out_b);
+            transfer_b(&e, user, out_b);
         }
 
-        storage::put_reserve_a(&e, balance_a - out_a);
-        storage::put_reserve_b(&e, balance_b - out_b);
+        put_reserve_a(&e, balance_a - out_a);
+        put_reserve_b(&e, balance_b - out_b);
         out
     }
 
@@ -241,13 +268,13 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic!("in_idx out of bounds");
         }
 
-        let reserve_a = storage::get_reserve_a(&e);
-        let reserve_b = storage::get_reserve_b(&e);
+        let reserve_a = get_reserve_a(&e);
+        let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        let fee_fraction = storage::get_fee_fraction(&e);
+        let fee_fraction = get_fee_fraction(&e);
 
         // First calculate how much needs to be sold to buy amount out from the pool
         let multiplier_with_fee = 10000 - fee_fraction as u128;
@@ -261,12 +288,17 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
-        let pool_data = rewards::manager::update_rewards_data(&e);
-        rewards::manager::update_user_reward(&e, &pool_data, &user);
-        rewards::storage::bump_user_reward_data(&e, &user);
+        let rewards = Rewards::new(&e);
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+        let pool_data = rewards.manager().update_rewards_data(total_shares);
+        rewards
+            .manager()
+            .update_user_reward(&pool_data, &user, user_shares);
+        rewards.storage().bump_user_reward_data(&user);
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = token::Client::new(&e, &storage::get_token_share(&e));
+        let share_token_client = Client::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -274,10 +306,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             &(share_amount as i128),
         );
 
-        let (balance_a, balance_b) = (token::get_balance_a(&e), token::get_balance_b(&e));
-        let balance_shares = token::get_balance_shares(&e);
-
-        let total_shares = token::get_total_shares(&e);
+        let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
+        let balance_shares = get_balance_shares(&e);
+        let total_shares = get_total_shares(&e);
 
         // Now calculate the withdraw amounts
         let out_a = (balance_a * balance_shares) / total_shares;
@@ -290,22 +321,22 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic!("min not satisfied");
         }
 
-        token::burn_shares(&e, balance_shares as i128);
-        token::transfer_a(&e, user.clone(), out_a);
-        token::transfer_b(&e, user, out_b);
-        storage::put_reserve_a(&e, balance_a - out_a);
-        storage::put_reserve_b(&e, balance_b - out_b);
+        burn_shares(&e, balance_shares as i128);
+        transfer_a(&e, user.clone(), out_a);
+        transfer_b(&e, user, out_b);
+        put_reserve_a(&e, balance_a - out_a);
+        put_reserve_b(&e, balance_b - out_b);
 
         Vec::from_array(&e, [out_a, out_b])
     }
 
     fn get_reserves(e: Env) -> Vec<u128> {
-        Vec::from_array(&e, [storage::get_reserve_a(&e), storage::get_reserve_b(&e)])
+        Vec::from_array(&e, [get_reserve_a(&e), get_reserve_b(&e)])
     }
 
     fn get_fee_fraction(e: Env) -> u32 {
         // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
-        storage::get_fee_fraction(&e)
+        get_fee_fraction(&e)
     }
 }
 
@@ -315,7 +346,8 @@ impl UpgradeableContractTrait for LiquidityPool {
     }
 
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) -> bool {
-        require_admin(&e);
+        let access_control = AccessControl::new(&e);
+        access_control.require_admin();
         e.deployer().update_current_contract_wasm(new_wasm_hash);
         true
     }
@@ -327,12 +359,13 @@ impl RewardsTrait for LiquidityPool {
         // admin.require_auth();
         // check_admin(&e, &admin);
 
-        if storage::has_reward_token(&e) {
+        let rewards = Rewards::new(&e);
+        if rewards.storage().has_reward_token() {
             panic!("rewards config already initialized")
         }
 
-        storage::put_reward_token(&e, reward_token);
-        storage::put_reward_storage(&e, reward_storage);
+        rewards.storage().put_reward_token(reward_token);
+        rewards.storage().put_reward_storage(reward_storage);
         true
     }
 
@@ -343,20 +376,27 @@ impl RewardsTrait for LiquidityPool {
         tps: u128,       // value with 7 decimal places. example: 600_0000000
     ) -> bool {
         admin.require_auth();
-        check_admin(&e, &admin);
+        AccessControl::new(&e).check_admin(&admin);
 
-        rewards::manager::update_rewards_data(&e);
+        let rewards = Rewards::new(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().update_rewards_data(total_shares);
 
-        let config = rewards::storage::PoolRewardConfig { tps, expired_at };
-        storage::bump_instance(&e);
-        rewards::storage::set_pool_reward_config(&e, &config);
+        let config = PoolRewardConfig { tps, expired_at };
+        bump_instance(&e);
+        rewards.storage().set_pool_reward_config(&config);
         true
     }
 
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
-        let config = get_pool_reward_config(&e);
-        let pool_data = rewards::manager::update_rewards_data(&e);
-        let user_data = rewards::manager::update_user_reward(&e, &pool_data, &user);
+        let rewards = Rewards::new(&e);
+        let config = rewards.storage().get_pool_reward_config();
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+        let pool_data = rewards.manager().update_rewards_data(total_shares);
+        let user_data = rewards
+            .manager()
+            .update_user_reward(&pool_data, &user, user_shares);
         let mut result = Map::new(&e);
         result.set(symbol_short!("tps"), to_i128(config.tps).unwrap());
         result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
@@ -379,12 +419,22 @@ impl RewardsTrait for LiquidityPool {
     }
 
     fn get_user_reward(e: Env, user: Address) -> u128 {
-        rewards::manager::get_amount_to_claim(&e, &user)
+        let rewards = Rewards::new(&e);
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+        rewards
+            .manager()
+            .get_amount_to_claim(&user, total_shares, user_shares)
     }
 
     fn claim(e: Env, user: Address) -> u128 {
-        let reward = rewards::manager::claim_reward(&e, &user);
-        rewards::storage::bump_user_reward_data(&e, &user);
+        let rewards = Rewards::new(&e);
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+        let reward = rewards
+            .manager()
+            .claim_reward(&user, total_shares, user_shares);
+        rewards.storage().bump_user_reward_data(&user);
         reward
     }
 }

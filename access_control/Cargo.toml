@@ -1,0 +1,9 @@
+[package]
+name = "access_control"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+soroban-sdk = { version = "20.0.0-rc2" }
+utils = { path = "../utils" }

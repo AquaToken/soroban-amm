@@ -1,14 +1,16 @@
-use crate::admin::get_admin;
 use crate::pool_contract::StandardLiquidityPoolClient;
-use crate::storage;
 use crate::storage::{
-    get_constant_product_pool_hash, get_reward_token, get_stableswap_pool_hash, get_token_hash,
-    LiquidityPoolType,
+    add_pool, get_constant_product_pool_hash, get_stable_swap_next_counter,
+    get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
-use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec};
+use access_control::access::{AccessControl, AccessControlTrait};
+use rewards::{storage::RewardsStorageTrait, Rewards};
+use soroban_sdk::{
+    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
+};
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
+    // fixme: fee_fraction is mutable for pool. hash collision is possible to happen
     let mut salt = Bytes::new(e);
     salt.append(&symbol_short!("standard").to_xdr(&e));
     salt.append(&symbol_short!("0x00").to_xdr(&e));
@@ -20,7 +22,7 @@ pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
 pub fn get_stableswap_pool_salt(e: &Env) -> BytesN<32> {
     let mut salt = Bytes::new(e);
     salt.append(&symbol_short!("0x00").to_xdr(e));
-    salt.append(&storage::get_stable_swap_next_counter(e).to_xdr(&e));
+    salt.append(&get_stable_swap_next_counter(e).to_xdr(&e));
     salt.append(&symbol_short!("0x00").to_xdr(e));
     e.crypto().sha256(&salt)
 }
@@ -48,7 +50,7 @@ pub fn deploy_standard_pool(
     tokens: Vec<Address>,
     fee_fraction: u32,
 ) -> (BytesN<32>, Address) {
-    let salt = crate::utils::pool_salt(e, tokens.clone());
+    let salt = pool_salt(e, tokens.clone());
     let liquidity_pool_wasm_hash = get_constant_product_pool_hash(&e);
     let subpool_salt = get_standard_pool_salt(e, &fee_fraction);
 
@@ -58,7 +60,7 @@ pub fn deploy_standard_pool(
         .deploy(liquidity_pool_wasm_hash);
     init_standard_pool(e, &tokens, &pool_contract_id, fee_fraction);
 
-    storage::add_pool(
+    add_pool(
         e,
         &salt,
         subpool_salt.clone(),
@@ -86,7 +88,7 @@ pub fn deploy_stableswap_pool(
     fee_fraction: u32,
     admin_fee: u32,
 ) -> (BytesN<32>, Address) {
-    let salt = crate::utils::pool_salt(&e, tokens.clone());
+    let salt = pool_salt(&e, tokens.clone());
 
     let liquidity_pool_wasm_hash = get_stableswap_pool_hash(&e, tokens.len());
     let subpool_salt = get_stableswap_pool_salt(&e);
@@ -98,7 +100,7 @@ pub fn deploy_stableswap_pool(
     init_stableswap_pool(e, &tokens, &pool_contract_id, a, fee_fraction, admin_fee);
 
     // if STABLE_SWAP_MAX_POOLS
-    storage::add_pool(
+    add_pool(
         &e,
         &salt,
         subpool_salt.clone(),
@@ -133,8 +135,10 @@ fn init_standard_pool(
     fee_fraction: u32,
 ) {
     let token_wasm_hash = get_token_hash(&e);
-    let reward_token = get_reward_token(&e);
-    let admin = get_admin(&e);
+    let rewards = Rewards::new(&e);
+    let reward_token = rewards.storage().get_reward_token();
+    let access_control = AccessControl::new(&e);
+    let admin = access_control.get_admin().unwrap();
     let liq_pool_client = StandardLiquidityPoolClient::new(&e, pool_contract_id);
     liq_pool_client.initialize(&admin, &token_wasm_hash, tokens, &fee_fraction);
     liq_pool_client.initialize_rewards_config(&reward_token, &e.current_contract_address());
@@ -149,8 +153,10 @@ fn init_stableswap_pool(
     admin_fee_fraction: u32,
 ) {
     let token_wasm_hash = get_token_hash(&e);
-    let reward_token = get_reward_token(&e);
-    let admin = get_admin(&e);
+    let rewards = Rewards::new(&e);
+    let reward_token = rewards.storage().get_reward_token();
+    let access_control = AccessControl::new(&e);
+    let admin = access_control.get_admin().unwrap();
     e.invoke_contract::<bool>(
         pool_contract_id,
         &Symbol::new(&e, "initialize"),
@@ -177,4 +183,18 @@ fn init_stableswap_pool(
             ],
         ),
     );
+}
+
+pub fn pool_salt(e: &Env, tokens: Vec<Address>) -> BytesN<32> {
+    for i in 0..tokens.len() - 1 {
+        if tokens.get_unchecked(i) >= tokens.get_unchecked(i + 1) {
+            panic!("tokens must be sorted by ascending");
+        }
+    }
+
+    let mut salt = Bytes::new(e);
+    for token in tokens.into_iter() {
+        salt.append(&token.to_xdr(e));
+    }
+    e.crypto().sha256(&salt)
 }

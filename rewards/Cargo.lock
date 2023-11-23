@@ -3,14 +3,6 @@
 version = 3
 
 [[package]]
-name = "access_control"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
- "utils",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1028,19 +1020,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-liquidity-pool-contract"
-version = "0.1.0"
-dependencies = [
- "access_control",
- "cast",
- "num-integer",
- "rewards",
- "soroban-sdk",
- "token_share",
- "utils",
-]
-
-[[package]]
 name = "soroban-native-sdk-macros"
 version = "20.0.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1247,14 +1226,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ad70d68dba9e1f8aceda7aa6711965dfec1cac869f311a51bd08b3a2ccbce20"
 dependencies = [
  "time-core",
-]
-
-[[package]]
-name = "token_share"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
- "utils",
 ]
 
 [[package]]

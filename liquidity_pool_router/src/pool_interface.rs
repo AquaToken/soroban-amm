@@ -3,7 +3,7 @@ use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 pub trait LiquidityPoolInterfaceTrait {
     fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol;
 
-    fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> (bool, Address);
+    fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address;
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address;
