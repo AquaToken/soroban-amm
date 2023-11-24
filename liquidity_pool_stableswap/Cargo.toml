@@ -14,6 +14,7 @@ cast = { version = "0.3.0" }
 access_control = { path = "../access_control" }
 rewards = { path = "../rewards" }
 token_share = { path = "../token_share" }
+utils = { path = "../utils" }
 
 [dev_dependencies]
 soroban-sdk = { version = "20.0.0-rc2", features = ["testutils"] }

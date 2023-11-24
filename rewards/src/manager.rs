@@ -1,21 +1,22 @@
-use crate::constants::PAGE_SIZE;
 use crate::storage::{
     PoolRewardConfig, PoolRewardData, RewardsStorageTrait, Storage, UserRewardData,
 };
-use crate::Client;
+use crate::{Client, RewardsConfig};
 use cast::u128 as to_u128;
-use soroban_sdk::{Address, Env, Map};
+use soroban_sdk::{log, Address, Env, Map};
 
 pub struct Manager {
     env: Env,
     storage: Storage,
+    config: RewardsConfig,
 }
 
 impl Manager {
-    pub fn new(e: &Env, storage: Storage) -> Manager {
+    pub fn new(e: &Env, storage: Storage, config: &RewardsConfig) -> Manager {
         Manager {
             env: e.clone(),
             storage,
+            config: config.clone(),
         }
     }
 
@@ -142,16 +143,23 @@ impl Manager {
     // private functions
 
     fn write_reward_inv_to_page(&self, pow: u32, start_block: u64, value: u64) {
-        let page_number = start_block / PAGE_SIZE.pow(pow + 1);
-        let mut page = match start_block % PAGE_SIZE.pow(pow + 1) {
+        let page_number = start_block / self.config.page_size.pow(pow + 1);
+        let mut page = match start_block % self.config.page_size.pow(pow + 1) {
             0 => Map::new(&self.env),
             _ => self.storage.get_reward_inv_data(pow, page_number),
         };
         page.set(start_block, value);
         if pow > 0 {
-            // println!("writing {} -> {} (page {}, pow {})", start_block, start_block + PAGE_SIZE.pow(pow) - 1, page_number, pow);
+            log!(
+                &self.env,
+                "writing {} -> {} (page {}, pow {})",
+                start_block,
+                start_block + self.config.page_size.pow(pow) - 1,
+                page_number,
+                pow
+            );
         } else {
-            // println!("writing {} (page {})", start_block, page_number);
+            log!(&self.env, "writing {} (page {})", start_block, page_number);
         }
         self.storage.set_reward_inv_data(pow, page_number, &page);
     }
@@ -165,19 +173,19 @@ impl Manager {
 
         let mut max_pow = 0;
         for pow in 1..255 {
-            if start_block + PAGE_SIZE.pow(pow) - 1 > end_block {
+            if start_block + self.config.page_size.pow(pow) - 1 > end_block {
                 break;
             }
             max_pow = pow;
         }
 
         while block <= end_block {
-            if block % PAGE_SIZE == 0 {
+            if block % self.config.page_size == 0 {
                 // check possibilities to skip
                 let mut block_increased = false;
                 let mut max_block_pow = 0;
                 for i in (1..max_pow + 1).rev() {
-                    if block % PAGE_SIZE.pow(i) == 0 {
+                    if block % self.config.page_size.pow(i) == 0 {
                         max_block_pow = i;
                         break;
                     }
@@ -188,13 +196,20 @@ impl Manager {
                 }
 
                 for l_pow in (1..max_block_pow + 1).rev() {
-                    let next_block = block + PAGE_SIZE.pow(l_pow);
+                    let next_block = block + self.config.page_size.pow(l_pow);
                     if next_block > end_block {
                         continue;
                     }
 
-                    let page_number = block / PAGE_SIZE.pow(l_pow + 1);
-                    // println!("skipping {} -> {} (page {}, pow {})", block, next_block, page_number, l_pow);
+                    let page_number = block / self.config.page_size.pow(l_pow + 1);
+                    log!(
+                        &self.env,
+                        "skipping {} -> {} (page {}, pow {})",
+                        block,
+                        next_block,
+                        page_number,
+                        l_pow
+                    );
                     let page = self.storage.get_reward_inv_data(l_pow, page_number);
                     result += page.get(block).expect("unknown block");
                     block = next_block;
@@ -203,14 +218,32 @@ impl Manager {
                 }
                 if !block_increased {
                     // couldn't find shortcut, looks like we're close to the tail. go one by one
-                    // println!("skipping {} -> {} (page {}, pow {})", block, block + 1, block / PAGE_SIZE, 0);
-                    let page = self.storage.get_reward_inv_data(0, block / PAGE_SIZE);
+                    log!(
+                        &self.env,
+                        "skipping {} -> {} (page {}, pow {})",
+                        block,
+                        block + 1,
+                        block / self.config.page_size,
+                        0
+                    );
+                    let page = self
+                        .storage
+                        .get_reward_inv_data(0, block / self.config.page_size);
                     result += page.get(block).expect("unknown block");
                     block += 1;
                 }
             } else {
-                // println!("skipping {} -> {} (page {}, pow {})", block, block + 1, block / PAGE_SIZE, 0);
-                let page = self.storage.get_reward_inv_data(0, block / PAGE_SIZE);
+                log!(
+                    &self.env,
+                    "skipping {} -> {} (page {}, pow {})",
+                    block,
+                    block + 1,
+                    block / self.config.page_size,
+                    0
+                );
+                let page = self
+                    .storage
+                    .get_reward_inv_data(0, block / self.config.page_size);
                 result += page.get(block).expect("unknown block");
                 block += 1;
             }
@@ -222,10 +255,10 @@ impl Manager {
         // write zero level page first
         self.write_reward_inv_to_page(0, block, value);
 
-        if (block + 1) % PAGE_SIZE == 0 {
+        if (block + 1) % self.config.page_size == 0 {
             // page end, at least one aggregation should be applicable
             for pow in 1..255 {
-                let aggregation_size = PAGE_SIZE.pow(pow);
+                let aggregation_size = self.config.page_size.pow(pow);
                 if (block + 1) % aggregation_size != 0 {
                     // aggregation level not applicable
                     break;

@@ -1,11 +1,12 @@
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_contract::StandardLiquidityPoolClient;
+use crate::rewards::get_rewards_manager;
 use crate::storage::{
     add_pool, get_constant_product_pool_hash, get_stable_swap_next_counter,
     get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
-use rewards::{storage::RewardsStorageTrait, Rewards};
+use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::{
     symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
@@ -132,7 +133,7 @@ fn init_standard_pool(
     fee_fraction: u32,
 ) {
     let token_wasm_hash = get_token_hash(&e);
-    let rewards = Rewards::new(&e);
+    let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
@@ -150,7 +151,7 @@ fn init_stableswap_pool(
     admin_fee_fraction: u32,
 ) {
     let token_wasm_hash = get_token_hash(&e);
-    let rewards = Rewards::new(&e);
+    let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();

@@ -1037,6 +1037,7 @@ dependencies = [
  "rewards",
  "soroban-sdk",
  "token_share",
+ "utils",
 ]
 
 [[package]]
