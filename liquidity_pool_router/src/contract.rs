@@ -16,7 +16,7 @@ use crate::storage::{
     set_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
-use rewards::{storage::RewardsStorageTrait, Client, Rewards};
+use rewards::{storage::RewardsStorageTrait, Client};
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
 };

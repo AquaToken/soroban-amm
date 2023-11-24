@@ -5,10 +5,11 @@ use crate::storage::{
     get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
-use rewards::{storage::RewardsStorageTrait, Rewards};
+use rewards::{storage::RewardsStorageTrait};
 use soroban_sdk::{
     symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
+use crate::rewards::get_rewards_manager;
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
     // fixme: fee_fraction is mutable for pool. hash collision is possible to happen
@@ -132,7 +133,7 @@ fn init_standard_pool(
     fee_fraction: u32,
 ) {
     let token_wasm_hash = get_token_hash(&e);
-    let rewards = Rewards::new(&e);
+    let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
@@ -150,7 +151,7 @@ fn init_stableswap_pool(
     admin_fee_fraction: u32,
 ) {
     let token_wasm_hash = get_token_hash(&e);
-    let rewards = Rewards::new(&e);
+    let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
