@@ -4,8 +4,8 @@ extern crate std;
 use crate::LiquidityPoolClient;
 use token_share::Client;
 
-use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo, Logs};
-use soroban_sdk::{log, testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Vec};
 use utils::test_utils::assert_approx_eq_abs;
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> Client<'a> {
@@ -683,7 +683,14 @@ fn test_deposit_ddos() {
         token2.approve(&user, &liqpool.address, &1_000_000_000, &99999);
     }
 
-    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    token_reward.mint(&liqpool.address, &1_000_000_000_000_0000000);
+    token_reward.approve(
+        &liqpool.address,
+        &liqpool.address,
+        &1_000_000_000_000_0000000,
+        &99999,
+    );
+
     let reward_1_tps = 10_5000000_u128;
     liqpool.set_rewards_config(
         &admin,
@@ -693,12 +700,6 @@ fn test_deposit_ddos() {
         &reward_1_tps,
     );
     jump(&e, 10);
-    token_reward.approve(
-        &liqpool.address,
-        &liqpool.address,
-        &1_000_000_0000000,
-        &99999,
-    );
 
     // we have this because of last jump(100)
     let mut expected_reward = 100 * reward_1_tps / iterations_to_simulate as u128 / 1000 * 1000;
@@ -718,13 +719,7 @@ fn test_deposit_ddos() {
     jump(&e, 100);
     e.budget().reset_default();
     e.budget().reset_tracker();
-    log!(e, "claim start");
     let user1_claim = liqpool.claim(&first_user);
-    log!(e, "claim end");
-    let logs = e.logs().all();
-    for log_string in logs {
-        std::println!("{}", log_string);
-    }
     e.budget().print();
     assert_eq!(user1_claim, expected_reward);
 }

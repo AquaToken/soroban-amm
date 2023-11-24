@@ -3,7 +3,7 @@ use crate::storage::{
 };
 use crate::{Client, RewardsConfig};
 use cast::u128 as to_u128;
-use soroban_sdk::{log, Address, Env, Map};
+use soroban_sdk::{Address, Env, Map};
 
 pub struct Manager {
     env: Env,
@@ -20,7 +20,7 @@ impl Manager {
         }
     }
 
-    pub fn initialize(&self) {
+    pub fn initialize(&mut self) {
         self.add_reward_inv(0, 0);
         self.storage.set_pool_reward_data(&PoolRewardData {
             block: 0,
@@ -33,7 +33,7 @@ impl Manager {
         });
     }
 
-    pub fn update_rewards_data(&self, total_shares: u128) -> PoolRewardData {
+    pub fn update_rewards_data(&mut self, total_shares: u128) -> PoolRewardData {
         let config = self.storage.get_pool_reward_config();
         let data = self.storage.get_pool_reward_data();
         let now = self.env.ledger().timestamp();
@@ -61,13 +61,18 @@ impl Manager {
         }
     }
 
-    fn calculate_user_reward(&self, start_block: u64, end_block: u64, user_share: u128) -> u128 {
+    fn calculate_user_reward(
+        &mut self,
+        start_block: u64,
+        end_block: u64,
+        user_share: u128,
+    ) -> u128 {
         let result = self.calculate_reward(start_block, end_block, true);
         (result) as u128 * user_share
     }
 
     pub fn update_user_reward(
-        &self,
+        &mut self,
         pool_data: &PoolRewardData,
         user: &Address,
         user_balance_shares: u128,
@@ -98,7 +103,7 @@ impl Manager {
     }
 
     pub fn get_amount_to_claim(
-        &self,
+        &mut self,
         user: &Address,
         total_shares: u128,
         user_balance_shares: u128,
@@ -109,7 +114,7 @@ impl Manager {
     }
 
     pub fn claim_reward(
-        &self,
+        &mut self,
         user: &Address,
         total_shares: u128,
         user_balance_shares: u128,
@@ -142,7 +147,7 @@ impl Manager {
 
     // private functions
 
-    fn write_reward_inv_to_page(&self, pow: u32, start_block: u64, value: u64) {
+    fn write_reward_inv_to_page(&mut self, pow: u32, start_block: u64, value: u64) {
         let page_number = start_block / self.config.page_size.pow(pow + 1);
         let mut page = match start_block % self.config.page_size.pow(pow + 1) {
             0 => Map::new(&self.env),
@@ -150,21 +155,21 @@ impl Manager {
         };
         page.set(start_block, value);
         if pow > 0 {
-            log!(
-                &self.env,
-                "writing {} -> {} (page {}, pow {})",
-                start_block,
-                start_block + self.config.page_size.pow(pow) - 1,
-                page_number,
-                pow
-            );
+            // log!(
+            //     &self.env,
+            //     "writing {} -> {} (page {}, pow {})",
+            //     start_block,
+            //     start_block + self.config.page_size.pow(pow) - 1,
+            //     page_number,
+            //     pow
+            // );
         } else {
-            log!(&self.env, "writing {} (page {})", start_block, page_number);
+            // log!(&self.env, "writing {} (page {})", start_block, page_number);
         }
-        self.storage.set_reward_inv_data(pow, page_number, &page);
+        self.storage.set_reward_inv_data(pow, page_number, page);
     }
 
-    fn calculate_reward(&self, start_block: u64, end_block: u64, use_max_pow: bool) -> u64 {
+    fn calculate_reward(&mut self, start_block: u64, end_block: u64, use_max_pow: bool) -> u64 {
         // calculate result from start_block to end_block [...]
         // use_max_pow disabled during aggregation process
         //  since we don't have such information and can be enabled after
@@ -202,14 +207,14 @@ impl Manager {
                     }
 
                     let page_number = block / self.config.page_size.pow(l_pow + 1);
-                    log!(
-                        &self.env,
-                        "skipping {} -> {} (page {}, pow {})",
-                        block,
-                        next_block,
-                        page_number,
-                        l_pow
-                    );
+                    // log!(
+                    //     &self.env,
+                    //     "skipping {} -> {} (page {}, pow {})",
+                    //     block,
+                    //     next_block,
+                    //     page_number,
+                    //     l_pow
+                    // );
                     let page = self.storage.get_reward_inv_data(l_pow, page_number);
                     result += page.get(block).expect("unknown block");
                     block = next_block;
@@ -218,14 +223,14 @@ impl Manager {
                 }
                 if !block_increased {
                     // couldn't find shortcut, looks like we're close to the tail. go one by one
-                    log!(
-                        &self.env,
-                        "skipping {} -> {} (page {}, pow {})",
-                        block,
-                        block + 1,
-                        block / self.config.page_size,
-                        0
-                    );
+                    // log!(
+                    //     &self.env,
+                    //     "skipping {} -> {} (page {}, pow {})",
+                    //     block,
+                    //     block + 1,
+                    //     block / self.config.page_size,
+                    //     0
+                    // );
                     let page = self
                         .storage
                         .get_reward_inv_data(0, block / self.config.page_size);
@@ -233,14 +238,14 @@ impl Manager {
                     block += 1;
                 }
             } else {
-                log!(
-                    &self.env,
-                    "skipping {} -> {} (page {}, pow {})",
-                    block,
-                    block + 1,
-                    block / self.config.page_size,
-                    0
-                );
+                // log!(
+                //     &self.env,
+                //     "skipping {} -> {} (page {}, pow {})",
+                //     block,
+                //     block + 1,
+                //     block / self.config.page_size,
+                //     0
+                // );
                 let page = self
                     .storage
                     .get_reward_inv_data(0, block / self.config.page_size);
@@ -251,7 +256,7 @@ impl Manager {
         result
     }
 
-    fn add_reward_inv(&self, block: u64, value: u64) {
+    fn add_reward_inv(&mut self, block: u64, value: u64) {
         // write zero level page first
         self.write_reward_inv_to_page(0, block, value);
 
@@ -270,7 +275,7 @@ impl Manager {
         }
     }
 
-    fn update_reward_inv(&self, accumulated: u128, total_shares: u128) {
+    fn update_reward_inv(&mut self, accumulated: u128, total_shares: u128) {
         let reward_per_share = if total_shares > 0 {
             accumulated / total_shares
         } else {
@@ -282,7 +287,7 @@ impl Manager {
     }
 
     fn update_rewards_data_snapshot(
-        &self,
+        &mut self,
         now: u64,
         config: &PoolRewardConfig,
         data: &PoolRewardData,
@@ -302,7 +307,7 @@ impl Manager {
     }
 
     fn create_new_rewards_data(
-        &self,
+        &mut self,
         generated_tokens: u128,
         total_shares: u128,
         new_data: PoolRewardData,
@@ -313,7 +318,7 @@ impl Manager {
     }
 
     fn update_rewards_data_catchup(
-        &self,
+        &mut self,
         now: u64,
         config: &PoolRewardConfig,
         data: &PoolRewardData,
@@ -356,15 +361,12 @@ impl Manager {
     }
 
     fn user_reward_data(
-        &self,
+        &mut self,
         user: &Address,
         total_shares: u128,
         user_balance_shares: u128,
     ) -> UserRewardData {
-        self.update_user_reward(
-            &self.update_rewards_data(total_shares),
-            user,
-            user_balance_shares,
-        )
+        let rewards_data = self.update_rewards_data(total_shares);
+        self.update_user_reward(&rewards_data, user, user_balance_shares)
     }
 }
