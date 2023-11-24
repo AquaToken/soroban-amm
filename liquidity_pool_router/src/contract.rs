@@ -1,4 +1,4 @@
-use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, POOL_CREATION_FEE};
+use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::pool_interface::{
     LiquidityPoolInterfaceTrait, PoolsManagementTrait, RewardsInterfaceTrait,
 };

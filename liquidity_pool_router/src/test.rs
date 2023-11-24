@@ -1032,7 +1032,6 @@ fn test_event_correct() {
 
     reward_token.mint(&router.address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;
-    let total_reward_1 = reward_1_tps * 60;
     router.set_rewards_config(
         &admin,
         &tokens,
