@@ -29,5 +29,6 @@ mod pool_2_constants;
 mod pool_3_constants;
 #[cfg(feature = "tokens_4")]
 mod pool_4_constants;
+mod rewards;
 
 pub use contract::*;

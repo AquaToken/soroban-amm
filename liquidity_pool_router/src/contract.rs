@@ -7,6 +7,7 @@ use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_custom_salt, get_stableswap_pool_salt,
     get_standard_pool_salt, pool_salt,
 };
+use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
     add_pool, get_init_pool_payment_amount, get_init_pool_payment_token, get_pool, get_pool_safe,
@@ -232,7 +233,7 @@ impl AdminInterface for LiquidityPoolRouter {
     fn set_reward_token(e: Env, reward_token: Address) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         rewards.storage().put_reward_token(reward_token);
     }
 }

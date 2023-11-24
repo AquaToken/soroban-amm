@@ -20,18 +20,15 @@ use token_share::{
     put_token_share, Client,
 };
 
+use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
-use rewards::{
-    storage::RewardsStorageTrait,
-    storage::{PoolRewardConfig, PoolRewardData},
-    utils::bump::bump_instance,
-    Rewards,
-};
+use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
 use soroban_sdk::{
     contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol,
     Vec,
 };
+use utils::bump::bump_instance;
 
 contractmeta!(
     key = "Description",
@@ -122,7 +119,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let pool_data = rewards.manager().update_rewards_data(total_shares);
         let user_shares = get_user_balance_shares(&e, &user);
@@ -216,7 +213,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let pool_data = rewards.manager().update_rewards_data(total_shares);
         let user_shares = get_user_balance_shares(&e, &user);
@@ -725,7 +722,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_transfer_ownership_deadline(&e, &0);
         put_is_killed(&e, &false);
 
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         rewards.manager().initialize();
 
         true
@@ -763,7 +760,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
 
         // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let pool_data = rewards.manager().update_rewards_data(total_shares);
         let user_shares = get_user_balance_shares(&e, &user);
@@ -955,7 +952,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let pool_data = rewards.manager().update_rewards_data(total_shares);
         let user_shares = get_user_balance_shares(&e, &user);
@@ -1019,7 +1016,7 @@ impl RewardsTrait for LiquidityPool {
     ) -> bool {
         // admin.require_auth();
         // check_admin(&e, &admin);
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
             panic!("rewards config already initialized")
         }
@@ -1043,7 +1040,7 @@ impl RewardsTrait for LiquidityPool {
             panic!("cannot set expiration time to the past");
         }
 
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         rewards.manager().update_rewards_data(total_shares);
 
@@ -1054,7 +1051,7 @@ impl RewardsTrait for LiquidityPool {
     }
 
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         let config = rewards.storage().get_pool_reward_config();
         let total_shares = get_total_shares(&e);
         let pool_data = rewards.manager().update_rewards_data(total_shares);
@@ -1084,7 +1081,7 @@ impl RewardsTrait for LiquidityPool {
     }
 
     fn get_user_reward(e: Env, user: Address) -> u128 {
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
         rewards
@@ -1093,7 +1090,7 @@ impl RewardsTrait for LiquidityPool {
     }
 
     fn claim(e: Env, user: Address) -> u128 {
-        let rewards = Rewards::new(&e);
+        let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
         let reward = rewards
