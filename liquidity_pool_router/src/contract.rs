@@ -1,4 +1,5 @@
 use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
+use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_interface::{
     LiquidityPoolInterfaceTrait, PoolsManagementTrait, RewardsInterfaceTrait,
 };
@@ -68,12 +69,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
                 [user.clone().into_val(&e), desired_amounts.into_val(&e)],
             ),
         );
-
-        e.events().publish(
-            (Symbol::new(&e, "deposit"), tokens, user),
-            (pool_id, amounts.clone(), share_amount.clone()),
-        );
-
+        Events::new(&e).deposit(tokens, user, pool_id, amounts.clone(), share_amount.clone());
         (amounts, share_amount)
     }
 
@@ -112,11 +108,15 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             ),
         );
 
-        e.events().publish(
-            (Symbol::new(&e, "swap"), tokens, user),
-            (pool_id, token_in, token_out, in_amount, out_amt),
+        Events::new(&e).swap(
+            tokens,
+            user,
+            pool_id,
+            token_in,
+            token_out,
+            in_amount.clone(),
+            out_amt,
         );
-
         out_amt
     }
 
@@ -177,11 +177,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             ),
         );
 
-        e.events().publish(
-            (Symbol::new(&e, "withdraw"), tokens, user),
-            (pool_id, share_amount, amounts.clone()),
-        );
-
+        Events::new(&e).withdraw(tokens, user, pool_id, amounts.clone(), share_amount);
         amounts
     }
 }
@@ -411,11 +407,13 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             pool_address.clone(),
         );
 
-        e.events().publish(
-            (Symbol::new(&e, "add_pool"), tokens),
-            (pool_address, pool_type, subpool_salt.clone(), init_args),
+        Events::new(&e).add_pool(
+            tokens,
+            pool_address,
+            pool_type,
+            subpool_salt.clone(),
+            init_args,
         );
-
         subpool_salt
     }
 

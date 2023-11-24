@@ -6,8 +6,6 @@ use crate::Client;
 use cast::u128 as to_u128;
 use soroban_sdk::{Address, Env, Map};
 
-// TODO: REFACTOR ManagerTrait FUNCTIONS FROM PREV COMMIT
-
 pub struct Manager {
     env: Env,
     storage: Storage,
