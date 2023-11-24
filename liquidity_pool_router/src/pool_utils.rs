@@ -1,15 +1,15 @@
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_contract::StandardLiquidityPoolClient;
+use crate::rewards::get_rewards_manager;
 use crate::storage::{
     add_pool, get_constant_product_pool_hash, get_stable_swap_next_counter,
     get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
-use rewards::{storage::RewardsStorageTrait};
+use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::{
     symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
-use crate::rewards::get_rewards_manager;
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
     // fixme: fee_fraction is mutable for pool. hash collision is possible to happen
