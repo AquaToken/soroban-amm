@@ -3,7 +3,7 @@ use crate::storage::{
 };
 use crate::{Client, RewardsConfig};
 use cast::u128 as to_u128;
-use soroban_sdk::{Address, Env, Map};
+use soroban_sdk::{log, Address, Env, Map};
 
 pub struct Manager {
     env: Env,
@@ -150,9 +150,16 @@ impl Manager {
         };
         page.set(start_block, value);
         if pow > 0 {
-            // println!("writing {} -> {} (page {}, pow {})", start_block, start_block + self.config.page_size.pow(pow) - 1, page_number, pow);
+            log!(
+                &self.env,
+                "writing {} -> {} (page {}, pow {})",
+                start_block,
+                start_block + self.config.page_size.pow(pow) - 1,
+                page_number,
+                pow
+            );
         } else {
-            // println!("writing {} (page {})", start_block, page_number);
+            log!(&self.env, "writing {} (page {})", start_block, page_number);
         }
         self.storage.set_reward_inv_data(pow, page_number, &page);
     }
@@ -195,7 +202,14 @@ impl Manager {
                     }
 
                     let page_number = block / self.config.page_size.pow(l_pow + 1);
-                    // println!("skipping {} -> {} (page {}, pow {})", block, next_block, page_number, l_pow);
+                    log!(
+                        &self.env,
+                        "skipping {} -> {} (page {}, pow {})",
+                        block,
+                        next_block,
+                        page_number,
+                        l_pow
+                    );
                     let page = self.storage.get_reward_inv_data(l_pow, page_number);
                     result += page.get(block).expect("unknown block");
                     block = next_block;
@@ -204,7 +218,14 @@ impl Manager {
                 }
                 if !block_increased {
                     // couldn't find shortcut, looks like we're close to the tail. go one by one
-                    // println!("skipping {} -> {} (page {}, pow {})", block, block + 1, block / self.config.page_size, 0);
+                    log!(
+                        &self.env,
+                        "skipping {} -> {} (page {}, pow {})",
+                        block,
+                        block + 1,
+                        block / self.config.page_size,
+                        0
+                    );
                     let page = self
                         .storage
                         .get_reward_inv_data(0, block / self.config.page_size);
@@ -212,7 +233,14 @@ impl Manager {
                     block += 1;
                 }
             } else {
-                // println!("skipping {} -> {} (page {}, pow {})", block, block + 1, block / self.config.page_size, 0);
+                log!(
+                    &self.env,
+                    "skipping {} -> {} (page {}, pow {})",
+                    block,
+                    block + 1,
+                    block / self.config.page_size,
+                    0
+                );
                 let page = self
                     .storage
                     .get_reward_inv_data(0, block / self.config.page_size);

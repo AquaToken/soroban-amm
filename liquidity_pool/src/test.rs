@@ -4,8 +4,8 @@ extern crate std;
 use crate::LiquidityPoolClient;
 use token_share::Client;
 
-use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo, Logs};
+use soroban_sdk::{log, testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Vec};
 use utils::test_utils::assert_approx_eq_abs;
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> Client<'a> {
@@ -718,9 +718,13 @@ fn test_deposit_ddos() {
     jump(&e, 100);
     e.budget().reset_default();
     e.budget().reset_tracker();
-    // println!("claim start");
+    log!(e, "claim start");
     let user1_claim = liqpool.claim(&first_user);
-    // println!("claim end");
+    log!(e, "claim end");
+    let logs = e.logs().all();
+    for log_string in logs {
+        std::println!("{}", log_string);
+    }
     e.budget().print();
     assert_eq!(user1_claim, expected_reward);
 }
