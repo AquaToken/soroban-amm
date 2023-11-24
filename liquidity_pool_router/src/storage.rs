@@ -3,7 +3,6 @@ use crate::pool_utils::pool_salt;
 use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, Map, Vec};
 use utils::bump::{bump_instance, bump_persistent};
 
-// todo: replace `as u32` usages with something more meaningful
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u32)]
