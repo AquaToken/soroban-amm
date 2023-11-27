@@ -656,10 +656,10 @@ fn test_deposit_ddos() {
         std::mem::swap(&mut admin1, &mut admin2);
     }
     let admin = Address::random(&e);
-    let iterations_to_simulate = 10000_u32;
+    let iterations_to_simulate = 10_000_u32;
     let first_user = Address::random(&e);
     let mut users = Vec::new(&e);
-    for _i in 0..10 {
+    for _i in 0..100 {
         users.push_back(Address::random(&e));
     }
 
@@ -672,7 +672,7 @@ fn test_deposit_ddos() {
         30,
     );
 
-    for i in 0..11 {
+    for i in 0..101 {
         let user = match i {
             0 => first_user.clone(),
             val => users.get(val - 1).unwrap(),
@@ -696,15 +696,15 @@ fn test_deposit_ddos() {
         &admin,
         &e.ledger()
             .timestamp()
-            .saturating_add((iterations_to_simulate * 2 + 10).into()),
+            .saturating_add((iterations_to_simulate * 2 + 110).into()),
         &reward_1_tps,
     );
     jump(&e, 10);
 
     // we have this because of last jump(100)
-    let mut expected_reward = 100 * reward_1_tps / iterations_to_simulate as u128 / 1000 * 1000;
+    let mut expected_reward = 100 * reward_1_tps / iterations_to_simulate as u128;
     for i in 0..iterations_to_simulate as u128 {
-        expected_reward += reward_1_tps / (i + 1) / 1000 * 1000;
+        expected_reward += reward_1_tps / (i + 1);
     }
 
     liqpool.deposit(&first_user, &Vec::from_array(&e, [1000, 1000]));

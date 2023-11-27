@@ -38,7 +38,7 @@ enum DataKey {
 
 pub struct Storage {
     env: Env,
-    inv_cache: Map<DataKey, Map<u64, u64>>,
+    inv_cache: Map<DataKey, Map<u64, u128>>,
 }
 
 impl Storage {
@@ -61,8 +61,8 @@ pub trait RewardsStorageTrait {
     fn set_user_reward_data(&self, user: &Address, config: &UserRewardData);
     fn bump_user_reward_data(&self, user: &Address);
 
-    fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Map<u64, u64>;
-    fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Map<u64, u64>);
+    fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Map<u64, u128>;
+    fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Map<u64, u128>);
     fn bump_reward_inv_data(&self, pow: u32, page_number: u64);
 
     fn get_reward_storage(&self) -> Address;
@@ -127,13 +127,13 @@ impl RewardsStorageTrait for Storage {
         bump_persistent(&self.env, &DataKey::UserRewardData(user.clone()))
     }
 
-    fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Map<u64, u64> {
+    fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Map<u64, u128> {
         let key = DataKey::RewardInvData(pow, page_number);
         let cached_value_result = self.inv_cache.get(key.clone());
         match cached_value_result {
             Some(value) => value,
             None => {
-                let value: Map<u64, u64> = self
+                let value: Map<u64, u128> = self
                     .env
                     .storage()
                     .persistent()
@@ -145,7 +145,7 @@ impl RewardsStorageTrait for Storage {
         }
     }
 
-    fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Map<u64, u64>) {
+    fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Map<u64, u128>) {
         let key = DataKey::RewardInvData(pow, page_number);
         self.inv_cache.set(key.clone(), value.clone());
         self.env.storage().persistent().set(&key, &value);
