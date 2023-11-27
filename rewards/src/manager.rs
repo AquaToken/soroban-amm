@@ -1,3 +1,4 @@
+use crate::constants::REWARD_PRECISION;
 use crate::storage::{
     PoolRewardConfig, PoolRewardData, RewardsStorageTrait, Storage, UserRewardData,
 };
@@ -68,7 +69,7 @@ impl Manager {
         user_share: u128,
     ) -> u128 {
         let result = self.calculate_reward(start_block, end_block, true);
-        (result) as u128 * user_share
+        (result) * user_share / REWARD_PRECISION
     }
 
     pub fn update_user_reward(
@@ -147,7 +148,7 @@ impl Manager {
 
     // private functions
 
-    fn write_reward_inv_to_page(&mut self, pow: u32, start_block: u64, value: u64) {
+    fn write_reward_inv_to_page(&mut self, pow: u32, start_block: u64, value: u128) {
         let page_number = start_block / self.config.page_size.pow(pow + 1);
         let mut page = match start_block % self.config.page_size.pow(pow + 1) {
             0 => Map::new(&self.env),
@@ -169,7 +170,7 @@ impl Manager {
         self.storage.set_reward_inv_data(pow, page_number, page);
     }
 
-    fn calculate_reward(&mut self, start_block: u64, end_block: u64, use_max_pow: bool) -> u64 {
+    fn calculate_reward(&mut self, start_block: u64, end_block: u64, use_max_pow: bool) -> u128 {
         // calculate result from start_block to end_block [...]
         // use_max_pow disabled during aggregation process
         //  since we don't have such information and can be enabled after
@@ -256,7 +257,7 @@ impl Manager {
         result
     }
 
-    fn add_reward_inv(&mut self, block: u64, value: u64) {
+    fn add_reward_inv(&mut self, block: u64, value: u128) {
         // write zero level page first
         self.write_reward_inv_to_page(0, block, value);
 
@@ -277,13 +278,13 @@ impl Manager {
 
     fn update_reward_inv(&mut self, accumulated: u128, total_shares: u128) {
         let reward_per_share = if total_shares > 0 {
-            accumulated / total_shares
+            REWARD_PRECISION * accumulated / total_shares
         } else {
             0
         };
 
         let data = self.storage.get_pool_reward_data();
-        self.add_reward_inv(data.block, reward_per_share as u64);
+        self.add_reward_inv(data.block, reward_per_share);
     }
 
     fn update_rewards_data_snapshot(
