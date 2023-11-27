@@ -656,7 +656,7 @@ fn test_deposit_ddos() {
         std::mem::swap(&mut admin1, &mut admin2);
     }
     let admin = Address::random(&e);
-    let iterations_to_simulate = 10_000_u32;
+    let iterations_to_simulate = 50_000_u32;
     let first_user = Address::random(&e);
     let mut users = Vec::new(&e);
     for _i in 0..100 {
