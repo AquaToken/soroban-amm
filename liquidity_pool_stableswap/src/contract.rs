@@ -924,24 +924,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     }
 
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
-        let rates = RATES;
-
-        let old_balances = get_reserves(&e);
-        let xp = Self::xp_mem(e.clone(), old_balances.clone());
-
-        // Handling an unexpected charge of a fee on transfer (USDT, PAXG)
-        let dx_w_fee = in_amount;
-
-        let x = xp.get(in_idx as u32).unwrap() + dx_w_fee * rates[in_idx as usize] / PRECISION;
-        let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
-
-        let dy = xp.get(out_idx as u32).unwrap() - y - 1; // -1 just in case there were some rounding errors
-        let dy_fee = dy * get_fee(&e) / FEE_DENOMINATOR;
-
-        // Convert all to real units
-        let dy = (dy - dy_fee) * PRECISION / rates[out_idx as usize];
-
-        dy
+        Self::get_dy(e, in_idx, out_idx, in_amount)
     }
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {

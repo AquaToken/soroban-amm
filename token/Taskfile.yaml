@@ -16,6 +16,10 @@ tasks:
       - build
     cmd: cargo test
 
+  test_slow:
+    cmds:
+      - task: test
+
   default:
     cmds:
       - task: build

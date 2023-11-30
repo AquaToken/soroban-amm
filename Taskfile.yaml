@@ -26,6 +26,11 @@ tasks:
       - for: { var: SUBDIRS }
         cmd: task -d {{ .ITEM }} test || exit 1
 
+  test_slow:
+    cmds:
+      - for: { var: SUBDIRS }
+        cmd: task -d {{ .ITEM }} test_slow || exit 1
+
   fmt:
     cmds:
       - for: { var: SUBDIRS }

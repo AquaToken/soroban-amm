@@ -682,9 +682,8 @@ fn test_custom_fee() {
         liqpool.deposit(
             &user1,
             &Vec::from_array(&e, [100_0000000, 100_0000000]),
-            // &100_0000000,
         );
-        // assert_eq!(liqpool.estimate_swap_out(&false, &1_0000000), fee_config.1,);
+        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.2);
         assert_eq!(liqpool.swap(&user1, &0, &1, &1_0000000, &0), fee_config.2);
         assert_eq!(liqpool.admin_balances(&0), fee_config.3);
         assert_eq!(liqpool.admin_balances(&1), fee_config.4)

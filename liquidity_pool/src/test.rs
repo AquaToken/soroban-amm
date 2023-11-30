@@ -635,8 +635,7 @@ fn test_lazy_user_rewards() {
     assert_approx_eq_abs(user1_claim + user2_claim, total_reward_1, 1000);
 }
 
-#[test]
-fn test_deposit_ddos() {
+fn test_rewards_many_users(iterations_to_simulate: u32) {
     // first user comes as initial liquidity provider
     //  many users come
     //  user does withdraw
@@ -656,7 +655,6 @@ fn test_deposit_ddos() {
         std::mem::swap(&mut admin1, &mut admin2);
     }
     let admin = Address::random(&e);
-    let iterations_to_simulate = 10_000_u32;
     let first_user = Address::random(&e);
     let mut users = Vec::new(&e);
     for _i in 0..100 {
@@ -722,4 +720,15 @@ fn test_deposit_ddos() {
     let user1_claim = liqpool.claim(&first_user);
     e.budget().print();
     assert_eq!(user1_claim, expected_reward);
+}
+
+#[test]
+fn test_rewards_1k() {
+    test_rewards_many_users(1_000);
+}
+
+#[cfg(feature = "slow_tests")]
+#[test]
+fn test_rewards_50k() {
+    test_rewards_many_users(50_000);
 }
