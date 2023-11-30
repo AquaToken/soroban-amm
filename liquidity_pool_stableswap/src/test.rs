@@ -679,10 +679,7 @@ fn test_custom_fee() {
         );
         token1.approve(&user1, &liqpool.address, &100000_0000000, &99999);
         token2.approve(&user1, &liqpool.address, &100000_0000000, &99999);
-        liqpool.deposit(
-            &user1,
-            &Vec::from_array(&e, [100_0000000, 100_0000000]),
-        );
+        liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]));
         assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.2);
         assert_eq!(liqpool.swap(&user1, &0, &1, &1_0000000, &0), fee_config.2);
         assert_eq!(liqpool.admin_balances(&0), fee_config.3);
