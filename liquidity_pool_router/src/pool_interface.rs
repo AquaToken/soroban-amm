@@ -63,6 +63,10 @@ pub trait LiquidityPoolInterfaceTrait {
         share_amount: u128,
         min_amounts: Vec<u128>,
     ) -> Vec<u128>;
+
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+
+    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> u128;
 }
 
 pub trait RewardsInterfaceTrait {

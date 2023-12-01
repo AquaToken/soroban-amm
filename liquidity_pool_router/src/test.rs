@@ -69,6 +69,66 @@ fn jump(e: &Env, time: u64) {
 }
 
 #[test]
+fn test_total_liquidity() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::random(&e);
+    let admin = Address::random(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::random(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let stableswap_pool_hash_2 = install_stableswap_two_tokens_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash_2);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+
+    token1.mint(&user1, &100000);
+    token2.mint(&user1, &100000);
+
+    let (pool_hash_1, pool_address_1) = router.init_standard_pool(&user1, &tokens, &30);
+    let (pool_hash_2, pool_address_2) = router.init_standard_pool(&user1, &tokens, &100);
+    token1.approve(&user1, &pool_address_1, &1000, &99999);
+    token2.approve(&user1, &pool_address_1, &1000, &99999);
+    router.deposit(
+        &user1,
+        &tokens,
+        &pool_hash_1,
+        &Vec::from_array(&e, [1000, 1000]),
+    );
+    assert_eq!(router.get_total_liquidity(&tokens), 34);
+
+    token1.approve(&user1, &pool_address_2, &30000, &99999);
+    token2.approve(&user1, &pool_address_2, &30000, &99999);
+    router.deposit(
+        &user1,
+        &tokens,
+        &pool_hash_2,
+        &Vec::from_array(&e, [30000, 30000]),
+    );
+    assert_eq!(router.get_total_liquidity(&tokens), 1062);
+}
+
+#[test]
 fn test_constant_product_pool() {
     let e = Env::default();
     e.mock_all_auths();
@@ -127,6 +187,7 @@ fn test_constant_product_pool() {
 
     let desired_amounts = Vec::from_array(&e, [100, 100]);
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
+    assert_eq!(router.get_total_liquidity(&tokens), 2);
 
     assert_eq!(token_share.balance(&user1), 100);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -372,6 +433,7 @@ fn test_stableswap_pool() {
 
     let desired_amounts = Vec::from_array(&e, [100_0000000, 100_0000000]);
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
+    // assert_eq!(router.get_total_liquidity(&tokens), 2);
 
     assert_eq!(token_share.balance(&user1), 200_0000000);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -519,6 +581,7 @@ fn test_stableswap_3_pool() {
 
     let desired_amounts = Vec::from_array(&e, [100_0000000, 100_0000000, 100_0000000]);
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
+    // assert_eq!(router.get_total_liquidity(&tokens), 2);
 
     assert_eq!(token_share.balance(&user1), 300_0000000);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -710,6 +773,7 @@ fn test_custom_pool() {
 
     let desired_amounts = Vec::from_array(&e, [100, 100]);
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
+    assert_eq!(router.get_total_liquidity(&tokens), 2);
 
     assert_eq!(
         router.swap(
@@ -800,6 +864,7 @@ fn test_simple_ongoing_reward() {
         &pool_hash,
         &Vec::from_array(&e, [100, 100]),
     );
+    assert_eq!(router.get_total_liquidity(&tokens), 2);
 
     assert_eq!(reward_token.balance(&user1), 0);
     // 30 seconds passed, half of the reward is available for the user
@@ -1055,6 +1120,7 @@ fn test_event_correct() {
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
     let (amounts, share_amount) = router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
+    assert_eq!(router.get_total_liquidity(&tokens), 2);
 
     let pool_id = router.get_pool(&tokens, &pool_hash);
 

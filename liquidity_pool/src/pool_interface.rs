@@ -42,6 +42,8 @@ pub trait LiquidityPoolTrait {
     fn get_reserves(e: Env) -> Vec<u128>;
 
     fn get_fee_fraction(e: Env) -> u32;
+
+    fn get_liquidity(e: Env) -> u128;
 }
 
 pub trait UpgradeableContractTrait {

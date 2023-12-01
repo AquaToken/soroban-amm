@@ -181,6 +181,24 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         Events::new(&e).withdraw(tokens, user, pool_id, amounts.clone(), share_amount);
         amounts
     }
+
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        let pool_id = get_pool(&e, tokens, pool_index).expect("Error when get share_id");
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_liquidity"), Vec::new(&e))
+    }
+
+    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> u128 {
+        let salt = pool_salt(&e, tokens);
+        let mut result = 0;
+        for (_hash, pool_id) in get_pools_plain(&e, &salt) {
+            result += e.invoke_contract::<u128>(
+                &pool_id,
+                &Symbol::new(&e, "get_liquidity"),
+                Vec::new(&e),
+            );
+        }
+        result
+    }
 }
 
 #[contractimpl]

@@ -973,6 +973,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         burn_shares(&e, share_amount as i128);
         amounts
     }
+
+    fn get_liquidity(e: Env) -> u128 {
+        // fixme
+        0
+    }
 }
 
 #[contractimpl]

@@ -71,6 +71,7 @@ fn test() {
         &token_reward.address,
         30,
     );
+    assert_eq!(liqpool.get_liquidity(), 0);
 
     token_reward.mint(&liqpool.address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;
@@ -115,6 +116,7 @@ fn test() {
             }
         )
     );
+    assert_eq!(liqpool.get_liquidity(), 2);
 
     assert_eq!(token_reward.balance(&user1), 0);
     // 30 seconds passed, half of the reward is available for the user
@@ -171,6 +173,7 @@ fn test() {
             }
         )
     );
+    assert_eq!(liqpool.get_liquidity(), 3);
 
     assert_eq!(token1.balance(&user1), 803);
     assert_eq!(token1.balance(&liqpool.address), 197);
@@ -201,6 +204,7 @@ fn test() {
             }
         )
     );
+    assert_eq!(liqpool.get_liquidity(), 0);
 
     jump(&e, 600);
     assert_eq!(liqpool.claim(&user1), 0);
@@ -302,6 +306,50 @@ fn test_custom_fee() {
         liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]));
         assert_eq!(liqpool.estimate_swap(&1, &0, &fee_config.1), 1_0000000);
         assert_eq!(liqpool.swap(&user1, &1, &0, &fee_config.1, &0), 1_0000000);
+    }
+}
+
+#[test]
+fn test_liquidity() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let user1 = Address::random(&e);
+
+    token1.mint(&user1, &1000000_0000000);
+    token2.mint(&user1, &1000000_0000000);
+
+    for config in [
+        (10, 10, 0),
+        (30, 30, 0),
+        (100, 100, 2),
+        (3000, 3000, 102),
+        (1000, 3000, 68),
+        (3000, 1000, 68),
+    ] {
+        let liqpool = create_liqpool_contract(
+            &e,
+            &user1,
+            &install_token_wasm(&e),
+            &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+            &token_reward.address,
+            30, // 0.3%
+        );
+        token1.approve(&user1, &liqpool.address, &100000_0000000, &99999);
+        token2.approve(&user1, &liqpool.address, &100000_0000000, &99999);
+        liqpool.deposit(&user1, &Vec::from_array(&e, [config.0, config.1]));
+        assert_eq!(liqpool.get_liquidity(), config.2);
     }
 }
 

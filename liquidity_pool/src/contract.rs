@@ -1,4 +1,6 @@
+use crate::constants::FEE_MULTIPLIER;
 use crate::pool;
+use crate::pool::get_liquidity;
 use crate::pool_interface::{LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait};
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
@@ -198,9 +200,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let fee_fraction = get_fee_fraction(&e);
 
         // First calculate how much we can get with in_amount from the pool
-        let multiplier_with_fee = 10000 - fee_fraction as u128;
+        let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
         let n = in_amount * reserve_buy * multiplier_with_fee;
-        let d = reserve_sell * 10000 + in_amount * multiplier_with_fee;
+        let d = reserve_sell * FEE_MULTIPLIER + in_amount * multiplier_with_fee;
         let out = n / d;
         if out < out_min {
             panic!("out amount is less than min")
@@ -219,9 +221,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
-        // deducting the fee, scaled up by 10000 to avoid fractions
-        let residue_numerator = 10000 - fee_fraction as u128;
-        let residue_denominator = 10000;
+        // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
+        let residue_numerator = FEE_MULTIPLIER - fee_fraction as u128;
+        let residue_denominator = FEE_MULTIPLIER;
 
         let new_invariant_factor = |balance: u128, reserve: u128, out: u128| {
             if balance - reserve > out {
@@ -276,9 +278,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let fee_fraction = get_fee_fraction(&e);
 
         // First calculate how much needs to be sold to buy amount out from the pool
-        let multiplier_with_fee = 10000 - fee_fraction as u128;
+        let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
         let n = in_amount * reserve_buy * multiplier_with_fee;
-        let d = reserve_sell * 10000 + in_amount * multiplier_with_fee;
+        let d = reserve_sell * FEE_MULTIPLIER + in_amount * multiplier_with_fee;
         let out = n / d;
         out
     }
@@ -336,6 +338,14 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn get_fee_fraction(e: Env) -> u32 {
         // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
         get_fee_fraction(&e)
+    }
+
+    fn get_liquidity(e: Env) -> u128 {
+        let reserve_a = get_reserve_a(&e);
+        let reserve_b = get_reserve_b(&e);
+        let fee_fraction = get_fee_fraction(&e) as u128;
+        get_liquidity(reserve_a, reserve_b, fee_fraction)
+            + get_liquidity(reserve_b, reserve_a, fee_fraction)
     }
 }
 
