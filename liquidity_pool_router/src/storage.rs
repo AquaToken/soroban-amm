@@ -1,7 +1,13 @@
 use crate::constants::{MAX_POOLS_FOR_PAIR, STABLE_SWAP_MAX_POOLS};
 use crate::pool_utils::pool_salt;
+use paste::paste;
 use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, Map, Vec};
 use utils::bump::{bump_instance, bump_persistent};
+use utils::{
+    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
+    generate_instance_storage_getter_and_setter_with_default,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
+};
 
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -50,12 +56,28 @@ fn get_pools(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
     }
 }
 
-pub fn set_constant_product_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
-    bump_instance(e);
-    e.storage()
-        .instance()
-        .set(&DataKey::ConstantPoolHash, pool_hash)
-}
+generate_instance_storage_getter_and_setter!(
+    constant_product_pool_hash,
+    DataKey::ConstantPoolHash,
+    BytesN<32>
+);
+generate_instance_storage_getter_and_setter!(token_hash, DataKey::TokenHash, BytesN<32>);
+generate_instance_storage_getter_and_setter!(
+    init_pool_payment_token,
+    DataKey::InitPoolPaymentToken,
+    Address
+);
+generate_instance_storage_getter_and_setter!(
+    init_pool_payment_amount,
+    DataKey::InitPoolPaymentAmount,
+    u128
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    stableswap_counter,
+    DataKey::StableSwapCounter,
+    u128,
+    0
+);
 
 // pool hash
 pub fn get_stableswap_pool_hash(e: &Env, num_tokens: u32) -> BytesN<32> {
@@ -69,74 +91,11 @@ pub fn get_stableswap_pool_hash(e: &Env, num_tokens: u32) -> BytesN<32> {
         .expect("StableSwapPoolHash hash not initialized")
 }
 
-// token hash
-
-pub fn get_token_hash(e: &Env) -> BytesN<32> {
-    bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::TokenHash)
-        .expect("Token hash not initialized")
-}
-
 pub fn set_stableswap_pool_hash(e: &Env, num_tokens: u32, pool_hash: &BytesN<32>) {
     bump_instance(e);
     e.storage()
         .instance()
         .set(&DataKey::StableSwapPoolHash(num_tokens), pool_hash)
-}
-
-// token hash
-pub fn set_token_hash(e: &Env, token_hash: &BytesN<32>) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::TokenHash, token_hash)
-}
-
-// pool payment config
-
-pub fn get_init_pool_payment_token(e: &Env) -> Address {
-    bump_instance(&e);
-    let token = e.storage().instance().get(&DataKey::InitPoolPaymentToken);
-    match token {
-        Some(value) => value,
-        None => {
-            panic!("init pool payment token not initialized")
-        }
-    }
-}
-
-pub fn set_init_pool_payment_token(e: &Env, token: &Address) {
-    bump_instance(&e);
-    e.storage()
-        .instance()
-        .set(&DataKey::InitPoolPaymentToken, token)
-}
-
-pub fn get_init_pool_payment_amount(e: &Env) -> i128 {
-    bump_instance(&e);
-    let token = e.storage().instance().get(&DataKey::InitPoolPaymentAmount);
-    match token {
-        Some(value) => value,
-        None => {
-            panic!("init pool payment token not initialized")
-        }
-    }
-}
-
-pub fn set_init_pool_payment_amount(e: &Env, amount: &i128) {
-    bump_instance(&e);
-    e.storage()
-        .instance()
-        .set(&DataKey::InitPoolPaymentAmount, amount)
-}
-
-// pool
-pub fn get_constant_product_pool_hash(e: &Env) -> BytesN<32> {
-    bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::ConstantPoolHash)
-        .expect("Pool hash not initialized")
 }
 
 pub fn get_pools_plain(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, Address> {

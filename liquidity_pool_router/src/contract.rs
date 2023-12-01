@@ -223,7 +223,7 @@ impl AdminInterface for LiquidityPoolRouter {
         set_stableswap_pool_hash(&e, num_tokens, &new_hash);
     }
 
-    fn configure_init_pool_payment(e: Env, token: Address, amount: i128) {
+    fn configure_init_pool_payment(e: Env, token: Address, amount: u128) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         set_init_pool_payment_token(&e, &token);
@@ -364,7 +364,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             &e.current_contract_address(),
             &user,
             &e.current_contract_address(),
-            &init_pool_amount,
+            &(init_pool_amount as i128),
         );
 
         let salt = pool_salt(&e, tokens.clone());
