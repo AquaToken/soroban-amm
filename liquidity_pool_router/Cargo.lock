@@ -1033,6 +1033,7 @@ version = "0.1.0"
 dependencies = [
  "access_control",
  "num-integer",
+ "paste",
  "rewards",
  "soroban-sdk",
  "token_share",
