@@ -10,10 +10,10 @@ use crate::pool_utils::{
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
-    add_pool, get_init_pool_payment_amount, get_init_pool_payment_token, get_pool, get_pool_safe,
-    get_pools_plain, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_init_pool_payment_amount, set_init_pool_payment_token, set_stableswap_pool_hash,
-    set_token_hash, LiquidityPoolType,
+    add_pool, get_init_pool_payment_address, get_init_pool_payment_amount,
+    get_init_pool_payment_token, get_pool, get_pool_safe, get_pools_plain, has_pool, remove_pool,
+    set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount,
+    set_init_pool_payment_token, set_stableswap_pool_hash, set_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::{storage::RewardsStorageTrait, Client};
@@ -223,11 +223,12 @@ impl AdminInterface for LiquidityPoolRouter {
         set_stableswap_pool_hash(&e, num_tokens, &new_hash);
     }
 
-    fn configure_init_pool_payment(e: Env, token: Address, amount: u128) {
+    fn configure_init_pool_payment(e: Env, token: Address, amount: u128, to: Address) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         set_init_pool_payment_token(&e, &token);
         set_init_pool_payment_amount(&e, &amount);
+        set_init_pool_payment_address(&e, &to);
     }
 
     fn set_reward_token(e: Env, reward_token: Address) {
@@ -360,10 +361,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         // pay for pool creation
         let init_pool_token = get_init_pool_payment_token(&e);
         let init_pool_amount = get_init_pool_payment_amount(&e);
+        let init_pool_address = get_init_pool_payment_address(&e);
         Client::new(&e, &init_pool_token).transfer_from(
             &e.current_contract_address(),
             &user,
-            &e.current_contract_address(),
+            &init_pool_address,
             &(init_pool_amount as i128),
         );
 
