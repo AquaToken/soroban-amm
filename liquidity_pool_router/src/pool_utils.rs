@@ -2,13 +2,13 @@ use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    add_pool, get_constant_product_pool_hash, get_stableswap_next_counter,
+    add_pool, get_constant_product_pool_hash, get_pools_plain, get_stableswap_next_counter,
     get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::{
-    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
+    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
 };
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
@@ -195,4 +195,17 @@ pub fn pool_salt(e: &Env, tokens: Vec<Address>) -> BytesN<32> {
         salt.append(&token.to_xdr(e));
     }
     e.crypto().sha256(&salt)
+}
+
+pub fn get_total_liquidity(e: &Env, tokens: Vec<Address>) -> (Map<BytesN<32>, u128>, u128) {
+    let salt = pool_salt(&e, tokens);
+    let mut result = 0;
+    let mut pools = Map::new(&e);
+    for (hash, pool_id) in get_pools_plain(&e, &salt) {
+        let liquidity =
+            e.invoke_contract::<u128>(&pool_id, &Symbol::new(&e, "get_liquidity"), Vec::new(&e));
+        result += liquidity;
+        pools.set(hash, liquidity);
+    }
+    (pools, result)
 }
