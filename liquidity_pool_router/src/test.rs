@@ -868,15 +868,15 @@ fn test_simple_ongoing_reward() {
     );
     assert_eq!(router.get_total_liquidity(&tokens), 2);
 
-    let rewards = Map::from_array(&e, [(tokens.clone(), 1_0000000)]);
-    router.config_rewards(
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
         &admin,
         &reward_1_tps,
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
     router.fill_liquidity(&admin, &tokens);
-    router.set_pool_rewards(&admin, &tokens, &pool_hash);
+    router.config_pool_rewards(&admin, &tokens, &pool_hash);
 
     assert_eq!(reward_token.balance(&user1), 0);
     // 30 seconds passed, half of the reward is available for the user

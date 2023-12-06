@@ -43,7 +43,13 @@ fn get_depth(reserve_a: u128, reserve_b: u128, fee_fraction: u128, price: u128) 
     let reserve_a_precise = PRICE_PRECISION * reserve_a;
     let reserve_b_precise = PRICE_PRECISION * reserve_b;
     let price_without_fee = price * (FEE_MULTIPLIER - fee_fraction);
-    reserve_b_precise - reserve_a_precise * FEE_MULTIPLIER / price_without_fee * PRICE_PRECISION
+    let right_part = reserve_a_precise * FEE_MULTIPLIER / price_without_fee * PRICE_PRECISION;
+    // special case on first iteration when right part is slightly more than reserve_b because of rounding
+    if right_part <= reserve_b_precise {
+        reserve_b_precise - right_part
+    } else {
+        0
+    }
 }
 
 pub(crate) fn get_liquidity(reserve_a: u128, reserve_b: u128, fee_fraction: u128) -> u128 {

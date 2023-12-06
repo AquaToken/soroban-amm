@@ -327,8 +327,8 @@ fn test_liquidity() {
     }
     let user1 = Address::random(&e);
 
-    token1.mint(&user1, &1000000_0000000);
-    token2.mint(&user1, &1000000_0000000);
+    token1.mint(&user1, &1_000_000_000_000_000_000_0000000);
+    token2.mint(&user1, &1_000_000_000_000_000_000_0000000);
 
     for config in [
         (10, 10, 0),
@@ -337,6 +337,13 @@ fn test_liquidity() {
         (3000, 3000, 102),
         (1000, 3000, 68),
         (3000, 1000, 68),
+        (10_0000000, 30_0000000, 6809461),
+        (30_0000000, 10_0000000, 6809461),
+        (
+            30_000_000_000_0000000,
+            10_000_000_000_0000000,
+            6809462488704887,
+        ),
     ] {
         let liqpool = create_liqpool_contract(
             &e,
@@ -346,8 +353,18 @@ fn test_liquidity() {
             &token_reward.address,
             30, // 0.3%
         );
-        token1.approve(&user1, &liqpool.address, &100000_0000000, &99999);
-        token2.approve(&user1, &liqpool.address, &100000_0000000, &99999);
+        token1.approve(
+            &user1,
+            &liqpool.address,
+            &1_000_000_000_000_000_000_0000000,
+            &99999,
+        );
+        token2.approve(
+            &user1,
+            &liqpool.address,
+            &1_000_000_000_000_000_000_0000000,
+            &99999,
+        );
         liqpool.deposit(&user1, &Vec::from_array(&e, [config.0, config.1]));
         assert_eq!(liqpool.get_liquidity(), config.2);
     }

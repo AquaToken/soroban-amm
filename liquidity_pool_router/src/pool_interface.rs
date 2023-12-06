@@ -68,16 +68,17 @@ pub trait LiquidityPoolInterfaceTrait {
 }
 
 pub trait RewardsInterfaceTrait {
+    fn get_rewards_config(e: Env) -> Map<Symbol, Val>;
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> u128;
-    fn config_rewards(
+    fn config_global_rewards(
         e: Env,
         admin: Address,
         reward_tps: u128,
         expired_at: u64,
-        tokens: Map<Vec<Address>, u32>,
+        tokens: Vec<(Vec<Address>, u32)>,
     );
     fn fill_liquidity(e: Env, admin: Address, tokens: Vec<Address>);
-    fn set_pool_rewards(
+    fn config_pool_rewards(
         e: Env,
         admin: Address,
         tokens: Vec<Address>,

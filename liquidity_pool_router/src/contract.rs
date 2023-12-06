@@ -247,6 +247,21 @@ impl AdminInterface for LiquidityPoolRouter {
 
 #[contractimpl]
 impl RewardsInterfaceTrait for LiquidityPoolRouter {
+    fn get_rewards_config(e: Env) -> Map<Symbol, Val> {
+        let rewards_config = get_rewards_config(&e);
+        let mut result = Map::new(&e);
+        result.set(Symbol::new(&e, "tps"), rewards_config.tps.into_val(&e));
+        result.set(
+            Symbol::new(&e, "expired_at"),
+            rewards_config.expired_at.into_val(&e),
+        );
+        result.set(
+            Symbol::new(&e, "current_block"),
+            rewards_config.current_block.into_val(&e),
+        );
+        result
+    }
+
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> u128 {
         let salt = pool_salt(&e, tokens);
         let mut result = 0;
@@ -260,12 +275,12 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         result
     }
 
-    fn config_rewards(
+    fn config_global_rewards(
         e: Env,
         admin: Address,
         reward_tps: u128, // value with 7 decimal places. example: 600_0000000
         expired_at: u64,  // timestamp
-        tokens: Map<Vec<Address>, u32>, // {[token1, token2]: voting_percentage}, voting percentage 0_0000000 .. 1_0000000
+        tokens: Vec<(Vec<Address>, u32)>, // {[token1, token2]: voting_percentage}, voting percentage 0_0000000 .. 1_0000000
     ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
@@ -275,6 +290,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         let new_rewards_block = rewards_config.current_block + 1;
 
         let mut tokens_with_liquidity = Map::new(&e);
+        // todo: sort tokens
         for token in tokens {
             tokens_with_liquidity.set(
                 token.0,
@@ -317,7 +333,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         set_reward_tokens_detailed(&e, rewards_config.current_block, salt, &pools);
     }
 
-    fn set_pool_rewards(
+    fn config_pool_rewards(
         e: Env,
         admin: Address,
         tokens: Vec<Address>,
@@ -334,22 +350,30 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         let salt = pool_salt(&e, tokens.clone());
         let tokens_detailed = get_reward_tokens_detailed(&e, rewards_config.current_block, salt);
         let tokens_reward = get_reward_tokens(&e, rewards_config.current_block);
-        let LiquidityPoolRewardInfo {
-            voting_share: tokens_voting_share,
-            processed,
-            total_liquidity: tokens_total_liquidity,
-        } = tokens_reward
-            .get(tokens.clone())
-            .expect("rewards for those tokens are not configured for current block");
+        let tokens_reward_info = tokens_reward.get(tokens.clone());
 
-        if !processed {
+        let pool_liquidity = if tokens_reward_info.is_some() {
+            tokens_detailed.get(pool_index).unwrap_or(0)
+        } else {
+            0
+        };
+
+        let reward_info = match tokens_reward_info {
+            Some(v) => v,
+            // if tokens not found in current config, deactivate them
+            None => LiquidityPoolRewardInfo {
+                voting_share: 0,
+                processed: true,
+                total_liquidity: 0,
+            },
+        };
+
+        if !reward_info.processed {
             panic!("liquidity info not available yet. run `fill_liquidity` first")
         }
-
-        let pool_liquidity = tokens_detailed.get(pool_index).unwrap_or(0);
         let pool_tps = if pool_liquidity > 0 {
-            rewards_config.tps * tokens_voting_share as u128 * pool_liquidity
-                / tokens_total_liquidity
+            rewards_config.tps * reward_info.voting_share as u128 * pool_liquidity
+                / reward_info.total_liquidity
                 / 1_0000000
         } else {
             0
