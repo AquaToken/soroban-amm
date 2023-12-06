@@ -22,6 +22,7 @@ use rewards::{storage::RewardsStorageTrait, Client};
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
 };
+use utils::utils::check_vec_ordered;
 
 #[contract]
 pub struct LiquidityPoolRouter;
@@ -290,8 +291,11 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         let new_rewards_block = rewards_config.current_block + 1;
 
         let mut tokens_with_liquidity = Map::new(&e);
-        // todo: sort tokens
         for token in tokens {
+            if !check_vec_ordered(&token.0) {
+                panic!("tokens are not sorted")
+            }
+
             tokens_with_liquidity.set(
                 token.0,
                 LiquidityPoolRewardInfo {
@@ -301,6 +305,14 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
                 },
             );
         }
+        let mut sum = 0;
+        for token in tokens_with_liquidity.iter() {
+            sum += token.1.voting_share;
+        }
+        if sum > 1_0000000 {
+            panic!("total voting share exceeds 100%")
+        }
+
         set_reward_tokens(&e, new_rewards_block, &tokens_with_liquidity);
         set_rewards_config(
             &e,

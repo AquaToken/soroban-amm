@@ -5,8 +5,7 @@ use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, MAX_POOLS_FOR_PAIR, STABL
 use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
 use soroban_sdk::{
-    symbol_short, testutils::Address as _, vec, Address, BytesN, Env, IntoVal, Map, Symbol, Val,
-    Vec,
+    symbol_short, testutils::Address as _, vec, Address, BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
 
 pub(crate) mod test_token {
