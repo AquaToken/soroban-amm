@@ -8,6 +8,7 @@ tasks:
 
   build:
     cmds:
+      - task -d ../token build || exit 1
       - soroban contract build
       - ls -l target/wasm32-unknown-unknown/release/*.wasm
 
