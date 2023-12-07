@@ -6,14 +6,7 @@ mod constants;
 pub mod manager;
 pub mod storage;
 
-pub mod reward_token {
-    soroban_sdk::contractimport!(
-        file = "../token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
-    );
-}
-
 pub use manager::Manager;
-pub use reward_token::Client;
 pub use storage::Storage;
 pub use utils;
 

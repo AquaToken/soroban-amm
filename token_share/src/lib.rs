@@ -16,7 +16,7 @@ pub mod token {
 }
 pub use token::{self as token_contract, Client};
 
-pub fn get_balance(e: &Env, contract: Address) -> u128 {
+fn get_balance(e: &Env, contract: Address) -> u128 {
     bump_instance(e);
     Client::new(e, &contract).balance(&e.current_contract_address()) as u128
 }

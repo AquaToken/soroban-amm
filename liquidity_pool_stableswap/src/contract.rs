@@ -17,7 +17,7 @@ use crate::storage::{
 use crate::token::create_contract;
 use token_share::{
     burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
-    put_token_share, Client,
+    put_token_share, Client as LPToken,
 };
 
 use crate::rewards::get_rewards_manager;
@@ -25,8 +25,8 @@ use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
 use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol,
-    Vec,
+    contract, contractimpl, contractmeta, symbol_short, token::Client, Address, BytesN, Env,
+    IntoVal, Map, Symbol, Vec,
 };
 use utils::bump::bump_instance;
 
@@ -181,7 +181,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = Client::new(&e, &get_token_share(&e));
+        let share_token_client = LPToken::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -239,7 +239,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserves(&e, &reserves);
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = Client::new(&e, &get_token_share(&e));
+        let share_token_client = LPToken::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -701,7 +701,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // LP token
         // let share_contract = create_contract(&e, token_wasm_hash, &token_a, &token_b);
         let share_contract = create_contract(&e, token_wasm_hash);
-        Client::new(&e, &share_contract).initialize(
+        LPToken::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
             &"Pool Share Token".into_val(&e),
@@ -963,7 +963,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_reserves(&e, &reserves);
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = Client::new(&e, &get_token_share(&e));
+        let share_token_client = LPToken::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
