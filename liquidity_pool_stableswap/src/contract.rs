@@ -20,6 +20,7 @@ use token_share::{
     put_token_share, Client,
 };
 
+use crate::liquidity::get_liquidity;
 use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
@@ -29,7 +30,6 @@ use soroban_sdk::{
     Vec,
 };
 use utils::bump::bump_instance;
-use crate::liquidity::get_liquidity;
 
 contractmeta!(
     key = "Description",
@@ -978,10 +978,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let reserves = get_reserves(&e);
         let mut liquidity = 0;
         let fee = get_fee(&e);
-        for i in 0..reserves.len(){
+        for i in 0..reserves.len() {
             for j in 0..reserves.len() {
                 if i == j {
-                    continue
+                    continue;
                 }
                 liquidity += get_liquidity(reserves.get(i).unwrap(), reserves.get(j).unwrap(), fee);
             }

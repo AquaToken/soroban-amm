@@ -23,6 +23,7 @@ compile_error!("only one feature with tokens number should be specified");
 ))]
 compile_error!("please specify tokens number feature");
 
+mod liquidity;
 #[cfg(feature = "tokens_2")]
 mod pool_2_constants;
 #[cfg(feature = "tokens_3")]
@@ -30,6 +31,5 @@ mod pool_3_constants;
 #[cfg(feature = "tokens_4")]
 mod pool_4_constants;
 mod rewards;
-mod liquidity;
 
 pub use contract::*;
