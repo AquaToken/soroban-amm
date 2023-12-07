@@ -28,10 +28,12 @@ pub fn get_deposit_amounts(
 }
 
 fn get_min_price(reserve_a: u128, reserve_b: u128, fee_fraction: u128) -> u128 {
+    // minimal available price for swap
     PRICE_PRECISION * FEE_MULTIPLIER * reserve_a / (reserve_b * (FEE_MULTIPLIER - fee_fraction))
 }
 
 fn price_weight(price: u128, min_price: u128) -> u128 {
+    // returns price weighted with exponent (p_min/p)^8
     let mut result = PRICE_PRECISION * min_price / price;
     for _i in 1..8 {
         result = result * min_price / price;
@@ -53,6 +55,8 @@ fn get_depth(reserve_a: u128, reserve_b: u128, fee_fraction: u128, price: u128) 
 }
 
 pub(crate) fn get_liquidity(reserve_a: u128, reserve_b: u128, fee_fraction: u128) -> u128 {
+    // approximation for liquidity integral. iterations number and dp are heuristics
+    // liquidity = integral[p_min...inf] ((Y - X/(P(1-F))) * (P_min/P)^8) dP)
     if reserve_a == 0 || reserve_b == 0 {
         return 0;
     }
