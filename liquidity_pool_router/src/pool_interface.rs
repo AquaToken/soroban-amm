@@ -78,12 +78,7 @@ pub trait RewardsInterfaceTrait {
         tokens: Vec<(Vec<Address>, u32)>,
     );
     fn fill_liquidity(e: Env, admin: Address, tokens: Vec<Address>);
-    fn config_pool_rewards(
-        e: Env,
-        admin: Address,
-        tokens: Vec<Address>,
-        pool_index: BytesN<32>,
-    ) -> bool;
+    fn config_pool_rewards(e: Env, admin: Address, tokens: Vec<Address>, pool_index: BytesN<32>);
 
     fn get_rewards_info(
         e: Env,

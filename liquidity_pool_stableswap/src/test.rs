@@ -1022,3 +1022,67 @@ fn test_lazy_user_rewards() {
     assert_approx_eq_abs(token_reward.balance(&user2) as u128, user2_claim, 1000);
     assert_approx_eq_abs(user1_claim + user2_claim, total_reward_1, 1000);
 }
+
+#[test]
+#[cfg(feature = "tokens_2")]
+fn test_liquidity() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::random(&e);
+    let mut admin2 = Address::random(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let user1 = Address::random(&e);
+
+    token1.mint(&user1, &1_000_000_000_000_000_000_0000000);
+    token2.mint(&user1, &1_000_000_000_000_000_000_0000000);
+
+    for config in [
+        (10, 10, 0),
+        (30, 30, 0),
+        (100, 100, 2),
+        (3000, 3000, 102),
+        (1000, 3000, 68),
+        (3000, 1000, 68),
+        (10_0000000, 30_0000000, 6809640),
+        (30_0000000, 10_0000000, 6809640),
+        (
+            30_000_000_000_0000000,
+            10_000_000_000_0000000,
+            6809641229721896,
+        ),
+    ] {
+        let liqpool = create_liqpool_contract(
+            &e,
+            &user1,
+            &install_token_wasm(&e),
+            &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+            85,
+            30, // 0.3%
+            0,
+            &token_reward.address,
+        );
+        token1.approve(
+            &user1,
+            &liqpool.address,
+            &1_000_000_000_000_000_000_0000000,
+            &99999,
+        );
+        token2.approve(
+            &user1,
+            &liqpool.address,
+            &1_000_000_000_000_000_000_0000000,
+            &99999,
+        );
+        liqpool.deposit(&user1, &Vec::from_array(&e, [config.0, config.1]));
+        assert_eq!(liqpool.get_liquidity(), config.2);
+    }
+}

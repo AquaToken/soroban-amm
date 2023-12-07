@@ -10,7 +10,7 @@ pub trait LiquidityPoolTrait {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
-    ) -> bool;
+    );
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
@@ -48,13 +48,13 @@ pub trait LiquidityPoolTrait {
 
 pub trait UpgradeableContractTrait {
     fn version() -> u32;
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) -> bool;
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
 }
 
 pub trait RewardsTrait {
     // todo: move rewards configuration to gauge
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) -> bool;
-    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128) -> bool;
+    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
+    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128);
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
     fn get_user_reward(e: Env, user: Address) -> u128;
     fn claim(e: Env, user: Address) -> u128;

@@ -4,8 +4,8 @@ extern crate std;
 use crate::testutils::{
     create_liqpool_contract, create_token_contract, install_token_wasm, jump, Setup, TestConfig,
 };
-use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation};
+use soroban_sdk::{testutils::Address as _, Address, IntoVal, Symbol, Vec};
 use utils::test_utils::assert_approx_eq_abs;
 
 #[test]
@@ -270,10 +270,10 @@ fn test_simple_ongoing_reward() {
     let Setup {
         env,
         users,
-        token1,
-        token2,
+        token1: _token1,
+        token2: _token2,
         token_reward,
-        token_share,
+        token_share: _token_share,
         liq_pool,
     } = Setup::default();
     let total_reward_1 = TestConfig::default().reward_tps * 60;
@@ -294,10 +294,10 @@ fn test_estimate_ongoing_reward() {
     let Setup {
         env,
         users,
-        token1,
-        token2,
+        token1: _token1,
+        token2: _token2,
         token_reward,
-        token_share,
+        token_share: _token_share,
         liq_pool,
     } = Setup::default();
 
@@ -320,10 +320,10 @@ fn test_simple_reward() {
     let Setup {
         env,
         users,
-        token1,
-        token2,
+        token1: _token1,
+        token2: _token2,
         token_reward,
-        token_share,
+        token_share: _token_share,
         liq_pool,
     } = setup;
 
@@ -363,10 +363,10 @@ fn test_two_users_rewards() {
     let Setup {
         env,
         users,
-        token1,
-        token2,
+        token1: _token1,
+        token2: _token2,
         token_reward,
-        token_share,
+        token_share: _token_share,
         liq_pool,
     } = Setup::default();
 
@@ -393,10 +393,10 @@ fn test_lazy_user_rewards() {
     let Setup {
         env,
         users,
-        token1,
-        token2,
+        token1: _token1,
+        token2: _token2,
         token_reward,
-        token_share,
+        token_share: _token_share,
         liq_pool,
     } = Setup::default();
 
@@ -424,64 +424,50 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     //  many users come
     //  user does withdraw
 
-    let e = Env::default();
-    e.mock_all_auths();
-    e.budget().reset_unlimited();
+    let Setup {
+        env,
+        users,
+        token1,
+        token2,
+        token_reward,
+        token_share: _token_share,
+        liq_pool,
+    } = Setup::new_with_config(&TestConfig {
+        users_count: 100,
+        ..TestConfig::default()
+    });
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
-
-    let mut token1 = create_token_contract(&e, &admin1);
-    let mut token2 = create_token_contract(&e, &admin2);
-    let token_reward = create_token_contract(&e, &admin1);
-    if &token2.address < &token1.address {
-        std::mem::swap(&mut token1, &mut token2);
-        std::mem::swap(&mut admin1, &mut admin2);
-    }
-    let admin = Address::random(&e);
-    let first_user = Address::random(&e);
-    let mut users = Vec::new(&e);
-    for _i in 0..100 {
-        users.push_back(Address::random(&e));
-    }
-
-    let liqpool = create_liqpool_contract(
-        &e,
-        &admin,
-        &install_token_wasm(&e),
-        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-        &token_reward.address,
-        30,
-    );
+    let admin = users[0].clone();
+    let first_user = Address::random(&env);
 
     for i in 0..101 {
         let user = match i {
-            0 => first_user.clone(),
-            val => users.get(val - 1).unwrap(),
+            0 => &first_user,
+            val => &users[val - 1],
         };
-        token1.mint(&user, &1_000_000_000);
-        token2.mint(&user, &1_000_000_000);
-        token1.approve(&user, &liqpool.address, &1_000_000_000, &99999);
-        token2.approve(&user, &liqpool.address, &1_000_000_000, &99999);
+        token1.mint(user, &1_000_000_000);
+        token2.mint(user, &1_000_000_000);
+        token1.approve(user, &liq_pool.address, &1_000_000_000, &99999);
+        token2.approve(user, &liq_pool.address, &1_000_000_000, &99999);
     }
 
-    token_reward.mint(&liqpool.address, &1_000_000_000_000_0000000);
+    token_reward.mint(&liq_pool.address, &1_000_000_000_000_0000000);
     token_reward.approve(
-        &liqpool.address,
-        &liqpool.address,
+        &liq_pool.address,
+        &liq_pool.address,
         &1_000_000_000_000_0000000,
         &99999,
     );
 
     let reward_1_tps = 10_5000000_u128;
-    liqpool.set_rewards_config(
+    liq_pool.set_rewards_config(
         &admin,
-        &e.ledger()
+        &env.ledger()
             .timestamp()
             .saturating_add((iterations_to_simulate * 2 + 110).into()),
         &reward_1_tps,
     );
-    jump(&e, 10);
+    jump(&env, 10);
 
     // we have this because of last jump(100)
     let mut expected_reward = 100 * reward_1_tps / iterations_to_simulate as u128;
@@ -489,20 +475,20 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         expected_reward += reward_1_tps / (i + 1);
     }
 
-    liqpool.deposit(&first_user, &Vec::from_array(&e, [1000, 1000]));
-    jump(&e, 1);
+    liq_pool.deposit(&first_user, &Vec::from_array(&env, [1000, 1000]));
+    jump(&env, 1);
 
-    for i in 1..iterations_to_simulate {
-        let user = users.get(i % 10).unwrap();
-        liqpool.deposit(&user, &Vec::from_array(&e, [1000, 1000]));
-        jump(&e, 1);
+    for i in 1..iterations_to_simulate as usize {
+        let user = &users[i % 10];
+        liq_pool.deposit(user, &Vec::from_array(&env, [1000, 1000]));
+        jump(&env, 1);
     }
 
-    jump(&e, 100);
-    e.budget().reset_default();
-    e.budget().reset_tracker();
-    let user1_claim = liqpool.claim(&first_user);
-    e.budget().print();
+    jump(&env, 100);
+    env.budget().reset_default();
+    env.budget().reset_tracker();
+    let user1_claim = liq_pool.claim(&first_user);
+    env.budget().print();
     assert_eq!(user1_claim, expected_reward);
 }
 

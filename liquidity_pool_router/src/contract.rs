@@ -186,7 +186,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     }
 
     fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Error when get share_id");
+        let pool_id = get_pool(&e, tokens, pool_index).expect("Error on getting share_id");
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_liquidity"), Vec::new(&e))
     }
 }
@@ -345,12 +345,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         set_reward_tokens_detailed(&e, rewards_config.current_block, salt, &pools);
     }
 
-    fn config_pool_rewards(
-        e: Env,
-        admin: Address,
-        tokens: Vec<Address>,
-        pool_index: BytesN<32>,
-    ) -> bool {
+    fn config_pool_rewards(e: Env, admin: Address, tokens: Vec<Address>, pool_index: BytesN<32>) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
@@ -391,7 +386,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             0
         };
 
-        e.invoke_contract(
+        e.invoke_contract::<()>(
             &pool_id,
             &Symbol::new(&e, "set_rewards_config"),
             Vec::from_array(

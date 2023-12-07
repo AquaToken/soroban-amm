@@ -155,7 +155,7 @@ fn init_stableswap_pool(
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
-    e.invoke_contract::<bool>(
+    e.invoke_contract::<()>(
         pool_contract_id,
         &Symbol::new(&e, "initialize"),
         Vec::from_array(
@@ -170,7 +170,7 @@ fn init_stableswap_pool(
             ],
         ),
     );
-    e.invoke_contract::<bool>(
+    e.invoke_contract::<()>(
         pool_contract_id,
         &Symbol::new(&e, "initialize_rewards_config"),
         Vec::from_array(

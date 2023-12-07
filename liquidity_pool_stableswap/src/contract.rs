@@ -29,6 +29,7 @@ use soroban_sdk::{
     Vec,
 };
 use utils::bump::bump_instance;
+use crate::liquidity::get_liquidity;
 
 contractmeta!(
     key = "Description",
@@ -685,7 +686,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         a: u128,
         fee: u128,
         admin_fee: u128,
-    ) -> bool {
+    ) {
         let access_control = AccessControl::new(&e);
         if access_control.has_admin() {
             panic!("already initialized")
@@ -724,8 +725,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         let rewards = get_rewards_manager(&e);
         rewards.manager().initialize();
-
-        true
     }
 
     fn get_fee_fraction(e: Env) -> u32 {
@@ -975,8 +974,19 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     }
 
     fn get_liquidity(e: Env) -> u128 {
-        // fixme
-        0
+        // fixme: temporary solution. calculates using constant product formula. only for quick testing
+        let reserves = get_reserves(&e);
+        let mut liquidity = 0;
+        let fee = get_fee(&e);
+        for i in 0..reserves.len(){
+            for j in 0..reserves.len() {
+                if i == j {
+                    continue
+                }
+                liquidity += get_liquidity(reserves.get(i).unwrap(), reserves.get(j).unwrap(), fee);
+            }
+        }
+        liquidity
     }
 }
 
@@ -986,11 +996,10 @@ impl UpgradeableContractTrait for LiquidityPool {
         1
     }
 
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) -> bool {
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         e.deployer().update_current_contract_wasm(new_wasm_hash);
-        true
     }
 }
 
@@ -1001,7 +1010,7 @@ impl RewardsTrait for LiquidityPool {
         // admin: Address,
         reward_token: Address,
         reward_storage: Address,
-    ) -> bool {
+    ) {
         // admin.require_auth();
         // check_admin(&e, &admin);
         let rewards = get_rewards_manager(&e);
@@ -1010,8 +1019,6 @@ impl RewardsTrait for LiquidityPool {
         }
         rewards.storage().put_reward_token(reward_token);
         rewards.storage().put_reward_storage(reward_storage);
-
-        true
     }
 
     fn set_rewards_config(
@@ -1019,7 +1026,7 @@ impl RewardsTrait for LiquidityPool {
         admin: Address,
         expired_at: u64, // timestamp
         tps: u128,       // value with 7 decimal places. example: 600_0000000
-    ) -> bool {
+    ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
@@ -1035,7 +1042,6 @@ impl RewardsTrait for LiquidityPool {
         let config = PoolRewardConfig { tps, expired_at };
         bump_instance(&e);
         rewards.storage().set_pool_reward_config(&config);
-        true
     }
 
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
