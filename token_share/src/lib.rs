@@ -9,12 +9,12 @@ enum DataKey {
     TokenShare,
 }
 
-mod token {
+pub mod token {
     soroban_sdk::contractimport!(
         file = "../token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
     );
 }
-pub use token::Client;
+pub use token::{self as token_contract, Client};
 
 pub fn get_balance(e: &Env, contract: Address) -> u128 {
     bump_instance(e);
