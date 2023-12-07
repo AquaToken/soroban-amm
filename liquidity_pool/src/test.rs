@@ -98,7 +98,7 @@ fn test() {
             }
         )
     );
-    assert_eq!(liqpool.get_liquidity(), 3);
+    assert_eq!(liq_pool.get_liquidity(), 3);
 
     assert_eq!(token1.balance(&user1), 803);
     assert_eq!(token1.balance(&liq_pool.address), 197);
@@ -122,14 +122,14 @@ fn test() {
                             user1.clone().into_val(&e),
                             100_u128.into_val(&e),
                             Vec::from_array(&e, [197_u128, 51_u128]).into_val(&e)
-                        ]
+                        ],
                     )
                 )),
                 sub_invocations: std::vec![],
             }
         )
     );
-    assert_eq!(liqpool.get_liquidity(), 0);
+    assert_eq!(liq_pool.get_liquidity(), 0);
 
     jump(&e, 600);
     assert_eq!(liq_pool.claim(&user1), 0);
@@ -213,24 +213,11 @@ fn test_custom_fee() {
 
 #[test]
 fn test_liquidity() {
-    let e = Env::default();
-    e.mock_all_auths();
-    e.budget().reset_unlimited();
-
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
-
-    let mut token1 = create_token_contract(&e, &admin1);
-    let mut token2 = create_token_contract(&e, &admin2);
-    let token_reward = create_token_contract(&e, &admin1);
-    if &token2.address < &token1.address {
-        std::mem::swap(&mut token1, &mut token2);
-        std::mem::swap(&mut admin1, &mut admin2);
-    }
-    let user1 = Address::random(&e);
-
-    token1.mint(&user1, &1_000_000_000_000_000_000_0000000);
-    token2.mint(&user1, &1_000_000_000_000_000_000_0000000);
+    let config = TestConfig {
+        mint_to_user: 1_000_000_000_000_000_000_0000000,
+        ..TestConfig::default()
+    };
+    let setup = Setup::new_with_config(&config);
 
     for config in [
         (10, 10, 0),
@@ -247,28 +234,34 @@ fn test_liquidity() {
             6809462488704887,
         ),
     ] {
-        let liqpool = create_liqpool_contract(
-            &e,
-            &user1,
-            &install_token_wasm(&e),
-            &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-            &token_reward.address,
+        let liq_pool = create_liqpool_contract(
+            &setup.env,
+            &setup.users[0],
+            &install_token_wasm(&setup.env),
+            &Vec::from_array(
+                &setup.env,
+                [setup.token1.address.clone(), setup.token2.address.clone()],
+            ),
+            &setup.token_reward.address,
             30, // 0.3%
         );
-        token1.approve(
-            &user1,
-            &liqpool.address,
+        setup.token1.approve(
+            &setup.users[0],
+            &liq_pool.address,
             &1_000_000_000_000_000_000_0000000,
             &99999,
         );
-        token2.approve(
-            &user1,
-            &liqpool.address,
+        setup.token2.approve(
+            &setup.users[0],
+            &liq_pool.address,
             &1_000_000_000_000_000_000_0000000,
             &99999,
         );
-        liqpool.deposit(&user1, &Vec::from_array(&e, [config.0, config.1]));
-        assert_eq!(liqpool.get_liquidity(), config.2);
+        liq_pool.deposit(
+            &setup.users[0],
+            &Vec::from_array(&setup.env, [config.0, config.1]),
+        );
+        assert_eq!(liq_pool.get_liquidity(), config.2);
     }
 }
 
