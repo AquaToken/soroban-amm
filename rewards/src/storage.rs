@@ -164,6 +164,13 @@ impl RewardsStorageTrait for Storage {
             .expect("Trying to get reward storage")
     }
 
+    fn put_reward_storage(&self, contract: Address) {
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::RewardStorage, &contract)
+    }
+
     fn get_reward_token(&self) -> Address {
         self.env
             .storage()
@@ -181,12 +188,5 @@ impl RewardsStorageTrait for Storage {
 
     fn has_reward_token(&self) -> bool {
         self.env.storage().instance().has(&DataKey::RewardToken)
-    }
-
-    fn put_reward_storage(&self, contract: Address) {
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::RewardStorage, &contract)
     }
 }

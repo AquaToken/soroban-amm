@@ -1,5 +1,5 @@
 use crate::pool_constants::N_COINS;
-use rewards::utils::bump::bump_instance;
+use rewards::bump_instance;
 use soroban_sdk::{contracttype, Address, Env, Vec};
 
 #[derive(Clone)]

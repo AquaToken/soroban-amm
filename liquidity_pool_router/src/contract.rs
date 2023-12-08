@@ -7,7 +7,6 @@ use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_custom_salt, get_stableswap_pool_salt,
     get_standard_pool_salt, pool_salt,
 };
-use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
     add_pool, get_init_pool_payment_amount, get_init_pool_payment_token, get_pool, get_pool_safe,
@@ -16,7 +15,7 @@ use crate::storage::{
     set_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
-use rewards::storage::RewardsStorageTrait;
+use rewards::{get_rewards_manager, storage::RewardsStorageTrait};
 use soroban_sdk::{
     contract, contractimpl, symbol_short, token::Client, Address, BytesN, Env, IntoVal, Map,
     Symbol, Val, Vec,

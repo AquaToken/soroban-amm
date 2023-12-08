@@ -1,11 +1,11 @@
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_contract::StandardLiquidityPoolClient;
-use crate::rewards::get_rewards_manager;
 use crate::storage::{
     add_pool, get_constant_product_pool_hash, get_stable_swap_next_counter,
     get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
+use rewards::get_rewards_manager;
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::{
     symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,

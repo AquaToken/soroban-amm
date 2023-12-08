@@ -1,4 +1,5 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
+use rewards::RewardsTrait;
+use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
 
 pub trait LiquidityPoolInterfaceTrait {
     fn pool_type(e: Env) -> Symbol;
@@ -61,15 +62,6 @@ pub trait LiquidityPoolInterfaceTrait {
 pub trait UpgradeableContractTrait {
     fn version() -> u32;
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) -> bool;
-}
-
-pub trait RewardsTrait {
-    // todo: move rewards configuration to gauge
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) -> bool;
-    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128) -> bool;
-    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
-    fn get_user_reward(e: Env, user: Address) -> u128;
-    fn claim(e: Env, user: Address) -> u128;
 }
 
 pub trait AdminInterfaceTrait {

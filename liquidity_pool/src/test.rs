@@ -5,7 +5,7 @@ use crate::testutils::{
     create_liqpool_contract, create_token_contract, install_token_wasm, jump, Setup, TestConfig,
 };
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Ledger};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{testutils::Address as _, Address, Env, IntoVal, Symbol, Vec};
 use utils::test_utils::assert_approx_eq_abs;
 
 #[test]
@@ -19,6 +19,7 @@ fn test() {
         token_share,
         liq_pool,
     } = Setup::default();
+    liq_pool.claim();
     let user1 = users[0].clone();
     let reward_1_tps = 10_5000000_u128;
     let reward_2_tps = 20_0000000_u128;

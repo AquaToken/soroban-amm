@@ -1,24 +1,22 @@
 use crate::pool;
-use crate::pool_interface::{LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait};
-use crate::rewards::get_rewards_manager;
+use crate::pool_interface::{LiquidityPoolTrait, UpgradeableContractTrait};
 use crate::storage::{
     get_fee_fraction, get_reserve_a, get_reserve_b, get_token_a, get_token_b, put_fee_fraction,
     put_reserve_a, put_reserve_b, put_token_a, put_token_b,
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
-use cast::i128 as to_i128;
 use num_integer::Roots;
-use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
+use rewards::storage::RewardsStorageTrait;
+use rewards::{get_rewards_manager, RewardsTrait};
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short,
-    token::Client, Address, BytesN, Env, IntoVal, Map, Symbol, Vec,
+    contract, contracterror, contractimpl, contractmeta, panic_with_error, token::Client, Address,
+    BytesN, Env, IntoVal, Map, Symbol, Vec,
 };
 use token_share::{
     burn_shares, get_balance_shares, get_token_share, get_total_shares, get_user_balance_shares,
     mint_shares, put_token_share, Client as LPToken,
 };
-use utils::bump::bump_instance;
 
 // Metadata that is added on to the WASM custom section
 contractmeta!(
@@ -351,88 +349,6 @@ impl UpgradeableContractTrait for LiquidityPool {
     }
 }
 
+// TODO: use this when soroban can impl Client functions for trait
 #[contractimpl]
-impl RewardsTrait for LiquidityPool {
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) -> bool {
-        // admin.require_auth();
-        // check_admin(&e, &admin);
-
-        let rewards = get_rewards_manager(&e);
-        if rewards.storage().has_reward_token() {
-            panic!("rewards config already initialized")
-        }
-
-        rewards.storage().put_reward_token(reward_token);
-        rewards.storage().put_reward_storage(reward_storage);
-        true
-    }
-
-    fn set_rewards_config(
-        e: Env,
-        admin: Address,
-        expired_at: u64, // timestamp
-        tps: u128,       // value with 7 decimal places. example: 600_0000000
-    ) -> bool {
-        admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
-
-        let rewards = get_rewards_manager(&e);
-        let total_shares = get_total_shares(&e);
-        rewards.manager().update_rewards_data(total_shares);
-
-        let config = PoolRewardConfig { tps, expired_at };
-        bump_instance(&e);
-        rewards.storage().set_pool_reward_config(&config);
-        true
-    }
-
-    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
-        let rewards = get_rewards_manager(&e);
-        let config = rewards.storage().get_pool_reward_config();
-        let total_shares = get_total_shares(&e);
-        let user_shares = get_user_balance_shares(&e, &user);
-        let pool_data = rewards.manager().update_rewards_data(total_shares);
-        let user_data = rewards
-            .manager()
-            .update_user_reward(&pool_data, &user, user_shares);
-        let mut result = Map::new(&e);
-        result.set(symbol_short!("tps"), to_i128(config.tps).unwrap());
-        result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
-        result.set(
-            symbol_short!("acc"),
-            to_i128(pool_data.accumulated).unwrap(),
-        );
-        result.set(symbol_short!("last_time"), to_i128(pool_data.last_time));
-        result.set(
-            symbol_short!("pool_acc"),
-            to_i128(user_data.pool_accumulated).unwrap(),
-        );
-        result.set(symbol_short!("block"), to_i128(pool_data.block));
-        result.set(symbol_short!("usr_block"), to_i128(user_data.last_block));
-        result.set(
-            symbol_short!("to_claim"),
-            to_i128(user_data.to_claim).unwrap(),
-        );
-        result
-    }
-
-    fn get_user_reward(e: Env, user: Address) -> u128 {
-        let rewards = get_rewards_manager(&e);
-        let total_shares = get_total_shares(&e);
-        let user_shares = get_user_balance_shares(&e, &user);
-        rewards
-            .manager()
-            .get_amount_to_claim(&user, total_shares, user_shares)
-    }
-
-    fn claim(e: Env, user: Address) -> u128 {
-        let rewards = get_rewards_manager(&e);
-        let total_shares = get_total_shares(&e);
-        let user_shares = get_user_balance_shares(&e, &user);
-        let reward = rewards
-            .manager()
-            .claim_reward(&user, total_shares, user_shares);
-        rewards.storage().bump_user_reward_data(&user);
-        reward
-    }
-}
+impl RewardsTrait for LiquidityPool {}

@@ -794,8 +794,10 @@ dependencies = [
 name = "rewards"
 version = "0.1.0"
 dependencies = [
+ "access_control",
  "cast",
  "soroban-sdk",
+ "token_share",
  "utils",
 ]
 
