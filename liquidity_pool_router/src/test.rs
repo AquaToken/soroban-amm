@@ -232,7 +232,10 @@ fn test_stableswap_pools_amount_over_max() {
     reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
     for i in 1..=STABLE_SWAP_MAX_POOLS {
         router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
-        assert_eq!(reward_token.balance(&payment_for_creation_address), 1000_0000000i128 * (i as i128));
+        assert_eq!(
+            reward_token.balance(&payment_for_creation_address),
+            1000_0000000i128 * (i as i128)
+        );
     }
 }
 
@@ -283,7 +286,10 @@ fn test_stableswap_pools_amount_ok() {
     reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
     for i in 1..STABLE_SWAP_MAX_POOLS {
         router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
-        assert_eq!(reward_token.balance(&payment_for_creation_address), 1000_0000000i128 * (i as i128));
+        assert_eq!(
+            reward_token.balance(&payment_for_creation_address),
+            1000_0000000i128 * (i as i128)
+        );
     }
 }
 
@@ -327,7 +333,10 @@ fn test_stableswap_pool_no_allowance() {
     );
 
     router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
-    assert_eq!(reward_token.balance(&payment_for_creation_address), 1000_0000000);
+    assert_eq!(
+        reward_token.balance(&payment_for_creation_address),
+        1000_0000000
+    );
 }
 
 #[test]
@@ -378,7 +387,10 @@ fn test_stableswap_pool() {
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable")
     );
-    assert_eq!(reward_token.balance(&payment_for_creation_address), 1000_0000000);
+    assert_eq!(
+        reward_token.balance(&payment_for_creation_address),
+        1000_0000000
+    );
 
     let pools = router.get_pools(&tokens);
 
@@ -529,7 +541,10 @@ fn test_stableswap_3_pool() {
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable_3")
     );
-    assert_eq!(reward_token.balance(&payment_for_creation_address), 1000_0000000);
+    assert_eq!(
+        reward_token.balance(&payment_for_creation_address),
+        1000_0000000
+    );
 
     let pools = router.get_pools(&tokens);
 
@@ -992,7 +1007,10 @@ fn test_event_correct() {
 
     let (pool_hash, pool_address) =
         router.init_stableswap_pool(&user1, &tokens, &10, &fee, &admin_fee);
-    assert_eq!(reward_token.balance(&payment_for_creation_address), 1000_0000000);
+    assert_eq!(
+        reward_token.balance(&payment_for_creation_address),
+        1000_0000000
+    );
 
     let init_stableswap_pool_event = e.events().all().last().unwrap();
 
