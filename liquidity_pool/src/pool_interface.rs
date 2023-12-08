@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
 pub trait LiquidityPoolTrait {
     fn pool_type(e: Env) -> Symbol;
@@ -44,6 +44,8 @@ pub trait LiquidityPoolTrait {
     fn get_fee_fraction(e: Env) -> u32;
 
     fn get_liquidity(e: Env) -> u128;
+
+    fn get_info(e: Env) -> Map<Symbol, Val>;
 }
 
 pub trait UpgradeableContractTrait {

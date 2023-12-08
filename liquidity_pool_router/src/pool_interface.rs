@@ -2,6 +2,7 @@ use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
 pub trait LiquidityPoolInterfaceTrait {
     fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol;
+    fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val>;
 
     fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address;
 

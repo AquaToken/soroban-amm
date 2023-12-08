@@ -5,7 +5,8 @@ use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, MAX_POOLS_FOR_PAIR, STABL
 use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
 use soroban_sdk::{
-    symbol_short, testutils::Address as _, vec, Address, BytesN, Env, IntoVal, Symbol, Val, Vec,
+    symbol_short, testutils::Address as _, vec, Address, BytesN, Env, FromVal, IntoVal, Symbol,
+    Val, Vec,
 };
 
 pub(crate) mod test_token {
@@ -165,6 +166,11 @@ fn test_constant_product_pool() {
     let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
+        Symbol::new(&e, "constant_product")
+    );
+    let pool_info = router.get_info(&tokens, &pool_hash);
+    assert_eq!(
+        Symbol::from_val(&e, &pool_info.get(Symbol::new(&e, "pool_type")).unwrap()),
         Symbol::new(&e, "constant_product")
     );
 
@@ -556,7 +562,7 @@ fn test_stableswap_3_pool() {
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
-        Symbol::new(&e, "stable_3")
+        Symbol::new(&e, "stable")
     );
 
     let pools = router.get_pools(&tokens);
@@ -844,10 +850,9 @@ fn test_simple_ongoing_reward() {
 
     let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
 
-    reward_token.mint(&router.address, &1_000_000_0000000);
+    reward_token.mint(&pool_address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
-    reward_token.approve(&router.address, &pool_address, &1_000_000_0000000, &99999);
 
     token1.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1), 1000);

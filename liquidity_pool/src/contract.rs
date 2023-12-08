@@ -12,9 +12,10 @@ use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
 use num_integer::Roots;
 use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
+use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, IntoVal,
-    Vec,
+    Val, Vec,
 };
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol};
 use token_share::{
@@ -130,8 +131,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let amounts =
             pool::get_deposit_amounts(desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
 
-        let token_a_client = Client::new(&e, &get_token_a(&e));
-        let token_b_client = Client::new(&e, &get_token_b(&e));
+        let token_a_client = SorobanTokenClient::new(&e, &get_token_a(&e));
+        let token_b_client = SorobanTokenClient::new(&e, &get_token_b(&e));
 
         token_a_client.transfer_from(
             &e.current_contract_address(),
@@ -208,7 +209,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // Transfer the amount being sold to the contract
         let sell_token = tokens.get(in_idx).unwrap();
-        let sell_token_client = Client::new(&e, &sell_token);
+        let sell_token_client = SorobanTokenClient::new(&e, &sell_token);
         sell_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -344,6 +345,15 @@ impl LiquidityPoolTrait for LiquidityPool {
         let fee_fraction = get_fee_fraction(&e) as u128;
         get_liquidity(reserve_a, reserve_b, fee_fraction)
             + get_liquidity(reserve_b, reserve_a, fee_fraction)
+    }
+
+    fn get_info(e: Env) -> Map<Symbol, Val> {
+        let fee = get_fee_fraction(&e);
+        let pool_type = Self::pool_type(e.clone());
+        let mut result = Map::new(&e);
+        result.set(symbol_short!("pool_type"), pool_type.into_val(&e));
+        result.set(symbol_short!("fee"), fee.into_val(&e));
+        result
     }
 }
 
