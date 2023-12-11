@@ -6,6 +6,9 @@ tasks:
   fmt:
     cmd: cargo fmt --all
 
+  check:
+    cmd: cargo check
+
   build:
     cmds:
       - task -d ../token build || exit 1
@@ -32,4 +35,5 @@ tasks:
       - task: clean
       - task: fmt
       - task: build
+      - task: check
       - task: test

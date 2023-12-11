@@ -6,6 +6,9 @@ tasks:
   fmt:
     cmd: cargo fmt --all
 
+  check:
+    cmd: cargo check
+
   build:
     cmds:
       - soroban contract build
@@ -29,4 +32,5 @@ tasks:
       - task: clean
       - task: fmt
       - task: build
+      - task: check
       - task: test
