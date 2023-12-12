@@ -439,7 +439,7 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         ..TestConfig::default()
     });
 
-    let admin = Address::generate(&env);
+    let admin = users[0].clone();
     let first_user = Address::generate(&env);
 
     for i in 0..101 {
