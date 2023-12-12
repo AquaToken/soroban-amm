@@ -1,6 +1,5 @@
-use crate::storage::{get_token_a, get_token_b};
-use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env};
-use token_share::{get_balance, Client};
+use crate::storage::{bump_instance, get_token_a, get_token_b};
+use soroban_sdk::{token::Client, xdr::ToXdr, Address, Bytes, BytesN, Env};
 
 pub fn create_contract(
     e: &Env,
@@ -15,6 +14,11 @@ pub fn create_contract(
     e.deployer()
         .with_current_contract(salt)
         .deploy(token_wasm_hash)
+}
+
+pub fn get_balance(e: &Env, contract: Address) -> u128 {
+    bump_instance(e);
+    Client::new(e, &contract).balance(&e.current_contract_address()) as u128
 }
 
 pub fn get_balance_a(e: &Env) -> u128 {
