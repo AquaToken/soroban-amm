@@ -153,7 +153,7 @@ pub fn add_pool(
                 stable_swap_pools_amt += 1;
             }
         }
-        if stable_swap_pools_amt >= STABLE_SWAP_MAX_POOLS {
+        if stable_swap_pools_amt > STABLE_SWAP_MAX_POOLS {
             panic!("stableswap pools amount is over max")
         }
     }
