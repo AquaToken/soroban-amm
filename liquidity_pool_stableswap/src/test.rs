@@ -18,14 +18,22 @@ fn create_liqpool_contract<'a>(
     token_wasm_hash: &BytesN<32>,
     coins: &Vec<Address>,
     a: u128,
-    fee: u128,
-    admin_fee: u128,
+    fee: u32,
+    admin_fee: u32,
     token_reward: &Address,
     // fee_fraction: u32,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
-    liqpool.initialize(&admin, token_wasm_hash, coins, &a, &fee, &admin_fee);
-    liqpool.initialize_rewards_config(token_reward, &liqpool.address);
+    liqpool.initialize_all(
+        &admin,
+        token_wasm_hash,
+        coins,
+        &a,
+        &fee,
+        &admin_fee,
+        token_reward,
+        &liqpool.address,
+    );
     liqpool
 }
 
@@ -51,6 +59,35 @@ fn jump(e: &Env, time: u64) {
 
 #[cfg(feature = "tokens_2")]
 #[test]
+fn test_swap_empty_pool() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::random(&e);
+    let admin2 = Address::random(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::random(&e);
+    let fee = 2000_u128;
+    let admin_fee = 0_u128;
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        fee as u32,
+        admin_fee as u32,
+        &token_reward.address,
+    );
+    assert_eq!(liqpool.estimate_swap(&0, &1, &10_0000000), 0);
+}
+
+#[cfg(feature = "tokens_2")]
+#[test]
 fn test_happy_flow() {
     let e = Env::default();
     e.mock_all_auths();
@@ -71,8 +108,8 @@ fn test_happy_flow() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        fee as u128,
-        admin_fee as u128,
+        fee as u32,
+        admin_fee as u32,
         &token_reward.address,
     );
 
@@ -226,8 +263,8 @@ fn test_happy_flow_3_tokens() {
             ],
         ),
         10,
-        fee as u128,
-        admin_fee as u128,
+        fee as u32,
+        admin_fee as u32,
         &token_reward.address,
     );
 
@@ -369,8 +406,8 @@ fn test_happy_flow_4_tokens() {
             ],
         ),
         10,
-        fee as u128,
-        admin_fee as u128,
+        fee as u32,
+        admin_fee as u32,
         &token_reward.address,
     );
 
@@ -498,8 +535,8 @@ fn test_withdraw_partial() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        fee as u128,
-        admin_fee as u128,
+        fee as u32,
+        admin_fee as u32,
         &token_reward.address,
     );
 
