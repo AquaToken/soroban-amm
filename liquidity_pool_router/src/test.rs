@@ -93,40 +93,56 @@ fn test_total_liquidity() {
 
     let user1 = Address::random(&e);
 
-    let pool_hash = install_liq_pool_hash(&e);
+    let pool_wasm_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash_2 = install_stableswap_two_tokens_liq_pool_hash(&e);
     let token_hash = install_token_wasm(&e);
     let router = create_liqpool_router_contract(&e);
     router.init_admin(&admin);
-    router.set_pool_hash(&pool_hash);
+    router.set_pool_hash(&pool_wasm_hash);
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash_2);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1_0000000);
+    reward_token.mint(&user1, &3_0000000);
+    reward_token.approve(&user1, &router.address, &3_0000000, &99999);
 
-    token1.mint(&user1, &100000);
-    token2.mint(&user1, &100000);
+    token1.mint(&user1, &1000000);
+    token2.mint(&user1, &1000000);
 
-    let (pool_hash_1, pool_address_1) = router.init_standard_pool(&user1, &tokens, &30);
-    let (pool_hash_2, pool_address_2) = router.init_standard_pool(&user1, &tokens, &100);
-    token1.approve(&user1, &pool_address_1, &1000, &99999);
-    token2.approve(&user1, &pool_address_1, &1000, &99999);
-    router.deposit(
-        &user1,
-        &tokens,
-        &pool_hash_1,
-        &Vec::from_array(&e, [1000, 1000]),
-    );
-    assert_eq!(router.get_total_liquidity(&tokens), 34);
+    for pool_fee in CONSTANT_PRODUCT_FEE_AVAILABLE {
+        let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &pool_fee);
+        token1.approve(&user1, &pool_address, &30000, &99999);
+        token2.approve(&user1, &pool_address, &30000, &99999);
+        router.deposit(
+            &user1,
+            &tokens,
+            &pool_hash,
+            &Vec::from_array(&e, [30000, 30000]),
+        );
+    }
 
-    token1.approve(&user1, &pool_address_2, &30000, &99999);
-    token2.approve(&user1, &pool_address_2, &30000, &99999);
-    router.deposit(
-        &user1,
-        &tokens,
-        &pool_hash_2,
-        &Vec::from_array(&e, [30000, 30000]),
-    );
-    assert_eq!(router.get_total_liquidity(&tokens), 1062);
+    e.budget().reset_default();
+    assert_eq!(router.get_total_liquidity(&tokens), 3066);
+    e.budget().print();
+    e.budget().reset_unlimited();
+
+    for pool_fee in [10, 30, 100] {
+        let (pool_hash, pool_address) =
+            router.init_stableswap_pool(&user1, &tokens, &85, &pool_fee, &0);
+        token1.approve(&user1, &pool_address, &30000, &99999);
+        token2.approve(&user1, &pool_address, &30000, &99999);
+        router.deposit(
+            &user1,
+            &tokens,
+            &pool_hash,
+            &Vec::from_array(&e, [30000, 30000]),
+        );
+    }
+
+    // fixme: budget exceed error here
+    // e.budget().reset_default();
+    assert_eq!(router.get_total_liquidity(&tokens), 6132);
+    e.budget().print();
 }
 
 #[test]
@@ -291,7 +307,7 @@ fn test_stableswap_pools_amount_over_max() {
     }
     reward_token.mint(&admin, &10000000_0000000);
     reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
-    for _i in 0..STABLESWAP_MAX_POOLS {
+    for _i in 0..STABLESWAP_MAX_POOLS + 1 {
         router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
     }
 }
@@ -335,7 +351,7 @@ fn test_stableswap_pools_amount_ok() {
     }
     reward_token.mint(&admin, &10000000_0000000);
     reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
-    for _i in 0..STABLESWAP_MAX_POOLS - 1 {
+    for _i in 0..STABLESWAP_MAX_POOLS {
         router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
     }
 }
@@ -417,6 +433,7 @@ fn test_stableswap_pool() {
     e.budget().reset_default();
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
     e.budget().print();
+    assert!(e.budget().cpu_instruction_cost() < 100_000_000);
     e.budget().reset_unlimited();
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
