@@ -18,6 +18,11 @@ pub fn create_contract(
         .deploy(token_wasm_hash)
 }
 
+pub fn get_balance(e: &Env, contract: Address) -> u128 {
+    bump_instance(e);
+    Client::new(e, &contract).balance(&e.current_contract_address()) as u128
+}
+
 pub fn get_balance_a(e: &Env) -> u128 {
     get_balance(e, get_token_a(e))
 }
