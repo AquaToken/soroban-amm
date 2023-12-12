@@ -14,13 +14,10 @@ use access_control::access::{AccessControl, AccessControlTrait};
 use num_integer::Roots;
 use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
 use soroban_sdk::token::Client as SorobanTokenClient;
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, IntoVal,
-    Val, Vec,
-};
+use soroban_sdk::{contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, IntoVal, Val, Vec, Address, Env, BytesN, Symbol, Map};
 use token_share::{
     burn_shares, get_balance_shares, get_token_share, get_total_shares, get_user_balance_shares,
-    mint_shares, put_token_share, Client as LPToken,
+    mint_shares, put_token_share, Client as LPTokenClient,
 };
 use utils::bump::bump_instance;
 
@@ -85,7 +82,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let share_contract = create_contract(&e, lp_token_wasm_hash, &token_a, &token_b);
-        LPToken::new(&e, &share_contract).initialize(
+        LPTokenClient::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
             &"Pool Share Token".into_val(&e),
@@ -316,7 +313,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards.storage().bump_user_reward_data(&user);
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = LPToken::new(&e, &get_token_share(&e));
+        let share_token_client = LPTokenClient::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,

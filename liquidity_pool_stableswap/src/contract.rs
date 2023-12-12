@@ -27,8 +27,8 @@ use cast::i128 as to_i128;
 use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, symbol_short, token::Client,Address, BytesN, Env, IntoVal, Map, Symbol,
-    Val, Vec,
+    contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env,
+    IntoVal, Map, Symbol, Val, Vec,
 };
 use utils::bump::bump_instance;
 

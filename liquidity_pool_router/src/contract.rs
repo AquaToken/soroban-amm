@@ -13,13 +13,14 @@ use crate::storage::{
     add_pool, get_init_pool_payment_amount, get_init_pool_payment_token, get_pool, get_pools_plain,
     get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, has_pool, remove_pool,
     set_constant_product_pool_hash, set_init_pool_payment_amount, set_init_pool_payment_token,
-    set_reward_tokens, set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo, LiquidityPoolType,
+    set_reward_tokens, set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash,
+    set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, token::Client, Address, BytesN, Env, IntoVal, Map,
+    contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map,
     Symbol, Val, Vec,
 };
 use utils::utils::check_vec_ordered;

@@ -1,7 +1,7 @@
 use crate::storage::{get_token_a, get_token_b};
 use soroban_sdk::token::Client;
 use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env};
-use token_share::get_balance;
+use utils::bump::bump_instance;
 
 pub fn create_contract(
     e: &Env,
