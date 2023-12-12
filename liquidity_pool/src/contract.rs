@@ -7,7 +7,6 @@ use crate::storage::{
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
-use cast::i128 as to_i128;
 use num_integer::Roots;
 use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
 use soroban_sdk::{
@@ -396,23 +395,17 @@ impl RewardsTrait for LiquidityPool {
             .manager()
             .update_user_reward(&pool_data, &user, user_shares);
         let mut result = Map::new(&e);
-        result.set(symbol_short!("tps"), to_i128(config.tps).unwrap());
-        result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
-        result.set(
-            symbol_short!("acc"),
-            to_i128(pool_data.accumulated).unwrap(),
-        );
-        result.set(symbol_short!("last_time"), to_i128(pool_data.last_time));
+        result.set(symbol_short!("tps"), config.tps as i128);
+        result.set(symbol_short!("exp_at"), config.expired_at as i128);
+        result.set(symbol_short!("acc"), pool_data.accumulated as i128);
+        result.set(symbol_short!("last_time"), pool_data.last_time as i128);
         result.set(
             symbol_short!("pool_acc"),
-            to_i128(user_data.pool_accumulated).unwrap(),
+            user_data.pool_accumulated as i128,
         );
-        result.set(symbol_short!("block"), to_i128(pool_data.block));
-        result.set(symbol_short!("usr_block"), to_i128(user_data.last_block));
-        result.set(
-            symbol_short!("to_claim"),
-            to_i128(user_data.to_claim).unwrap(),
-        );
+        result.set(symbol_short!("block"), pool_data.block as i128);
+        result.set(symbol_short!("usr_block"), user_data.last_block as i128);
+        result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
         result
     }
 

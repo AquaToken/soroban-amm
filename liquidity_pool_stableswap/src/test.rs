@@ -43,9 +43,9 @@ fn jump(e: &Env, time: u64) {
         sequence_number: e.ledger().sequence(),
         network_id: Default::default(),
         base_reserve: 10,
-        min_temp_entry_expiration: 999999,
-        min_persistent_entry_expiration: 999999,
-        max_entry_expiration: u32::MAX,
+        min_temp_entry_ttl: 999999,
+        min_persistent_entry_ttl: 999999,
+        max_entry_ttl: u32::MAX,
     });
 }
 
@@ -56,13 +56,13 @@ fn test_happy_flow() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token_reward = create_token_contract(&e, &admin1);
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     let fee = 2000_u128;
     let admin_fee = 0_u128;
     let liqpool = create_liqpool_contract(
@@ -165,13 +165,13 @@ fn test_kill() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token_reward = create_token_contract(&e, &admin1);
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -202,15 +202,15 @@ fn test_happy_flow_3_tokens() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
-    let admin3 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+    let admin3 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token3 = create_token_contract(&e, &admin3);
     let token_reward = create_token_contract(&e, &admin1);
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     let fee = 2000_u128;
     let admin_fee = 0_u128;
     let liqpool = create_liqpool_contract(
@@ -341,10 +341,10 @@ fn test_happy_flow_4_tokens() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
-    let admin3 = Address::random(&e);
-    let admin4 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+    let admin3 = Address::generate(&e);
+    let admin4 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
@@ -352,7 +352,7 @@ fn test_happy_flow_4_tokens() {
     let token4 = create_token_contract(&e, &admin4);
 
     let token_reward = create_token_contract(&e, &admin1);
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     let fee = 2000_u128;
     let admin_fee = 0_u128;
     let liqpool = create_liqpool_contract(
@@ -477,8 +477,8 @@ fn test_withdraw_partial() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -487,7 +487,7 @@ fn test_withdraw_partial() {
         std::mem::swap(&mut token1, &mut token2);
         std::mem::swap(&mut admin1, &mut admin2);
     }
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     // let fee = 20000_u128;
     let fee = 0_u128;
     // let admin_fee = 300000_u128;
@@ -565,8 +565,8 @@ fn test_withdraw_one_token() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -575,7 +575,7 @@ fn test_withdraw_one_token() {
         std::mem::swap(&mut token1, &mut token2);
         std::mem::swap(&mut admin1, &mut admin2);
     }
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -635,8 +635,8 @@ fn test_custom_fee() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -645,7 +645,7 @@ fn test_custom_fee() {
         std::mem::swap(&mut token1, &mut token2);
         std::mem::swap(&mut admin1, &mut admin2);
     }
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
 
     token1.mint(&user1, &1000000_0000000);
     token2.mint(&user1, &1000000_0000000);
@@ -694,13 +694,13 @@ fn test_deposit_inequal() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token_reward = create_token_contract(&e, &admin1);
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -736,14 +736,14 @@ fn test_simple_ongoing_reward() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token_reward = create_token_contract(&e, &admin1);
 
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -800,14 +800,14 @@ fn test_simple_reward() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token_reward = create_token_contract(&e, &admin1);
 
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -872,15 +872,15 @@ fn test_two_users_rewards() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token_reward = create_token_contract(&e, &admin1);
 
-    let user1 = Address::random(&e);
-    let user2 = Address::random(&e);
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
 
     let liqpool = create_liqpool_contract(
         &e,
@@ -951,15 +951,15 @@ fn test_lazy_user_rewards() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token_reward = create_token_contract(&e, &admin1);
 
-    let user1 = Address::random(&e);
-    let user2 = Address::random(&e);
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
 
     let liqpool = create_liqpool_contract(
         &e,

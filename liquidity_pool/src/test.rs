@@ -371,8 +371,8 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -381,11 +381,11 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         std::mem::swap(&mut token1, &mut token2);
         std::mem::swap(&mut admin1, &mut admin2);
     }
-    let admin = Address::random(&e);
-    let first_user = Address::random(&e);
+    let admin = Address::generate(&e);
+    let first_user = Address::generate(&e);
     let mut users = Vec::new(&e);
     for _i in 0..100 {
-        users.push_back(Address::random(&e));
+        users.push_back(Address::generate(&e));
     }
 
     let liqpool = create_liqpool_contract(
