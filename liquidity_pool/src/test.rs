@@ -155,11 +155,13 @@ fn initialize_already_initialized() {
     let token1 = create_token_contract(&setup.env, &users[1]);
     let token2 = create_token_contract(&setup.env, &users[2]);
 
-    setup.liq_pool.initialize(
+    setup.liq_pool.initialize_all(
         &users[0],
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         &10_u32,
+        &token1.address,
+        &setup.liq_pool.address,
     );
 }
 

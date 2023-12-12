@@ -97,14 +97,7 @@ pub fn deploy_stableswap_pool(
         .deployer()
         .with_current_contract(merge_salt(&e, salt.clone(), subpool_salt.clone()))
         .deploy(liquidity_pool_wasm_hash);
-    init_stableswap_pool(
-        e,
-        &tokens,
-        &pool_contract_id,
-        a,
-        fee_fraction as u128,
-        admin_fee as u128,
-    );
+    init_stableswap_pool(e, &tokens, &pool_contract_id, a, fee_fraction, admin_fee);
 
     // if STABLESWAP_MAX_POOLS
     add_pool(
@@ -145,8 +138,14 @@ fn init_standard_pool(
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
     let liq_pool_client = StandardLiquidityPoolClient::new(&e, pool_contract_id);
-    liq_pool_client.initialize(&admin, &token_wasm_hash, tokens, &fee_fraction);
-    liq_pool_client.initialize_rewards_config(&reward_token, &liq_pool_client.address);
+    liq_pool_client.initialize_all(
+        &admin,
+        &token_wasm_hash,
+        tokens,
+        &fee_fraction,
+        &reward_token,
+        &liq_pool_client.address,
+    );
 }
 
 fn init_stableswap_pool(
@@ -154,17 +153,17 @@ fn init_stableswap_pool(
     tokens: &Vec<Address>,
     pool_contract_id: &Address,
     a: u128,
-    fee_fraction: u128,
-    admin_fee_fraction: u128,
+    fee_fraction: u32,
+    admin_fee_fraction: u32,
 ) {
     let token_wasm_hash = get_token_hash(&e);
     let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
-    e.invoke_contract::<Val>(
+    e.invoke_contract::<()>(
         pool_contract_id,
-        &Symbol::new(&e, "initialize"),
+        &Symbol::new(&e, "initialize_all"),
         Vec::from_array(
             &e,
             [
@@ -174,15 +173,6 @@ fn init_stableswap_pool(
                 a.into_val(e),
                 fee_fraction.into_val(e),
                 admin_fee_fraction.into_val(e),
-            ],
-        ),
-    );
-    e.invoke_contract::<Val>(
-        pool_contract_id,
-        &Symbol::new(&e, "initialize_rewards_config"),
-        Vec::from_array(
-            &e,
-            [
                 reward_token.into_val(e),
                 pool_contract_id.clone().into_val(e),
             ],

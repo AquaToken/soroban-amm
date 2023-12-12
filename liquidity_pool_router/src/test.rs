@@ -414,7 +414,10 @@ fn test_stableswap_pool() {
 
     reward_token.mint(&user1, &10000000_0000000);
     reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
+    e.budget().reset_default();
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+    e.budget().print();
+    e.budget().reset_unlimited();
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable")

@@ -152,8 +152,14 @@ pub fn create_liqpool_contract<'a>(
     fee_fraction: u32,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
-    liqpool.initialize(&admin, token_wasm_hash, tokens, &fee_fraction);
-    liqpool.initialize_rewards_config(token_reward, &liqpool.address);
+    liqpool.initialize_all(
+        &admin,
+        token_wasm_hash,
+        tokens,
+        &fee_fraction,
+        token_reward,
+        &liqpool.address,
+    );
     liqpool
 }
 

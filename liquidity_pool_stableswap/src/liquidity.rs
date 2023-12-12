@@ -1,8 +1,9 @@
 use crate::pool_constants::{FEE_DENOMINATOR, LENDING_PRECISION};
 
-fn get_min_price(reserve_a: u128, reserve_b: u128, fee_fraction: u128) -> u128 {
+fn get_min_price(reserve_a: u128, reserve_b: u128, fee_fraction: u32) -> u128 {
     // minimal available price for swap
-    LENDING_PRECISION * FEE_DENOMINATOR * reserve_a / (reserve_b * (FEE_DENOMINATOR - fee_fraction))
+    LENDING_PRECISION * FEE_DENOMINATOR as u128 * reserve_a
+        / (reserve_b * (FEE_DENOMINATOR - fee_fraction) as u128)
 }
 
 fn price_weight(price: u128, min_price: u128) -> u128 {
@@ -14,11 +15,12 @@ fn price_weight(price: u128, min_price: u128) -> u128 {
     result
 }
 
-fn get_depth(reserve_a: u128, reserve_b: u128, fee_fraction: u128, price: u128) -> u128 {
+fn get_depth(reserve_a: u128, reserve_b: u128, fee_fraction: u32, price: u128) -> u128 {
     let reserve_a_precise = LENDING_PRECISION * reserve_a;
     let reserve_b_precise = LENDING_PRECISION * reserve_b;
-    let price_without_fee = price * (FEE_DENOMINATOR - fee_fraction);
-    let right_part = reserve_a_precise * FEE_DENOMINATOR / price_without_fee * LENDING_PRECISION;
+    let price_without_fee = price * (FEE_DENOMINATOR - fee_fraction) as u128;
+    let right_part =
+        reserve_a_precise * FEE_DENOMINATOR as u128 / price_without_fee * LENDING_PRECISION;
     // special case on first iteration when right part is slightly more than reserve_b because of rounding
     if right_part <= reserve_b_precise {
         reserve_b_precise - right_part
@@ -27,7 +29,7 @@ fn get_depth(reserve_a: u128, reserve_b: u128, fee_fraction: u128, price: u128) 
     }
 }
 
-pub(crate) fn get_liquidity(reserve_a: u128, reserve_b: u128, fee_fraction: u128) -> u128 {
+pub(crate) fn get_liquidity(reserve_a: u128, reserve_b: u128, fee_fraction: u32) -> u128 {
     // approximation for liquidity integral. iterations number and dp are heuristics
     // liquidity = integral[p_min...inf] ((Y - X/(P(1-F))) * (P_min/P)^8) dP)
     if reserve_a == 0 || reserve_b == 0 {

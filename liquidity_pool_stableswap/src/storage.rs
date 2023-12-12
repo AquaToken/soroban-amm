@@ -110,7 +110,7 @@ pub fn put_future_a_time(e: &Env, value: &u64) {
 }
 
 // fee
-pub fn get_fee(e: &Env) -> u128 {
+pub fn get_fee(e: &Env) -> u32 {
     bump_instance(e);
     e.storage()
         .instance()
@@ -118,13 +118,13 @@ pub fn get_fee(e: &Env) -> u128 {
         .expect("Please initialize fee")
 }
 
-pub fn put_fee(e: &Env, value: &u128) {
+pub fn put_fee(e: &Env, value: &u32) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::Fee, value);
 }
 
 // admin_fee
-pub fn get_admin_fee(e: &Env) -> u128 {
+pub fn get_admin_fee(e: &Env) -> u32 {
     bump_instance(e);
     e.storage()
         .instance()
@@ -132,13 +132,13 @@ pub fn get_admin_fee(e: &Env) -> u128 {
         .expect("Please initialize admin_fee")
 }
 
-pub fn put_admin_fee(e: &Env, value: &u128) {
+pub fn put_admin_fee(e: &Env, value: &u32) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::AdminFee, value);
 }
 
 // future_fee
-pub fn get_future_fee(e: &Env) -> u128 {
+pub fn get_future_fee(e: &Env) -> u32 {
     bump_instance(e);
     e.storage()
         .instance()
@@ -146,13 +146,13 @@ pub fn get_future_fee(e: &Env) -> u128 {
         .expect("Please initialize future_fee")
 }
 
-pub fn put_future_fee(e: &Env, value: &u128) {
+pub fn put_future_fee(e: &Env, value: &u32) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::FutureFee, value);
 }
 
 // future_admin_fee
-pub fn get_future_admin_fee(e: &Env) -> u128 {
+pub fn get_future_admin_fee(e: &Env) -> u32 {
     bump_instance(e);
     e.storage()
         .instance()
@@ -160,7 +160,7 @@ pub fn get_future_admin_fee(e: &Env) -> u128 {
         .expect("Please initialize future_admin_fee")
 }
 
-pub fn put_future_admin_fee(e: &Env, value: &u128) {
+pub fn put_future_admin_fee(e: &Env, value: &u32) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::FutureAdminFee, value);
 }

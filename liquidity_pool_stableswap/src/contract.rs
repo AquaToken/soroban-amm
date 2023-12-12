@@ -4,7 +4,7 @@ use crate::pool_constants::{
 };
 use crate::pool_interface::{
     AdminInterfaceTrait, InternalInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait,
-    RewardsTrait, UpgradeableContractTrait,
+    ManagedLiquidityPool, RewardsTrait, UpgradeableContractTrait,
 };
 use crate::storage::{
     get_admin_actions_deadline, get_admin_fee, get_fee, get_future_a, get_future_a_time,
@@ -95,8 +95,14 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let x = xp.get(i as u32).unwrap() + (dx * rates[i as usize] / PRECISION);
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
+
+        if y == 0 {
+            // pool is empty
+            return 0;
+        }
+
         let dy = (xp.get(j as u32).unwrap() - y - 1) * PRECISION / rates[j as usize];
-        let fee = get_fee(&e) * dy / FEE_DENOMINATOR;
+        let fee = get_fee(&e) as u128 * dy / FEE_DENOMINATOR as u128;
         return dy - fee;
     }
 
@@ -108,7 +114,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let x = xp.get(i as u32).unwrap() + dx * precisions[i as usize];
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
         let dy = (xp.get(j as u32).unwrap() - y - 1) / precisions[j as usize];
-        let fee = get_fee(&e) * dy / FEE_DENOMINATOR;
+        let fee = get_fee(&e) as u128 * dy / FEE_DENOMINATOR as u128;
         return dy - fee;
     }
 
@@ -138,8 +144,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         if token_supply == 0 {
             panic!("zero total supply")
         }
-        let _fee = get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
-        let _admin_fee = get_admin_fee(&e);
+        let _fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let _admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
         let mut reserves = get_reserves(&e);
 
@@ -161,11 +167,11 @@ impl LiquidityPoolTrait for LiquidityPool {
             } else {
                 new_balances.get(i).unwrap() - ideal_balance
             };
-            fees.set(i, _fee * difference / FEE_DENOMINATOR);
+            fees.set(i, _fee * difference / FEE_DENOMINATOR as u128);
             reserves.set(
                 i,
                 new_balances.get(i).unwrap()
-                    - (fees.get(i).unwrap() * _admin_fee / FEE_DENOMINATOR),
+                    - (fees.get(i).unwrap() * _admin_fee / FEE_DENOMINATOR as u128),
             );
             new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
         }
@@ -236,7 +242,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let mut reserves = get_reserves(&e);
         reserves.set(
             i as u32,
-            reserves.get(i as u32).unwrap() - (dy + dy_fee * get_admin_fee(&e) / FEE_DENOMINATOR),
+            reserves.get(i as u32).unwrap()
+                - (dy + dy_fee * get_admin_fee(&e) as u128 / FEE_DENOMINATOR as u128),
         );
         put_reserves(&e, &reserves);
 
@@ -442,7 +449,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         // * Solve Eqn against y_i for D - token_amount
 
         let amp = Self::a(e.clone());
-        let _fee = get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let _fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
         let precisions = PRECISION_MUL;
         let total_supply = get_total_shares(&e) as u128;
 
@@ -463,7 +470,7 @@ impl InternalInterfaceTrait for LiquidityPool {
             };
             xp_reduced.set(
                 j,
-                xp_reduced.get(j).unwrap() - _fee * dx_expected / FEE_DENOMINATOR,
+                xp_reduced.get(j).unwrap() - _fee * dx_expected / FEE_DENOMINATOR as u128,
             );
         }
 
@@ -517,7 +524,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         // now (block.timestamp < t1) is always False, so we return saved A
     }
 
-    fn commit_new_fee(e: Env, admin: Address, new_fee: u128, new_admin_fee: u128) {
+    fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
@@ -669,6 +676,26 @@ impl AdminInterfaceTrait for LiquidityPool {
 }
 
 #[contractimpl]
+impl ManagedLiquidityPool for LiquidityPool {
+    fn initialize_all(
+        e: Env,
+        admin: Address,
+        token_wasm_hash: BytesN<32>,
+        coins: Vec<Address>,
+        a: u128,
+        fee: u32,
+        admin_fee: u32,
+        reward_token: Address,
+        reward_storage: Address,
+    ) {
+        // merge whole initialize process into one because lack of caching of VM components
+        // https://github.com/stellar/rs-soroban-env/issues/827
+        Self::initialize(e.clone(), admin, token_wasm_hash, coins, a, fee, admin_fee);
+        Self::initialize_rewards_config(e.clone(), reward_token, reward_storage);
+    }
+}
+
+#[contractimpl]
 impl LiquidityPoolInterfaceTrait for LiquidityPool {
     fn pool_type(e: Env) -> Symbol {
         Symbol::new(&e, "stable")
@@ -680,8 +707,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
         a: u128,
-        fee: u128,
-        admin_fee: u128,
+        fee: u32,
+        admin_fee: u32,
     ) {
         let access_control = AccessControl::new(&e);
         if access_control.has_admin() {
@@ -724,11 +751,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     }
 
     fn get_fee_fraction(e: Env) -> u32 {
-        get_fee(&e) as u32
+        get_fee(&e)
     }
 
     fn get_admin_fee(e: Env) -> u32 {
-        get_admin_fee(&e) as u32
+        get_admin_fee(&e)
     }
 
     fn share_id(e: Env) -> Address {
@@ -765,8 +792,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         rewards.storage().bump_user_reward_data(&user);
 
         let mut fees: Vec<u128> = Vec::from_array(&e, [0; N_COINS]);
-        let fee = get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
-        let admin_fee = get_admin_fee(&e);
+        let fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
 
         let token_supply = get_total_shares(&e) as u128;
@@ -821,12 +848,12 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
                 } else {
                     new_balances.get(i).unwrap() - ideal_balance
                 };
-                fees.set(i, fee * difference / FEE_DENOMINATOR);
+                fees.set(i, fee as u128 * difference / FEE_DENOMINATOR as u128);
 
                 result.set(
                     i,
                     new_balances.get(i).unwrap()
-                        - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR),
+                        - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR as u128),
                 );
                 new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
             }
@@ -889,7 +916,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = xp.get(out_idx as u32).unwrap() - y - 1; // -1 just in case there were some rounding errors
-        let dy_fee = dy * get_fee(&e) / FEE_DENOMINATOR;
+        let dy_fee = dy * get_fee(&e) as u128 / FEE_DENOMINATOR as u128;
 
         // Convert all to real units
         let dy = (dy - dy_fee) * PRECISION / rates[out_idx as usize];
@@ -897,7 +924,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic!("Exchange resulted in fewer coins than expected")
         }
 
-        let mut dy_admin_fee = dy_fee * get_admin_fee(&e) / FEE_DENOMINATOR;
+        let mut dy_admin_fee = dy_fee * get_admin_fee(&e) as u128 / FEE_DENOMINATOR as u128;
         dy_admin_fee = dy_admin_fee * PRECISION / rates[out_idx as usize];
 
         // Change balances exactly in same way as we change actual ERC20 coin amounts

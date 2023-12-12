@@ -1,5 +1,17 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
+pub trait LiquidityPoolCrunch {
+    fn initialize_all(
+        e: Env,
+        admin: Address,
+        lp_token_wasm_hash: BytesN<32>,
+        tokens: Vec<Address>,
+        fee_fraction: u32,
+        reward_token: Address,
+        reward_storage: Address,
+    );
+}
+
 pub trait LiquidityPoolTrait {
     fn pool_type(e: Env) -> Symbol;
 

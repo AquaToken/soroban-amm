@@ -1,5 +1,19 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
+pub trait ManagedLiquidityPool {
+    fn initialize_all(
+        e: Env,
+        admin: Address,
+        token_wasm_hash: BytesN<32>,
+        coins: Vec<Address>,
+        a: u128,
+        fee: u32,
+        admin_fee: u32,
+        reward_token: Address,
+        reward_storage: Address,
+    );
+}
+
 pub trait LiquidityPoolInterfaceTrait {
     fn pool_type(e: Env) -> Symbol;
 
@@ -10,8 +24,8 @@ pub trait LiquidityPoolInterfaceTrait {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         a: u128,
-        fee_fraction: u128,
-        admin_fee: u128,
+        fee_fraction: u32,
+        admin_fee: u32,
     );
 
     // The pool swap fee, as an integer with 1e4 precision. 0.01% = 1; 0.3% = 30; 1% = 100;
@@ -79,7 +93,7 @@ pub trait RewardsTrait {
 pub trait AdminInterfaceTrait {
     fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64);
     fn stop_ramp_a(e: Env, admin: Address);
-    fn commit_new_fee(e: Env, admin: Address, new_fee: u128, new_admin_fee: u128);
+    fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32);
     fn apply_new_fee(e: Env, admin: Address);
     fn revert_new_parameters(e: Env, admin: Address);
     fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address);

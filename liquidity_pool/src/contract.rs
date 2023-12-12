@@ -1,7 +1,9 @@
 use crate::constants::FEE_MULTIPLIER;
 use crate::liquidity::get_liquidity;
 use crate::pool;
-use crate::pool_interface::{LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait};
+use crate::pool_interface::{
+    LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait,
+};
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
     get_fee_fraction, get_reserve_a, get_reserve_b, get_token_a, get_token_b, put_fee_fraction,
@@ -39,6 +41,24 @@ pub enum LiquidityPoolError {
 
 #[contract]
 pub struct LiquidityPool;
+
+#[contractimpl]
+impl LiquidityPoolCrunch for LiquidityPool {
+    fn initialize_all(
+        e: Env,
+        admin: Address,
+        lp_token_wasm_hash: BytesN<32>,
+        tokens: Vec<Address>,
+        fee_fraction: u32,
+        reward_token: Address,
+        reward_storage: Address,
+    ) {
+        // merge whole initialize process into one because lack of caching of VM components
+        // https://github.com/stellar/rs-soroban-env/issues/827
+        Self::initialize(e.clone(), admin, lp_token_wasm_hash, tokens, fee_fraction);
+        Self::initialize_rewards_config(e.clone(), reward_token, reward_storage);
+    }
+}
 
 #[contractimpl]
 impl LiquidityPoolTrait for LiquidityPool {
