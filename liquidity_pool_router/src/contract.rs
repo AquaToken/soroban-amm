@@ -20,8 +20,7 @@ use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map,
-    Symbol, Val, Vec,
+    contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
 };
 use utils::utils::check_vec_ordered;
 
