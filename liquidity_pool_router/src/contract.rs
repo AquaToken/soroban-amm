@@ -84,7 +84,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
-        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Error when swap");
+        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         let out_amt = e.invoke_contract(
