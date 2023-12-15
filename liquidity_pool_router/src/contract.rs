@@ -92,6 +92,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
+        if !check_vec_ordered(&tokens) {
+            panic!("tokens are not sorted")
+        }
         let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
