@@ -2,9 +2,9 @@ use crate::constants::REWARD_PRECISION;
 use crate::storage::{
     PoolRewardConfig, PoolRewardData, RewardsStorageTrait, Storage, UserRewardData,
 };
-use crate::{Client, RewardsConfig};
+use crate::RewardsConfig;
 use cast::u128 as to_u128;
-use soroban_sdk::{Address, Env, Map};
+use soroban_sdk::{token::Client, Address, Env, Map};
 
 pub struct Manager {
     env: Env,

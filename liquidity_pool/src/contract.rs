@@ -7,17 +7,15 @@ use crate::storage::{
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
-use cast::i128 as to_i128;
 use num_integer::Roots;
 use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, IntoVal,
-    Vec,
+    contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short,
+    token::Client, Address, BytesN, Env, IntoVal, Map, Symbol, Vec,
 };
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol};
 use token_share::{
     burn_shares, get_balance_shares, get_token_share, get_total_shares, get_user_balance_shares,
-    mint_shares, put_token_share, Client,
+    mint_shares, put_token_share, Client as LPToken,
 };
 use utils::bump::bump_instance;
 
@@ -64,7 +62,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let share_contract = create_contract(&e, lp_token_wasm_hash, &token_a, &token_b);
-        Client::new(&e, &share_contract).initialize(
+        LPToken::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
             &"Pool Share Token".into_val(&e),
@@ -297,7 +295,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards.storage().bump_user_reward_data(&user);
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = Client::new(&e, &get_token_share(&e));
+        let share_token_client = LPToken::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -397,23 +395,17 @@ impl RewardsTrait for LiquidityPool {
             .manager()
             .update_user_reward(&pool_data, &user, user_shares);
         let mut result = Map::new(&e);
-        result.set(symbol_short!("tps"), to_i128(config.tps).unwrap());
-        result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
-        result.set(
-            symbol_short!("acc"),
-            to_i128(pool_data.accumulated).unwrap(),
-        );
-        result.set(symbol_short!("last_time"), to_i128(pool_data.last_time));
+        result.set(symbol_short!("tps"), config.tps as i128);
+        result.set(symbol_short!("exp_at"), config.expired_at as i128);
+        result.set(symbol_short!("acc"), pool_data.accumulated as i128);
+        result.set(symbol_short!("last_time"), pool_data.last_time as i128);
         result.set(
             symbol_short!("pool_acc"),
-            to_i128(user_data.pool_accumulated).unwrap(),
+            user_data.pool_accumulated as i128,
         );
-        result.set(symbol_short!("block"), to_i128(pool_data.block));
-        result.set(symbol_short!("usr_block"), to_i128(user_data.last_block));
-        result.set(
-            symbol_short!("to_claim"),
-            to_i128(user_data.to_claim).unwrap(),
-        );
+        result.set(symbol_short!("block"), pool_data.block as i128);
+        result.set(symbol_short!("usr_block"), user_data.last_block as i128);
+        result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
         result
     }
 

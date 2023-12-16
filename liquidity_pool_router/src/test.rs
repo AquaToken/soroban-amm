@@ -62,9 +62,9 @@ fn jump(e: &Env, time: u64) {
         sequence_number: e.ledger().sequence(),
         network_id: Default::default(),
         base_reserve: 10,
-        min_temp_entry_expiration: 999999,
-        min_persistent_entry_expiration: 999999,
-        max_entry_expiration: u32::MAX,
+        min_temp_entry_ttl: 999999,
+        min_persistent_entry_ttl: 999999,
+        max_entry_ttl: u32::MAX,
     });
 }
 
@@ -74,8 +74,8 @@ fn test_constant_product_pool() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -85,12 +85,12 @@ fn test_constant_product_pool() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash_2 = install_stableswap_two_tokens_liq_pool_hash(&e);
@@ -191,8 +191,8 @@ fn test_stableswap_pools_amount_over_max() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -202,9 +202,9 @@ fn test_stableswap_pools_amount_over_max() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
-    let payment_for_creation_address = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
@@ -245,8 +245,8 @@ fn test_stableswap_pools_amount_ok() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -256,9 +256,9 @@ fn test_stableswap_pools_amount_ok() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
-    let payment_for_creation_address = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
@@ -300,8 +300,8 @@ fn test_stableswap_pool_no_allowance() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -311,9 +311,9 @@ fn test_stableswap_pool_no_allowance() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
-    let payment_for_creation_address = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
@@ -345,8 +345,8 @@ fn test_stableswap_pool() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -356,13 +356,13 @@ fn test_stableswap_pool() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
-    let user1 = Address::random(&e);
-    let payment_for_creation_address = Address::random(&e);
+    let user1 = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
@@ -430,7 +430,7 @@ fn test_stableswap_pool() {
             &token1.address,
             &token2.address,
             &pool_hash,
-            &97_0000000
+            &97_0000000,
         ),
         80_4573706
     );
@@ -480,9 +480,9 @@ fn test_stableswap_3_pool() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
-    let mut admin3 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
+    let mut admin3 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -508,13 +508,13 @@ fn test_stableswap_3_pool() {
         ],
     );
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
-    let payment_for_creation_address = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_2_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
@@ -590,7 +590,7 @@ fn test_stableswap_3_pool() {
             &token1.address,
             &token2.address,
             &pool_hash,
-            &97_0000000
+            &97_0000000,
         ),
         80_4573706
     );
@@ -655,8 +655,8 @@ fn test_init_pool_twice() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -666,8 +666,8 @@ fn test_init_pool_twice() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
@@ -703,8 +703,8 @@ fn test_custom_pool() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -714,12 +714,12 @@ fn test_custom_pool() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
@@ -791,8 +791,8 @@ fn test_simple_ongoing_reward() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -802,12 +802,12 @@ fn test_simple_ongoing_reward() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
@@ -868,8 +868,8 @@ fn test_max_pools_for_pair() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -879,12 +879,12 @@ fn test_max_pools_for_pair() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
@@ -927,8 +927,8 @@ fn test_unexpected_fee() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -938,12 +938,12 @@ fn test_unexpected_fee() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
@@ -965,8 +965,8 @@ fn test_event_correct() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let mut admin1 = Address::random(&e);
-    let mut admin2 = Address::random(&e);
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
 
     let mut token1 = create_token_contract(&e, &admin1);
     let mut token2 = create_token_contract(&e, &admin2);
@@ -976,13 +976,13 @@ fn test_event_correct() {
     }
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    let reward_admin = Address::random(&e);
-    let admin = Address::random(&e);
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
-    let user1 = Address::random(&e);
-    let payment_for_creation_address = Address::random(&e);
+    let user1 = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let router_pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
