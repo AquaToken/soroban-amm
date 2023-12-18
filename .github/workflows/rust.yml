@@ -19,7 +19,7 @@ jobs:
     - name: Install Task
       uses: arduino/setup-task@v1
     - name: Install Soroban
-      run: cargo install --locked --version 20.0.2 soroban-cli
+      run: cargo install --locked --version 20.0.2 soroban-cli --features opt
     - name: Check code formatting
       run: task fmt && git diff --exit-code
     - name: Run tests
