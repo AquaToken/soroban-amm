@@ -224,7 +224,7 @@ fn test_stableswap_pools_amount_over_max() {
     }
     reward_token.mint(&admin, &10000000_0000000);
     reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
-    for _i in 0..STABLE_SWAP_MAX_POOLS {
+    for _i in 0..STABLE_SWAP_MAX_POOLS + 1 {
         router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
     }
 }
