@@ -350,7 +350,12 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         set_reward_tokens_detailed(&e, rewards_config.current_block, salt, &pools);
     }
 
-    fn config_pool_rewards(e: Env, admin: Address, tokens: Vec<Address>, pool_index: BytesN<32>) {
+    fn config_pool_rewards(
+        e: Env,
+        admin: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128 {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
@@ -402,6 +407,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
                 ],
             ),
         );
+
+        pool_tps
     }
 
     fn get_rewards_info(

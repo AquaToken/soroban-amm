@@ -900,7 +900,9 @@ fn test_simple_ongoing_reward() {
         &rewards,
     );
     router.fill_liquidity(&admin, &tokens);
-    router.config_pool_rewards(&admin, &tokens, &pool_hash);
+    let pool_tps = router.config_pool_rewards(&admin, &tokens, &pool_hash);
+
+    assert_eq!(total_reward_1, pool_tps * 60);
 
     assert_eq!(reward_token.balance(&user1), 0);
     // 30 seconds passed, half of the reward is available for the user
