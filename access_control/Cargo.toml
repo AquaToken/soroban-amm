@@ -1,9 +1,13 @@
 [package]
 name = "access_control"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 publish = false
 
+[lib]
+crate-type = ["rlib"]
+doctest = false
+
 [dependencies]
-soroban-sdk = { version = "20.0.0" }
-utils = { path = "../utils" }
+soroban-sdk = { workspace = true }
+utils = { workspace = true }

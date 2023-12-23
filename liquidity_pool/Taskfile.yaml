@@ -9,9 +9,9 @@ tasks:
   build:
     cmds:
       - task -d ../token build || exit 1
-      - soroban contract build
-      - soroban contract optimize --wasm target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm --wasm-out target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm
-      - ls -l target/wasm32-unknown-unknown/release/*.wasm
+      - cargo build --target wasm32-unknown-unknown --release
+      - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm
+      - ls -l ../target/wasm32-unknown-unknown/release/*.wasm
 
   test:
     deps:
