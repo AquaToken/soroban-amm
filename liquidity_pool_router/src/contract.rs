@@ -10,15 +10,15 @@ use crate::pool_utils::{
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
-    add_pool, get_init_pool_payment_amount, get_init_pool_payment_token, get_pool, get_pool_safe,
-    get_pools_plain, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_init_pool_payment_amount, set_init_pool_payment_token, set_stableswap_pool_hash,
-    set_token_hash, LiquidityPoolType,
+    add_pool, get_init_pool_payment_amount, get_init_pool_payment_token, get_pool, get_pools_plain,
+    has_pool, remove_pool, set_constant_product_pool_hash, set_init_pool_payment_amount,
+    set_init_pool_payment_token, set_stableswap_pool_hash, set_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
-use rewards::{storage::RewardsStorageTrait, Client};
+use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
+    contract, contractimpl, symbol_short, token::Client, Address, BytesN, Env, IntoVal, Map,
+    Symbol, Val, Vec,
 };
 
 #[contract]
@@ -59,8 +59,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     ) -> (Vec<u128>, u128) {
         user.require_auth();
 
-        let salt = pool_salt(&e, tokens.clone());
-        let pool_id = get_pool_safe(&e, &salt, pool_index);
+        let pool_id = get_pool(&e, tokens.clone(), pool_index).expect("unable to find pool");
 
         let (amounts, share_amount): (Vec<u128>, u128) = e.invoke_contract(
             &pool_id,
@@ -85,7 +84,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
-        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Error when swap");
+        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         let out_amt = e.invoke_contract(

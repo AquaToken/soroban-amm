@@ -65,8 +65,8 @@ impl Setup<'_> {
 
         let mut users = Self::generate_random_users(&e, config.users_count);
 
-        let mut token_admin1 = Address::random(&e);
-        let mut token_admin2 = Address::random(&e);
+        let mut token_admin1 = Address::generate(&e);
+        let mut token_admin2 = Address::generate(&e);
 
         let mut token1 = create_token_contract(&e, &token_admin1);
         let mut token2 = create_token_contract(&e, &token_admin2);
@@ -110,7 +110,7 @@ impl Setup<'_> {
     pub(crate) fn generate_random_users(e: &Env, users_count: u32) -> vec::Vec<Address> {
         let mut users = vec![];
         for _c in 0..users_count {
-            users.push(Address::random(&e));
+            users.push(Address::generate(&e));
         }
         users
     }
@@ -168,9 +168,9 @@ pub fn jump(e: &Env, time: u64) {
         sequence_number: e.ledger().sequence(),
         network_id: Default::default(),
         base_reserve: 10,
-        min_temp_entry_expiration: 999999,
-        min_persistent_entry_expiration: 999999,
-        max_entry_expiration: u32::MAX,
+        min_temp_entry_ttl: 999999,
+        min_persistent_entry_ttl: 999999,
+        max_entry_ttl: u32::MAX,
     });
 }
 

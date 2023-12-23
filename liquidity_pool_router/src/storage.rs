@@ -117,25 +117,15 @@ pub fn has_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) -> bool {
     get_pools(e, salt).contains_key(pool_index)
 }
 
-pub fn get_pool_safe(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) -> Address {
-    let pools = get_pools(e, salt);
-    pools
-        .get(pool_index)
-        .unwrap_or(LiquidityPoolData {
-            pool_type: LiquidityPoolType::MissingPool,
-            address: Address::from_contract_id(&BytesN::from_array(&e, &[0; 32])),
-        })
-        .address
-}
-
 pub fn get_pool(
     e: &Env,
     tokens: Vec<Address>,
     pool_index: BytesN<32>,
 ) -> Result<Address, PoolError> {
     let salt = pool_salt(&e, tokens);
-    match has_pool(&e, &salt, pool_index.clone()) {
-        true => Ok(get_pool_safe(&e, &salt, pool_index)),
+    let pools = get_pools(e, &salt);
+    match pools.contains_key(pool_index.clone()) {
+        true => Ok(pools.get(pool_index).unwrap().address),
         false => Err(PoolError::PoolNotFound),
     }
 }
