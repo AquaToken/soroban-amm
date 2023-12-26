@@ -11,14 +11,14 @@ enum DataKey {
 fn write_balance(e: &Env, addr: Address, amount: i128) {
     let key = DataKey::Balance(addr);
     e.storage().persistent().set(&key, &amount);
-    bump_persistent(&e, &key);
+    bump_persistent(e, &key);
 }
 
 pub fn read_balance(e: &Env, addr: Address) -> i128 {
     let key = DataKey::Balance(addr);
     match e.storage().persistent().get::<DataKey, i128>(&key) {
         Some(balance) => {
-            bump_persistent(&e, &key);
+            bump_persistent(e, &key);
             balance
         }
         None => 0,
@@ -39,12 +39,12 @@ pub fn spend_balance(e: &Env, addr: Address, amount: i128) {
 }
 
 pub fn read_total_balance(e: &Env) -> i128 {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().get(&DataKey::TotalBalance).unwrap()
 }
 
 pub fn write_total_balance(e: &Env, amount: i128) {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().set(&DataKey::TotalBalance, &amount);
 }
 

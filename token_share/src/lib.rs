@@ -22,7 +22,7 @@ fn get_balance(e: &Env, contract: Address) -> u128 {
 }
 
 pub fn get_token_share(e: &Env) -> Address {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::TokenShare)
@@ -30,7 +30,7 @@ pub fn get_token_share(e: &Env) -> Address {
 }
 
 pub fn put_token_share(e: &Env, contract: Address) {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().set(&DataKey::TokenShare, &contract)
 }
 
