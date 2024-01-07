@@ -64,13 +64,13 @@ fn test_swap_empty_pool() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
-    let admin1 = Address::random(&e);
-    let admin2 = Address::random(&e);
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token_reward = create_token_contract(&e, &admin1);
-    let user1 = Address::random(&e);
+    let user1 = Address::generate(&e);
     let fee = 2000_u128;
     let admin_fee = 0_u128;
     let liqpool = create_liqpool_contract(

@@ -1,4 +1,4 @@
-use crate::constants::{MAX_POOLS_FOR_PAIR, STABLE_SWAP_MAX_POOLS};
+use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
 use crate::pool_utils::pool_salt;
 use paste::paste;
 use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, Map, Vec};
@@ -42,7 +42,8 @@ enum DataKey {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum PoolError {
-    PoolNotFound = 400,
+    PoolAlreadyExists = 401,
+    PoolNotFound = 404,
 }
 
 fn get_pools(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
@@ -147,13 +148,13 @@ pub fn add_pool(
     );
 
     if pool_type == LiquidityPoolType::StableSwap {
-        let mut stable_swap_pools_amt = 0;
+        let mut stableswap_pools_amt = 0;
         for (_key, value) in pools.clone() {
             if value.pool_type == LiquidityPoolType::StableSwap {
-                stable_swap_pools_amt += 1;
+                stableswap_pools_amt += 1;
             }
         }
-        if stable_swap_pools_amt > STABLE_SWAP_MAX_POOLS {
+        if stableswap_pools_amt > STABLESWAP_MAX_POOLS {
             panic!("stableswap pools amount is over max")
         }
     }
@@ -170,15 +171,8 @@ pub fn remove_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) {
     put_pools(e, salt, &pools);
 }
 
-pub fn get_stable_swap_next_counter(e: &Env) -> u128 {
-    bump_instance(&e);
-    let value = e
-        .storage()
-        .instance()
-        .get(&DataKey::StableSwapCounter)
-        .unwrap_or(0);
-    e.storage()
-        .instance()
-        .set(&DataKey::StableSwapCounter, &(value.clone() + 1));
+pub fn get_stableswap_next_counter(e: &Env) -> u128 {
+    let value = get_stableswap_counter(e);
+    set_stableswap_counter(e, &(value.clone() + 1));
     value
 }
