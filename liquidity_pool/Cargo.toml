@@ -8,7 +8,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-soroban-sdk = { version = "20.0.0" }
+soroban-sdk = { version = "20.0.3" }
 num-integer = { version = "0.1.45", default-features = false, features = ["i128"] }
 rewards = { path = "../rewards" }
 token_share = { path = "../token_share" }
