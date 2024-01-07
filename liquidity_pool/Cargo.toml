@@ -16,7 +16,7 @@ access_control = { path = "../access_control" }
 utils = { path = "../utils" }
 
 [dev_dependencies]
-soroban-sdk = { version = "20.0.0-rc4", features = ["testutils"] }
+soroban-sdk = { version = "20.0.3", features = ["testutils"] }
 
 [profile.release]
 opt-level = "z"
