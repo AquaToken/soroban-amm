@@ -111,18 +111,43 @@ pub trait RewardsTrait {
 }
 
 pub trait AdminInterfaceTrait {
+    // Start ramping A to target value in future timestamp
     fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64);
+
+    // Stop ramping A
     fn stop_ramp_a(e: Env, admin: Address);
+
+    // Set new fee to be applied in future
     fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32);
+
+    // Apply committed fee
     fn apply_new_fee(e: Env, admin: Address);
+
+    // Revert committed parameters to current values
     fn revert_new_parameters(e: Env, admin: Address);
+
+    // Commit ownership transfer
     fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address);
+
+    // Apply committed transfer ownership
     fn apply_transfer_ownership(e: Env, admin: Address);
+
+    // Revert committed ownership transfer
     fn revert_transfer_ownership(e: Env, admin: Address);
+
+    // Get amount of collected admin fees
     fn admin_balances(e: Env, i: u32) -> u128;
+
+    // Withdraw collected admin fee
     fn withdraw_admin_fees(e: Env, admin: Address);
+
+    // Donate collected admin fee to common fee pool
     fn donate_admin_fees(e: Env, admin: Address);
+
+    // Stop pool instantly
     fn kill_me(e: Env, admin: Address);
+
+    // Resume pool
     fn unkill_me(e: Env, admin: Address);
 }
 
