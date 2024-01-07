@@ -20,6 +20,7 @@ use soroban_sdk::{
     contract, contractimpl, symbol_short, token::Client, Address, BytesN, Env, IntoVal, Map,
     Symbol, Val, Vec,
 };
+use utils::utils::check_vec_ordered;
 
 #[contract]
 pub struct LiquidityPoolRouter;
