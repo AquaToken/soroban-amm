@@ -2,6 +2,7 @@
 
 mod constants;
 mod contract;
+mod liquidity;
 mod pool;
 mod pool_interface;
 mod rewards;

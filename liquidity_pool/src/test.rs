@@ -41,6 +41,7 @@ fn test() {
             }
         )
     );
+    assert_eq!(liq_pool.get_liquidity(), 2);
 
     assert_eq!(token_reward.balance(&user1), 0);
     // 30 seconds passed, half of the reward is available for the user
@@ -97,6 +98,7 @@ fn test() {
             }
         )
     );
+    assert_eq!(liq_pool.get_liquidity(), 3);
 
     assert_eq!(token1.balance(&user1), 803);
     assert_eq!(token1.balance(&liq_pool.address), 197);
@@ -127,6 +129,7 @@ fn test() {
             }
         )
     );
+    assert_eq!(liq_pool.get_liquidity(), 0);
 
     jump(&e, 600);
     assert_eq!(liq_pool.claim(&user1), 0);
@@ -207,6 +210,60 @@ fn test_custom_fee() {
             liqpool.swap(&setup.users[0], &1, &0, &fee_config.1, &0),
             1_0000000
         );
+    }
+}
+
+#[test]
+fn test_liquidity() {
+    let config = TestConfig {
+        mint_to_user: 1_000_000_000_000_000_000_0000000,
+        ..TestConfig::default()
+    };
+    let setup = Setup::new_with_config(&config);
+
+    for config in [
+        (10, 10, 0),
+        (30, 30, 0),
+        (100, 100, 2),
+        (3000, 3000, 102),
+        (1000, 3000, 68),
+        (3000, 1000, 68),
+        (10_0000000, 30_0000000, 6809461),
+        (30_0000000, 10_0000000, 6809461),
+        (
+            30_000_000_000_0000000,
+            10_000_000_000_0000000,
+            6809462488704887,
+        ),
+    ] {
+        let liq_pool = create_liqpool_contract(
+            &setup.env,
+            &setup.users[0],
+            &install_token_wasm(&setup.env),
+            &Vec::from_array(
+                &setup.env,
+                [setup.token1.address.clone(), setup.token2.address.clone()],
+            ),
+            &setup.token_reward.address,
+            30, // 0.3%
+        );
+        setup.token1.approve(
+            &setup.users[0],
+            &liq_pool.address,
+            &1_000_000_000_000_000_000_0000000,
+            &99999,
+        );
+        setup.token2.approve(
+            &setup.users[0],
+            &liq_pool.address,
+            &1_000_000_000_000_000_000_0000000,
+            &99999,
+        );
+        liq_pool.deposit(
+            &setup.users[0],
+            &Vec::from_array(&setup.env, [config.0, config.1]),
+        );
+        assert_eq!(liq_pool.get_liquidity(), config.2);
     }
 }
 

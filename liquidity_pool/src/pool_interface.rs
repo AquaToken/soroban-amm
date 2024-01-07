@@ -55,6 +55,8 @@ pub trait LiquidityPoolTrait {
 
     fn get_fee_fraction(e: Env) -> u32;
 
+    fn get_liquidity(e: Env) -> u128;
+
     fn get_info(e: Env) -> Map<Symbol, Val>;
 }
 
