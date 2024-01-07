@@ -2,7 +2,7 @@ use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    add_pool, get_constant_product_pool_hash, get_stable_swap_next_counter,
+    add_pool, get_constant_product_pool_hash, get_stableswap_next_counter,
     get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -24,7 +24,7 @@ pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
 pub fn get_stableswap_pool_salt(e: &Env) -> BytesN<32> {
     let mut salt = Bytes::new(e);
     salt.append(&symbol_short!("0x00").to_xdr(e));
-    salt.append(&get_stable_swap_next_counter(e).to_xdr(&e));
+    salt.append(&get_stableswap_next_counter(e).to_xdr(&e));
     salt.append(&symbol_short!("0x00").to_xdr(e));
     e.crypto().sha256(&salt)
 }
@@ -99,7 +99,7 @@ pub fn deploy_stableswap_pool(
         .deploy(liquidity_pool_wasm_hash);
     init_stableswap_pool(e, &tokens, &pool_contract_id, a, fee_fraction, admin_fee);
 
-    // if STABLE_SWAP_MAX_POOLS
+    // if STABLESWAP_MAX_POOLS
     add_pool(
         &e,
         &salt,
@@ -138,8 +138,14 @@ fn init_standard_pool(
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
     let liq_pool_client = StandardLiquidityPoolClient::new(&e, pool_contract_id);
-    liq_pool_client.initialize(&admin, &token_wasm_hash, tokens, &fee_fraction);
-    liq_pool_client.initialize_rewards_config(&reward_token, &e.current_contract_address());
+    liq_pool_client.initialize_all(
+        &admin,
+        &token_wasm_hash,
+        tokens,
+        &fee_fraction,
+        &reward_token,
+        &liq_pool_client.address,
+    );
 }
 
 fn init_stableswap_pool(
@@ -155,9 +161,9 @@ fn init_stableswap_pool(
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
-    e.invoke_contract::<bool>(
+    e.invoke_contract::<()>(
         pool_contract_id,
-        &Symbol::new(&e, "initialize"),
+        &Symbol::new(&e, "initialize_all"),
         Vec::from_array(
             &e,
             [
@@ -165,19 +171,10 @@ fn init_stableswap_pool(
                 token_wasm_hash.into_val(e),
                 tokens.clone().into_val(e),
                 a.into_val(e),
-                (fee_fraction as u128).into_val(e),
-                (admin_fee_fraction as u128).into_val(e),
-            ],
-        ),
-    );
-    e.invoke_contract::<bool>(
-        pool_contract_id,
-        &Symbol::new(&e, "initialize_rewards_config"),
-        Vec::from_array(
-            &e,
-            [
+                fee_fraction.into_val(e),
+                admin_fee_fraction.into_val(e),
                 reward_token.into_val(e),
-                e.current_contract_address().into_val(e),
+                pool_contract_id.clone().into_val(e),
             ],
         ),
     );

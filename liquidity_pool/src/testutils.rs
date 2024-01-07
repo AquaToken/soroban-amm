@@ -63,14 +63,14 @@ impl Setup<'_> {
         e.mock_all_auths();
         e.budget().reset_unlimited();
 
-        let mut users = Self::generate_random_users(&e, config.users_count);
+        let users = Self::generate_random_users(&e, config.users_count);
 
         let mut token_admin1 = Address::generate(&e);
         let mut token_admin2 = Address::generate(&e);
 
         let mut token1 = create_token_contract(&e, &token_admin1);
         let mut token2 = create_token_contract(&e, &token_admin2);
-        let mut token_reward = create_token_contract(&e, &token_admin1);
+        let token_reward = create_token_contract(&e, &token_admin1);
 
         if &token2.address < &token1.address {
             std::mem::swap(&mut token1, &mut token2);
@@ -152,8 +152,14 @@ pub fn create_liqpool_contract<'a>(
     fee_fraction: u32,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
-    liqpool.initialize(&admin, token_wasm_hash, tokens, &fee_fraction);
-    liqpool.initialize_rewards_config(token_reward, &liqpool.address);
+    liqpool.initialize_all(
+        &admin,
+        token_wasm_hash,
+        tokens,
+        &fee_fraction,
+        token_reward,
+        &liqpool.address,
+    );
     liqpool
 }
 
@@ -183,5 +189,5 @@ fn test() {
         liq_pool_fee: 30,
         reward_tps: 10_5000000_u128,
     };
-    let setup = Setup::new_with_config(&config);
+    let _setup = Setup::new_with_config(&config);
 }

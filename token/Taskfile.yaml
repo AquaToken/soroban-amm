@@ -6,6 +6,9 @@ tasks:
   fmt:
     cmd: cargo fmt --all
 
+  check:
+    cmd: cargo check
+
   build:
     cmds:
       - cargo build --target wasm32-unknown-unknown --release
@@ -30,4 +33,5 @@ tasks:
       - task: clean
       - task: fmt
       - task: build
+      - task: check
       - task: test
