@@ -7,9 +7,9 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-soroban-sdk = { version = "20.0.0" }
+soroban-sdk = { version = "20.0.3" }
 cast = { version = "0.3.0" }
 utils = { path = "../utils" }
 
 [dev_dependencies]
-soroban-sdk = { version = "20.0.0", features = ["testutils"] }
+soroban-sdk = { version = "20.0.3", features = ["testutils"] }

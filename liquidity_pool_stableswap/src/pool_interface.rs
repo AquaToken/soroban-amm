@@ -1,4 +1,18 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
+
+pub trait ManagedLiquidityPool {
+    fn initialize_all(
+        e: Env,
+        admin: Address,
+        token_wasm_hash: BytesN<32>,
+        coins: Vec<Address>,
+        a: u128,
+        fee: u32,
+        admin_fee: u32,
+        reward_token: Address,
+        reward_storage: Address,
+    );
+}
 
 pub trait LiquidityPoolInterfaceTrait {
     fn pool_type(e: Env) -> Symbol;
@@ -10,9 +24,9 @@ pub trait LiquidityPoolInterfaceTrait {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         a: u128,
-        fee_fraction: u128,
-        admin_fee: u128,
-    ) -> bool;
+        fee_fraction: u32,
+        admin_fee: u32,
+    );
 
     // The pool swap fee, as an integer with 1e4 precision. 0.01% = 1; 0.3% = 30; 1% = 100;
     fn get_fee_fraction(e: Env) -> u32;
@@ -56,17 +70,19 @@ pub trait LiquidityPoolInterfaceTrait {
     // min_amounts: Minimum amounts of underlying coins to receive
     // Returns a list of the amounts for each coin that was withdrawn.
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128>;
+
+    fn get_info(e: Env) -> Map<Symbol, Val>;
 }
 
 pub trait UpgradeableContractTrait {
     fn version() -> u32;
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) -> bool;
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
 }
 
 pub trait RewardsTrait {
     // todo: move rewards configuration to gauge
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) -> bool;
-    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128) -> bool;
+    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
+    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128);
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
     fn get_user_reward(e: Env, user: Address) -> u128;
     fn claim(e: Env, user: Address) -> u128;
@@ -75,7 +91,7 @@ pub trait RewardsTrait {
 pub trait AdminInterfaceTrait {
     fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64);
     fn stop_ramp_a(e: Env, admin: Address);
-    fn commit_new_fee(e: Env, admin: Address, new_fee: u128, new_admin_fee: u128);
+    fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32);
     fn apply_new_fee(e: Env, admin: Address);
     fn revert_new_parameters(e: Env, admin: Address);
     fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address);

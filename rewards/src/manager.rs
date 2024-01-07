@@ -4,7 +4,8 @@ use crate::storage::{
 };
 use crate::RewardsConfig;
 use cast::u128 as to_u128;
-use soroban_sdk::{token::Client, Address, Env, Map};
+use soroban_sdk::token::Client;
+use soroban_sdk::{Address, Env, Map};
 
 pub struct Manager {
     env: Env,
@@ -129,12 +130,21 @@ impl Manager {
 
         // transfer reward
         let reward_token = self.storage.get_reward_token();
-        Client::new(&self.env, &reward_token).transfer_from(
-            &self.env.current_contract_address(),
-            &self.storage.get_reward_storage(),
-            &user,
-            &(reward_amount as i128),
-        );
+        let rewards_storage = self.storage.get_reward_storage();
+        if rewards_storage == self.env.current_contract_address() {
+            Client::new(&self.env, &reward_token).transfer(
+                &rewards_storage,
+                &user,
+                &(reward_amount as i128),
+            );
+        } else {
+            Client::new(&self.env, &reward_token).transfer_from(
+                &self.env.current_contract_address(),
+                &rewards_storage,
+                &user,
+                &(reward_amount as i128),
+            );
+        };
 
         // set available reward to zero
         let new_data = UserRewardData {

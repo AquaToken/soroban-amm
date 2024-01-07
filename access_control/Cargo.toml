@@ -5,5 +5,5 @@ edition = "2021"
 publish = false
 
 [dependencies]
-soroban-sdk = { version = "20.0.0" }
+soroban-sdk = { version = "20.0.3" }
 utils = { path = "../utils" }

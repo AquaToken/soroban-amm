@@ -17,10 +17,11 @@ use crate::storage::{
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
+use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, token::Client, Address, BytesN, Env, IntoVal, Map,
-    Symbol, Val, Vec,
+    contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
 };
+use utils::utils::check_vec_ordered;
 
 #[contract]
 pub struct LiquidityPoolRouter;
@@ -28,8 +29,13 @@ pub struct LiquidityPoolRouter;
 #[contractimpl]
 impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Error when get pool type");
+        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
         e.invoke_contract(&pool_id, &Symbol::new(&e, "pool_type"), Vec::new(&e))
+    }
+
+    fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val> {
+        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_info"), Vec::new(&e))
     }
 
     fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
@@ -37,17 +43,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     }
 
     fn share_id(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Error when get share_id");
+        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
         e.invoke_contract(&pool_id, &Symbol::new(&e, "share_id"), Vec::new(&e))
     }
 
     fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128> {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Error when get reserves");
+        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
     }
 
     fn get_tokens(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<Address> {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Error when get tokens");
+        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_tokens"), Vec::new(&e))
     }
 
@@ -85,6 +91,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
+        if !check_vec_ordered(&tokens) {
+            panic!("tokens are not sorted")
+        }
         let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
@@ -129,8 +138,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         pool_index: BytesN<32>,
         in_amount: u128,
     ) -> u128 {
-        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone())
-            .expect("Error when trying to estimate swap");
+        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         e.invoke_contract(
@@ -162,8 +170,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         min_amounts: Vec<u128>,
     ) -> Vec<u128> {
         user.require_auth();
-        let pool_id =
-            get_pool(&e, tokens.clone(), pool_index.clone()).expect("Error when trying withdraw");
+        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
 
         let amounts: Vec<u128> = e.invoke_contract(
             &pool_id,
@@ -248,15 +255,14 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         pool_index: BytesN<32>,
         expired_at: u64,
         tps: u128,
-    ) -> bool {
+    ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
 
-        let pool_id =
-            get_pool(&e, tokens, pool_index.clone()).expect("Error when trying set rewards config");
+        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
 
-        e.invoke_contract(
+        e.invoke_contract::<Val>(
             &pool_id,
             &Symbol::new(&e, "set_rewards_config"),
             Vec::from_array(
@@ -267,7 +273,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
                     tps.into_val(&e),
                 ],
             ),
-        )
+        );
     }
 
     fn get_rewards_info(
@@ -276,8 +282,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
     ) -> Map<Symbol, i128> {
-        let pool_id =
-            get_pool(&e, tokens, pool_index.clone()).expect("Error when trying get rewards info");
+        let pool_id = get_pool(&e, tokens, pool_index.clone()).expect("Pool doesn't exist");
 
         e.invoke_contract(
             &pool_id,
@@ -292,8 +297,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
     ) -> u128 {
-        let pool_id =
-            get_pool(&e, tokens, pool_index.clone()).expect("Error when trying get user reward");
+        let pool_id = get_pool(&e, tokens, pool_index.clone()).expect("Pool doesn't exist");
 
         e.invoke_contract(
             &pool_id,
@@ -304,7 +308,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
     fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         user.require_auth();
-        let pool_id = get_pool(&e, tokens, pool_index.clone()).expect("Error when trying claim");
+        let pool_id = get_pool(&e, tokens, pool_index.clone()).expect("Pool doesn't exist");
 
         e.invoke_contract(
             &pool_id,
@@ -362,7 +366,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         let init_pool_token = get_init_pool_payment_token(&e);
         let init_pool_amount = get_init_pool_payment_amount(&e);
         let init_pool_address = get_init_pool_payment_address(&e);
-        Client::new(&e, &init_pool_token).transfer_from(
+        SorobanTokenClient::new(&e, &init_pool_token).transfer_from(
             &e.current_contract_address(),
             &user,
             &init_pool_address,
