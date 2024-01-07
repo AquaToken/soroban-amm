@@ -1,10 +1,13 @@
 [package]
 name = "utils"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
+publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["rlib"]
+doctest = false
 
 [dependencies]
-soroban-sdk = { version = "20.0.3" }
-cast = { version = "0.3.0" }
+soroban-sdk = { workspace = true }

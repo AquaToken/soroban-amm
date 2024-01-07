@@ -18,8 +18,7 @@ tasks:
 
   build:
     cmds:
-      - for: { var: SUBDIRS }
-        cmd: task -d {{ .ITEM }} build || exit 1
+      - task -d liquidity_pool_router build || exit 1
 
   test:
     cmds:

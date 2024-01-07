@@ -11,9 +11,7 @@ use soroban_sdk::{
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
-    contractimport!(
-        file = "../token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
-    );
+    contractimport!(file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm");
 }
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client<'a> {
@@ -30,28 +28,28 @@ fn create_liqpool_router_contract<'a>(e: &Env) -> LiquidityPoolRouterClient<'a> 
 
 fn install_token_wasm(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../liquidity_pool/target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_stableswap_two_tokens_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../liquidity_pool_stableswap/target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_2_tokens.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_2_tokens.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_stableswap_three_tokens_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../liquidity_pool_stableswap/target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_3_tokens.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_3_tokens.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
