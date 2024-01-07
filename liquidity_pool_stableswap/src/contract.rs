@@ -4,7 +4,7 @@ use crate::pool_constants::{
 };
 use crate::pool_interface::{
     AdminInterfaceTrait, InternalInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait,
-    RewardsTrait, UpgradeableContractTrait,
+    ManagedLiquidityPool, RewardsTrait, UpgradeableContractTrait,
 };
 use crate::storage::{
     get_admin_actions_deadline, get_admin_fee, get_fee, get_future_a, get_future_a_time,
@@ -24,9 +24,10 @@ use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
 use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
+use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, symbol_short, token::Client, Address, BytesN, Env,
-    IntoVal, Map, Symbol, Vec,
+    contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol,
+    Val, Vec,
 };
 use utils::bump::bump_instance;
 
@@ -93,8 +94,14 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let x = xp.get(i as u32).unwrap() + (dx * rates[i as usize] / PRECISION);
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
+
+        if y == 0 {
+            // pool is empty
+            return 0;
+        }
+
         let dy = (xp.get(j as u32).unwrap() - y - 1) * PRECISION / rates[j as usize];
-        let fee = get_fee(&e) * dy / FEE_DENOMINATOR;
+        let fee = get_fee(&e) as u128 * dy / FEE_DENOMINATOR as u128;
         return dy - fee;
     }
 
@@ -106,7 +113,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let x = xp.get(i as u32).unwrap() + dx * precisions[i as usize];
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
         let dy = (xp.get(j as u32).unwrap() - y - 1) / precisions[j as usize];
-        let fee = get_fee(&e) * dy / FEE_DENOMINATOR;
+        let fee = get_fee(&e) as u128 * dy / FEE_DENOMINATOR as u128;
         return dy - fee;
     }
 
@@ -136,8 +143,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         if token_supply == 0 {
             panic!("zero total supply")
         }
-        let _fee = get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
-        let _admin_fee = get_admin_fee(&e);
+        let _fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let _admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
         let mut reserves = get_reserves(&e);
 
@@ -159,11 +166,11 @@ impl LiquidityPoolTrait for LiquidityPool {
             } else {
                 new_balances.get(i).unwrap() - ideal_balance
             };
-            fees.set(i, _fee * difference / FEE_DENOMINATOR);
+            fees.set(i, _fee * difference / FEE_DENOMINATOR as u128);
             reserves.set(
                 i,
                 new_balances.get(i).unwrap()
-                    - (fees.get(i).unwrap() * _admin_fee / FEE_DENOMINATOR),
+                    - (fees.get(i).unwrap() * _admin_fee / FEE_DENOMINATOR as u128),
             );
             new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
         }
@@ -193,7 +200,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         for i in 0..N_COINS as u32 {
             if amounts.get(i).unwrap() != 0 {
                 let coins = get_tokens(&e);
-                let token_client = Client::new(&e, &coins.get(i).unwrap());
+                let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
                 token_client.transfer(
                     &e.current_contract_address(),
                     &user,
@@ -234,7 +241,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let mut reserves = get_reserves(&e);
         reserves.set(
             i as u32,
-            reserves.get(i as u32).unwrap() - (dy + dy_fee * get_admin_fee(&e) / FEE_DENOMINATOR),
+            reserves.get(i as u32).unwrap()
+                - (dy + dy_fee * get_admin_fee(&e) as u128 / FEE_DENOMINATOR as u128),
         );
         put_reserves(&e, &reserves);
 
@@ -249,7 +257,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         burn_shares(&e, token_amount as i128);
 
         let coins = get_tokens(&e);
-        let token_client = Client::new(&e, &coins.get(i as u32).unwrap());
+        let token_client = SorobanTokenClient::new(&e, &coins.get(i as u32).unwrap());
         token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
     }
 }
@@ -440,7 +448,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         // * Solve Eqn against y_i for D - token_amount
 
         let amp = Self::a(e.clone());
-        let _fee = get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let _fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
         let precisions = PRECISION_MUL;
         let total_supply = get_total_shares(&e) as u128;
 
@@ -461,7 +469,7 @@ impl InternalInterfaceTrait for LiquidityPool {
             };
             xp_reduced.set(
                 j,
-                xp_reduced.get(j).unwrap() - _fee * dx_expected / FEE_DENOMINATOR,
+                xp_reduced.get(j).unwrap() - _fee * dx_expected / FEE_DENOMINATOR as u128,
             );
         }
 
@@ -515,7 +523,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         // now (block.timestamp < t1) is always False, so we return saved A
     }
 
-    fn commit_new_fee(e: Env, admin: Address, new_fee: u128, new_admin_fee: u128) {
+    fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
@@ -604,7 +612,7 @@ impl AdminInterfaceTrait for LiquidityPool {
 
     fn admin_balances(e: Env, i: u32) -> u128 {
         let coins = get_tokens(&e);
-        let token_client = Client::new(&e, &coins.get(i).unwrap());
+        let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
         let balance = token_client.balance(&e.current_contract_address()) as u128;
         let reserves = get_reserves(&e);
 
@@ -620,7 +628,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         let reserves = get_reserves(&e);
 
         for i in 0..N_COINS as u32 {
-            let token_client = Client::new(&e, &coins.get(i).unwrap());
+            let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
             let balance = token_client.balance(&e.current_contract_address()) as u128;
 
             let value = balance - reserves.get(i).unwrap();
@@ -639,7 +647,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         let mut reserves = get_reserves(&e);
 
         for i in 0..N_COINS as u32 {
-            let token_client = Client::new(&e, &coins.get(i).unwrap());
+            let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
             let balance = token_client.balance(&e.current_contract_address());
             reserves.set(i, balance as u128);
         }
@@ -667,14 +675,29 @@ impl AdminInterfaceTrait for LiquidityPool {
 }
 
 #[contractimpl]
+impl ManagedLiquidityPool for LiquidityPool {
+    fn initialize_all(
+        e: Env,
+        admin: Address,
+        token_wasm_hash: BytesN<32>,
+        coins: Vec<Address>,
+        a: u128,
+        fee: u32,
+        admin_fee: u32,
+        reward_token: Address,
+        reward_storage: Address,
+    ) {
+        // merge whole initialize process into one because lack of caching of VM components
+        // https://github.com/stellar/rs-soroban-env/issues/827
+        Self::initialize(e.clone(), admin, token_wasm_hash, coins, a, fee, admin_fee);
+        Self::initialize_rewards_config(e.clone(), reward_token, reward_storage);
+    }
+}
+
+#[contractimpl]
 impl LiquidityPoolInterfaceTrait for LiquidityPool {
     fn pool_type(e: Env) -> Symbol {
-        match N_COINS {
-            2 => Symbol::new(&e, "stable"),
-            3 => Symbol::new(&e, "stable_3"),
-            4 => Symbol::new(&e, "stable_4"),
-            _ => panic!("unable to calculate pool type"),
-        }
+        Symbol::new(&e, "stable")
     }
 
     fn initialize(
@@ -683,9 +706,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
         a: u128,
-        fee: u128,
-        admin_fee: u128,
-    ) -> bool {
+        fee: u32,
+        admin_fee: u32,
+    ) {
         let access_control = AccessControl::new(&e);
         if access_control.has_admin() {
             panic!("already initialized")
@@ -707,7 +730,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             &"Pool Share Token".into_val(&e),
             &"POOL".into_val(&e),
         );
-        put_token_share(&e, share_contract.try_into().unwrap());
+        put_token_share(&e, share_contract);
         let initial_reserves = Vec::from_array(&e, [0_u128; N_COINS]);
         put_reserves(&e, &initial_reserves);
 
@@ -724,16 +747,14 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         let rewards = get_rewards_manager(&e);
         rewards.manager().initialize();
-
-        true
     }
 
     fn get_fee_fraction(e: Env) -> u32 {
-        get_fee(&e) as u32
+        get_fee(&e)
     }
 
     fn get_admin_fee(e: Env) -> u32 {
-        get_admin_fee(&e) as u32
+        get_admin_fee(&e)
     }
 
     fn share_id(e: Env) -> Address {
@@ -770,8 +791,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         rewards.storage().bump_user_reward_data(&user);
 
         let mut fees: Vec<u128> = Vec::from_array(&e, [0; N_COINS]);
-        let fee = get_fee(&e) * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
-        let admin_fee = get_admin_fee(&e);
+        let fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
 
         let token_supply = get_total_shares(&e) as u128;
@@ -795,7 +816,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
             // Take coins from the sender
             if in_amount > 0 {
-                let token_client = Client::new(&e, &in_coin);
+                let token_client = SorobanTokenClient::new(&e, &in_coin);
                 token_client.transfer_from(
                     &e.current_contract_address(),
                     &user,
@@ -826,12 +847,12 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
                 } else {
                     new_balances.get(i).unwrap() - ideal_balance
                 };
-                fees.set(i, fee * difference / FEE_DENOMINATOR);
+                fees.set(i, fee as u128 * difference / FEE_DENOMINATOR as u128);
 
                 result.set(
                     i,
                     new_balances.get(i).unwrap()
-                        - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR),
+                        - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR as u128),
                 );
                 new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
             }
@@ -882,7 +903,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let coins = get_tokens(&e);
         let input_coin = coins.get(in_idx as u32).unwrap();
 
-        let token_client = Client::new(&e, &input_coin);
+        let token_client = SorobanTokenClient::new(&e, &input_coin);
         token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -894,7 +915,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = xp.get(out_idx as u32).unwrap() - y - 1; // -1 just in case there were some rounding errors
-        let dy_fee = dy * get_fee(&e) / FEE_DENOMINATOR;
+        let dy_fee = dy * get_fee(&e) as u128 / FEE_DENOMINATOR as u128;
 
         // Convert all to real units
         let dy = (dy - dy_fee) * PRECISION / rates[out_idx as usize];
@@ -902,7 +923,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic!("Exchange resulted in fewer coins than expected")
         }
 
-        let mut dy_admin_fee = dy_fee * get_admin_fee(&e) / FEE_DENOMINATOR;
+        let mut dy_admin_fee = dy_fee * get_admin_fee(&e) as u128 / FEE_DENOMINATOR as u128;
         dy_admin_fee = dy_admin_fee * PRECISION / rates[out_idx as usize];
 
         // Change balances exactly in same way as we change actual ERC20 coin amounts
@@ -918,7 +939,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         );
         put_reserves(&e, &reserves);
 
-        let token_client = Client::new(&e, &coins.get(out_idx as u32).unwrap());
+        let token_client = SorobanTokenClient::new(&e, &coins.get(out_idx as u32).unwrap());
         token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
         dy
     }
@@ -957,7 +978,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             reserves.set(i, reserves.get(i).unwrap() - value);
             amounts.set(i, value);
 
-            let token_client = Client::new(&e, &coins.get(i).unwrap());
+            let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
             token_client.transfer(&e.current_contract_address(), &user, &(value as i128));
         }
         put_reserves(&e, &reserves);
@@ -973,6 +994,18 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         burn_shares(&e, share_amount as i128);
         amounts
     }
+
+    fn get_info(e: Env) -> Map<Symbol, Val> {
+        let fee = get_fee(&e);
+        let a = Self::a(e.clone());
+        let pool_type = Self::pool_type(e.clone());
+        let mut result = Map::new(&e);
+        result.set(symbol_short!("pool_type"), pool_type.into_val(&e));
+        result.set(symbol_short!("fee"), fee.into_val(&e));
+        result.set(symbol_short!("a"), a.into_val(&e));
+        result.set(symbol_short!("n_tokens"), (N_COINS as u32).into_val(&e));
+        result
+    }
 }
 
 #[contractimpl]
@@ -981,32 +1014,22 @@ impl UpgradeableContractTrait for LiquidityPool {
         1
     }
 
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) -> bool {
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         e.deployer().update_current_contract_wasm(new_wasm_hash);
-        true
     }
 }
 
 #[contractimpl]
 impl RewardsTrait for LiquidityPool {
-    fn initialize_rewards_config(
-        e: Env,
-        // admin: Address,
-        reward_token: Address,
-        reward_storage: Address,
-    ) -> bool {
-        // admin.require_auth();
-        // check_admin(&e, &admin);
+    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) {
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
             panic!("rewards config already initialized")
         }
         rewards.storage().put_reward_token(reward_token);
         rewards.storage().put_reward_storage(reward_storage);
-
-        true
     }
 
     fn set_rewards_config(
@@ -1014,7 +1037,7 @@ impl RewardsTrait for LiquidityPool {
         admin: Address,
         expired_at: u64, // timestamp
         tps: u128,       // value with 7 decimal places. example: 600_0000000
-    ) -> bool {
+    ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
@@ -1030,7 +1053,6 @@ impl RewardsTrait for LiquidityPool {
         let config = PoolRewardConfig { tps, expired_at };
         bump_instance(&e);
         rewards.storage().set_pool_reward_config(&config);
-        true
     }
 
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
