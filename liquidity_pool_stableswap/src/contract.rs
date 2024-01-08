@@ -488,7 +488,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
         if !(e.ledger().timestamp() >= get_initial_a_time(&e) + MIN_RAMP_TIME) {
-            panic!("")
+            panic!("ramp time is less than minimal")
         };
         if !(future_time >= e.ledger().timestamp() + MIN_RAMP_TIME) {
             panic!("insufficient time")
@@ -496,12 +496,12 @@ impl AdminInterfaceTrait for LiquidityPool {
 
         let initial_a = Self::a(e.clone());
         if !((future_a > 0) && (future_a < MAX_A)) {
-            panic!("")
+            panic!("future_a should not exceed maximum")
         }
         if !(((future_a >= initial_a) && (future_a <= initial_a * MAX_A_CHANGE))
             || ((future_a < initial_a) && (future_a * MAX_A_CHANGE >= initial_a)))
         {
-            panic!("")
+            panic!("too rapid change")
         }
         put_initial_a(&e, &initial_a);
         put_future_a(&e, &future_a);
