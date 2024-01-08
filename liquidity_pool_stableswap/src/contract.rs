@@ -715,10 +715,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
 
         access_control.set_admin(&admin);
-        // do we need admin fee?
         put_admin_fee(&e, &admin_fee);
 
-        // todo: assert non zero addresses
         put_tokens(&e, &coins);
 
         // LP token
@@ -736,9 +734,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         // pool config
         put_initial_a(&e, &a);
-        put_initial_a_time(&e, &e.ledger().timestamp()); // todo: is it correct value?
+        put_initial_a_time(&e, &e.ledger().timestamp());
         put_future_a(&e, &a);
-        put_future_a_time(&e, &e.ledger().timestamp()); // todo: is it correct value?
+        put_future_a_time(&e, &e.ledger().timestamp());
         put_fee(&e, &fee);
         put_kill_deadline(&e, &(e.ledger().timestamp() + KILL_DEADLINE_DT));
         put_admin_actions_deadline(&e, &0);
@@ -870,7 +868,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             token_supply * (d2 - d0) / d0
         };
 
-        // todo: return back after interface unify
         // if mint_amount < min_mint_amount {
         //     panic!("Slippage screwed you");
         // }
