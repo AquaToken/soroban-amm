@@ -1,5 +1,8 @@
 #![no_std]
 
+use soroban_sdk::token::{
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+};
 use soroban_sdk::{contracttype, Address, Env};
 use utils::bump::bump_instance;
 
@@ -7,6 +10,7 @@ use utils::bump::bump_instance;
 #[contracttype]
 enum DataKey {
     TokenShare,
+    TotalShares,
 }
 
 pub mod token {
@@ -18,7 +22,7 @@ pub use token::{self as token_contract, Client};
 
 fn get_balance(e: &Env, contract: Address) -> u128 {
     bump_instance(e);
-    Client::new(e, &contract).balance(&e.current_contract_address()) as u128
+    SorobanTokenClient::new(e, &contract).balance(&e.current_contract_address()) as u128
 }
 
 pub fn get_token_share(e: &Env) -> Address {
@@ -26,7 +30,7 @@ pub fn get_token_share(e: &Env) -> Address {
     e.storage()
         .instance()
         .get(&DataKey::TokenShare)
-        .expect("Trying to get Token Share")
+        .expect("Unable to get TokenShare")
 }
 
 pub fn put_token_share(e: &Env, contract: Address) {
@@ -39,20 +43,34 @@ pub fn get_balance_shares(e: &Env) -> u128 {
 }
 
 pub fn get_user_balance_shares(e: &Env, user: &Address) -> u128 {
-    Client::new(e, &get_token_share(e)).balance(user) as u128
+    SorobanTokenClient::new(e, &get_token_share(e)).balance(user) as u128
 }
 
 pub fn get_total_shares(e: &Env) -> u128 {
-    let share_token = get_token_share(e);
-    Client::new(e, &share_token).total_balance() as u128
+    bump_instance(e);
+    e.storage()
+        .instance()
+        .get(&DataKey::TotalShares)
+        .unwrap_or(0)
+}
+
+pub fn put_total_shares(e: &Env, value: u128) {
+    bump_instance(&e);
+    e.storage().instance().set(&DataKey::TotalShares, &value)
 }
 
 pub fn burn_shares(e: &Env, amount: i128) {
+    let total_share = get_total_shares(e);
+    put_total_shares(e, total_share - amount as u128);
+
     let share_contract = get_token_share(e);
-    Client::new(e, &share_contract).burn(&e.current_contract_address(), &amount);
+    SorobanTokenClient::new(e, &share_contract).burn(&e.current_contract_address(), &amount);
 }
 
 pub fn mint_shares(e: &Env, to: Address, amount: i128) {
+    let total_share = get_total_shares(e);
+    put_total_shares(e, total_share + amount as u128);
+
     let share_contract_id = get_token_share(e);
-    Client::new(e, &share_contract_id).mint(&to, &amount);
+    SorobanTokenAdminClient::new(e, &share_contract_id).mint(&to, &amount);
 }

@@ -5,11 +5,11 @@ use crate::LiquidityPoolClient;
 
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Ledger, LedgerInfo};
+use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
-use token_share::Client;
 
-fn create_token_contract<'a>(e: &Env, admin: &Address) -> Client<'a> {
-    Client::new(e, &e.register_stellar_asset_contract(admin.clone()))
+fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
+    SorobanTokenClient::new(e, &e.register_stellar_asset_contract(admin.clone()))
 }
 
 fn create_liqpool_contract<'a>(
@@ -113,7 +113,7 @@ fn test_happy_flow() {
         &token_reward.address,
     );
 
-    let token_share = Client::new(&e, &liqpool.share_id());
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
     token1.mint(&user1, &1000_0000000);
     token2.mint(&user1, &1000_0000000);
@@ -268,7 +268,7 @@ fn test_happy_flow_3_tokens() {
         &token_reward.address,
     );
 
-    let token_share = Client::new(&e, &liqpool.share_id());
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
     token1.mint(&user1, &1000_0000000);
     token2.mint(&user1, &1000_0000000);
@@ -411,7 +411,7 @@ fn test_happy_flow_4_tokens() {
         &token_reward.address,
     );
 
-    let token_share = Client::new(&e, &liqpool.share_id());
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
     token1.mint(&user1, &1000_0000000);
     token2.mint(&user1, &1000_0000000);
@@ -540,7 +540,7 @@ fn test_withdraw_partial() {
         &token_reward.address,
     );
 
-    let token_share = Client::new(&e, &liqpool.share_id());
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
     token1.mint(&user1, &1000_0000000);
     assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
@@ -624,7 +624,7 @@ fn test_withdraw_one_token() {
         &token_reward.address,
     );
 
-    let token_share = Client::new(&e, &liqpool.share_id());
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
     token1.mint(&user1, &1000_0000000);
     assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
@@ -749,7 +749,7 @@ fn test_deposit_inequal() {
         &token_reward.address,
     );
 
-    let token_share = Client::new(&e, &liqpool.share_id());
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
     token1.mint(&user1, &1000_0000000);
     token2.mint(&user1, &1000_0000000);

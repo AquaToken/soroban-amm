@@ -189,7 +189,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = LPToken::new(&e, &get_token_share(&e));
+        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -248,7 +248,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserves(&e, &reserves);
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = LPToken::new(&e, &get_token_share(&e));
+        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -985,7 +985,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_reserves(&e, &reserves);
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = LPToken::new(&e, &get_token_share(&e));
+        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
