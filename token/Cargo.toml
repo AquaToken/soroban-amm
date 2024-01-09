@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 soroban-sdk = { version = "20.0.3" }
-soroban-token-sdk = { version = "20.0.0-rc2" }
+soroban-token-sdk = { version = "20.0.3" }
 access_control = { path = "../access_control" }
 utils = { path = "../utils" }
 
