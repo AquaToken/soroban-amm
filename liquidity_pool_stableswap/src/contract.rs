@@ -33,7 +33,7 @@ use utils::bump::bump_instance;
 
 contractmeta!(
     key = "Description",
-    val = "Stable Swap AMM for two pairs of tokens"
+    val = "Stable Swap AMM for set of tokens"
 );
 
 #[contract]
