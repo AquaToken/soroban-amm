@@ -139,7 +139,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
 
-        // todo: return back after interface unify
         // let min_a = min_amounts.get(0).unwrap();
         // let min_b = min_amounts.get(1).unwrap();
         let (min_a, min_b) = (0, 0);

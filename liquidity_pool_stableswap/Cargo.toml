@@ -19,7 +19,7 @@ utils = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [features]
-default = []
+default = ["tokens_2"]
 tokens_2 = []
 tokens_3 = []
 tokens_4 = []

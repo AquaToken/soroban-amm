@@ -47,7 +47,7 @@ impl Manager {
         if now < config.expired_at {
             self.update_rewards_data_snapshot(now, &config, &data, total_shares)
         } else if data.last_time > config.expired_at {
-            // todo: don't increase block
+            // todo: try to avoid unneeded block increments
             self.create_new_rewards_data(
                 0,
                 total_shares,

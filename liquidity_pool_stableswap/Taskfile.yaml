@@ -23,9 +23,9 @@ tasks:
     deps:
       - build
     cmds:
-      - cargo test --features=tokens_2 -- --nocapture
-      - cargo test --features=tokens_3 -- --nocapture
-      - cargo test --features=tokens_4 -- --nocapture
+      - cargo test --no-default-features --features=tokens_2
+      - cargo test --no-default-features --features=tokens_3
+      - cargo test --no-default-features --features=tokens_4
 
   test_slow:
     cmds:
