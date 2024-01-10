@@ -11,6 +11,7 @@ tasks:
 
   build:
     cmds:
+      - task -d ../liquidity_pool build || exit 1
       - task -d ../liquidity_pool_stableswap build || exit 1
       - cargo build --target wasm32-unknown-unknown --release
       - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_router_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_router_contract.wasm
