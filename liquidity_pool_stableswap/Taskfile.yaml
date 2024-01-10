@@ -11,12 +11,14 @@ tasks:
 
   build:
     cmds:
-      - cargo build --no-default-features --features=tokens_2 --target wasm32-unknown-unknown --release
+      - task -d ../token build || exit 1
+      - soroban contract build --package soroban-liquidity-pool-stableswap-contract
       - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_2_tokens.wasm
-      - cargo build --no-default-features --features=tokens_3 --target wasm32-unknown-unknown --release
+      - soroban contract build --no-default-features --features=tokens_3 --package soroban-liquidity-pool-stableswap-contract
       - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_3_tokens.wasm
-      - cargo build --no-default-features --features=tokens_4 --target wasm32-unknown-unknown --release
+      - soroban contract build --no-default-features --features=tokens_4 --package soroban-liquidity-pool-stableswap-contract
       - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_4_tokens.wasm
+      - rm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm
       - ls -l ../target/wasm32-unknown-unknown/release/*.wasm
 
   test:
