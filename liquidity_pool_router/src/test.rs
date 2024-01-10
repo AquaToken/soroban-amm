@@ -102,7 +102,7 @@ fn test_total_liquidity() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash_2);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1_0000000);
+    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
     reward_token.mint(&user1, &3_0000000);
     reward_token.approve(&user1, &router.address, &3_0000000, &99999);
 
