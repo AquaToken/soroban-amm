@@ -34,7 +34,7 @@ inherits = "release"
 debug-assertions = true
 
 [features]
-default = []
+default = ["tokens_2"]
 tokens_2 = []
 tokens_3 = []
 tokens_4 = []
