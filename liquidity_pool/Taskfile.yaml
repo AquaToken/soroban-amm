@@ -20,12 +20,12 @@ tasks:
   test:
     deps:
       - build
-    cmd: cargo test -- --nocapture
+    cmd: cargo test
 
   test_slow:
     deps:
       - build
-    cmd: cargo test --features=slow_tests -- --nocapture
+    cmd: cargo test --features=slow_tests
 
   default:
     cmds:
