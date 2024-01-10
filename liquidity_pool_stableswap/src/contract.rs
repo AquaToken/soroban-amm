@@ -549,10 +549,10 @@ impl AdminInterfaceTrait for LiquidityPool {
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
 
-        if e.ledger().timestamp() >= get_admin_actions_deadline(&e) {
+        if !(e.ledger().timestamp() >= get_admin_actions_deadline(&e)) {
             panic!("insufficient time")
         }
-        if get_admin_actions_deadline(&e) != 0 {
+        if !(get_admin_actions_deadline(&e) != 0) {
             panic!("no active action")
         }
 
@@ -576,7 +576,9 @@ impl AdminInterfaceTrait for LiquidityPool {
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
 
-        // assert self.transfer_ownership_deadline == 0  # dev: active transfer
+        if !(get_transfer_ownership_deadline(&e) == 0) {
+            panic!("active transfer");
+        }
 
         let deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
         put_transfer_ownership_deadline(&e, &deadline);
@@ -588,10 +590,10 @@ impl AdminInterfaceTrait for LiquidityPool {
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
 
-        if e.ledger().timestamp() >= get_transfer_ownership_deadline(&e) {
+        if !(e.ledger().timestamp() >= get_transfer_ownership_deadline(&e)) {
             panic!("insufficient time")
         }
-        if get_transfer_ownership_deadline(&e) != 0 {
+        if !(get_transfer_ownership_deadline(&e) != 0) {
             panic!("no active transfer")
         }
 
