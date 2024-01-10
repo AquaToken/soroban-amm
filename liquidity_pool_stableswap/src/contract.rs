@@ -143,8 +143,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         if token_supply == 0 {
             panic!("zero total supply")
         }
-        let _fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
-        let _admin_fee = get_admin_fee(&e) as u128;
+        let fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
         let mut reserves = get_reserves(&e);
 
@@ -166,11 +166,11 @@ impl LiquidityPoolTrait for LiquidityPool {
             } else {
                 new_balances.get(i).unwrap() - ideal_balance
             };
-            fees.set(i, _fee * difference / FEE_DENOMINATOR as u128);
+            fees.set(i, fee * difference / FEE_DENOMINATOR as u128);
             reserves.set(
                 i,
                 new_balances.get(i).unwrap()
-                    - (fees.get(i).unwrap() * _admin_fee / FEE_DENOMINATOR as u128),
+                    - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR as u128),
             );
             new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
         }
@@ -302,8 +302,8 @@ impl InternalInterfaceTrait for LiquidityPool {
         let ann = amp * N_COINS as u128;
         for _i in 0..255 {
             let mut d_p = d;
-            for _x in xp.clone() {
-                d_p = d_p * d / (_x * N_COINS as u128) // If division by 0, this will be borked: only withdrawal will work. And that is good
+            for x1 in xp.clone() {
+                d_p = d_p * d / (x1 * N_COINS as u128) // If division by 0, this will be borked: only withdrawal will work. And that is good
             }
             d_prev = d;
             d = (ann * s + d_p * N_COINS as u128) * d
@@ -326,16 +326,16 @@ impl InternalInterfaceTrait for LiquidityPool {
         Self::get_d(e.clone(), Self::xp_mem(e.clone(), balances), amp)
     }
 
-    fn get_y(e: Env, i: u32, j: u32, x: u128, xp_: Vec<u128>) -> u128 {
+    fn get_y(e: Env, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>) -> u128 {
         // x in the input is converted to the same price/precision
 
-        if !(i != j) {
+        if !(in_idx != out_idx) {
             panic!("same coin")
         } // dev: same coin
           // if !(j >= 0) {
           //     panic!("j below zero")
           // } // dev: j below zero
-        if !(j < N_COINS as u32) {
+        if !(out_idx < N_COINS as u32) {
             panic!("j above N_COINS")
         } // dev: j above N_COINS
 
@@ -343,27 +343,27 @@ impl InternalInterfaceTrait for LiquidityPool {
         // if !(i >= 0) {
         //     panic!("bad arguments")
         // }
-        if !(i < N_COINS as u32) {
+        if !(in_idx < N_COINS as u32) {
             panic!("bad arguments")
         }
 
         let amp = Self::a(e.clone());
-        let d = Self::get_d(e.clone(), xp_.clone(), amp);
+        let d = Self::get_d(e.clone(), xp.clone(), amp);
         let mut c = d;
         let mut s = 0;
         let ann = amp * N_COINS as u128;
 
-        let mut _x = 0;
-        for _i in 0..N_COINS as u32 {
-            if _i == i {
-                _x = x;
-            } else if _i != j {
-                _x = xp_.get(_i).unwrap();
+        let mut x1;
+        for i in 0..N_COINS as u32 {
+            if i == in_idx {
+                x1 = x;
+            } else if i != out_idx {
+                x1 = xp.get(i).unwrap();
             } else {
                 continue;
             }
-            s += _x;
-            c = c * d / (_x * N_COINS as u128);
+            s += x1;
+            c = c * d / (x1 * N_COINS as u128);
         }
         c = c * d / (ann * N_COINS as u128);
         let b = s + d / ann; // - D
@@ -386,7 +386,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         return y;
     }
 
-    fn get_y_d(_e: Env, a: u128, i: u32, xp: Vec<u128>, d: u128) -> u128 {
+    fn get_y_d(_e: Env, a: u128, in_idx: u32, xp: Vec<u128>, d: u128) -> u128 {
         // Calculate x[i] if one reduces D from being calculated for xp to D
         //
         // Done by solving quadratic equation iteratively.
@@ -400,7 +400,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         // if !(i >= 0) {
         //     panic!("i below zero")
         // }
-        if !(i < N_COINS as u32) {
+        if !(in_idx < N_COINS as u32) {
             panic!("i above N_COINS")
         }
 
@@ -408,15 +408,15 @@ impl InternalInterfaceTrait for LiquidityPool {
         let mut s = 0;
         let ann = a * N_COINS as u128;
 
-        let mut _x = 0;
-        for _i in 0..N_COINS as u32 {
-            if _i != i as u32 {
-                _x = xp.get(_i).unwrap();
+        let mut x;
+        for i in 0..N_COINS as u32 {
+            if i != in_idx {
+                x = xp.get(i).unwrap();
             } else {
                 continue;
             }
-            s += _x;
-            c = c * d / (_x * N_COINS as u128);
+            s += x;
+            c = c * d / (x * N_COINS as u128);
         }
         c = c * d / (ann * N_COINS as u128);
 
@@ -442,15 +442,15 @@ impl InternalInterfaceTrait for LiquidityPool {
         return y;
     }
 
-    fn internal_calc_withdraw_one_coin(e: Env, token_amount: u128, i: u32) -> (u128, u128) {
+    fn internal_calc_withdraw_one_coin(e: Env, token_amount: u128, token_idx: u32) -> (u128, u128) {
         // First, need to calculate
         // * Get current D
         // * Solve Eqn against y_i for D - token_amount
 
         let amp = Self::a(e.clone());
-        let _fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
         let precisions = PRECISION_MUL;
-        let total_supply = get_total_shares(&e) as u128;
+        let total_supply = get_total_shares(&e);
 
         let xp = Self::xp(e.clone());
 
@@ -458,24 +458,24 @@ impl InternalInterfaceTrait for LiquidityPool {
         let d1 = d0 - token_amount * d0 / total_supply;
         let mut xp_reduced = xp.clone();
 
-        let new_y = Self::get_y_d(e.clone(), amp, i, xp.clone(), d1);
-        let dy_0 = (xp.get(i as u32).unwrap() - new_y) / precisions[i as usize]; // w/o fees;
+        let new_y = Self::get_y_d(e.clone(), amp, token_idx, xp.clone(), d1);
+        let dy_0 = (xp.get(token_idx).unwrap() - new_y) / precisions[token_idx as usize]; // w/o fees;
 
         for j in 0..N_COINS as u32 {
-            let dx_expected = if j == i as u32 {
+            let dx_expected = if j == token_idx {
                 xp.get(j).unwrap() * d1 / d0 - new_y
             } else {
                 xp.get(j).unwrap() - xp.get(j).unwrap() * d1 / d0
             };
             xp_reduced.set(
                 j,
-                xp_reduced.get(j).unwrap() - _fee * dx_expected / FEE_DENOMINATOR as u128,
+                xp_reduced.get(j).unwrap() - fee * dx_expected / FEE_DENOMINATOR as u128,
             );
         }
 
-        let mut dy = xp_reduced.get(i as u32).unwrap()
-            - Self::get_y_d(e.clone(), amp, i, xp_reduced.clone(), d1);
-        dy = (dy - 1) / precisions[i as usize]; // Withdraw less to account for rounding errors
+        let mut dy = xp_reduced.get(token_idx).unwrap()
+            - Self::get_y_d(e.clone(), amp, token_idx, xp_reduced.clone(), d1);
+        dy = (dy - 1) / precisions[token_idx as usize]; // Withdraw less to account for rounding errors
 
         return (dy, dy_0 - dy);
     }
@@ -538,8 +538,8 @@ impl AdminInterfaceTrait for LiquidityPool {
             panic!("admin fee exceeds maximum")
         }
 
-        let _deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
-        put_admin_actions_deadline(&e, &_deadline);
+        let deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
+        put_admin_actions_deadline(&e, &deadline);
         put_future_fee(&e, &new_fee);
         put_future_admin_fee(&e, &new_admin_fee);
     }
