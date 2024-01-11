@@ -1512,10 +1512,12 @@ fn test_liquidity() {
         std::mem::swap(&mut token1, &mut token2);
         std::mem::swap(&mut admin1, &mut admin2);
     }
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let user1 = Address::generate(&e);
 
-    token1.mint(&user1, &1_000_000_000_000_000_000_0000000);
-    token2.mint(&user1, &1_000_000_000_000_000_000_0000000);
+    token1_admin_client.mint(&user1, &1_000_000_000_000_000_000_0000000);
+    token2_admin_client.mint(&user1, &1_000_000_000_000_000_000_0000000);
 
     for config in [
         (10, 10, 0),
