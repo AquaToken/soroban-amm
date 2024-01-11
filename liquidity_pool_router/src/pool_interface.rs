@@ -1,12 +1,16 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
 pub trait LiquidityPoolInterfaceTrait {
+    // Get symbolic explanation of pool type.
     fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol;
+
+    // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val>;
 
+    // Get address for specified pool index.
     fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address;
 
-    // Returns the token contract address for the pool share token
+    // Returns the token contract address for the pool share token.
     fn share_id(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address;
 
     // Getter for the pool balances array.
@@ -43,6 +47,7 @@ pub trait LiquidityPoolInterfaceTrait {
         out_min: u128,
     ) -> u128;
 
+    // Estimate amount of coins to retrieve using swap function
     fn estimate_swap(
         e: Env,
         tokens: Vec<Address>,
@@ -69,6 +74,9 @@ pub trait LiquidityPoolInterfaceTrait {
 }
 
 pub trait RewardsInterfaceTrait {
+    // Configure rewards for pool. Every second tps of coins
+    // being distributed across all liquidity providers
+    // after expired_at timestamp distribution ends
     fn get_rewards_config(e: Env) -> Map<Symbol, Val>;
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> u128;
     fn config_global_rewards(
@@ -86,6 +94,8 @@ pub trait RewardsInterfaceTrait {
         pool_index: BytesN<32>,
     ) -> u128;
 
+    // Get rewards status for the pool,
+    // including amount available for the user
     fn get_rewards_info(
         e: Env,
         user: Address,
@@ -93,15 +103,22 @@ pub trait RewardsInterfaceTrait {
         pool_index: BytesN<32>,
     ) -> Map<Symbol, i128>;
 
+    // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>)
         -> u128;
 
+    // Claim reward as a user.
+    // returns amount of tokens rewarded to the user
     fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 }
 
 pub trait PoolsManagementTrait {
+    // Initialize standard pool with default arguments
     fn init_pool(e: Env, tokens: Vec<Address>) -> (BytesN<32>, Address);
 
+    // Initialize standard pool with custom arguments.
+    // fee_fraction should match pre-defined set of values: 0.1%, 0.3%, 1%
+    // 10 = 0.1%, 30 = 0.3%, 100 = 1%
     fn init_standard_pool(
         e: Env,
         user: Address,
@@ -109,6 +126,10 @@ pub trait PoolsManagementTrait {
         fee_fraction: u32,
     ) -> (BytesN<32>, Address);
 
+    // Initialize stableswap pool with custom arguments.
+    // a - amplification coefficient
+    // fee_fraction has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%
+    // admin_fee - percentage of fee that goes to pool admin
     fn init_stableswap_pool(
         e: Env,
         user: Address,
@@ -118,7 +139,7 @@ pub trait PoolsManagementTrait {
         admin_fee: u32,
     ) -> (BytesN<32>, Address);
 
-    // get pools for given pair
+    // Get pools for given pair
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address>;
 
     // Add initialized custom pool to the list for given pair
@@ -131,6 +152,6 @@ pub trait PoolsManagementTrait {
         init_args: Vec<Val>,
     ) -> BytesN<32>;
 
-    // remove pool from the list
+    // Remove pool from the list
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>);
 }

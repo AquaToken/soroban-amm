@@ -11,9 +11,7 @@ use soroban_sdk::{
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
-    contractimport!(
-        file = "../token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
-    );
+    contractimport!(file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm");
 }
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client<'a> {
@@ -30,28 +28,28 @@ fn create_liqpool_router_contract<'a>(e: &Env) -> LiquidityPoolRouterClient<'a> 
 
 fn install_token_wasm(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../liquidity_pool/target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_stableswap_two_tokens_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../liquidity_pool_stableswap/target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_2_tokens.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_2_tokens.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_stableswap_three_tokens_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../liquidity_pool_stableswap/target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_3_tokens.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_3_tokens.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
@@ -287,6 +285,7 @@ fn test_stableswap_pools_amount_over_max() {
 
     let reward_admin = Address::generate(&e);
     let admin = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
@@ -299,7 +298,12 @@ fn test_stableswap_pools_amount_over_max() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
+    router.configure_init_pool_payment(
+        &reward_token.address,
+        &1000_0000000,
+        &payment_for_creation_address,
+    );
+    assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     // init constant product pools to make sure we don't affect stableswap counter
     for fee_fraction in CONSTANT_PRODUCT_FEE_AVAILABLE {
@@ -307,8 +311,12 @@ fn test_stableswap_pools_amount_over_max() {
     }
     reward_token.mint(&admin, &10000000_0000000);
     reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
-    for _i in 0..STABLESWAP_MAX_POOLS + 1 {
+    for i in 0..STABLESWAP_MAX_POOLS + 1 {
         router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
+        assert_eq!(
+            reward_token.balance(&payment_for_creation_address),
+            1000_0000000i128 * ((i + 1) as i128)
+        );
     }
 }
 
@@ -331,6 +339,7 @@ fn test_stableswap_pools_amount_ok() {
 
     let reward_admin = Address::generate(&e);
     let admin = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
@@ -343,7 +352,12 @@ fn test_stableswap_pools_amount_ok() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
+    router.configure_init_pool_payment(
+        &reward_token.address,
+        &1000_0000000,
+        &payment_for_creation_address,
+    );
+    assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     // init constant product pools to make sure we don't affect stableswap counter
     for fee_fraction in CONSTANT_PRODUCT_FEE_AVAILABLE {
@@ -351,8 +365,12 @@ fn test_stableswap_pools_amount_ok() {
     }
     reward_token.mint(&admin, &10000000_0000000);
     reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
-    for _i in 0..STABLESWAP_MAX_POOLS {
+    for i in 0..STABLESWAP_MAX_POOLS {
         router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
+        assert_eq!(
+            reward_token.balance(&payment_for_creation_address),
+            1000_0000000i128 * ((i + 1) as i128)
+        );
     }
 }
 
@@ -376,6 +394,7 @@ fn test_stableswap_pool_no_allowance() {
 
     let reward_admin = Address::generate(&e);
     let admin = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
@@ -388,9 +407,17 @@ fn test_stableswap_pool_no_allowance() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
+    router.configure_init_pool_payment(
+        &reward_token.address,
+        &1000_0000000,
+        &payment_for_creation_address,
+    );
 
     router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
+    assert_eq!(
+        reward_token.balance(&payment_for_creation_address),
+        1000_0000000
+    );
 }
 
 #[test]
@@ -416,6 +443,7 @@ fn test_stableswap_pool() {
     let reward_token = create_token_contract(&e, &reward_admin);
 
     let user1 = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
@@ -426,7 +454,12 @@ fn test_stableswap_pool() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
+    router.configure_init_pool_payment(
+        &reward_token.address,
+        &1000_0000000,
+        &payment_for_creation_address,
+    );
+    assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     reward_token.mint(&user1, &10000000_0000000);
     reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
@@ -438,6 +471,10 @@ fn test_stableswap_pool() {
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable")
+    );
+    assert_eq!(
+        reward_token.balance(&payment_for_creation_address),
+        1000_0000000
     );
 
     let pools = router.get_pools(&tokens);
@@ -559,6 +596,7 @@ fn test_stableswap_3_pool() {
 
     let reward_admin = Address::generate(&e);
     let admin = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let reward_token = create_token_contract(&e, &reward_admin);
 
@@ -575,7 +613,12 @@ fn test_stableswap_3_pool() {
     router.set_stableswap_pool_hash(&3, &stableswap_pool_3_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
+    router.configure_init_pool_payment(
+        &reward_token.address,
+        &1000_0000000,
+        &payment_for_creation_address,
+    );
+    assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     reward_token.mint(&user1, &10000000_0000000);
     reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
@@ -583,6 +626,10 @@ fn test_stableswap_3_pool() {
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable")
+    );
+    assert_eq!(
+        reward_token.balance(&payment_for_creation_address),
+        1000_0000000
     );
 
     let pools = router.get_pools(&tokens);
@@ -1036,6 +1083,7 @@ fn test_event_correct() {
     let reward_token = create_token_contract(&e, &reward_admin);
 
     let user1 = Address::generate(&e);
+    let payment_for_creation_address = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
@@ -1048,7 +1096,12 @@ fn test_event_correct() {
     router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000);
+    router.configure_init_pool_payment(
+        &reward_token.address,
+        &1000_0000000,
+        &payment_for_creation_address,
+    );
+    assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     let router_1 = create_liqpool_router_contract(&e);
     router_1.init_admin(&admin);
@@ -1056,7 +1109,6 @@ fn test_event_correct() {
     router_1.set_token_hash(&token_hash);
     router_1.set_reward_token(&reward_token.address);
     let (_pool_hash, custom_pool_address) = router_1.init_standard_pool(&user1, &tokens, &30);
-
     reward_token.mint(&user1, &10000000_0000000);
     reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
     let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1];
@@ -1064,6 +1116,10 @@ fn test_event_correct() {
 
     let (pool_hash, pool_address) =
         router.init_stableswap_pool(&user1, &tokens, &10, &fee, &admin_fee);
+    assert_eq!(
+        reward_token.balance(&payment_for_creation_address),
+        1000_0000000
+    );
 
     let init_stableswap_pool_event = e.events().all().last().unwrap();
 

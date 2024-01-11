@@ -3,13 +3,20 @@ extern crate std;
 
 use crate::LiquidityPoolClient;
 
+use crate::pool_constants::{ADMIN_ACTIONS_DELAY, MIN_RAMP_TIME};
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Ledger, LedgerInfo};
-use soroban_sdk::token::Client as SorobanTokenClient;
+use soroban_sdk::token::{
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+};
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
     SorobanTokenClient::new(e, &e.register_stellar_asset_contract(admin.clone()))
+}
+
+fn get_token_admin_client<'a>(e: &'a Env, address: &'a Address) -> SorobanTokenAdminClient<'a> {
+    SorobanTokenAdminClient::new(e, address)
 }
 
 fn create_liqpool_contract<'a>(
@@ -39,7 +46,7 @@ fn create_liqpool_contract<'a>(
 
 fn install_token_wasm(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
@@ -98,6 +105,8 @@ fn test_happy_flow() {
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
@@ -115,8 +124,8 @@ fn test_happy_flow() {
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
-    token1.mint(&user1, &1000_0000000);
-    token2.mint(&user1, &1000_0000000);
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
     token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
@@ -207,6 +216,8 @@ fn test_kill() {
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
@@ -219,8 +230,8 @@ fn test_kill() {
         0,
         &token_reward.address,
     );
-    token1.mint(&user1, &1000_0000000);
-    token2.mint(&user1, &1000_0000000);
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
     token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
     token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
@@ -246,6 +257,9 @@ fn test_happy_flow_3_tokens() {
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
     let token3 = create_token_contract(&e, &admin3);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token3_admin_client = get_token_admin_client(&e, &token3.address);
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
@@ -270,9 +284,9 @@ fn test_happy_flow_3_tokens() {
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
-    token1.mint(&user1, &1000_0000000);
-    token2.mint(&user1, &1000_0000000);
-    token3.mint(&user1, &1000_0000000);
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+    token3_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token3.balance(&user1) as u128, 1000_0000000);
@@ -387,6 +401,10 @@ fn test_happy_flow_4_tokens() {
     let token2 = create_token_contract(&e, &admin2);
     let token3 = create_token_contract(&e, &admin3);
     let token4 = create_token_contract(&e, &admin4);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token3_admin_client = get_token_admin_client(&e, &token3.address);
+    let token4_admin_client = get_token_admin_client(&e, &token4.address);
 
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
@@ -413,10 +431,10 @@ fn test_happy_flow_4_tokens() {
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
-    token1.mint(&user1, &1000_0000000);
-    token2.mint(&user1, &1000_0000000);
-    token3.mint(&user1, &1000_0000000);
-    token4.mint(&user1, &1000_0000000);
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+    token3_admin_client.mint(&user1, &1000_0000000);
+    token4_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token3.balance(&user1) as u128, 1000_0000000);
@@ -524,6 +542,8 @@ fn test_withdraw_partial() {
         std::mem::swap(&mut token1, &mut token2);
         std::mem::swap(&mut admin1, &mut admin2);
     }
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let user1 = Address::generate(&e);
     // let fee = 20000_u128;
     let fee = 0_u128;
@@ -542,10 +562,10 @@ fn test_withdraw_partial() {
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
-    token1.mint(&user1, &1000_0000000);
+    token1_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
 
-    token2.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
     token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
     token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
@@ -612,6 +632,8 @@ fn test_withdraw_one_token() {
         std::mem::swap(&mut token1, &mut token2);
         std::mem::swap(&mut admin1, &mut admin2);
     }
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -626,10 +648,10 @@ fn test_withdraw_one_token() {
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
-    token1.mint(&user1, &1000_0000000);
+    token1_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
 
-    token2.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
     token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
     token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
@@ -682,10 +704,12 @@ fn test_custom_fee() {
         std::mem::swap(&mut token1, &mut token2);
         std::mem::swap(&mut admin1, &mut admin2);
     }
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let user1 = Address::generate(&e);
 
-    token1.mint(&user1, &1000000_0000000);
-    token2.mint(&user1, &1000000_0000000);
+    token1_admin_client.mint(&user1, &1000000_0000000);
+    token2_admin_client.mint(&user1, &1000000_0000000);
 
     // we're checking fraction against value required to swap 1 token
     for fee_config in [
@@ -736,6 +760,8 @@ fn test_deposit_inequal() {
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
@@ -751,8 +777,8 @@ fn test_deposit_inequal() {
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
 
-    token1.mint(&user1, &1000_0000000);
-    token2.mint(&user1, &1000_0000000);
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
     token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
     token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
@@ -778,7 +804,10 @@ fn test_simple_ongoing_reward() {
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward = create_token_contract(&e, &admin1);
+    let token_reward_admin_client = get_token_admin_client(&e, &token_reward.address);
 
     let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
@@ -792,7 +821,7 @@ fn test_simple_ongoing_reward() {
         &token_reward.address,
     );
 
-    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    token_reward_admin_client.mint(&liqpool.address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
     liqpool.set_rewards_config(
@@ -807,10 +836,10 @@ fn test_simple_ongoing_reward() {
         &99999,
     );
 
-    token1.mint(&user1, &1000);
+    token1_admin_client.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1) as u128, 1000);
 
-    token2.mint(&user1, &1000);
+    token2_admin_client.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1) as u128, 1000);
     token1.approve(&user1, &liqpool.address, &1000, &99999);
     token2.approve(&user1, &liqpool.address, &1000, &99999);
@@ -842,7 +871,10 @@ fn test_simple_reward() {
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward = create_token_contract(&e, &admin1);
+    let token_reward_admin_client = get_token_admin_client(&e, &token_reward.address);
 
     let user1 = Address::generate(&e);
     let liqpool = create_liqpool_contract(
@@ -856,10 +888,10 @@ fn test_simple_reward() {
         &token_reward.address,
     );
 
-    token1.mint(&user1, &1000);
+    token1_admin_client.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1) as u128, 1000);
 
-    token2.mint(&user1, &1000);
+    token2_admin_client.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1) as u128, 1000);
     token1.approve(&user1, &liqpool.address, &1000, &99999);
     token2.approve(&user1, &liqpool.address, &1000, &99999);
@@ -874,7 +906,7 @@ fn test_simple_reward() {
 
     // 20 seconds. rewards set up for 60 seconds
     jump(&e, 10);
-    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    token_reward_admin_client.mint(&liqpool.address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
     liqpool.set_rewards_config(
@@ -914,7 +946,10 @@ fn test_two_users_rewards() {
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward = create_token_contract(&e, &admin1);
+    let token_reward_admin_client = get_token_admin_client(&e, &token_reward.address);
 
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
@@ -930,7 +965,7 @@ fn test_two_users_rewards() {
         &token_reward.address,
     );
 
-    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    token_reward_admin_client.mint(&liqpool.address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
     liqpool.set_rewards_config(
@@ -946,10 +981,10 @@ fn test_two_users_rewards() {
     );
 
     for user in [&user1, &user2] {
-        token1.mint(user, &1000);
+        token1_admin_client.mint(user, &1000);
         assert_eq!(token1.balance(user) as u128, 1000);
 
-        token2.mint(user, &1000);
+        token2_admin_client.mint(user, &1000);
         assert_eq!(token2.balance(user) as u128, 1000);
 
         token1.approve(user, &liqpool.address, &1000, &99999);
@@ -993,7 +1028,10 @@ fn test_lazy_user_rewards() {
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward = create_token_contract(&e, &admin1);
+    let token_reward_admin_client = get_token_admin_client(&e, &token_reward.address);
 
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
@@ -1009,7 +1047,7 @@ fn test_lazy_user_rewards() {
         &token_reward.address,
     );
 
-    token_reward.mint(&liqpool.address, &1_000_000_0000000);
+    token_reward_admin_client.mint(&liqpool.address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
     liqpool.set_rewards_config(
@@ -1025,10 +1063,10 @@ fn test_lazy_user_rewards() {
     );
 
     for user in [&user1, &user2] {
-        token1.mint(user, &1000);
+        token1_admin_client.mint(user, &1000);
         assert_eq!(token1.balance(user) as u128, 1000);
 
-        token2.mint(user, &1000);
+        token2_admin_client.mint(user, &1000);
         assert_eq!(token2.balance(user) as u128, 1000);
 
         token1.approve(user, &liqpool.address, &1000, &99999);
@@ -1058,6 +1096,403 @@ fn test_lazy_user_rewards() {
     assert_approx_eq_abs(token_reward.balance(&user1) as u128, user1_claim, 1000);
     assert_approx_eq_abs(token_reward.balance(&user2) as u128, user2_claim, 1000);
     assert_approx_eq_abs(user1_claim + user2_claim, total_reward_1, 1000);
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+#[should_panic(expected = "insufficient time")]
+fn test_update_fee_too_early() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    liqpool.commit_new_fee(&pool_admin_original, &30, &1);
+    assert_eq!(liqpool.get_fee_fraction(), 0);
+    assert_eq!(liqpool.get_admin_fee(), 0);
+    liqpool.apply_new_fee(&pool_admin_original);
+    jump(&e, 2 * 30 * 86400 - 1);
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+fn test_update_fee() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    liqpool.commit_new_fee(&pool_admin_original, &30, &1);
+    assert_eq!(liqpool.get_fee_fraction(), 0);
+    assert_eq!(liqpool.get_admin_fee(), 0);
+
+    jump(&e, 2 * 30 * 86400 + 1);
+    liqpool.apply_new_fee(&pool_admin_original);
+    assert_eq!(liqpool.get_fee_fraction(), 30);
+    assert_eq!(liqpool.get_admin_fee(), 1);
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+#[should_panic(expected = "insufficient time")]
+fn test_transfer_ownership_too_early() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+    let pool_admin_new = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    // check admin by calling protected method
+    liqpool.donate_admin_fees(&pool_admin_original);
+    jump(&e, ADMIN_ACTIONS_DELAY - 1);
+    liqpool.apply_transfer_ownership(&pool_admin_original);
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+#[should_panic(expected = "active transfer")]
+fn test_transfer_ownership_twice() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+    let pool_admin_new = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+#[should_panic(expected = "no active transfer")]
+fn test_transfer_ownership_not_committed() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    jump(&e, ADMIN_ACTIONS_DELAY + 1);
+    liqpool.apply_transfer_ownership(&pool_admin_original);
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+#[should_panic(expected = "no active transfer")]
+fn test_transfer_ownership_reverted() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+    let pool_admin_new = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    // check admin by calling protected method
+    liqpool.donate_admin_fees(&pool_admin_original);
+    jump(&e, ADMIN_ACTIONS_DELAY + 1);
+    liqpool.revert_transfer_ownership(&pool_admin_original);
+    liqpool.apply_transfer_ownership(&pool_admin_original);
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+fn test_transfer_ownership() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+    let pool_admin_new = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    // check admin by calling protected method
+    liqpool.donate_admin_fees(&pool_admin_original);
+    jump(&e, ADMIN_ACTIONS_DELAY + 1);
+    liqpool.apply_transfer_ownership(&pool_admin_original);
+    liqpool.donate_admin_fees(&pool_admin_new);
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+#[should_panic(expected = "ramp time is less than minimal")]
+fn test_ramp_a_too_early() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    jump(&e, MIN_RAMP_TIME - 1);
+    assert_eq!(liqpool.a(), 10);
+    liqpool.ramp_a(
+        &pool_admin_original,
+        &30,
+        &e.ledger().timestamp().saturating_add(MIN_RAMP_TIME + 1),
+    );
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+#[should_panic(expected = "insufficient time")]
+fn test_ramp_a_too_short() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    jump(&e, MIN_RAMP_TIME + 1);
+    assert_eq!(liqpool.a(), 10);
+    liqpool.ramp_a(
+        &pool_admin_original,
+        &30,
+        &e.ledger().timestamp().saturating_add(MIN_RAMP_TIME - 1),
+    );
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+#[should_panic(expected = "too rapid change")]
+fn test_ramp_a_too_fast() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    jump(&e, MIN_RAMP_TIME + 1);
+    assert_eq!(liqpool.a(), 10);
+    liqpool.ramp_a(
+        &pool_admin_original,
+        &101,
+        &e.ledger().timestamp().saturating_add(MIN_RAMP_TIME + 1),
+    );
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+fn test_ramp_a() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+    );
+
+    jump(&e, MIN_RAMP_TIME + 1);
+    assert_eq!(liqpool.a(), 10);
+    liqpool.ramp_a(
+        &pool_admin_original,
+        &99,
+        &e.ledger().timestamp().saturating_add(MIN_RAMP_TIME + 1),
+    );
+    jump(&e, MIN_RAMP_TIME / 2 + 1);
+    assert_eq!(liqpool.a(), 54);
+    jump(&e, MIN_RAMP_TIME);
+    assert_eq!(liqpool.a(), 99);
 }
 
 #[test]

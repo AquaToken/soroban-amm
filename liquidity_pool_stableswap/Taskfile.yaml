@@ -12,21 +12,22 @@ tasks:
   build:
     cmds:
       - task -d ../token build || exit 1
-      - soroban contract build --features=tokens_2
-      - soroban contract optimize --wasm target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_2_tokens.wasm
-      - soroban contract build --features=tokens_3
-      - soroban contract optimize --wasm target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_3_tokens.wasm
-      - soroban contract build --features=tokens_4
-      - soroban contract optimize --wasm target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_4_tokens.wasm
-      - ls -l target/wasm32-unknown-unknown/release/*.wasm
+      - soroban contract build --package soroban-liquidity-pool-stableswap-contract
+      - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_2_tokens.wasm
+      - soroban contract build --no-default-features --features=tokens_3 --package soroban-liquidity-pool-stableswap-contract
+      - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_3_tokens.wasm
+      - soroban contract build --no-default-features --features=tokens_4 --package soroban-liquidity-pool-stableswap-contract
+      - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_4_tokens.wasm
+      - rm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm
+      - ls -l ../target/wasm32-unknown-unknown/release/*.wasm
 
   test:
     deps:
       - build
     cmds:
-      - cargo test --features=tokens_2 -- --nocapture
-      - cargo test --features=tokens_3 -- --nocapture
-      - cargo test --features=tokens_4 -- --nocapture
+      - cargo test --no-default-features --features=tokens_2
+      - cargo test --no-default-features --features=tokens_3
+      - cargo test --no-default-features --features=tokens_4
 
   test_slow:
     cmds:

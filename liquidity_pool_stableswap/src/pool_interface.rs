@@ -1,6 +1,7 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
 pub trait ManagedLiquidityPool {
+    // Initialize pool completely to reduce calculations cost
     fn initialize_all(
         e: Env,
         admin: Address,
@@ -15,6 +16,7 @@ pub trait ManagedLiquidityPool {
 }
 
 pub trait LiquidityPoolInterfaceTrait {
+    // Get symbolic explanation of pool type.
     fn pool_type(e: Env) -> Symbol;
 
     // Sets the token contract addresses for this pool
@@ -63,6 +65,7 @@ pub trait LiquidityPoolInterfaceTrait {
         out_min: u128,
     ) -> u128;
 
+    // Estimate amount of coins to retrieve using swap function
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
 
     // Withdraw coins from the pool.
@@ -73,36 +76,80 @@ pub trait LiquidityPoolInterfaceTrait {
 
     fn get_liquidity(e: Env) -> u128;
 
+    // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> Map<Symbol, Val>;
 }
 
 pub trait UpgradeableContractTrait {
+    // Get contract version
     fn version() -> u32;
+
+    // Upgrade contract with new wasm code
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
 }
 
 pub trait RewardsTrait {
     // todo: move rewards configuration to gauge
+
+    // Initialize rewards settings: token address and storage address
+    // from which transfer will be made on claim
     fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
+
+    // Configure rewards for pool. Every second tps of coins
+    // being distributed across all liquidity providers
+    // after expired_at timestamp distribution ends
     fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128);
+
+    // Get rewards status for the pool,
+    // including amount available for the user
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
+
+    // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
+
+    // Claim reward as a user.
+    // returns amount of tokens rewarded to the user
     fn claim(e: Env, user: Address) -> u128;
 }
 
 pub trait AdminInterfaceTrait {
+    // Start ramping A to target value in future timestamp
     fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64);
+
+    // Stop ramping A
     fn stop_ramp_a(e: Env, admin: Address);
+
+    // Set new fee to be applied in future
     fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32);
+
+    // Apply committed fee
     fn apply_new_fee(e: Env, admin: Address);
+
+    // Revert committed parameters to current values
     fn revert_new_parameters(e: Env, admin: Address);
+
+    // Commit ownership transfer
     fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address);
+
+    // Apply committed transfer ownership
     fn apply_transfer_ownership(e: Env, admin: Address);
+
+    // Revert committed ownership transfer
     fn revert_transfer_ownership(e: Env, admin: Address);
+
+    // Get amount of collected admin fees
     fn admin_balances(e: Env, i: u32) -> u128;
+
+    // Withdraw collected admin fee
     fn withdraw_admin_fees(e: Env, admin: Address);
+
+    // Donate collected admin fee to common fee pool
     fn donate_admin_fees(e: Env, admin: Address);
+
+    // Stop pool instantly
     fn kill_me(e: Env, admin: Address);
+
+    // Resume pool
     fn unkill_me(e: Env, admin: Address);
 }
 

@@ -11,17 +11,16 @@ tasks:
 
   build:
     cmds:
-      - task -d ../token build || exit 1
       - task -d ../liquidity_pool build || exit 1
       - task -d ../liquidity_pool_stableswap build || exit 1
-      - soroban contract build
-      - soroban contract optimize --wasm target/wasm32-unknown-unknown/release/soroban_liquidity_pool_router_contract.wasm --wasm-out target/wasm32-unknown-unknown/release/soroban_liquidity_pool_router_contract.wasm
-      - ls -l target/wasm32-unknown-unknown/release/*.wasm
+      - soroban contract build --package soroban-liquidity-pool-router-contract
+      - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_router_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_router_contract.wasm
+      - ls -l ../target/wasm32-unknown-unknown/release/*.wasm
 
   test:
     deps:
       - build
-    cmd: cargo test -- --nocapture
+    cmd: cargo test
 
   test_slow:
     cmds:

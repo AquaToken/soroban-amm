@@ -45,7 +45,7 @@ impl Storage {
     pub fn new(e: &Env) -> Storage {
         Storage {
             env: e.clone(),
-            inv_cache: Map::new(&e),
+            inv_cache: Map::new(e),
         }
     }
 }
