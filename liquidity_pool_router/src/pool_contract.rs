@@ -1,6 +1,6 @@
 mod standard_pool_client {
     soroban_sdk::contractimport!(
-        file = "../liquidity_pool/target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm"
+        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm"
     );
 }
 
