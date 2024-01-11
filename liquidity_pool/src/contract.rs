@@ -13,7 +13,7 @@ use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, tr
 use access_control::access::{AccessControl, AccessControlTrait};
 use num_integer::Roots;
 use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
-use soroban_sdk::token::Client as SorobanTokenClient;
+use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, Address,
     BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
@@ -315,7 +315,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards.storage().bump_user_reward_data(&user);
 
         // First transfer the pool shares that need to be redeemed
-        let share_token_client = LPTokenClient::new(&e, &get_token_share(&e));
+        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
         share_token_client.transfer_from(
             &e.current_contract_address(),
             &user,

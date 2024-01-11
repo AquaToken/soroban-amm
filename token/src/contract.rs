@@ -1,10 +1,7 @@
 //! This contract demonstrates a sample implementation of the Soroban token
 //! interface.
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
-use crate::balance::{
-    decrease_total_balance, increase_total_balance, read_balance, read_total_balance,
-    receive_balance, spend_balance, write_total_balance,
-};
+use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
 use access_control::access::{AccessControl, AccessControlTrait};
 use soroban_sdk::token::{self, Interface as _};
@@ -33,7 +30,6 @@ impl Token {
         if decimal > u8::MAX.into() {
             panic!("Decimal must fit in a u8");
         }
-        write_total_balance(&e, 0);
 
         write_metadata(
             &e,
@@ -54,7 +50,6 @@ impl Token {
         bump_instance(&e);
 
         receive_balance(&e, to.clone(), amount);
-        increase_total_balance(&e, amount);
         TokenUtils::new(&e).events().mint(admin, to, amount);
     }
 
@@ -67,10 +62,6 @@ impl Token {
 
         access_control.set_admin(&admin);
         TokenUtils::new(&e).events().set_admin(admin, new_admin);
-    }
-
-    pub fn total_balance(e: Env) -> i128 {
-        read_total_balance(&e)
     }
 }
 
@@ -132,7 +123,6 @@ impl token::Interface for Token {
         bump_instance(&e);
 
         spend_balance(&e, from.clone(), amount);
-        decrease_total_balance(&e, amount);
         TokenUtils::new(&e).events().burn(from, amount);
     }
 
@@ -145,7 +135,6 @@ impl token::Interface for Token {
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
-        decrease_total_balance(&e, amount);
         TokenUtils::new(&e).events().burn(from, amount)
     }
 
