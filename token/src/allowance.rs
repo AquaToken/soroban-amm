@@ -15,18 +15,10 @@ struct AllowanceDataKey {
 
 #[derive(Clone)]
 #[contracttype]
+#[derive(Default)]
 pub struct AllowanceValue {
     pub amount: i128,
     pub expiration_ledger: u32,
-}
-
-impl Default for AllowanceValue {
-    fn default() -> Self {
-        AllowanceValue {
-            amount: 0,
-            expiration_ledger: 0,
-        }
-    }
 }
 
 pub fn read_allowance(e: &Env, from: Address, spender: Address) -> AllowanceValue {
