@@ -4,7 +4,7 @@ use crate::storage::{
 };
 use crate::RewardsConfig;
 use cast::u128 as to_u128;
-use soroban_sdk::{token::Client, Address, Env, Map};
+use soroban_sdk::{token::TokenClient as Client, Address, Env, Map};
 
 pub struct Manager {
     env: Env,
