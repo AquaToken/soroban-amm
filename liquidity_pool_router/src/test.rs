@@ -54,6 +54,28 @@ fn install_stableswap_three_tokens_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(WASM)
 }
 
+mod pool_plane {
+    soroban_sdk::contractimport!(
+        file =
+            "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_plane_contract.wasm"
+    );
+}
+
+fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
+    pool_plane::Client::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
+}
+
+mod swap_router {
+    soroban_sdk::contractimport!(
+        file =
+            "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_swap_router_contract.wasm"
+    );
+}
+
+fn create_swap_router_contract<'a>(e: &Env) -> swap_router::Client<'a> {
+    swap_router::Client::new(e, &e.register_contract_wasm(None, swap_router::WASM))
+}
+
 fn jump(e: &Env, time: u64) {
     e.ledger().set(LedgerInfo {
         timestamp: e.ledger().timestamp().saturating_add(time),
@@ -1207,4 +1229,126 @@ fn test_event_correct() {
             ),
         ]
     );
+}
+
+#[test]
+fn test_estimate_swap_routed() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let stableswap_pool_hash_2 = install_stableswap_two_tokens_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.initialize_plane(&plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash_2);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.initialize_plane(&plane.address);
+    router.initialize_swap_router(&swap_router.address);
+    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+
+    reward_token.mint(&user1, &3_0000000);
+    reward_token.approve(&user1, &router.address, &3_0000000, &99999);
+    token1.mint(&user1, &100000_0000000);
+    token2.mint(&user1, &100000_0000000);
+
+    let (_standard1_pool_hash, standard1_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &10);
+    plane.update(
+        &standard1_pool_address,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+    );
+    let (_standard2_pool_hash, standard2_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
+    plane.update(
+        &standard2_pool_address,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+    );
+    let (_standard3_pool_hash, standard3_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &100);
+    plane.update(
+        &standard3_pool_address,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+    );
+    let (stable1_pool_hash, stable1_pool_address) =
+        router.init_stableswap_pool(&user1, &tokens, &85, &6, &0);
+    token1.approve(&user1, &stable1_pool_address, &1100_0000000, &99999);
+    token2.approve(&user1, &stable1_pool_address, &1100_0000000, &99999);
+    router.deposit(
+        &user1,
+        &tokens,
+        &stable1_pool_hash,
+        &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+    );
+    plane.update(
+        &stable1_pool_address,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [6_u128, 85_u128]),
+        &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+    );
+    let (_stable2_pool_hash, stable2_pool_address) =
+        router.init_stableswap_pool(&user1, &tokens, &85, &6, &0);
+    plane.update(
+        &stable2_pool_address,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [6_u128, 85_u128]),
+        &Vec::from_array(&e, [100_0000000_u128, 100_0000000_u128]),
+    );
+    let (_stable3_pool_hash, stable3_pool_address) =
+        router.init_stableswap_pool(&user1, &tokens, &85, &6, &0);
+    plane.update(
+        &stable3_pool_address,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [6_u128, 85_u128]),
+        &Vec::from_array(&e, [100_0000000_u128, 100_0000000_u128]),
+    );
+
+    e.budget().reset_default();
+    let (best_pool, best_result) =
+        router.estimate_swap_routed(&tokens, &token1.address, &token2.address, &9_0000000);
+    e.budget().print();
+    assert_eq!(best_pool, stable1_pool_hash);
+    assert_eq!(best_result, 8_9936586);
+
+    e.budget().reset_default();
+    let swap_result = router.swap(
+        &user1,
+        &tokens,
+        &token1.address,
+        &token2.address,
+        &best_pool,
+        &9_0000000,
+        &(best_result - 1),
+    );
+    assert_eq!(swap_result, best_result);
 }

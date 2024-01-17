@@ -9,7 +9,9 @@ members = [
     "rewards",
     "liquidity_pool",
     "liquidity_pool_stableswap",
-    "liquidity_pool_router"
+    "liquidity_pool_router",
+    "liquidity_pool_swap_router",
+    "liquidity_pool_plane",
 ]
 
 [workspace.package]
