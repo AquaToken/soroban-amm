@@ -147,7 +147,7 @@ pub trait PoolsManagementTrait {
 }
 
 pub trait PoolPlaneInterface {
-    fn initialize_plane(e: Env, plane: Address);
+    fn initialize_plane(e: Env, admin: Address, plane: Address);
     fn get_plane(e: Env) -> Address;
 }
 
@@ -158,7 +158,7 @@ pub trait SwapRouterInterface {
         token_in: Address,
         token_out: Address,
         in_amount: u128,
-    ) -> (BytesN<32>, u128);
-    fn initialize_swap_router(e: Env, plane: Address);
+    ) -> (BytesN<32>, Address, u128);
+    fn initialize_swap_router(e: Env, admin: Address, router: Address);
     fn get_swap_router(e: Env) -> Address;
 }

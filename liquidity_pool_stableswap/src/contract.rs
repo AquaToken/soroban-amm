@@ -9,10 +9,10 @@ use crate::pool_interface::{
 use crate::storage::{
     get_admin_actions_deadline, get_admin_fee, get_fee, get_future_a, get_future_a_time,
     get_future_admin_fee, get_future_fee, get_initial_a, get_initial_a_time, get_is_killed,
-    get_kill_deadline, get_reserves, get_tokens, get_transfer_ownership_deadline,
+    get_kill_deadline, get_reserves, get_tokens, get_transfer_ownership_deadline, has_plane,
     put_admin_actions_deadline, put_admin_fee, put_fee, put_future_a, put_future_a_time,
     put_future_admin_fee, put_future_fee, put_initial_a, put_initial_a_time, put_is_killed,
-    put_kill_deadline, put_reserves, put_tokens, put_transfer_ownership_deadline,
+    put_kill_deadline, put_reserves, put_tokens, put_transfer_ownership_deadline, set_plane,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -20,14 +20,16 @@ use token_share::{
     put_token_share, Client as LPToken,
 };
 
+use crate::plane::update_plane;
+use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
 use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol,
-    Val, Vec,
+    contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, Address,
+    BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
 };
 use utils::bump::bump_instance;
 
@@ -35,6 +37,14 @@ contractmeta!(
     key = "Description",
     val = "Stable Swap AMM for set of tokens"
 );
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum LiquidityPoolError {
+    AlreadyInitialized = 201,
+    PlaneAlreadyInitialized = 202,
+}
 
 #[contract]
 pub struct LiquidityPool;
@@ -209,6 +219,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             }
         }
 
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
+
         token_amount
     }
 
@@ -259,6 +272,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let coins = get_tokens(&e);
         let token_client = SorobanTokenClient::new(&e, &coins.get(i as u32).unwrap());
         token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
+
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
     }
 }
 
@@ -507,6 +523,9 @@ impl AdminInterfaceTrait for LiquidityPool {
         put_future_a(&e, &future_a);
         put_initial_a_time(&e, &e.ledger().timestamp());
         put_future_a_time(&e, &future_time);
+
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
     }
 
     fn stop_ramp_a(e: Env, admin: Address) {
@@ -521,6 +540,9 @@ impl AdminInterfaceTrait for LiquidityPool {
         put_future_a_time(&e, &e.ledger().timestamp());
 
         // now (block.timestamp < t1) is always False, so we return saved A
+
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
     }
 
     fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32) {
@@ -561,6 +583,9 @@ impl AdminInterfaceTrait for LiquidityPool {
         let admin_fee = get_future_admin_fee(&e);
         put_fee(&e, &fee);
         put_admin_fee(&e, &admin_fee);
+
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
     }
 
     fn revert_new_parameters(e: Env, admin: Address) {
@@ -654,6 +679,9 @@ impl AdminInterfaceTrait for LiquidityPool {
             reserves.set(i, balance as u128);
         }
         put_reserves(&e, &reserves);
+
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
     }
 
     fn kill_me(e: Env, admin: Address) {
@@ -688,9 +716,11 @@ impl ManagedLiquidityPool for LiquidityPool {
         admin_fee: u32,
         reward_token: Address,
         reward_storage: Address,
+        plane: Address,
     ) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
+        Self::initialize_plane(e.clone(), plane);
         Self::initialize(e.clone(), admin, token_wasm_hash, coins, a, fee, admin_fee);
         Self::initialize_rewards_config(e.clone(), reward_token, reward_storage);
     }
@@ -713,7 +743,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     ) {
         let access_control = AccessControl::new(&e);
         if access_control.has_admin() {
-            panic!("already initialized")
+            panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
         }
 
         access_control.set_admin(&admin);
@@ -747,6 +777,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         let rewards = get_rewards_manager(&e);
         rewards.manager().initialize();
+
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
     }
 
     fn get_fee_fraction(e: Env) -> u32 {
@@ -877,6 +910,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // Mint pool tokens
         mint_shares(&e, user, mint_amount as i128);
 
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
+
         (amounts, mint_amount)
     }
 
@@ -940,6 +976,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         let token_client = SorobanTokenClient::new(&e, &coins.get(out_idx as u32).unwrap());
         token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
+
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
+
         dy
     }
 
@@ -991,6 +1031,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             &(share_amount as i128),
         );
         burn_shares(&e, share_amount as i128);
+
+        // update plane data for every pool update
+        update_plane(&e, Self::a(e.clone()));
+
         amounts
     }
 
@@ -1102,5 +1146,16 @@ impl RewardsTrait for LiquidityPool {
             .claim_reward(&user, total_shares, user_shares);
         rewards.storage().bump_user_reward_data(&user);
         reward
+    }
+}
+
+#[contractimpl]
+impl Plane for LiquidityPool {
+    fn initialize_plane(e: Env, plane: Address) {
+        if has_plane(&e) {
+            panic_with_error!(&e, LiquidityPoolError::PlaneAlreadyInitialized);
+        }
+
+        set_plane(&e, &plane);
     }
 }

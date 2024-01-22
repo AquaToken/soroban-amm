@@ -440,7 +440,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
 #[contractimpl]
 impl PoolPlaneInterface for LiquidityPoolRouter {
-    fn initialize_plane(e: Env, plane: Address) {
+    fn initialize_plane(e: Env, admin: Address, plane: Address) {
+        let access_control = AccessControl::new(&e);
+        admin.require_auth();
+        access_control.check_admin(&admin);
+
         set_pool_plane(&e, &plane);
     }
 
@@ -451,8 +455,11 @@ impl PoolPlaneInterface for LiquidityPoolRouter {
 
 #[contractimpl]
 impl SwapRouterInterface for LiquidityPoolRouter {
-    fn initialize_swap_router(e: Env, plane: Address) {
-        set_swap_router(&e, &plane);
+    fn initialize_swap_router(e: Env, admin: Address, router: Address) {
+        let access_control = AccessControl::new(&e);
+        admin.require_auth();
+        access_control.check_admin(&admin);
+        set_swap_router(&e, &router);
     }
 
     fn get_swap_router(e: Env) -> Address {
@@ -465,7 +472,7 @@ impl SwapRouterInterface for LiquidityPoolRouter {
         token_in: Address,
         token_out: Address,
         in_amount: u128,
-    ) -> (BytesN<32>, u128) {
+    ) -> (BytesN<32>, Address, u128) {
         let salt = pool_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
 
@@ -477,39 +484,19 @@ impl SwapRouterInterface for LiquidityPoolRouter {
             pools_reversed.set(value, key);
         }
 
-        let result = SwapRouterClient::new(&e, &swap_router).estimate_swap(
-            &pools_vec,
-            &(tokens.first_index_of(token_in.clone()).unwrap()),
-            &(tokens.first_index_of(token_out.clone()).unwrap()),
-            &in_amount,
-        );
-        // let best_pool: Address;
-        // let best_result: u128;
-        // SwapRouterClient::new();
-        // (best_pool, best_result) = e.invoke_contract(
-        //     &swap_router,
-        //     &Symbol::new(&e, "estimate_swap"),
-        //     Vec::from_array(
-        //         &e,
-        //         [
-        //             pools_vec.into_val(&e),
-        //             tokens
-        //                 .first_index_of(token_in.clone())
-        //                 .unwrap()
-        //                 .into_val(&e),
-        //             tokens
-        //                 .first_index_of(token_out.clone())
-        //                 .unwrap()
-        //                 .into_val(&e),
-        //             in_amount.into_val(&e),
-        //         ],
-        //     ),
-        // );
+        let (best_pool_address, swap_result) = SwapRouterClient::new(&e, &swap_router)
+            .estimate_swap(
+                &pools_vec,
+                &(tokens.first_index_of(token_in.clone()).unwrap()),
+                &(tokens.first_index_of(token_out.clone()).unwrap()),
+                &in_amount,
+            );
         (
             pools_reversed
-                .get(result.0)
+                .get(best_pool_address.clone())
                 .expect("unable to reverse pool"),
-            result.1,
+            best_pool_address,
+            swap_result,
         )
     }
 }
