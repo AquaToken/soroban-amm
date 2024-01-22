@@ -53,6 +53,8 @@ enum DataKey {
     ConstantPoolHash,
     StableSwapPoolHash(u32),
     StableSwapCounter,
+    PoolPlane,
+    SwapRouter,
     RewardsConfig,
     RewardTokensList(u64),
     RewardTokensPoolsLiquidity(u64, BytesN<32>),
@@ -104,6 +106,8 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
+generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
+generate_instance_storage_getter_and_setter!(swap_router, DataKey::SwapRouter, Address);
 generate_instance_storage_getter_and_setter_with_default!(
     rewards_config,
     DataKey::RewardsConfig,

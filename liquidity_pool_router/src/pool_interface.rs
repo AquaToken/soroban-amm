@@ -155,3 +155,20 @@ pub trait PoolsManagementTrait {
     // Remove pool from the list
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>);
 }
+
+pub trait PoolPlaneInterface {
+    fn initialize_plane(e: Env, plane: Address);
+    fn get_plane(e: Env) -> Address;
+}
+
+pub trait SwapRouterInterface {
+    fn estimate_swap_routed(
+        e: Env,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        in_amount: u128,
+    ) -> (BytesN<32>, u128);
+    fn initialize_swap_router(e: Env, plane: Address);
+    fn get_swap_router(e: Env) -> Address;
+}
