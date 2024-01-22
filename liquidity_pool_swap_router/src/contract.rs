@@ -34,6 +34,18 @@ impl Router for LiquidityPoolSwapRouter {
         out_idx: u32,
         in_amount: u128,
     ) -> (Address, u128) {
+        if in_idx == out_idx {
+            panic!("cannot swap token to same one")
+        }
+
+        if in_idx > 1 {
+            panic!("in_idx out of bounds");
+        }
+
+        if out_idx > 1 {
+            panic!("out_idx out of bounds");
+        }
+
         let plane_client = PoolPlaneClient::new(&e, &get_plane(&e));
         let data = plane_client.get(&pools);
         let mut best_result = 0;

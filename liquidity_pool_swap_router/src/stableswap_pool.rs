@@ -123,17 +123,5 @@ pub(crate) fn estimate_swap(
     out_idx: u32,
     in_amount: u128,
 ) -> u128 {
-    if in_idx == out_idx {
-        panic!("cannot swap token to same one")
-    }
-
-    if in_idx >= reserves.len() {
-        panic!("in_idx out of bounds");
-    }
-
-    if out_idx >= reserves.len() {
-        panic!("out_idx out of bounds");
-    }
-
     get_dy(reserves, fee_fraction, a, in_idx, out_idx, in_amount)
 }

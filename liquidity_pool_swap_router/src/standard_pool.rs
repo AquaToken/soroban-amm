@@ -8,18 +8,6 @@ pub(crate) fn estimate_swap(
     out_idx: u32,
     in_amount: u128,
 ) -> u128 {
-    if in_idx == out_idx {
-        panic!("cannot swap token to same one")
-    }
-
-    if in_idx > 1 {
-        panic!("in_idx out of bounds");
-    }
-
-    if out_idx > 1 {
-        panic!("out_idx out of bounds");
-    }
-
     let reserve_sell = reserves.get(in_idx).unwrap();
     let reserve_buy = reserves.get(out_idx).unwrap();
 
