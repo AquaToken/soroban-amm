@@ -21,7 +21,7 @@ pub struct PoolPlane {
 
 fn bump_persistent(e: &Env, key: &DataKey) {
     e.storage().persistent().extend_ttl(
-        &key,
+        key,
         PERSISTENT_LIFETIME_THRESHOLD,
         PERSISTENT_BUMP_AMOUNT,
     );
