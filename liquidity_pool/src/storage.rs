@@ -9,6 +9,7 @@ enum DataKey {
     ReserveA,
     ReserveB,
     FeeFraction, // 1 = 0.01%
+    Plane,
 }
 
 pub fn get_token_a(e: &Env) -> Address {
@@ -74,4 +75,23 @@ pub fn get_fee_fraction(e: &Env) -> u32 {
 pub fn put_fee_fraction(e: &Env, value: u32) {
     bump_instance(&e);
     e.storage().instance().set(&DataKey::FeeFraction, &value)
+}
+
+pub(crate) fn set_plane(e: &Env, plane: &Address) {
+    let key = DataKey::Plane;
+    bump_instance(&e);
+    e.storage().instance().set(&key, plane);
+}
+
+pub(crate) fn get_plane(e: &Env) -> Address {
+    let key = DataKey::Plane;
+    e.storage()
+        .instance()
+        .get(&key)
+        .expect("unable to get plane")
+}
+
+pub(crate) fn has_plane(e: &Env) -> bool {
+    let key = DataKey::Plane;
+    e.storage().instance().has(&key)
 }

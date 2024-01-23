@@ -19,6 +19,7 @@ enum DataKey {
     TransferOwnershipDeadline,
     KillDeadline,
     IsKilled,
+    Plane,
 }
 
 pub fn get_tokens(e: &Env) -> Vec<Address> {
@@ -223,4 +224,23 @@ pub fn get_is_killed(e: &Env) -> bool {
 pub fn put_is_killed(e: &Env, value: &bool) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::IsKilled, value);
+}
+
+pub(crate) fn set_plane(e: &Env, plane: &Address) {
+    let key = DataKey::Plane;
+    bump_instance(&e);
+    e.storage().instance().set(&key, plane);
+}
+
+pub(crate) fn get_plane(e: &Env) -> Address {
+    let key = DataKey::Plane;
+    e.storage()
+        .instance()
+        .get(&key)
+        .expect("unable to get plane")
+}
+
+pub(crate) fn has_plane(e: &Env) -> bool {
+    let key = DataKey::Plane;
+    e.storage().instance().has(&key)
 }

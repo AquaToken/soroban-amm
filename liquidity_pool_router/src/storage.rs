@@ -37,6 +37,8 @@ enum DataKey {
     ConstantPoolHash,
     StableSwapPoolHash(u32),
     StableSwapCounter,
+    PoolPlane,
+    SwapRouter,
 }
 
 #[contracterror]
@@ -85,6 +87,8 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
+generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
+generate_instance_storage_getter_and_setter!(swap_router, DataKey::SwapRouter, Address);
 
 // pool hash
 pub fn get_stableswap_pool_hash(e: &Env, num_tokens: u32) -> BytesN<32> {

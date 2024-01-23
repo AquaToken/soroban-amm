@@ -10,6 +10,7 @@ pub trait LiquidityPoolCrunch {
         fee_fraction: u32,
         reward_token: Address,
         reward_storage: Address,
+        plane: Address,
     );
 }
 
