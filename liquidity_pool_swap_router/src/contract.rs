@@ -1,3 +1,4 @@
+use crate::interface::RouterInterface;
 use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
@@ -7,25 +8,11 @@ use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Symbol, Ve
 #[contract]
 pub struct LiquidityPoolSwapRouter;
 
-pub trait Router {
-    fn init_admin(e: Env, account: Address);
-    fn set_pools_plane(e: Env, admin: Address, plane: Address);
-    fn get_pools_plane(e: Env) -> Address;
-
-    fn estimate_swap(
-        e: Env,
-        pools: Vec<Address>,
-        in_idx: u32,
-        out_idx: u32,
-        in_amount: u128,
-    ) -> (Address, u128);
-}
-
-const POOL_TYPE_STANDARD: Symbol = symbol_short!("standard");
-const POOL_TYPE_STABLESWAP: Symbol = symbol_short!("stable");
+pub const POOL_TYPE_STANDARD: Symbol = symbol_short!("standard");
+pub const POOL_TYPE_STABLESWAP: Symbol = symbol_short!("stable");
 
 #[contractimpl]
-impl Router for LiquidityPoolSwapRouter {
+impl RouterInterface for LiquidityPoolSwapRouter {
     fn init_admin(e: Env, account: Address) {
         let access_control = AccessControl::new(&e);
         if !access_control.has_admin() {
