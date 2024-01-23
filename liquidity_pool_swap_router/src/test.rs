@@ -30,6 +30,7 @@ fn test() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
+    let admin = Address::generate(&e);
     let address1 = Address::generate(&e);
     let address2 = Address::generate(&e);
     let address3 = Address::generate(&e);
@@ -59,24 +60,25 @@ fn test() {
     plane.update(
         &address4,
         &symbol_short!("stable"),
-        &Vec::from_array(&e, [20_u128, 85_u128]),
+        &Vec::from_array(&e, [20_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
         &Vec::from_array(&e, [150_0000000_u128, 150_0000000_u128]),
     );
     plane.update(
         &address5,
         &symbol_short!("stable"),
-        &Vec::from_array(&e, [6_u128, 85_u128]),
+        &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
         &Vec::from_array(&e, [150_0000000_u128, 150_0000000_u128]),
     );
     plane.update(
         &address6,
         &symbol_short!("stable"),
-        &Vec::from_array(&e, [14_u128, 85_u128]),
+        &Vec::from_array(&e, [14_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
         &Vec::from_array(&e, [150_0000000_u128, 150_0000000_u128]),
     );
 
     let router = create_contract(&e);
-    router.initialize_plane(&plane.address);
+    router.init_admin(&admin);
+    router.set_pools_plane(&admin, &plane.address);
 
     e.budget().reset_default();
     let (best_pool, best_result) = router.estimate_swap(
@@ -107,6 +109,7 @@ fn test_empty_pool() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
+    let admin = Address::generate(&e);
     let address1 = Address::generate(&e);
     let address2 = Address::generate(&e);
 
@@ -120,12 +123,13 @@ fn test_empty_pool() {
     plane.update(
         &address2,
         &symbol_short!("stable"),
-        &Vec::from_array(&e, [6_u128, 85_u128]),
+        &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
         &Vec::from_array(&e, [0_u128, 0_u128]),
     );
 
     let router = create_contract(&e);
-    router.initialize_plane(&plane.address);
+    router.init_admin(&admin);
+    router.set_pools_plane(&admin, &plane.address);
 
     e.budget().reset_default();
     let (best_pool, best_result) = router.estimate_swap(
@@ -146,6 +150,7 @@ fn test_bad_address() {
     e.mock_all_auths();
     e.budget().reset_unlimited();
 
+    let admin = Address::generate(&e);
     let address1 = Address::generate(&e);
     let address2 = Address::generate(&e);
 
@@ -158,7 +163,8 @@ fn test_bad_address() {
     );
 
     let router = create_contract(&e);
-    router.initialize_plane(&plane.address);
+    router.init_admin(&admin);
+    router.set_pools_plane(&admin, &plane.address);
 
     e.budget().reset_default();
     let (best_pool, best_result) = router.estimate_swap(

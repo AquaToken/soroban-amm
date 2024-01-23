@@ -7,7 +7,7 @@ use crate::pool_interface::{
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_fee_fraction, get_reserve_a, get_reserve_b, get_token_a, get_token_b, has_plane,
+    get_fee_fraction, get_plane, get_reserve_a, get_reserve_b, get_token_a, get_token_b, has_plane,
     put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a, put_token_b, set_plane,
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
@@ -56,7 +56,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
     ) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
-        Self::initialize_plane(e.clone(), plane);
+        Self::set_pools_plane(e.clone(), plane);
         Self::initialize(e.clone(), admin, lp_token_wasm_hash, tokens, fee_fraction);
         Self::initialize_rewards_config(e.clone(), reward_token, reward_storage);
     }
@@ -476,11 +476,14 @@ impl RewardsTrait for LiquidityPool {
 
 #[contractimpl]
 impl Plane for LiquidityPool {
-    fn initialize_plane(e: Env, plane: Address) {
+    fn set_pools_plane(e: Env, plane: Address) {
         if has_plane(&e) {
             panic_with_error!(&e, LiquidityPoolError::PlaneAlreadyInitialized);
         }
 
         set_plane(&e, &plane);
+    }
+    fn get_pools_plane(e: Env) -> Address {
+        get_plane(&e)
     }
 }

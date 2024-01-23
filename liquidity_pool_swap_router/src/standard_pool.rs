@@ -1,9 +1,10 @@
 use crate::constants::FEE_MULTIPLIER;
-use soroban_sdk::Vec;
+use soroban_sdk::{Env, Vec};
 
 pub(crate) fn estimate_swap(
-    reserves: Vec<u128>,
+    _e: &Env,
     fee_fraction: u128,
+    reserves: Vec<u128>,
     in_idx: u32,
     out_idx: u32,
     in_amount: u128,

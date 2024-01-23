@@ -38,6 +38,11 @@ pub(crate) fn get(e: &Env, contract: Address) -> Pool {
             reserves: Vec::from_array(e, [0_u128, 0_u128]),
         };
     }
+    e.storage().persistent().extend_ttl(
+        &key,
+        PERSISTENT_LIFETIME_THRESHOLD,
+        PERSISTENT_BUMP_AMOUNT,
+    );
 
     e.storage().persistent().get(&key).unwrap()
 }

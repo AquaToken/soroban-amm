@@ -9,17 +9,39 @@ pub use crate::plane::pool_plane_client::Client as PoolPlaneClient;
 
 use soroban_sdk::Vec;
 
-pub(crate) fn parse_standard_data(init_args: Vec<u128>, reserves: Vec<u128>) -> (u128, Vec<u128>) {
-    (init_args.get(0).unwrap(), reserves)
+pub struct StandardPoolData {
+    pub(crate) fee: u128,
+    pub(crate) reserves: Vec<u128>,
 }
 
+pub(crate) fn parse_standard_data(init_args: Vec<u128>, reserves: Vec<u128>) -> StandardPoolData {
+    StandardPoolData {
+        fee: init_args.get(0).unwrap(),
+        reserves,
+    }
+}
+
+pub struct StableSwapPoolData {
+    pub(crate) fee: u128,
+    pub(crate) initial_a: u128,
+    pub(crate) initial_a_time: u128,
+    pub(crate) future_a: u128,
+    pub(crate) future_a_time: u128,
+    pub(crate) reserves: Vec<u128>,
+}
+
+/// * `init_args`: [fee, initial_a, initial_a_time, future_a, future_a_time]
+/// * `reserves`: pool balances list
 pub(crate) fn parse_stableswap_data(
     init_args: Vec<u128>,
     reserves: Vec<u128>,
-) -> (u128, u128, Vec<u128>) {
-    (
-        init_args.get(0).unwrap(),
-        init_args.get(1).unwrap(),
+) -> StableSwapPoolData {
+    StableSwapPoolData {
+        fee: init_args.get(0).unwrap(),
+        initial_a: init_args.get(1).unwrap(),
+        initial_a_time: init_args.get(2).unwrap(),
+        future_a: init_args.get(3).unwrap(),
+        future_a_time: init_args.get(4).unwrap(),
         reserves,
-    )
+    }
 }

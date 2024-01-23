@@ -30,7 +30,7 @@ fn test() {
     plane.update(
         &address2,
         &symbol_short!("stable"),
-        &Vec::from_array(&e, [6_u128, 85_u128]),
+        &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
         &Vec::from_array(&e, [800_u128, 900_u128]),
     );
     let data = plane.get(&Vec::from_array(&e, [address1, address2]));
@@ -42,6 +42,9 @@ fn test() {
 
     let data2 = data.get(1).unwrap();
     assert_eq!(data2.0, symbol_short!("stable"));
-    assert_eq!(data2.1, Vec::from_array(&e, [6_u128, 85_u128]));
+    assert_eq!(
+        data2.1,
+        Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128])
+    );
     assert_eq!(data2.2, Vec::from_array(&e, [800_u128, 900_u128]));
 }

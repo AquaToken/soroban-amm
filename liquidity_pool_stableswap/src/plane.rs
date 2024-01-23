@@ -7,15 +7,30 @@ pub mod pool_plane {
 
 pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
-use crate::storage::{get_fee, get_plane, get_reserves};
+use crate::storage::{
+    get_fee, get_future_a, get_future_a_time, get_initial_a, get_initial_a_time, get_plane,
+    get_reserves,
+};
 use soroban_sdk::{symbol_short, Env, Vec};
 
-fn get_pool_data(e: &Env, a: u128) -> (Vec<u128>, Vec<u128>) {
-    (Vec::from_array(e, [get_fee(e) as u128, a]), get_reserves(e))
+fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
+    (
+        Vec::from_array(
+            e,
+            [
+                get_fee(e) as u128,
+                get_initial_a(e),
+                get_initial_a_time(e) as u128,
+                get_future_a(e),
+                get_future_a_time(e) as u128,
+            ],
+        ),
+        get_reserves(e),
+    )
 }
 
-pub fn update_plane(e: &Env, a: u128) {
-    let (init_args, reserves) = get_pool_data(e, a);
+pub fn update_plane(e: &Env) {
+    let (init_args, reserves) = get_pool_data(e);
     PoolPlaneClient::new(e, &get_plane(e)).update(
         &e.current_contract_address(),
         &symbol_short!("stable"),

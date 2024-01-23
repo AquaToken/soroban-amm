@@ -147,11 +147,16 @@ pub trait PoolsManagementTrait {
 }
 
 pub trait PoolPlaneInterface {
-    fn initialize_plane(e: Env, admin: Address, plane: Address);
+    // configure pools plane address to be used as lightweight proxy to optimize instructions & batch operations
+    fn set_pools_plane(e: Env, admin: Address, plane: Address);
+
+    // get pools plane address
     fn get_plane(e: Env) -> Address;
 }
 
 pub trait SwapRouterInterface {
+    // Estimate swap comparing all the available pools for given tokens set.
+    //  returns best pool hash, address and estimated out value
     fn estimate_swap_routed(
         e: Env,
         tokens: Vec<Address>,
@@ -159,6 +164,21 @@ pub trait SwapRouterInterface {
         token_out: Address,
         in_amount: u128,
     ) -> (BytesN<32>, Address, u128);
-    fn initialize_swap_router(e: Env, admin: Address, router: Address);
+
+    // Swap tokens using best pool available
+    fn swap_routed(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        in_amount: u128,
+        out_min: u128,
+    ) -> u128;
+
+    // Set swap router address. it's separate contract optimized to estimate swap for multiple pools
+    fn set_swap_router(e: Env, admin: Address, router: Address);
+
+    // Get swap router address
     fn get_swap_router(e: Env) -> Address;
 }

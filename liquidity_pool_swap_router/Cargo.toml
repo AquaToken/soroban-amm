@@ -8,6 +8,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+access_control = { workspace = true }
 soroban-sdk = { workspace = true }
 
 [dev_dependencies]

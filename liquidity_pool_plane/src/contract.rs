@@ -5,6 +5,7 @@ use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, Vec};
 pub struct LiquidityPoolPlane;
 
 pub trait Plane {
+    // update pool details. any contract can use it to store it's basic information
     fn update(
         e: Env,
         contract: Address,
@@ -12,6 +13,8 @@ pub trait Plane {
         init_args: Vec<u128>,
         reserves: Vec<u128>,
     );
+
+    // get pool details
     fn get(e: Env, contracts: Vec<Address>) -> Vec<(Symbol, Vec<u128>, Vec<u128>)>;
 }
 

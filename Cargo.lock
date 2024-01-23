@@ -1103,6 +1103,7 @@ dependencies = [
 name = "soroban-liquidity-pool-swap-router-contract"
 version = "0.0.0"
 dependencies = [
+ "access_control",
  "soroban-sdk",
 ]
 

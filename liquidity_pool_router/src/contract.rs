@@ -440,7 +440,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
 #[contractimpl]
 impl PoolPlaneInterface for LiquidityPoolRouter {
-    fn initialize_plane(e: Env, admin: Address, plane: Address) {
+    fn set_pools_plane(e: Env, admin: Address, plane: Address) {
         let access_control = AccessControl::new(&e);
         admin.require_auth();
         access_control.check_admin(&admin);
@@ -455,7 +455,7 @@ impl PoolPlaneInterface for LiquidityPoolRouter {
 
 #[contractimpl]
 impl SwapRouterInterface for LiquidityPoolRouter {
-    fn initialize_swap_router(e: Env, admin: Address, router: Address) {
+    fn set_swap_router(e: Env, admin: Address, router: Address) {
         let access_control = AccessControl::new(&e);
         admin.require_auth();
         access_control.check_admin(&admin);
@@ -487,10 +487,11 @@ impl SwapRouterInterface for LiquidityPoolRouter {
         let (best_pool_address, swap_result) = SwapRouterClient::new(&e, &swap_router)
             .estimate_swap(
                 &pools_vec,
-                &(tokens.first_index_of(token_in.clone()).unwrap()),
-                &(tokens.first_index_of(token_out.clone()).unwrap()),
+                &(tokens.first_index_of(token_in).unwrap()),
+                &(tokens.first_index_of(token_out).unwrap()),
                 &in_amount,
             );
+
         (
             pools_reversed
                 .get(best_pool_address.clone())
@@ -498,5 +499,69 @@ impl SwapRouterInterface for LiquidityPoolRouter {
             best_pool_address,
             swap_result,
         )
+    }
+
+    fn swap_routed(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        in_amount: u128,
+        out_min: u128,
+    ) -> u128 {
+        user.require_auth();
+
+        if !check_vec_ordered(&tokens) {
+            panic!("tokens are not sorted")
+        }
+
+        let (pool_index, pool_id, _result) = Self::estimate_swap_routed(
+            e.clone(),
+            tokens.clone(),
+            token_in.clone(),
+            token_out.clone(),
+            in_amount.clone(),
+        );
+        SorobanTokenClient::new(&e, &token_in).approve(
+            &user,
+            &pool_id,
+            &(in_amount as i128),
+            &e.ledger().sequence(),
+        );
+
+        let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
+
+        let out_amt = e.invoke_contract(
+            &pool_id,
+            &symbol_short!("swap"),
+            Vec::from_array(
+                &e,
+                [
+                    user.into_val(&e),
+                    tokens
+                        .first_index_of(token_in.clone())
+                        .unwrap()
+                        .into_val(&e),
+                    tokens
+                        .first_index_of(token_out.clone())
+                        .unwrap()
+                        .into_val(&e),
+                    in_amount.into_val(&e),
+                    out_min.into_val(&e),
+                ],
+            ),
+        );
+
+        Events::new(&e).swap(
+            tokens,
+            user,
+            pool_id,
+            token_in,
+            token_out,
+            in_amount.clone(),
+            out_amt,
+        );
+        out_amt
     }
 }
