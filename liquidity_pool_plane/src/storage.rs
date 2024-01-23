@@ -20,11 +20,9 @@ pub struct PoolPlane {
 }
 
 fn bump_persistent(e: &Env, key: &DataKey) {
-    e.storage().persistent().extend_ttl(
-        key,
-        PERSISTENT_LIFETIME_THRESHOLD,
-        PERSISTENT_BUMP_AMOUNT,
-    );
+    e.storage()
+        .persistent()
+        .extend_ttl(key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
 }
 
 fn get_default_pool(e: &Env) -> PoolPlane {

@@ -15,5 +15,5 @@ pub fn check_vec_ordered(addresses: &Vec<Address>) -> bool {
             return false;
         }
     }
-    return true;
+    true
 }

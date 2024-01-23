@@ -79,7 +79,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
                 [user.clone().into_val(&e), desired_amounts.into_val(&e)],
             ),
         );
-        Events::new(&e).deposit(tokens, user, pool_id, amounts.clone(), share_amount.clone());
+        Events::new(&e).deposit(tokens, user, pool_id, amounts.clone(), share_amount);
         (amounts, share_amount)
     }
 
@@ -122,13 +122,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         );
 
         Events::new(&e).swap(
-            tokens,
-            user,
-            pool_id,
-            token_in,
-            token_out,
-            in_amount.clone(),
-            out_amt,
+            tokens, user, pool_id, token_in, token_out, in_amount, out_amt,
         );
         out_amt
     }
@@ -522,7 +516,7 @@ impl SwapRouterInterface for LiquidityPoolRouter {
             tokens.clone(),
             token_in.clone(),
             token_out.clone(),
-            in_amount.clone(),
+            in_amount,
         );
         SorobanTokenClient::new(&e, &token_in).approve(
             &user,
@@ -555,13 +549,7 @@ impl SwapRouterInterface for LiquidityPoolRouter {
         );
 
         Events::new(&e).swap(
-            tokens,
-            user,
-            pool_id,
-            token_in,
-            token_out,
-            in_amount.clone(),
-            out_amt,
+            tokens, user, pool_id, token_in, token_out, in_amount, out_amt,
         );
         out_amt
     }

@@ -34,7 +34,7 @@ fn create_liqpool_contract<'a>(
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize_all(
-        &admin,
+        admin,
         token_wasm_hash,
         coins,
         &a,
@@ -42,7 +42,7 @@ fn create_liqpool_contract<'a>(
         &admin_fee,
         token_reward,
         &liqpool.address,
-        &plane,
+        plane,
     );
     liqpool
 }
@@ -186,7 +186,7 @@ fn test_happy_flow() {
 
     liqpool.withdraw(
         &user1,
-        &((total_share_token_amount as u128) / 2),
+        &(total_share_token_amount / 2),
         &Vec::from_array(&e, [0, 0]),
     );
 
@@ -202,7 +202,7 @@ fn test_happy_flow() {
 
     liqpool.withdraw(
         &user1,
-        &((total_share_token_amount as u128) / 2),
+        &(total_share_token_amount / 2),
         &Vec::from_array(&e, [0, 0]),
     );
 
@@ -619,7 +619,7 @@ fn test_withdraw_partial() {
 
     liqpool.withdraw(
         &user1,
-        &((share_token_amount as u128) * 30 / 100),
+        &(share_token_amount * 30 / 100),
         &Vec::from_array(&e, [0, 0]),
     );
 

@@ -133,7 +133,7 @@ impl Manager {
         if rewards_storage == self.env.current_contract_address() {
             Client::new(&self.env, &reward_token).transfer(
                 &rewards_storage,
-                &user,
+                user,
                 &(reward_amount as i128),
             );
         } else {

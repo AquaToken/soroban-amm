@@ -65,8 +65,8 @@ impl LiquidityPoolRouterEvents for Events {
         share_amount: u128,
     ) {
         self.env().events().publish(
-            (Symbol::new(&self.env(), "deposit"), tokens, user),
-            (pool_id, amounts.clone(), share_amount.clone()),
+            (Symbol::new(self.env(), "deposit"), tokens, user),
+            (pool_id, amounts.clone(), share_amount),
         );
     }
 
@@ -81,7 +81,7 @@ impl LiquidityPoolRouterEvents for Events {
         out_amt: u128,
     ) {
         self.env().events().publish(
-            (Symbol::new(&self.env(), "swap"), tokens, user),
+            (Symbol::new(self.env(), "swap"), tokens, user),
             (pool_id, token_in, token_out, in_amount, out_amt),
         );
     }
@@ -95,7 +95,7 @@ impl LiquidityPoolRouterEvents for Events {
         share_amount: u128,
     ) {
         self.env().events().publish(
-            (Symbol::new(&self.env(), "withdraw"), tokens, user),
+            (Symbol::new(self.env(), "withdraw"), tokens, user),
             (pool_id, share_amount, amounts),
         );
     }
@@ -109,7 +109,7 @@ impl LiquidityPoolRouterEvents for Events {
         init_args: Vec<Val>,
     ) {
         self.env().events().publish(
-            (Symbol::new(&self.env(), "add_pool"), tokens),
+            (Symbol::new(self.env(), "add_pool"), tokens),
             (pool_address, pool_type, subpool_salt, init_args),
         );
     }

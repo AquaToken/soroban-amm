@@ -312,8 +312,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
         let n = in_amount * reserve_buy * multiplier_with_fee;
         let d = reserve_sell * FEE_MULTIPLIER + in_amount * multiplier_with_fee;
-        let out = n / d;
-        out
+
+        n / d
     }
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {

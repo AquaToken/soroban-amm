@@ -10,7 +10,7 @@ fn a(e: &Env, initial_a: u128, initial_a_time: u128, future_a: u128, future_a_ti
     let a1 = future_a;
     let now = e.ledger().timestamp() as u128;
 
-    return if now < t1 {
+    if now < t1 {
         let a0 = initial_a;
         let t0 = initial_a_time;
         // Expressions in u128 cannot have negative numbers, thus "if"
@@ -22,7 +22,7 @@ fn a(e: &Env, initial_a: u128, initial_a_time: u128, future_a: u128, future_a_ti
     } else {
         // when t1 == 0 or block.timestamp >= t1
         a1
-    };
+    }
 }
 
 // xp size = N_COINS
@@ -50,25 +50,23 @@ fn get_d(n_coins: u32, xp: Vec<u128>, amp: u128) -> u128 {
             if d - d_prev <= 1 {
                 break;
             }
-        } else {
-            if d_prev - d <= 1 {
-                break;
-            }
+        } else if d_prev - d <= 1 {
+            break;
         }
     }
-    return d;
+    d
 }
 
 fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u128) -> u128 {
     // x in the input is converted to the same price/precision
 
-    if !(in_idx != out_idx) {
+    if in_idx == out_idx {
         panic!("same coin")
     } // dev: same coin
       // if !(j >= 0) {
       //     panic!("j below zero")
       // } // dev: j below zero
-    if !(out_idx < n_coins as u32) {
+    if out_idx >= n_coins {
         panic!("j above N_COINS")
     } // dev: j above N_COINS
 
@@ -76,7 +74,7 @@ fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u12
     // if !(i >= 0) {
     //     panic!("bad arguments")
     // }
-    if !(in_idx < n_coins as u32) {
+    if in_idx >= n_coins {
         panic!("bad arguments")
     }
 
@@ -87,7 +85,7 @@ fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u12
     let ann = amp * n_coins as u128;
 
     let mut x1;
-    for i in 0..n_coins as u32 {
+    for i in 0..n_coins {
         if i == in_idx {
             x1 = x;
         } else if i != out_idx {
@@ -110,20 +108,18 @@ fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u12
             if y - y_prev <= 1 {
                 break;
             }
-        } else {
-            if y_prev - y <= 1 {
-                break;
-            }
+        } else if y_prev - y <= 1 {
+            break;
         }
     }
-    return y;
+    y
 }
 
 fn get_dy(reserves: Vec<u128>, fee_fraction: u128, a: u128, i: u32, j: u32, dx: u128) -> u128 {
     // dx and dy in c-units
     let xp = reserves.clone();
 
-    let x = xp.get(i as u32).unwrap() + (dx * RATE / PRECISION);
+    let x = xp.get(i).unwrap() + (dx * RATE / PRECISION);
     let y = get_y(reserves.len(), i, j, x, xp.clone(), a);
 
     if y == 0 {
@@ -131,9 +127,9 @@ fn get_dy(reserves: Vec<u128>, fee_fraction: u128, a: u128, i: u32, j: u32, dx: 
         return 0;
     }
 
-    let dy = (xp.get(j as u32).unwrap() - y - 1) * PRECISION / RATE;
-    let fee = fee_fraction as u128 * dy / FEE_DENOMINATOR as u128;
-    return dy - fee;
+    let dy = (xp.get(j).unwrap() - y - 1) * PRECISION / RATE;
+    let fee = fee_fraction * dy / FEE_DENOMINATOR as u128;
+    dy - fee
 }
 
 pub(crate) fn estimate_swap(

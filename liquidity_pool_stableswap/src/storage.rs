@@ -23,7 +23,7 @@ enum DataKey {
 }
 
 pub fn get_tokens(e: &Env) -> Vec<Address> {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::Tokens)
@@ -31,7 +31,7 @@ pub fn get_tokens(e: &Env) -> Vec<Address> {
 }
 
 pub fn get_reserves(e: &Env) -> Vec<u128> {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::Reserves)
@@ -228,7 +228,7 @@ pub fn put_is_killed(e: &Env, value: &bool) {
 
 pub(crate) fn set_plane(e: &Env, plane: &Address) {
     let key = DataKey::Plane;
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().set(&key, plane);
 }
 

@@ -116,23 +116,23 @@ impl Setup<'_> {
     pub(crate) fn generate_random_users(e: &Env, users_count: u32) -> vec::Vec<Address> {
         let mut users = vec![];
         for _c in 0..users_count {
-            users.push(Address::generate(&e));
+            users.push(Address::generate(e));
         }
         users
     }
 
     pub(crate) fn mint_tokens_for_users(&self, amount: &i128) {
         for user in self.users.iter() {
-            self.token1.mint(&user, amount);
-            assert_eq!(self.token1.balance(&user), amount.clone());
+            self.token1.mint(user, amount);
+            assert_eq!(self.token1.balance(user), amount.clone());
 
-            self.token2.mint(&user, amount);
-            assert_eq!(self.token2.balance(&user), amount.clone());
+            self.token2.mint(user, amount);
+            assert_eq!(self.token2.balance(user), amount.clone());
 
             self.token1
-                .approve(&user, &self.liq_pool.address, amount, &99999);
+                .approve(user, &self.liq_pool.address, amount, &99999);
             self.token2
-                .approve(&user, &self.liq_pool.address, amount, &99999);
+                .approve(user, &self.liq_pool.address, amount, &99999);
         }
     }
 
@@ -140,7 +140,7 @@ impl Setup<'_> {
         self.liq_pool.set_rewards_config(
             &self.users[0],
             &self.env.ledger().timestamp().saturating_add(60),
-            &reward_tps,
+            reward_tps,
         );
     }
 }
@@ -164,13 +164,13 @@ pub fn create_liqpool_contract<'a>(
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize_all(
-        &admin,
+        admin,
         token_wasm_hash,
         tokens,
         &fee_fraction,
         token_reward,
         &liqpool.address,
-        &plane,
+        plane,
     );
     liqpool
 }

@@ -8,5 +8,5 @@ pub(crate) const PAGE_SIZE: u64 = 1000;
 pub(crate) const PAGE_SIZE: u64 = 5;
 
 pub(crate) fn get_rewards_manager(e: &Env) -> Rewards {
-    Rewards::new(&e, PAGE_SIZE)
+    Rewards::new(e, PAGE_SIZE)
 }
