@@ -12,6 +12,7 @@ pub trait ManagedLiquidityPool {
         admin_fee: u32,
         reward_token: Address,
         reward_storage: Address,
+        plane: Address,
     );
 }
 

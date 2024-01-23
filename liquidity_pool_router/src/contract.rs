@@ -1,7 +1,8 @@
 use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_interface::{
-    LiquidityPoolInterfaceTrait, PoolsManagementTrait, RewardsInterfaceTrait,
+    LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait, RewardsInterfaceTrait,
+    SwapRouterInterface,
 };
 use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_custom_salt, get_stableswap_pool_salt,
@@ -11,10 +12,12 @@ use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
     add_pool, get_init_pool_payment_address, get_init_pool_payment_amount,
-    get_init_pool_payment_token, get_pool, get_pools_plain, has_pool, remove_pool,
-    set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount,
-    set_init_pool_payment_token, set_stableswap_pool_hash, set_token_hash, LiquidityPoolType,
+    get_init_pool_payment_token, get_pool, get_pool_plane, get_pools_plain, get_swap_router,
+    has_pool, remove_pool, set_constant_product_pool_hash, set_init_pool_payment_address,
+    set_init_pool_payment_amount, set_init_pool_payment_token, set_pool_plane,
+    set_stableswap_pool_hash, set_swap_router, set_token_hash, LiquidityPoolType,
 };
+use crate::swap_router::SwapRouterClient;
 use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -432,5 +435,133 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         if has_pool(&e, &salt, pool_hash.clone()) {
             remove_pool(&e, &salt, pool_hash)
         }
+    }
+}
+
+#[contractimpl]
+impl PoolPlaneInterface for LiquidityPoolRouter {
+    fn set_pools_plane(e: Env, admin: Address, plane: Address) {
+        let access_control = AccessControl::new(&e);
+        admin.require_auth();
+        access_control.check_admin(&admin);
+
+        set_pool_plane(&e, &plane);
+    }
+
+    fn get_plane(e: Env) -> Address {
+        get_pool_plane(&e)
+    }
+}
+
+#[contractimpl]
+impl SwapRouterInterface for LiquidityPoolRouter {
+    fn set_swap_router(e: Env, admin: Address, router: Address) {
+        let access_control = AccessControl::new(&e);
+        admin.require_auth();
+        access_control.check_admin(&admin);
+        set_swap_router(&e, &router);
+    }
+
+    fn get_swap_router(e: Env) -> Address {
+        get_swap_router(&e)
+    }
+
+    fn estimate_swap_routed(
+        e: Env,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        in_amount: u128,
+    ) -> (BytesN<32>, Address, u128) {
+        let salt = pool_salt(&e, tokens.clone());
+        let pools = get_pools_plain(&e, &salt);
+
+        let swap_router = get_swap_router(&e);
+        let mut pools_vec: Vec<Address> = Vec::new(&e);
+        let mut pools_reversed: Map<Address, BytesN<32>> = Map::new(&e);
+        for (key, value) in pools {
+            pools_vec.push_back(value.clone());
+            pools_reversed.set(value, key);
+        }
+
+        let (best_pool_address, swap_result) = SwapRouterClient::new(&e, &swap_router)
+            .estimate_swap(
+                &pools_vec,
+                &(tokens.first_index_of(token_in).unwrap()),
+                &(tokens.first_index_of(token_out).unwrap()),
+                &in_amount,
+            );
+
+        (
+            pools_reversed
+                .get(best_pool_address.clone())
+                .expect("unable to reverse pool"),
+            best_pool_address,
+            swap_result,
+        )
+    }
+
+    fn swap_routed(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        in_amount: u128,
+        out_min: u128,
+    ) -> u128 {
+        user.require_auth();
+
+        if !check_vec_ordered(&tokens) {
+            panic!("tokens are not sorted")
+        }
+
+        let (pool_index, pool_id, _result) = Self::estimate_swap_routed(
+            e.clone(),
+            tokens.clone(),
+            token_in.clone(),
+            token_out.clone(),
+            in_amount.clone(),
+        );
+        SorobanTokenClient::new(&e, &token_in).approve(
+            &user,
+            &pool_id,
+            &(in_amount as i128),
+            &e.ledger().sequence(),
+        );
+
+        let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
+
+        let out_amt = e.invoke_contract(
+            &pool_id,
+            &symbol_short!("swap"),
+            Vec::from_array(
+                &e,
+                [
+                    user.into_val(&e),
+                    tokens
+                        .first_index_of(token_in.clone())
+                        .unwrap()
+                        .into_val(&e),
+                    tokens
+                        .first_index_of(token_out.clone())
+                        .unwrap()
+                        .into_val(&e),
+                    in_amount.into_val(&e),
+                    out_min.into_val(&e),
+                ],
+            ),
+        );
+
+        Events::new(&e).swap(
+            tokens,
+            user,
+            pool_id,
+            token_in,
+            token_out,
+            in_amount.clone(),
+            out_amt,
+        );
+        out_amt
     }
 }

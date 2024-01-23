@@ -1,13 +1,17 @@
 [package]
 name = "token_share"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
+publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["rlib"]
+doctest = false
 
 [dependencies]
-soroban-sdk = { version = "20.0.3" }
-utils = { path = "../utils" }
+soroban-sdk = { workspace = true }
+utils = { workspace = true }
 
 [dev_dependencies]
-soroban-sdk = { version = "20.0.3", features = ["testutils"] }
+soroban-sdk = { workspace = true, features = ["testutils"] }

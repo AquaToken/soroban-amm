@@ -18,6 +18,7 @@ fn test() {
         token_reward,
         token_share,
         liq_pool,
+        plane: _plane,
     } = Setup::default();
     let user1 = users[0].clone();
     let reward_1_tps = 10_5000000_u128;
@@ -152,6 +153,23 @@ fn initialize_already_initialized() {
     let token1 = create_token_contract(&setup.env, &users[1]);
     let token2 = create_token_contract(&setup.env, &users[2]);
 
+    setup.liq_pool.initialize(
+        &users[0],
+        &install_token_wasm(&setup.env),
+        &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
+        &10_u32,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #202)")]
+fn initialize_already_initialized_plane() {
+    let setup = Setup::default();
+
+    let users = Setup::generate_random_users(&setup.env, 3);
+    let token1 = create_token_contract(&setup.env, &users[1]);
+    let token2 = create_token_contract(&setup.env, &users[2]);
+
     setup.liq_pool.initialize_all(
         &users[0],
         &install_token_wasm(&setup.env),
@@ -159,6 +177,7 @@ fn initialize_already_initialized() {
         &10_u32,
         &token1.address,
         &setup.liq_pool.address,
+        &setup.plane.address,
     );
 }
 
@@ -191,6 +210,7 @@ fn test_custom_fee() {
             ),
             &setup.token_reward.address,
             fee_config.0, // ten percent
+            &setup.plane.address,
         );
         setup
             .token1
@@ -220,6 +240,7 @@ fn test_simple_ongoing_reward() {
         token_reward,
         token_share: _token_share,
         liq_pool,
+        plane: _plane,
     } = Setup::default();
     let total_reward_1 = TestConfig::default().reward_tps * 60;
 
@@ -244,6 +265,7 @@ fn test_estimate_ongoing_reward() {
         token_reward,
         token_share: _token_share,
         liq_pool,
+        plane: _plane,
     } = Setup::default();
 
     // 10 seconds passed since config, user depositing
@@ -270,6 +292,7 @@ fn test_simple_reward() {
         token_reward,
         token_share: _token_share,
         liq_pool,
+        plane: _plane,
     } = setup;
 
     // 10 seconds. user depositing
@@ -313,6 +336,7 @@ fn test_two_users_rewards() {
         token_reward,
         token_share: _token_share,
         liq_pool,
+        plane: _plane,
     } = Setup::default();
 
     let total_reward_1 = &TestConfig::default().reward_tps * 60;
@@ -343,6 +367,7 @@ fn test_lazy_user_rewards() {
         token_reward,
         token_share: _token_share,
         liq_pool,
+        plane: _plane,
     } = Setup::default();
 
     let total_reward_1 = &TestConfig::default().reward_tps * 60;
@@ -377,6 +402,7 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         token_reward,
         token_share: _token_share,
         liq_pool,
+        plane: _plane,
     } = Setup::new_with_config(&TestConfig {
         users_count: 100,
         ..TestConfig::default()

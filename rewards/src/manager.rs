@@ -4,8 +4,7 @@ use crate::storage::{
 };
 use crate::RewardsConfig;
 use cast::u128 as to_u128;
-use soroban_sdk::token::Client;
-use soroban_sdk::{Address, Env, Map};
+use soroban_sdk::{token::TokenClient as Client, Address, Env, Map};
 
 pub struct Manager {
     env: Env,
@@ -79,7 +78,7 @@ impl Manager {
         user: &Address,
         user_balance_shares: u128,
     ) -> UserRewardData {
-        return match self.storage.get_user_reward_data(user) {
+        match self.storage.get_user_reward_data(user) {
             Some(user_data) => {
                 if user_data.pool_accumulated == pool_data.accumulated {
                     // nothing accumulated since last update
@@ -88,7 +87,7 @@ impl Manager {
 
                 if user_balance_shares == 0 {
                     // zero balance, no new reward
-                    return self.create_new_user_data(&user, &pool_data, user_data.to_claim);
+                    return self.create_new_user_data(user, pool_data, user_data.to_claim);
                 }
 
                 let reward = self.calculate_user_reward(
@@ -98,10 +97,10 @@ impl Manager {
                 );
                 // let new_reward =
                 //     (pool_data.accumulated - user_data.pool_accumulated) * user_shares / total_shares;
-                self.create_new_user_data(&user, &pool_data, user_data.to_claim + reward)
+                self.create_new_user_data(user, pool_data, user_data.to_claim + reward)
             }
-            None => self.create_new_user_data(&user, &pool_data, 0),
-        };
+            None => self.create_new_user_data(user, pool_data, 0),
+        }
     }
 
     pub fn get_amount_to_claim(
@@ -141,7 +140,7 @@ impl Manager {
             Client::new(&self.env, &reward_token).transfer_from(
                 &self.env.current_contract_address(),
                 &rewards_storage,
-                &user,
+                user,
                 &(reward_amount as i128),
             );
         };

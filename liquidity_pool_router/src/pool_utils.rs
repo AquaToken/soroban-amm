@@ -2,7 +2,7 @@ use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    add_pool, get_constant_product_pool_hash, get_stableswap_next_counter,
+    add_pool, get_constant_product_pool_hash, get_pool_plane, get_stableswap_next_counter,
     get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -138,6 +138,7 @@ fn init_standard_pool(
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
     let liq_pool_client = StandardLiquidityPoolClient::new(&e, pool_contract_id);
+    let plane = get_pool_plane(e);
     liq_pool_client.initialize_all(
         &admin,
         &token_wasm_hash,
@@ -145,6 +146,7 @@ fn init_standard_pool(
         &fee_fraction,
         &reward_token,
         &liq_pool_client.address,
+        &plane,
     );
 }
 
@@ -161,6 +163,7 @@ fn init_stableswap_pool(
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(&e);
     let admin = access_control.get_admin().unwrap();
+    let plane = get_pool_plane(e);
     e.invoke_contract::<()>(
         pool_contract_id,
         &Symbol::new(&e, "initialize_all"),
@@ -175,6 +178,7 @@ fn init_stableswap_pool(
                 admin_fee_fraction.into_val(e),
                 reward_token.into_val(e),
                 pool_contract_id.clone().into_val(e),
+                plane.into_val(e),
             ],
         ),
     );

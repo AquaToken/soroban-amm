@@ -1,31 +1,20 @@
 [package]
 name = "soroban-token-contract"
 description = "Soroban standard token contract"
-version = "0.0.6"
+version.workspace = true
 edition = "2021"
+publish = false
 
 [lib]
 crate-type = ["cdylib"]
+doctest = false
 
 [dependencies]
-soroban-sdk = { version = "20.0.3" }
-soroban-token-sdk = { version = "20.0.3" }
-access_control = { path = "../access_control" }
-utils = { path = "../utils" }
+soroban-sdk = { workspace = true }
+soroban-token-sdk = { workspace = true }
+access_control = { workspace = true }
+utils = { workspace = true }
 
 [dev_dependencies]
-soroban-sdk = { version = "20.0.3", features = ["testutils"] }
+soroban-sdk = { workspace = true, features = ["testutils"] }
 
-[profile.release]
-opt-level = "z"
-overflow-checks = true
-debug = 0
-strip = "symbols"
-debug-assertions = false
-panic = "abort"
-codegen-units = 1
-lto = true
-
-[profile.release-with-logs]
-inherits = "release"
-debug-assertions = true
