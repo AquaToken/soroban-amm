@@ -166,6 +166,8 @@ pub trait SwapRouterInterface {
     ) -> (BytesN<32>, Address, u128);
 
     // Swap tokens using best pool available
+    //   expiration_ledger is argument for sub invocation of token.approve to keep code execution consistent
+    //      both for preflight and execution
     fn swap_routed(
         e: Env,
         user: Address,
@@ -174,6 +176,7 @@ pub trait SwapRouterInterface {
         token_out: Address,
         in_amount: u128,
         out_min: u128,
+        expiration_ledger: u32,
     ) -> u128;
 
     // Set swap router address. it's separate contract optimized to estimate swap for multiple pools
