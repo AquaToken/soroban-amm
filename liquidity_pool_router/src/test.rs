@@ -1401,6 +1401,7 @@ fn test_swap_routed() {
         &token2.address,
         &9_0000000,
         &(best_result - 1),
+        &(e.ledger().sequence() + 5),
     );
     e.budget().print();
     assert_eq!(swap_result, best_result);

@@ -509,6 +509,7 @@ impl SwapRouterInterface for LiquidityPoolRouter {
         token_out: Address,
         in_amount: u128,
         out_min: u128,
+        expiration_ledger: u32,
     ) -> u128 {
         user.require_auth();
 
@@ -527,7 +528,7 @@ impl SwapRouterInterface for LiquidityPoolRouter {
             &user,
             &pool_id,
             &(in_amount as i128),
-            &e.ledger().sequence(),
+            &expiration_ledger,
         );
 
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
