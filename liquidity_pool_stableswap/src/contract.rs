@@ -1043,7 +1043,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 #[contractimpl]
 impl UpgradeableContractTrait for LiquidityPool {
     fn version() -> u32 {
-        1
+        100
     }
 
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {

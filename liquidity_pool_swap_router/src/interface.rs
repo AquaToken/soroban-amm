@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Vec};
+use soroban_sdk::{Address, BytesN, Env, Vec};
 
 pub trait RouterInterface {
     // Initialize admin user. Will panic if called twice
@@ -18,4 +18,12 @@ pub trait RouterInterface {
         out_idx: u32,
         in_amount: u128,
     ) -> (Address, u128);
+}
+
+pub trait UpgradeableContract {
+    // Get contract version
+    fn version() -> u32;
+
+    // Upgrade contract with new wasm code
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
 }

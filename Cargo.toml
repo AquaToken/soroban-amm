@@ -15,7 +15,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.1.0"
 
 [workspace.dependencies]
 soroban-sdk = { version = "20.2.0" }

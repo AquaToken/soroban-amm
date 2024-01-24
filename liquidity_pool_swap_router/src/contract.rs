@@ -1,9 +1,9 @@
-use crate::interface::RouterInterface;
+use crate::interface::{RouterInterface, UpgradeableContract};
 use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
 use access_control::access::{AccessControl, AccessControlTrait};
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 #[contract]
 pub struct LiquidityPoolSwapRouter;
@@ -94,5 +94,18 @@ impl RouterInterface for LiquidityPoolSwapRouter {
             }
         }
         (best_pool, best_result)
+    }
+}
+
+#[contractimpl]
+impl UpgradeableContract for LiquidityPoolSwapRouter {
+    fn version() -> u32 {
+        100
+    }
+
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        let access_control = AccessControl::new(&e);
+        access_control.require_admin();
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

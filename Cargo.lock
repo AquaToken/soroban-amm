@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "access_control"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "soroban-sdk",
  "utils",
@@ -804,7 +804,7 @@ dependencies = [
 
 [[package]]
 name = "rewards"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "cast",
  "soroban-sdk",
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-contract"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "access_control",
  "num-integer",
@@ -1069,14 +1069,14 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-plane-contract"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "soroban-sdk",
 ]
 
 [[package]]
 name = "soroban-liquidity-pool-router-contract"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "access_control",
  "num-integer",
@@ -1089,7 +1089,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-stableswap-contract"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "access_control",
  "cast",
@@ -1101,7 +1101,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-swap-router-contract"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -1177,7 +1177,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-token-contract"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -1330,7 +1330,7 @@ dependencies = [
 
 [[package]]
 name = "token_share"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "soroban-sdk",
  "utils",
@@ -1350,7 +1350,7 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 
 [[package]]
 name = "utils"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "soroban-sdk",
 ]
