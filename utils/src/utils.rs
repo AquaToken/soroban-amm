@@ -1,12 +1,13 @@
 use soroban_sdk::{Address, Vec};
 
 pub fn sort(a: &Address, b: &Address) -> (Address, Address) {
-    if a < b {
-        return (a.clone(), b.clone());
-    } else if a > b {
-        return (b.clone(), a.clone());
+    if a == b {
+        panic!("a and b can't be the same")
     }
-    panic!("a and b can't be the same")
+    match a < b {
+        true => (a.clone(), b.clone()),
+        false => (b.clone(), a.clone()),
+    }
 }
 
 pub fn check_vec_ordered(addresses: &Vec<Address>) -> bool {

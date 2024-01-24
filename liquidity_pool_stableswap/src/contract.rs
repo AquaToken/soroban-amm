@@ -834,7 +834,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         for i in 0..N_COINS as u32 {
             let in_amount = amounts.get(i).unwrap();
-            if token_supply == 0 && in_amount <= 0 {
+            if token_supply == 0 && in_amount == 0 {
                 panic!("initial deposit requires all coins");
             }
             let in_coin = coins.get(i).unwrap();
