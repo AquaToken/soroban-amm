@@ -133,7 +133,7 @@ impl Manager {
         if rewards_storage == self.env.current_contract_address() {
             Client::new(&self.env, &reward_token).transfer(
                 &rewards_storage,
-                &user,
+                user,
                 &(reward_amount as i128),
             );
         } else {
@@ -164,18 +164,6 @@ impl Manager {
             _ => self.storage.get_reward_inv_data(pow, page_number),
         };
         page.set(start_block, value);
-        if pow > 0 {
-            // log!(
-            //     &self.env,
-            //     "writing {} -> {} (page {}, pow {})",
-            //     start_block,
-            //     start_block + self.config.page_size.pow(pow) - 1,
-            //     page_number,
-            //     pow
-            // );
-        } else {
-            // log!(&self.env, "writing {} (page {})", start_block, page_number);
-        }
         self.storage.set_reward_inv_data(pow, page_number, page);
     }
 
@@ -217,14 +205,6 @@ impl Manager {
                     }
 
                     let page_number = block / self.config.page_size.pow(l_pow + 1);
-                    // log!(
-                    //     &self.env,
-                    //     "skipping {} -> {} (page {}, pow {})",
-                    //     block,
-                    //     next_block,
-                    //     page_number,
-                    //     l_pow
-                    // );
                     let page = self.storage.get_reward_inv_data(l_pow, page_number);
                     result += page.get(block).expect("unknown block");
                     block = next_block;
@@ -233,14 +213,6 @@ impl Manager {
                 }
                 if !block_increased {
                     // couldn't find shortcut, looks like we're close to the tail. go one by one
-                    // log!(
-                    //     &self.env,
-                    //     "skipping {} -> {} (page {}, pow {})",
-                    //     block,
-                    //     block + 1,
-                    //     block / self.config.page_size,
-                    //     0
-                    // );
                     let page = self
                         .storage
                         .get_reward_inv_data(0, block / self.config.page_size);
@@ -248,14 +220,6 @@ impl Manager {
                     block += 1;
                 }
             } else {
-                // log!(
-                //     &self.env,
-                //     "skipping {} -> {} (page {}, pow {})",
-                //     block,
-                //     block + 1,
-                //     block / self.config.page_size,
-                //     0
-                // );
                 let page = self
                     .storage
                     .get_reward_inv_data(0, block / self.config.page_size);

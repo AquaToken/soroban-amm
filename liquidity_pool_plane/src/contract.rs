@@ -1,34 +1,18 @@
-use crate::storage::{get, update, Pool};
+use crate::interface::PlaneInterface;
+use crate::storage::{get, update, PoolPlane};
 use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, Vec};
 
 #[contract]
 pub struct LiquidityPoolPlane;
 
-pub trait Plane {
-    fn update(
-        e: Env,
-        contract: Address,
-        pool_type: Symbol,
-        init_args: Vec<u128>,
-        reserves: Vec<u128>,
-    );
-    fn get(e: Env, contracts: Vec<Address>) -> Vec<(Symbol, Vec<u128>, Vec<u128>)>;
-}
-
 #[contractimpl]
-impl Plane for LiquidityPoolPlane {
-    fn update(
-        e: Env,
-        contract: Address,
-        pool_type: Symbol,
-        init_args: Vec<u128>,
-        reserves: Vec<u128>,
-    ) {
-        contract.require_auth();
+impl PlaneInterface for LiquidityPoolPlane {
+    fn update(e: Env, pool: Address, pool_type: Symbol, init_args: Vec<u128>, reserves: Vec<u128>) {
+        pool.require_auth();
         update(
             &e,
-            contract,
-            &Pool {
+            pool,
+            &PoolPlane {
                 pool_type,
                 init_args,
                 reserves,
@@ -37,11 +21,11 @@ impl Plane for LiquidityPoolPlane {
     }
 
     // pool_type, init_args, reserves
-    fn get(e: Env, contracts: Vec<Address>) -> Vec<(Symbol, Vec<u128>, Vec<u128>)> {
+    fn get(e: Env, pools: Vec<Address>) -> Vec<(Symbol, Vec<u128>, Vec<u128>)> {
         let mut result = Vec::new(&e);
-        for i in 0..contracts.len() {
-            let contract = contracts.get(i).unwrap();
-            let data = get(&e, contract);
+        for i in 0..pools.len() {
+            let pool = pools.get(i).unwrap();
+            let data = get(&e, pool);
             result.push_back((data.pool_type, data.init_args, data.reserves));
         }
         result

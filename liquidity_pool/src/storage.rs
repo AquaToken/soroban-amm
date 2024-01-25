@@ -9,10 +9,11 @@ enum DataKey {
     ReserveA,
     ReserveB,
     FeeFraction, // 1 = 0.01%
+    Plane,
 }
 
 pub fn get_token_a(e: &Env) -> Address {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::TokenA)
@@ -20,7 +21,7 @@ pub fn get_token_a(e: &Env) -> Address {
 }
 
 pub fn get_token_b(e: &Env) -> Address {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::TokenB)
@@ -28,7 +29,7 @@ pub fn get_token_b(e: &Env) -> Address {
 }
 
 pub fn get_reserve_a(e: &Env) -> u128 {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::ReserveA)
@@ -36,7 +37,7 @@ pub fn get_reserve_a(e: &Env) -> u128 {
 }
 
 pub fn get_reserve_b(e: &Env) -> u128 {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::ReserveB)
@@ -44,27 +45,27 @@ pub fn get_reserve_b(e: &Env) -> u128 {
 }
 
 pub fn put_token_a(e: &Env, contract: Address) {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().set(&DataKey::TokenA, &contract)
 }
 
 pub fn put_token_b(e: &Env, contract: Address) {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().set(&DataKey::TokenB, &contract)
 }
 
 pub fn put_reserve_a(e: &Env, amount: u128) {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().set(&DataKey::ReserveA, &amount)
 }
 
 pub fn put_reserve_b(e: &Env, amount: u128) {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().set(&DataKey::ReserveB, &amount)
 }
 
 pub fn get_fee_fraction(e: &Env) -> u32 {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::FeeFraction)
@@ -72,6 +73,25 @@ pub fn get_fee_fraction(e: &Env) -> u32 {
 }
 
 pub fn put_fee_fraction(e: &Env, value: u32) {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().set(&DataKey::FeeFraction, &value)
+}
+
+pub(crate) fn set_plane(e: &Env, plane: &Address) {
+    let key = DataKey::Plane;
+    bump_instance(e);
+    e.storage().instance().set(&key, plane);
+}
+
+pub(crate) fn get_plane(e: &Env) -> Address {
+    let key = DataKey::Plane;
+    e.storage()
+        .instance()
+        .get(&key)
+        .expect("unable to get plane")
+}
+
+pub(crate) fn has_plane(e: &Env) -> bool {
+    let key = DataKey::Plane;
+    e.storage().instance().has(&key)
 }

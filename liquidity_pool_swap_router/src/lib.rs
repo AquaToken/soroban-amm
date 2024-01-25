@@ -2,6 +2,7 @@
 
 mod constants;
 mod contract;
+mod interface;
 mod plane;
 mod stableswap_pool;
 mod standard_pool;

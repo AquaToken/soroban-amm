@@ -1,4 +1,6 @@
 use crate::constants::FEE_MULTIPLIER;
+use crate::plane::update_plane;
+use crate::plane_interface::Plane;
 use crate::liquidity::get_liquidity;
 use crate::pool;
 use crate::pool_interface::{
@@ -6,8 +8,8 @@ use crate::pool_interface::{
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_fee_fraction, get_reserve_a, get_reserve_b, get_token_a, get_token_b, put_fee_fraction,
-    put_reserve_a, put_reserve_b, put_token_a, put_token_b,
+    get_fee_fraction, get_plane, get_reserve_a, get_reserve_b, get_token_a, get_token_b, has_plane,
+    put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a, put_token_b, set_plane,
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -35,6 +37,7 @@ contractmeta!(
 #[repr(u32)]
 pub enum LiquidityPoolError {
     AlreadyInitialized = 201,
+    PlaneAlreadyInitialized = 202,
 }
 
 #[contract]
@@ -50,9 +53,11 @@ impl LiquidityPoolCrunch for LiquidityPool {
         fee_fraction: u32,
         reward_token: Address,
         reward_storage: Address,
+        plane: Address,
     ) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
+        Self::set_pools_plane(e.clone(), plane);
         Self::initialize(e.clone(), admin, lp_token_wasm_hash, tokens, fee_fraction);
         Self::initialize_rewards_config(e.clone(), reward_token, reward_storage);
     }
@@ -100,12 +105,15 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         put_token_a(&e, token_a);
         put_token_b(&e, token_b);
-        put_token_share(&e, share_contract.try_into().unwrap());
+        put_token_share(&e, share_contract);
         put_reserve_a(&e, 0);
         put_reserve_b(&e, 0);
 
         let rewards = get_rewards_manager(&e);
         rewards.manager().initialize();
+
+        // update plane data for every pool update
+        update_plane(&e);
     }
 
     fn share_id(e: Env) -> Address {
@@ -181,6 +189,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         mint_shares(&e, user, shares_to_mint as i128);
         put_reserve_a(&e, balance_a);
         put_reserve_b(&e, balance_b);
+
+        // update plane data for every pool update
+        update_plane(&e);
+
         (Vec::from_array(&e, [amounts.0, amounts.1]), shares_to_mint)
     }
 
@@ -269,6 +281,10 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         put_reserve_a(&e, balance_a - out_a);
         put_reserve_b(&e, balance_b - out_b);
+
+        // update plane data for every pool update
+        update_plane(&e);
+
         out
     }
 
@@ -297,8 +313,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
         let n = in_amount * reserve_buy * multiplier_with_fee;
         let d = reserve_sell * FEE_MULTIPLIER + in_amount * multiplier_with_fee;
-        let out = n / d;
-        out
+
+        n / d
     }
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
@@ -344,6 +360,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_a(&e, balance_a - out_a);
         put_reserve_b(&e, balance_b - out_b);
 
+        // update plane data for every pool update
+        update_plane(&e);
+
         Vec::from_array(&e, [out_a, out_b])
     }
 
@@ -376,7 +395,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
 impl UpgradeableContractTrait for LiquidityPool {
     fn version() -> u32 {
-        1
+        100
     }
 
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
@@ -461,5 +480,19 @@ impl RewardsTrait for LiquidityPool {
             .claim_reward(&user, total_shares, user_shares);
         rewards.storage().bump_user_reward_data(&user);
         reward
+    }
+}
+
+#[contractimpl]
+impl Plane for LiquidityPool {
+    fn set_pools_plane(e: Env, plane: Address) {
+        if has_plane(&e) {
+            panic_with_error!(&e, LiquidityPoolError::PlaneAlreadyInitialized);
+        }
+
+        set_plane(&e, &plane);
+    }
+    fn get_pools_plane(e: Env) -> Address {
+        get_plane(&e)
     }
 }

@@ -1,30 +1,34 @@
+use crate::interface::{RouterInterface, UpgradeableContract};
 use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Symbol, Vec};
+use access_control::access::{AccessControl, AccessControlTrait};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 #[contract]
 pub struct LiquidityPoolSwapRouter;
 
-pub trait Router {
-    fn initialize_plane(e: Env, plane: Address);
-
-    fn estimate_swap(
-        e: Env,
-        pools: Vec<Address>,
-        in_idx: u32,
-        out_idx: u32,
-        in_amount: u128,
-    ) -> (Address, u128);
-}
-
-const POOL_TYPE_STANDARD: Symbol = symbol_short!("standard");
-const POOL_TYPE_STABLESWAP: Symbol = symbol_short!("stable");
+pub const POOL_TYPE_STANDARD: Symbol = symbol_short!("standard");
+pub const POOL_TYPE_STABLESWAP: Symbol = symbol_short!("stable");
 
 #[contractimpl]
-impl Router for LiquidityPoolSwapRouter {
-    fn initialize_plane(e: Env, plane: Address) {
+impl RouterInterface for LiquidityPoolSwapRouter {
+    fn init_admin(e: Env, account: Address) {
+        let access_control = AccessControl::new(&e);
+        if !access_control.has_admin() {
+            access_control.set_admin(&account)
+        }
+    }
+
+    fn set_pools_plane(e: Env, admin: Address, plane: Address) {
+        let access_control = AccessControl::new(&e);
+        admin.require_auth();
+        access_control.check_admin(&admin);
+
         set_plane(&e, &plane);
+    }
+    fn get_pools_plane(e: Env) -> Address {
+        get_plane(&e)
     }
 
     fn estimate_swap(
@@ -55,11 +59,29 @@ impl Router for LiquidityPoolSwapRouter {
 
             let out;
             if pool_type == POOL_TYPE_STANDARD {
-                let (fee, reserves) = parse_standard_data(init_args, reserves);
-                out = standard_pool::estimate_swap(reserves, fee, in_idx, out_idx, in_amount);
+                let data = parse_standard_data(init_args, reserves);
+                out = standard_pool::estimate_swap(
+                    &e,
+                    data.fee,
+                    data.reserves,
+                    in_idx,
+                    out_idx,
+                    in_amount,
+                );
             } else if pool_type == POOL_TYPE_STABLESWAP {
-                let (fee, a, reserves) = parse_stableswap_data(init_args, reserves);
-                out = stableswap_pool::estimate_swap(reserves, fee, a, in_idx, out_idx, in_amount);
+                let data = parse_stableswap_data(init_args, reserves);
+                out = stableswap_pool::estimate_swap(
+                    &e,
+                    data.fee,
+                    data.initial_a,
+                    data.initial_a_time,
+                    data.future_a,
+                    data.future_a_time,
+                    data.reserves,
+                    in_idx,
+                    out_idx,
+                    in_amount,
+                );
             } else {
                 panic!("unknown pool type");
             };
@@ -72,5 +94,18 @@ impl Router for LiquidityPoolSwapRouter {
             }
         }
         (best_pool, best_result)
+    }
+}
+
+#[contractimpl]
+impl UpgradeableContract for LiquidityPoolSwapRouter {
+    fn version() -> u32 {
+        100
+    }
+
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        let access_control = AccessControl::new(&e);
+        access_control.require_admin();
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

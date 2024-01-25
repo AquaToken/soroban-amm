@@ -75,7 +75,7 @@ fn get_pools(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
             bump_persistent(e, &key);
             value
         }
-        None => Map::new(&e),
+        None => Map::new(e),
     }
 }
 
@@ -199,7 +199,7 @@ pub fn get_pool(
     tokens: Vec<Address>,
     pool_index: BytesN<32>,
 ) -> Result<Address, PoolError> {
-    let salt = pool_salt(&e, tokens);
+    let salt = pool_salt(e, tokens);
     let pools = get_pools(e, &salt);
     match pools.contains_key(pool_index.clone()) {
         true => Ok(pools.get(pool_index).unwrap().address),
@@ -249,6 +249,6 @@ pub fn remove_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) {
 
 pub fn get_stableswap_next_counter(e: &Env) -> u128 {
     let value = get_stableswap_counter(e);
-    set_stableswap_counter(e, &(value.clone() + 1));
+    set_stableswap_counter(e, &(value + 1));
     value
 }

@@ -55,7 +55,7 @@ pub fn get_total_shares(e: &Env) -> u128 {
 }
 
 pub fn put_total_shares(e: &Env, value: u128) {
-    bump_instance(&e);
+    bump_instance(e);
     e.storage().instance().set(&DataKey::TotalShares, &value)
 }
 
