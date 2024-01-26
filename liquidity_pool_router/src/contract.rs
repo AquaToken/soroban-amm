@@ -10,22 +10,7 @@ use crate::pool_utils::{
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
-use crate::storage::{
-    add_pool, get_init_pool_payment_address, get_init_pool_payment_amount,
-    get_init_pool_payment_token, get_pool, get_pools_plain, get_reward_tokens,
-    get_reward_tokens_detailed, get_rewards_config, has_pool, remove_pool,
-    set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount,
-    set_init_pool_payment_token, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
-    set_stableswap_pool_hash, set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
-    LiquidityPoolType,
-};
-use crate::storage::{
-    add_pool, get_init_pool_payment_address, get_init_pool_payment_amount,
-    get_init_pool_payment_token, get_pool, get_pool_plane, get_pools_plain, get_swap_router,
-    has_pool, remove_pool, set_constant_product_pool_hash, set_init_pool_payment_address,
-    set_init_pool_payment_amount, set_init_pool_payment_token, set_pool_plane,
-    set_stableswap_pool_hash, set_swap_router, set_token_hash, LiquidityPoolType,
-};
+use crate::storage::{add_pool, get_init_pool_payment_address, get_init_pool_payment_amount, get_init_pool_payment_token, get_pool, get_pool_plane, get_pools_plain, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_swap_router, has_pool, remove_pool, set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount, set_init_pool_payment_token, set_pool_plane, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_swap_router, set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo, LiquidityPoolType, set_liquidity_calculator, get_liquidity_calculator};
 use crate::swap_router::SwapRouterClient;
 use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
@@ -34,6 +19,7 @@ use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
 };
 use utils::utils::check_vec_ordered;
+use crate::liquidity_calculator::LiquidityCalculatorClient;
 
 #[contract]
 pub struct LiquidityPoolRouter;
@@ -197,7 +183,21 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
 
     fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_liquidity"), Vec::new(&e))
+
+        let calculator = get_liquidity_calculator(&e);
+        LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&Vec::from_array(&e, [pool_id])).get(0).expect("unable to get liquidity for the pool")
+    }
+
+    fn get_liquidity_calculator(e: Env) -> Address {
+        get_liquidity_calculator(&e)
+    }
+
+    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
+        let access_control = AccessControl::new(&e);
+        admin.require_auth();
+        access_control.check_admin(&admin);
+
+        set_liquidity_calculator(&e, &calculator);
     }
 }
 
@@ -275,14 +275,21 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     }
 
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> u128 {
-        let salt = pool_salt(&e, tokens);
+        let salt = pool_salt(&e, tokens.clone());
+        let pools = get_pools_plain(&e, &salt);
+
+        let calculator = get_liquidity_calculator(&e);
+        let mut pools_vec: Vec<Address> = Vec::new(&e);
+        let mut pools_reversed: Map<Address, BytesN<32>> = Map::new(&e);
+        for (key, value) in pools {
+            pools_vec.push_back(value.clone());
+            pools_reversed.set(value, key);
+        }
+
+        let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
         let mut result = 0;
-        for (_hash, pool_id) in get_pools_plain(&e, &salt) {
-            result += e.invoke_contract::<u128>(
-                &pool_id,
-                &Symbol::new(&e, "get_liquidity"),
-                Vec::new(&e),
-            );
+        for liquidity in pools_liquidity {
+            result += liquidity;
         }
         result
     }

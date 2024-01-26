@@ -76,6 +76,17 @@ fn create_swap_router_contract<'a>(e: &Env) -> swap_router::Client<'a> {
     swap_router::Client::new(e, &e.register_contract_wasm(None, swap_router::WASM))
 }
 
+mod liquidity_calculator {
+    soroban_sdk::contractimport!(
+        file =
+            "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_liquidity_calculator_contract.wasm"
+    );
+}
+
+fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator::Client<'a> {
+    liquidity_calculator::Client::new(e, &e.register_contract_wasm(None, liquidity_calculator::WASM))
+}
+
 fn jump(e: &Env, time: u64) {
     e.ledger().set(LedgerInfo {
         timestamp: e.ledger().timestamp().saturating_add(time),
@@ -116,6 +127,13 @@ fn test_total_liquidity() {
     let pool_wasm_hash = install_liq_pool_hash(&e);
     let stableswap_pool_hash_2 = install_stableswap_two_tokens_liq_pool_hash(&e);
     let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
     let router = create_liqpool_router_contract(&e);
     router.init_admin(&admin);
     router.set_pool_hash(&pool_wasm_hash);
@@ -123,6 +141,10 @@ fn test_total_liquidity() {
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
     router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
     reward_token.mint(&user1, &3_0000000);
     reward_token.approve(&user1, &router.address, &3_0000000, &99999);
 
@@ -142,7 +164,7 @@ fn test_total_liquidity() {
     }
 
     e.budget().reset_default();
-    assert_eq!(router.get_total_liquidity(&tokens), 3066);
+    assert_eq!(router.get_total_liquidity(&tokens), 3250);
     e.budget().print();
     e.budget().reset_unlimited();
 

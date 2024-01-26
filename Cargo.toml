@@ -11,6 +11,7 @@ members = [
     "liquidity_pool_stableswap",
     "liquidity_pool_router",
     "liquidity_pool_swap_router",
+    "liquidity_pool_liquidity_calculator",
     "liquidity_pool_plane",
 ]
 

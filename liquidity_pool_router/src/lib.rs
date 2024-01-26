@@ -11,5 +11,6 @@ mod router_interface;
 mod storage;
 mod swap_router;
 mod test;
+mod liquidity_calculator;
 
 pub use contract::{LiquidityPoolRouter, LiquidityPoolRouterClient};
