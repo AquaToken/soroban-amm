@@ -1,9 +1,8 @@
 use soroban_sdk::{Env, Vec};
+use crate::constants::{FEE_MULTIPLIER, PRICE_PRECISION};
 
 const RATE: u128 = 1_0000000;
 const PRECISION: u128 = 1_0000000;
-const FEE_DENOMINATOR: u32 = 10000; // 0.01% = 0.0001 = 1 / 10000
-const PRICE_PRECISION: u128 = 1_000_000;
 
 
 fn a(e: &Env, initial_a: u128, initial_a_time: u128, future_a: u128, future_a_time: u128) -> u128 {
@@ -130,7 +129,7 @@ fn get_dy(reserves: &Vec<u128>, fee_fraction: u128, a: u128, i: u32, j: u32, dx:
     }
 
     let dy = (xp.get(j).unwrap() - y - 1) * PRECISION / RATE;
-    let fee = fee_fraction * dy / FEE_DENOMINATOR as u128;
+    let fee = fee_fraction * dy / FEE_MULTIPLIER as u128;
     dy - fee
 }
 
@@ -197,40 +196,35 @@ pub(crate) fn get_liquidity(
     let mut prev_depth = 0;
 
     let mut first_iteration = true;
-    let mut in_amt = 0;
-    let in_limit = reserve_in * 2;
-    let mut d_in = 1000;
+    let mut last_iteration = false;
+    let mut in_amt = reserve_in * 2;
 
-    while in_amt < in_limit {
-        // increment dx gradually
-        in_amt += d_in;
-        d_in = d_in * 150 / 100;
-        let depth = estimate_swap(e, fee_fraction, initial_a, initial_a_time, future_a, future_a_time, &reserves, in_idx, out_idx, in_amt);
-        let price = in_amt * PRICE_PRECISION / depth;
-
-        // if price changed less than 1% from previous value, drop iteration
-        if price * 100 < prev_price * 101 {
-            continue;
-        }
-
-        let weight = price_weight(price, min_price);
+    // todo: how to describe range properly?
+    while !last_iteration {
+        let mut depth = estimate_swap(e, fee_fraction, initial_a, initial_a_time, future_a, future_a_time, &reserves, in_idx, out_idx, in_amt);
+        let mut price = in_amt * PRICE_PRECISION / depth;
+        let mut weight = price_weight(price, min_price);
 
         if first_iteration {
-            prev_price = min_price;
+            prev_price = price;
             prev_depth = depth;
             prev_weight = weight;
             first_iteration = false;
+            continue;
+        }
+
+        // stop if rounding affects price
+        // then integrate up to min price
+        if price > prev_price {
+            price = min_price;
+            weight = 1;
+            depth = 0;
+            last_iteration = true;
         }
 
         let depth_avg = (depth + prev_depth) / 2;
         let weight_avg = (weight + prev_weight) / 2;
-        let d_price= price - prev_price;
-        // if price > prev_price {
-        //     d_price = price - prev_price;
-        // } else {
-        //     continue
-        // };
-
+        let d_price = prev_price - price;
         let integration_result = depth_avg * PRICE_PRECISION * weight_avg / PRICE_PRECISION * d_price / PRICE_PRECISION;
 
         result += integration_result;
@@ -238,7 +232,8 @@ pub(crate) fn get_liquidity(
         prev_price = price;
         prev_weight = weight;
         prev_depth = depth;
+        // decrease dx exponentially
+        in_amt = in_amt * 100 / 110;
     }
     result / PRICE_PRECISION
 }
-
