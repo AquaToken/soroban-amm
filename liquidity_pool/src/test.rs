@@ -266,6 +266,7 @@ fn test_liquidity() {
             ),
             &setup.token_reward.address,
             30, // 0.3%
+            &setup.plane.address,
         );
         setup.token1.approve(
             &setup.users[0],

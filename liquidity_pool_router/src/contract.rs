@@ -275,6 +275,9 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     }
 
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> u128 {
+        if !check_vec_ordered(&tokens) {
+            panic!("tokens are not sorted")
+        }
         let salt = pool_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
 
