@@ -72,9 +72,9 @@ pub(crate) fn get_liquidity(
         let mut weight = price_weight(price, min_price);
 
         if first_iteration {
-            prev_price = price.clone();
-            prev_depth = depth.clone();
-            prev_weight = weight.clone();
+            prev_price = price;
+            prev_depth = depth;
+            prev_weight = weight;
             first_iteration = false;
             continue;
         }
@@ -106,11 +106,11 @@ pub(crate) fn get_liquidity(
         let integration_result =
             depth_avg * PRICE_PRECISION * weight_avg / PRICE_PRECISION * d_price / PRICE_PRECISION;
 
-        result_big = result_big + integration_result;
+        result_big += integration_result;
 
-        prev_price = price.clone();
-        prev_weight = weight.clone();
-        prev_depth = depth.clone();
+        prev_price = price;
+        prev_weight = weight;
+        prev_depth = depth;
         // let in_amt_prev = biguint_to_128(in_amt.clone());
         in_amt = get_next_in_amt(in_amt);
     }
