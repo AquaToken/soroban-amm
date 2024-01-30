@@ -256,6 +256,80 @@ fn test_kill() {
     );
 }
 
+#[cfg(feature = "tokens_2")]
+#[test]
+#[should_panic(expected = "initial deposit requires all coins")]
+fn test_zero_initial_deposit() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+
+    liqpool.deposit(&user1, &Vec::from_array(&e, [1000_0000000, 0]));
+}
+
+#[cfg(feature = "tokens_2")]
+#[test]
+fn test_zero_deposit_ok() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
+
+    liqpool.deposit(&user1, &Vec::from_array(&e, [500_0000000, 500_0000000]));
+    liqpool.deposit(&user1, &Vec::from_array(&e, [500_0000000, 0]));
+}
+
 #[cfg(feature = "tokens_3")]
 #[test]
 fn test_happy_flow_3_tokens() {
