@@ -216,7 +216,6 @@ pub(crate) fn get_liquidity(
     let mut last_iteration = false;
     let mut in_amt = get_max_reserve(&reserves_norm) * 2;
 
-    // todo: how to describe range properly?
     while !last_iteration {
         let mut depth = estimate_swap(
             e,
@@ -241,10 +240,9 @@ pub(crate) fn get_liquidity(
 
         // stop if rounding affects price
         // stop if steps are too small
-        // then integrate up to min price
-        // todo: add exit condition on iterations amount
+        //  then integrate up to min price
         if (price > prev_price) || (in_amt < 50_000) {
-            // todo: do we need this case? don't go into last iteration since we've jumped below min price
+            // don't go into last iteration since we've already jumped below min price
             if prev_price < min_price {
                 break;
             }
@@ -254,11 +252,6 @@ pub(crate) fn get_liquidity(
             depth = 0;
             last_iteration = true;
         }
-        // // if price has changed for less than 0.01%, skip iteration
-        // else if &price * U256M::from(10001_u32) > &prev_price * U256M::from(10000_u32) {
-        //     in_amt = get_next_in_amt(&in_amt);
-        //     continue;
-        // }
 
         let depth_avg = (&depth + &prev_depth) / 2;
         let weight_avg = (&weight + &prev_weight) / 2;
@@ -271,7 +264,6 @@ pub(crate) fn get_liquidity(
         prev_price = price;
         prev_weight = weight;
         prev_depth = depth;
-        // let in_amt_prev = biguint_to_128(in_amt.clone());
         in_amt = get_next_in_amt(in_amt);
     }
     result_big / PRICE_PRECISION * nominator / denominator
