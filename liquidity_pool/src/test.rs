@@ -235,6 +235,40 @@ fn test_deposit_min_mint() {
 }
 
 #[test]
+#[should_panic(expected = "initial deposit requires all coins")]
+fn test_zero_initial_deposit() {
+    let Setup {
+        env: e,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::default();
+    let user1 = users[0].clone();
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 0]));
+}
+
+#[test]
+fn test_zero_deposit_ok() {
+    let Setup {
+        env: e,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::default();
+    let user1 = users[0].clone();
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 100]));
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 0]));
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #201)")]
 fn initialize_already_initialized() {
     let setup = Setup::default();
