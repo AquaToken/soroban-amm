@@ -21,6 +21,24 @@ fn estimate_swap(
     n / d
 }
 
+fn get_min_price(
+    e: &Env,
+    fee_fraction: u128,
+    reserves: Vec<u128>,
+    in_idx: u32,
+    out_idx: u32,
+) -> u128 {
+    let min_amount = PRICE_PRECISION;
+    let mut reserves_adj = Vec::new(e);
+    for i in 0..reserves.len() {
+        let value = reserves.get(i).unwrap();
+        reserves_adj.push_back(value * PRICE_PRECISION);
+    }
+
+    &min_amount * PRICE_PRECISION
+        / estimate_swap(e, fee_fraction, &reserves_adj, in_idx, out_idx, min_amount)
+}
+
 pub(crate) fn get_liquidity(
     e: &Env,
     fee_fraction: u128,
@@ -36,23 +54,9 @@ pub(crate) fn get_liquidity(
     }
 
     let (reserves_norm, nominator, denominator) = normalize_reserves(reserves);
+    let min_price = get_min_price(e, fee_fraction, reserves_norm.clone(), in_idx, out_idx);
 
     let mut result_big = 0;
-    // let min_price_func = get_min_price(reserve_in, reserve_out, fee_fraction);
-    // let min_price = reserve_in * U256M::from_u128(e, PRICE_PRECISION) / reserve_out;
-    let min_amount = PRICE_PRECISION;
-    let mut reserves_adj = Vec::new(e);
-    let mut reserves_big = Vec::new(e);
-    for i in 0..reserves_norm.len() {
-        let value = reserves_norm.get(i).unwrap();
-        reserves_big.push_back(value);
-        reserves_adj.push_back(value * PRICE_PRECISION);
-    }
-
-    let min_price = &min_amount * PRICE_PRECISION
-        / estimate_swap(e, fee_fraction, &reserves_adj, in_idx, out_idx, min_amount);
-    // let _min_price_p8 = min_price.pow(8);
-
     let mut prev_price = 0;
     let mut prev_weight = 1;
     let mut prev_depth = 0;
@@ -63,7 +67,7 @@ pub(crate) fn get_liquidity(
 
     // todo: how to describe range properly?
     while !last_iteration {
-        let mut depth = estimate_swap(e, fee_fraction, &reserves_big, in_idx, out_idx, in_amt);
+        let mut depth = estimate_swap(e, fee_fraction, &reserves_norm, in_idx, out_idx, in_amt);
         let mut price = in_amt * PRICE_PRECISION / depth;
         let mut weight = price_weight(price, min_price);
 
@@ -76,9 +80,10 @@ pub(crate) fn get_liquidity(
         }
 
         // stop if rounding affects price
-        // then integrate up to min price
+        // stop if steps are too small
+        //  then integrate up to min price
         // todo: add exit condition on iterations amount
-        if price > prev_price {
+        if (price > prev_price) || (in_amt < 50_000) {
             // todo: do we need this case? don't go into last iteration since we've jumped below min price
             if prev_price < min_price {
                 break;

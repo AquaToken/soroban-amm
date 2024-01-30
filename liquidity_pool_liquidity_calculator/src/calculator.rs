@@ -12,10 +12,7 @@ pub fn price_weight(price: u128, min_price: u128) -> u128 {
 
 pub fn get_next_in_amt(in_amt: u128) -> u128 {
     // decrease dx exponentially
-    // in_amt * U256M::from(100_u8) / U256M::from(110_u8)
-    // in_amt * 100 / 125
-    in_amt * 100 / 110
-    // in_amt * U256M::from(50_u8) / U256M::from(100_u8)
+    in_amt * 100 / 125
 }
 
 pub fn get_max_reserve(reserves: &Vec<u128>) -> u128 {

@@ -26,7 +26,7 @@ fn a(e: &Env, initial_a: u128, initial_a_time: u128, future_a: u128, future_a_ti
 }
 
 // xp size = N_COINS
-fn get_d(n_coins: u32, xp: Vec<u128>, amp: u128) -> u128 {
+fn get_d(n_coins: u32, xp: &Vec<u128>, amp: u128) -> u128 {
     let mut s = 0;
     for x in xp.clone() {
         s += x;
@@ -57,7 +57,15 @@ fn get_d(n_coins: u32, xp: Vec<u128>, amp: u128) -> u128 {
     d
 }
 
-fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u128) -> u128 {
+fn get_y(
+    d: u128,
+    n_coins: u32,
+    in_idx: u32,
+    out_idx: u32,
+    x: u128,
+    xp: Vec<u128>,
+    amp: u128,
+) -> u128 {
     // x in the input is converted to the same price/precision
 
     if in_idx == out_idx {
@@ -78,8 +86,6 @@ fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u12
         panic!("bad arguments")
     }
 
-    let amp = a;
-    let d = get_d(xp.len(), xp.clone(), amp);
     let mut c = d;
     let mut s = 0;
     let ann = amp * n_coins as u128;
@@ -115,12 +121,20 @@ fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u12
     y
 }
 
-fn get_dy(reserves: &Vec<u128>, fee_fraction: u128, a: u128, i: u32, j: u32, dx: u128) -> u128 {
+fn get_dy(
+    d: u128,
+    reserves: &Vec<u128>,
+    fee_fraction: u128,
+    amp: u128,
+    i: u32,
+    j: u32,
+    dx: u128,
+) -> u128 {
     // dx and dy in c-units
     let xp = reserves.clone();
 
     let x = xp.get(i).unwrap() + (dx * RATE / PRECISION);
-    let y = get_y(reserves.len(), i, j, x, xp.clone(), a);
+    let y = get_y(d, reserves.len(), i, j, x, xp.clone(), amp);
 
     if y == 0 {
         // pool is empty
@@ -133,19 +147,16 @@ fn get_dy(reserves: &Vec<u128>, fee_fraction: u128, a: u128, i: u32, j: u32, dx:
 }
 
 fn estimate_swap(
-    e: &Env,
+    _e: &Env,
     fee_fraction: u128,
-    initial_a: u128,
-    initial_a_time: u128,
-    future_a: u128,
-    future_a_time: u128,
+    d: u128,
+    amp: u128,
     reserves: &Vec<u128>,
     in_idx: u32,
     out_idx: u32,
     in_amount: u128,
 ) -> u128 {
-    let a = a(e, initial_a, initial_a_time, future_a, future_a_time);
-    get_dy(reserves, fee_fraction, a, in_idx, out_idx, in_amount)
+    get_dy(d, reserves, fee_fraction, amp, in_idx, out_idx, in_amount)
 }
 
 pub(crate) fn get_liquidity(
@@ -180,14 +191,16 @@ pub(crate) fn get_liquidity(
         reserves_adj.push_back(value * PRICE_PRECISION);
     }
 
+    let amp = a(e, initial_a, initial_a_time, future_a, future_a_time);
+    let n_tokens = reserves_adj.len();
+    let d_adj = get_d(n_tokens, &reserves_adj, amp);
+    let d = get_d(n_tokens, &reserves_big, amp);
     let min_price = &min_amount * PRICE_PRECISION
         / estimate_swap(
             e,
             fee_fraction,
-            initial_a,
-            initial_a_time,
-            future_a,
-            future_a_time,
+            d_adj,
+            amp,
             &reserves_adj,
             in_idx,
             out_idx,
@@ -208,10 +221,8 @@ pub(crate) fn get_liquidity(
         let mut depth = estimate_swap(
             e,
             fee_fraction,
-            initial_a,
-            initial_a_time,
-            future_a,
-            future_a_time,
+            d,
+            amp,
             &reserves_big,
             in_idx,
             out_idx,
@@ -229,9 +240,10 @@ pub(crate) fn get_liquidity(
         }
 
         // stop if rounding affects price
+        // stop if steps are too small
         // then integrate up to min price
         // todo: add exit condition on iterations amount
-        if price > prev_price {
+        if (price > prev_price) || (in_amt < 50_000) {
             // todo: do we need this case? don't go into last iteration since we've jumped below min price
             if prev_price < min_price {
                 break;
