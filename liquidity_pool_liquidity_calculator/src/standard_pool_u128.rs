@@ -41,28 +41,39 @@ fn get_next_in_amt(in_amt: u128) -> u128 {
     // in_amt * U256M::from(50_u8) / U256M::from(100_u8)
 }
 
-fn normalize_reserves(reserves: &Vec<u128>) -> (Vec<u128>, u128) {
-    let mut reserves_norm = reserves.clone();
-    // find maximum reserve
+fn get_max_reserve(reserves: &Vec<u128>) -> u128 {
     let mut max_reserve = 0;
-    for i in 0..reserves_norm.len() {
-        let value = reserves_norm.get(i).unwrap();
+    for value in reserves.clone() {
         if max_reserve < value {
             max_reserve = value;
         }
     }
+    max_reserve
+}
+
+fn normalize_reserves(reserves: &Vec<u128>) -> (Vec<u128>, u128, u128) {
+    let mut reserves_norm = reserves.clone();
+    let mut max_reserve = get_max_reserve(reserves);
 
     // normalize reserves
-    let mut multiplier = 1;
+    let mut nominator = 1;
+    let mut denominator = 1;
     if max_reserve > RESERVES_NORM * 2 {
-        multiplier = max_reserve / RESERVES_NORM;
+        nominator = max_reserve / RESERVES_NORM;
         for i in 0..reserves_norm.len() {
             let value = reserves_norm.get(i).unwrap();
-            let adj_value = value / multiplier;
+            let adj_value = value / nominator;
+            reserves_norm.set(i, adj_value);
+        }
+    } else if max_reserve < RESERVES_NORM / 2 {
+        denominator = RESERVES_NORM / max_reserve;
+        for i in 0..reserves_norm.len() {
+            let value = reserves_norm.get(i).unwrap();
+            let adj_value = value * denominator;
             reserves_norm.set(i, adj_value);
         }
     }
-    (reserves_norm, multiplier)
+    (reserves_norm, nominator, denominator)
 }
 
 pub(crate) fn get_liquidity(
@@ -79,8 +90,8 @@ pub(crate) fn get_liquidity(
         return 0;
     }
 
-    let (reserves_norm, multiplier) = normalize_reserves(reserves);
-    reserve_in = reserve_in / multiplier;
+    let (reserves_norm, nominator, denominator) = normalize_reserves(reserves);
+    reserve_in = reserve_in / nominator * denominator;
 
     let mut result_big = 0;
     // let min_price_func = get_min_price(reserve_in, reserve_out, fee_fraction);
@@ -104,7 +115,7 @@ pub(crate) fn get_liquidity(
 
     let mut first_iteration = true;
     let mut last_iteration = false;
-    let mut in_amt = reserve_in * 2;
+    let mut in_amt = get_max_reserve(&reserves_norm) * 2;
 
     // todo: how to describe range properly?
     let mut i = 0;
@@ -156,5 +167,5 @@ pub(crate) fn get_liquidity(
         // let in_amt_prev = biguint_to_128(in_amt.clone());
         in_amt = get_next_in_amt(in_amt);
     }
-    result_big / PRICE_PRECISION * multiplier
+    result_big / PRICE_PRECISION * nominator / denominator
 }

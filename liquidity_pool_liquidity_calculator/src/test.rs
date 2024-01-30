@@ -99,7 +99,7 @@ fn test() {
         results,
         Vec::from_array(
             &e,
-            [358785276, 537111826, 54194222, 2552234630, 2552201092, 2552212390,]
+            [358785276, 537111826, 54194228, 2552234630, 2552201092, 2552212390,]
         )
     );
 }
@@ -260,22 +260,65 @@ fn test_small() {
             address6.clone(),
         ],
     ));
-    e.budget().print();
     e.budget().reset_unlimited();
-    assert_eq!(
-        results,
-        Vec::from_array(
-            &e,
-            [
-                53931457250,
-                5384176125,
-                553251436,
-                312084614500,
-                31183780625,
-                3118378054,
-            ]
-        )
+    assert_eq!(results, Vec::from_array(&e, [0, 2, 36, 2, 24, 254,]));
+}
+
+#[test]
+fn test_reversed() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let address1 = Address::generate(&e);
+    let address2 = Address::generate(&e);
+    let address3 = Address::generate(&e);
+    let address4 = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &address1,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [1000_u128, 3000_u128]),
     );
+    plane.update(
+        &address2,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [3000_u128, 1000_u128]),
+    );
+    plane.update(
+        &address3,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [30_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [1000_u128, 3000_u128]),
+    );
+    plane.update(
+        &address4,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [30_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [3000_u128, 1000_u128]),
+    );
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    e.budget().reset_default();
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [
+            address1.clone(),
+            address2.clone(),
+            address3.clone(),
+            address4.clone(),
+        ],
+    ));
+    e.budget().reset_unlimited();
+    assert_eq!(results, Vec::from_array(&e, [70, 70, 479, 479,]));
 }
 
 #[test]

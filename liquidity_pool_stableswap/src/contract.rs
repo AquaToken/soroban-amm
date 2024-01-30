@@ -20,7 +20,6 @@ use token_share::{
     put_token_share, Client as LPToken,
 };
 
-use crate::liquidity::get_liquidity;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
@@ -1026,22 +1025,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         update_plane(&e);
 
         amounts
-    }
-
-    fn get_liquidity(e: Env) -> u128 {
-        // fixme: temporary solution. calculates using constant product formula. only for quick testing
-        let reserves = get_reserves(&e);
-        let mut liquidity = 0;
-        let fee = get_fee(&e);
-        for i in 0..reserves.len() {
-            for j in 0..reserves.len() {
-                if i == j {
-                    continue;
-                }
-                liquidity += get_liquidity(reserves.get(i).unwrap(), reserves.get(j).unwrap(), fee);
-            }
-        }
-        liquidity
     }
 
     fn get_info(e: Env) -> Map<Symbol, Val> {

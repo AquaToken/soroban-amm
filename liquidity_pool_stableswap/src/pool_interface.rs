@@ -75,8 +75,6 @@ pub trait LiquidityPoolInterfaceTrait {
     // Returns a list of the amounts for each coin that was withdrawn.
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128>;
 
-    fn get_liquidity(e: Env) -> u128;
-
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> Map<Symbol, Val>;
 }

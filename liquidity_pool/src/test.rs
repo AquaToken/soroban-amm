@@ -5,8 +5,22 @@ use crate::testutils::{
     create_liqpool_contract, create_token_contract, install_token_wasm, jump, Setup, TestConfig,
 };
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation};
-use soroban_sdk::{testutils::Address as _, Address, IntoVal, Symbol, Vec};
+use soroban_sdk::{testutils::Address as _, Address, Env, IntoVal, Symbol, Vec};
 use utils::test_utils::assert_approx_eq_abs;
+
+mod liquidity_calculator {
+    soroban_sdk::contractimport!(
+        file =
+            "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_liquidity_calculator_contract.wasm"
+    );
+}
+
+fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator::Client<'a> {
+    liquidity_calculator::Client::new(
+        e,
+        &e.register_contract_wasm(None, liquidity_calculator::WASM),
+    )
+}
 
 #[test]
 fn test() {
@@ -240,20 +254,23 @@ fn test_liquidity() {
         ..TestConfig::default()
     };
     let setup = Setup::new_with_config(&config);
+    let liquidity_calculator = create_liquidity_calculator_contract(&setup.env);
+    liquidity_calculator.init_admin(&setup.users[0]);
+    liquidity_calculator.set_pools_plane(&setup.users[0], &setup.plane.address);
 
     for config in [
         (10, 10, 0),
         (30, 30, 0),
         (100, 100, 2),
-        (3000, 3000, 102),
-        (1000, 3000, 68),
-        (3000, 1000, 68),
-        (10_0000000, 30_0000000, 6809461),
-        (30_0000000, 10_0000000, 6809461),
+        (3000, 3000, 106),
+        (1000, 3000, 70),
+        (3000, 1000, 70),
+        (10_0000000, 30_0000000, 7180298),
+        (30_0000000, 10_0000000, 7180298),
         (
             30_000_000_000_0000000,
             10_000_000_000_0000000,
-            6809462488704887,
+            7180298640000000,
         ),
     ] {
         let liq_pool = create_liqpool_contract(
@@ -284,7 +301,14 @@ fn test_liquidity() {
             &setup.users[0],
             &Vec::from_array(&setup.env, [config.0, config.1]),
         );
-        assert_eq!(liq_pool.get_liquidity(), config.2);
+        // assert_eq!(liq_pool.get_liquidity(), config.2);
+        assert_eq!(
+            liquidity_calculator
+                .get_liquidity(&Vec::from_array(&setup.env, [liq_pool.address]))
+                .get(0)
+                .unwrap(),
+            config.2
+        );
     }
 }
 
