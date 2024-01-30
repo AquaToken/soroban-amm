@@ -1,7 +1,7 @@
 use crate::constants::FEE_MULTIPLIER;
+use crate::liquidity::get_liquidity;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
-use crate::liquidity::get_liquidity;
 use crate::pool;
 use crate::pool_interface::{
     LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait,

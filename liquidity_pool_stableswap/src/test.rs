@@ -58,6 +58,20 @@ fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     PoolPlaneClient::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
 }
 
+mod liquidity_calculator {
+    soroban_sdk::contractimport!(
+        file =
+            "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_liquidity_calculator_contract.wasm"
+    );
+}
+
+fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator::Client<'a> {
+    liquidity_calculator::Client::new(
+        e,
+        &e.register_contract_wasm(None, liquidity_calculator::WASM),
+    )
+}
+
 fn jump(e: &Env, time: u64) {
     e.ledger().set(LedgerInfo {
         timestamp: e.ledger().timestamp().saturating_add(time),
@@ -1570,6 +1584,10 @@ fn test_liquidity() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin1);
+    liquidity_calculator.set_pools_plane(&admin1, &plane.address);
 
     token1_admin_client.mint(&user1, &1_000_000_000_000_000_000_0000000);
     token2_admin_client.mint(&user1, &1_000_000_000_000_000_000_0000000);
@@ -1598,6 +1616,7 @@ fn test_liquidity() {
             30, // 0.3%
             0,
             &token_reward.address,
+            &plane.address,
         );
         token1.approve(
             &user1,
@@ -1612,6 +1631,12 @@ fn test_liquidity() {
             &99999,
         );
         liqpool.deposit(&user1, &Vec::from_array(&e, [config.0, config.1]));
-        assert_eq!(liqpool.get_liquidity(), config.2);
+        assert_eq!(
+            liquidity_calculator
+                .get_liquidity(&Vec::from_array(&e, [liqpool.address]))
+                .get(0)
+                .unwrap(),
+            config.2
+        );
     }
 }

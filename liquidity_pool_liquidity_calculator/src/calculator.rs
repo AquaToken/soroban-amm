@@ -1,20 +1,18 @@
-use soroban_sdk::Env;
 use crate::constants::PRICE_PRECISION;
 use crate::u256::U256M;
-
+use soroban_sdk::Env;
 
 // const POOL_TYPE_STANDARD: Symbol = symbol_short!("standard");
 // const POOL_TYPE_STABLESWAP: Symbol = symbol_short!("stable");
 
-
-pub (crate) fn get_next_in_amt(e: &Env, in_amt: &U256M) -> U256M {
+pub(crate) fn get_next_in_amt(e: &Env, in_amt: &U256M) -> U256M {
     // decrease dx exponentially
     // in_amt * U256M::from(100_u8) / U256M::from(110_u8)
     in_amt * U256M::from_u32(e, 100) / U256M::from_u32(e, 125)
     // in_amt * U256M::from(50_u8) / U256M::from(100_u8)
 }
 
-pub (crate) fn price_weight(e: &Env, price: &U256M, min_price_p8: &U256M) -> U256M {
+pub(crate) fn price_weight(e: &Env, price: &U256M, min_price_p8: &U256M) -> U256M {
     // return U256M::from(1_u32);
     // returns price weighted with exponent (p_min/p)^8
     U256M::from_u128(e, PRICE_PRECISION) * min_price_p8 / price.pow(8)

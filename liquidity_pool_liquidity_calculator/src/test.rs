@@ -81,32 +81,200 @@ fn test() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    // e.budget().reset_default();
-    let results= calculator.get_liquidity(
-        &Vec::from_array(
-            &e,
-            [
-                address1.clone(),
-                address2.clone(),
-                address3.clone(),
-                address4.clone(),
-                address5.clone(),
-                address6.clone(),
-            ],
-        ),
-    );
+    e.budget().reset_default();
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [
+            address1.clone(),
+            address2.clone(),
+            address3.clone(),
+            address4.clone(),
+            address5.clone(),
+            address6.clone(),
+        ],
+    ));
     e.budget().print();
     e.budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [
-            365453042,
-            547105750,
-            55200700,
-            2802293296,
-            2802263728,
-            2802267760,
-        ])
+        Vec::from_array(
+            &e,
+            [358785276, 537111826, 54194222, 2552234630, 2552201092, 2552212390,]
+        )
+    );
+}
+
+#[test]
+fn test_norm() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let address1 = Address::generate(&e);
+    let address2 = Address::generate(&e);
+    let address3 = Address::generate(&e);
+    let address4 = Address::generate(&e);
+    let address5 = Address::generate(&e);
+    let address6 = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &address1,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [250_500_000_0000_u128, 50_000_000_0000_u128]),
+    );
+    plane.update(
+        &address2,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [25_000_000_0000_u128, 5_000_000_0000_u128]),
+    );
+    plane.update(
+        &address3,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [300_u128]),
+        &Vec::from_array(&e, [2_500_000_0000_u128, 0_500_000_0000_u128]),
+    );
+    plane.update(
+        &address4,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [30_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [250_500_000_0000_u128, 50_000_000_0000_u128]),
+    );
+    plane.update(
+        &address5,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [30_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [25_000_000_0000_u128, 5_000_000_0000_u128]),
+    );
+    plane.update(
+        &address6,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [30_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [2_500_000_0000_u128, 0_500_000_0000_u128]),
+    );
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    e.budget().reset_default();
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [
+            address1.clone(),
+            address2.clone(),
+            address3.clone(),
+            address4.clone(),
+            address5.clone(),
+            address6.clone(),
+        ],
+    ));
+    e.budget().print();
+    e.budget().reset_unlimited();
+    assert_eq!(
+        results,
+        Vec::from_array(
+            &e,
+            [
+                53931457250,
+                5384176125,
+                553251436,
+                312084614500,
+                31183780625,
+                3118378054,
+            ]
+        )
+    );
+}
+
+#[test]
+fn test_small() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let address1 = Address::generate(&e);
+    let address2 = Address::generate(&e);
+    let address3 = Address::generate(&e);
+    let address4 = Address::generate(&e);
+    let address5 = Address::generate(&e);
+    let address6 = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &address1,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [10_u128, 10_u128]),
+    );
+    plane.update(
+        &address2,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [100_u128, 100_u128]),
+    );
+    plane.update(
+        &address3,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [300_u128]),
+        &Vec::from_array(&e, [1000_u128, 1000_u128]),
+    );
+    plane.update(
+        &address4,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [30_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [10_u128, 10_u128]),
+    );
+    plane.update(
+        &address5,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [30_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [100_u128, 100_u128]),
+    );
+    plane.update(
+        &address6,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [30_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [1000_u128, 1000_u128]),
+    );
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    e.budget().reset_default();
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [
+            address1.clone(),
+            address2.clone(),
+            address3.clone(),
+            address4.clone(),
+            address5.clone(),
+            address6.clone(),
+        ],
+    ));
+    e.budget().print();
+    e.budget().reset_unlimited();
+    assert_eq!(
+        results,
+        Vec::from_array(
+            &e,
+            [
+                53931457250,
+                5384176125,
+                553251436,
+                312084614500,
+                31183780625,
+                3118378054,
+            ]
+        )
     );
 }
 
@@ -126,37 +294,33 @@ fn test_liquidity_overflow() {
         &address1,
         &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [u64::MAX as u128, u64::MAX as u128]),
+        &Vec::from_array(&e, [u128::MAX, u128::MAX]),
     );
     plane.update(
         &address2,
         &symbol_short!("stable"),
         &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
-        &Vec::from_array(&e, [u64::MAX as u128, u64::MAX as u128]),
+        &Vec::from_array(&e, [u128::MAX, u128::MAX]),
     );
 
     let calculator = create_contract(&e);
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    // e.budget().reset_default();
-    let results= calculator.get_liquidity(
-        &Vec::from_array(
-            &e,
-            [
-                address1.clone(),
-                address2.clone(),
-            ],
-        ),
-    );
+    e.budget().reset_default();
+    let results =
+        calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.budget().print();
     e.budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [
-            674141876399876634,
-            5169264198394322188,
-        ])
+        Vec::from_array(
+            &e,
+            [
+                12208830293366217679272277441816420068,
+                86846902844396382411602677508791731356,
+            ]
+        )
     );
 }
 
@@ -170,43 +334,61 @@ fn test_multiple_tokens() {
 
     let address1 = Address::generate(&e);
     let address2 = Address::generate(&e);
+    let address3 = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
     plane.update(
         &address1,
         &symbol_short!("stable"),
         &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
-        &Vec::from_array(&e, [u64::MAX as u128, u64::MAX as u128, u64::MAX as u128]),
+        &Vec::from_array(&e, [u128::MAX / 3, u128::MAX / 3, u128::MAX / 3]),
     );
     plane.update(
         &address2,
         &symbol_short!("stable"),
         &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
-        &Vec::from_array(&e, [u64::MAX as u128, u64::MAX as u128, u64::MAX as u128, u64::MAX as u128]),
+        &Vec::from_array(
+            &e,
+            [u128::MAX / 3, u128::MAX / 3, u128::MAX / 3, u128::MAX / 3],
+        ),
+    );
+    plane.update(
+        &address3,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(
+            &e,
+            [
+                u128::MAX / 3,
+                u128::MAX / 3,
+                u128::MAX / 3,
+                u128::MAX / 3,
+                u128::MAX / 3,
+            ],
+        ),
     );
 
     let calculator = create_contract(&e);
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    // e.budget().reset_default();
-    let results= calculator.get_liquidity(
-        &Vec::from_array(
-            &e,
-            [
-                address1.clone(),
-                address2.clone(),
-            ],
-        ),
-    );
+    e.budget().reset_default();
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [address1.clone(), address2.clone(), address3.clone()],
+    ));
     e.budget().print();
     e.budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [
-            15507792595182966564,
-            31015585190365933128,
-        ])
+        Vec::from_array(
+            &e,
+            [
+                86846902844396382411602677503687329172,
+                173693805688792764823205355007374658344,
+                289489676147987941372008925012291097240,
+            ]
+        )
     );
 }
 
@@ -240,15 +422,11 @@ fn test_empty_pool() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone()]),
-    );
+    let results =
+        calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.budget().print();
     e.budget().reset_unlimited();
-    assert_eq!(
-        results,
-        Vec::from_array(&e, [0, 0])
-    );
+    assert_eq!(results, Vec::from_array(&e, [0, 0]));
 }
 
 #[test]
@@ -275,13 +453,9 @@ fn test_bad_address() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone()]),
-    );
+    let results =
+        calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.budget().print();
     e.budget().reset_unlimited();
-    assert_eq!(
-        results,
-        Vec::from_array(&e, [0, 0])
-    );
+    assert_eq!(results, Vec::from_array(&e, [0, 0]));
 }

@@ -1,14 +1,19 @@
-use soroban_sdk::{Env, U256, Vec};
 use crate::calculator::{get_next_in_amt, price_weight};
 use crate::constants::{FEE_MULTIPLIER, PRICE_PRECISION};
 use crate::u256::U256M;
+use soroban_sdk::{Env, Vec, U256};
 // use crate::utils::biguint_to_128;
 
 const RATE: u128 = 1_0000000_u128;
 const PRECISION: u128 = 1_0000000_u128;
 
-
-fn a(e: &Env, initial_a: &U256M, initial_a_time: &U256M, future_a: &U256M, future_a_time: &U256M) -> U256M {
+fn a(
+    e: &Env,
+    initial_a: &U256M,
+    initial_a_time: &U256M,
+    future_a: &U256M,
+    future_a_time: &U256M,
+) -> U256M {
     // Handle ramping A up or down
     let t1 = future_a_time;
     let a1 = future_a;
@@ -45,10 +50,12 @@ fn get_d(e: &Env, n_coins: u32, xp: &Vec<U256>, amp: &U256M) -> U256M {
     for _i in 0..255 {
         let mut d_p = d.clone();
         for x1 in xp.clone() {
-            d_p = &d_p * &d / (U256M::from_u256(e, x1) * &U256M::from_u32(e, n_coins)) // If division by 0, this will be borked: only withdrawal will work. And that is good
+            d_p = &d_p * &d / (U256M::from_u256(e, x1) * &U256M::from_u32(e, n_coins))
+            // If division by 0, this will be borked: only withdrawal will work. And that is good
         }
         d_prev = d.clone();
-        d = (&ann * &s + &d_p * &U256M::from_u32(e, n_coins)) * &d / ((&ann - &U256M::from_u32(e, 1)) * &d + U256M::from_u32(e, n_coins + 1) * &d_p);
+        d = (&ann * &s + &d_p * &U256M::from_u32(e, n_coins)) * &d
+            / ((&ann - &U256M::from_u32(e, 1)) * &d + U256M::from_u32(e, n_coins + 1) * &d_p);
         // // Equality with the precision of 1
         if d.v > d_prev.v {
             if (&d - d_prev).v <= U256M::from_u32(e, 1).v {
@@ -61,15 +68,23 @@ fn get_d(e: &Env, n_coins: u32, xp: &Vec<U256>, amp: &U256M) -> U256M {
     d
 }
 
-fn get_y(e: &Env, n_coins: u32, in_idx: u32, out_idx: u32, x: &U256M, xp: &Vec<U256>, a: &U256M) -> U256M {
+fn get_y(
+    e: &Env,
+    n_coins: u32,
+    in_idx: u32,
+    out_idx: u32,
+    x: &U256M,
+    xp: &Vec<U256>,
+    a: &U256M,
+) -> U256M {
     // x in the input is converted to the same price/precision
 
     if in_idx == out_idx {
         panic!("same coin")
     } // dev: same coin
-    // if !(j >= 0) {
-    //     panic!("j below zero")
-    // } // dev: j below zero
+      // if !(j >= 0) {
+      //     panic!("j below zero")
+      // } // dev: j below zero
     if out_idx >= n_coins {
         panic!("j above N_COINS")
     } // dev: j above N_COINS
@@ -119,11 +134,20 @@ fn get_y(e: &Env, n_coins: u32, in_idx: u32, out_idx: u32, x: &U256M, xp: &Vec<U
     y
 }
 
-fn get_dy(e: &Env, reserves: &Vec<U256>, fee_fraction: &U256M, a: &U256M, i: u32, j: u32, dx: &U256M) -> U256M {
+fn get_dy(
+    e: &Env,
+    reserves: &Vec<U256>,
+    fee_fraction: &U256M,
+    a: &U256M,
+    i: u32,
+    j: u32,
+    dx: &U256M,
+) -> U256M {
     // dx and dy in c-units
     let xp = reserves;
 
-    let x = U256M::from_u256(e, xp.get(i).unwrap()) + (dx * U256M::from_u128(e, RATE) / U256M::from_u128(e, PRECISION));
+    let x = U256M::from_u256(e, xp.get(i).unwrap())
+        + (dx * U256M::from_u128(e, RATE) / U256M::from_u128(e, PRECISION));
     let y = get_y(e, reserves.len(), i, j, &x, &xp, a);
 
     if y.v == U256M::from_u32(e, 0).v {
@@ -131,7 +155,9 @@ fn get_dy(e: &Env, reserves: &Vec<U256>, fee_fraction: &U256M, a: &U256M, i: u32
         return U256M::from_u32(e, 0);
     }
 
-    let dy = (U256M::from_u256(e, xp.get(j).unwrap()) - y - U256M::from_u32(e, 1)) * U256M::from_u128(e, PRECISION) / U256M::from_u128(e, RATE);
+    let dy = (U256M::from_u256(e, xp.get(j).unwrap()) - y - U256M::from_u32(e, 1))
+        * U256M::from_u128(e, PRECISION)
+        / U256M::from_u128(e, RATE);
     let fee = fee_fraction * &dy / U256M::from_u128(e, FEE_MULTIPLIER);
     dy - fee
 }
@@ -168,10 +194,10 @@ pub(crate) fn get_liquidity(
     let initial_a_time_big = U256M::from_u128(e, initial_a_time);
     let future_a_big = U256M::from_u128(e, future_a);
     let future_a_time_big = U256M::from_u128(e, future_a_time);
-    let reserve_in = U256M::from_u128(e, reserves.get(0).unwrap());
-    let reserve_out = U256M::from_u128(e, reserves.get(1).unwrap());
+    let reserve_in = reserves.get(0).unwrap();
+    let reserve_out = reserves.get(1).unwrap();
 
-    if reserve_in.v == U256M::from_u32(e, 0).v || reserve_out.v == U256M::from_u32(e, 0).v {
+    if reserve_in == 0 || reserve_out == 0 {
         return 0;
     }
 
@@ -182,11 +208,45 @@ pub(crate) fn get_liquidity(
     let min_amount = U256M::from_u128(e, PRICE_PRECISION);
     let mut reserves_adj = Vec::new(e);
     let mut reserves_big = Vec::new(e);
+    let mut max_reserve = 0;
     for i in 0..reserves.len() {
-        reserves_big.push_back(U256::from_u128(e, reserves.get(i).unwrap()));
-        reserves_adj.push_back(U256::from_u128(e, reserves.get(i).unwrap()).mul(&U256::from_u128(e, PRICE_PRECISION)));
+        let value = reserves.get(i).unwrap();
+        if max_reserve < value {
+            max_reserve = value;
+        }
+        reserves_big.push_back(U256::from_u128(e, value));
+        reserves_adj.push_back(U256::from_u128(e, value).mul(&U256::from_u128(e, PRICE_PRECISION)));
     }
-    let min_price = &min_amount * U256M::from_u128(e, PRICE_PRECISION) / estimate_swap(e, &fee_fraction_big, &initial_a_big, &initial_a_time_big, &future_a_big, &future_a_time_big, &reserves_adj, in_idx, out_idx, &min_amount);
+
+    // normalize reserves
+    let reserve_norm = 1_0000000_u128;
+    let mut multiplier = 1;
+    if max_reserve > reserve_norm * 2 {
+        multiplier = max_reserve / reserve_norm;
+        for i in 0..reserves.len() {
+            reserves_big.set(
+                i,
+                reserves_big
+                    .get(i)
+                    .unwrap()
+                    .div(&U256::from_u128(e, multiplier)),
+            );
+        }
+    }
+
+    let min_price = &min_amount * U256M::from_u128(e, PRICE_PRECISION)
+        / estimate_swap(
+            e,
+            &fee_fraction_big,
+            &initial_a_big,
+            &initial_a_time_big,
+            &future_a_big,
+            &future_a_time_big,
+            &reserves_adj,
+            in_idx,
+            out_idx,
+            &min_amount,
+        );
     let min_price_p8 = min_price.pow(8);
 
     let mut prev_price = U256M::from_u32(e, 0);
@@ -195,13 +255,24 @@ pub(crate) fn get_liquidity(
 
     let mut first_iteration = true;
     let mut last_iteration = false;
-    let mut in_amt: U256M = reserve_in * U256M::from_u32(e, 2);
+    let mut in_amt: U256M = U256M::from_u128(e, reserve_in / multiplier * 2);
 
     // todo: how to describe range properly?
     let mut i = 0;
     while !last_iteration {
         i += 1;
-        let mut depth = estimate_swap(e, &fee_fraction_big, &initial_a_big, &initial_a_time_big, &future_a_big, &future_a_time_big, &reserves_big, in_idx, out_idx, &in_amt);
+        let mut depth = estimate_swap(
+            e,
+            &fee_fraction_big,
+            &initial_a_big,
+            &initial_a_time_big,
+            &future_a_big,
+            &future_a_time_big,
+            &reserves_big,
+            in_idx,
+            out_idx,
+            &in_amt,
+        );
         let mut price = &in_amt * U256M::from_u128(e, PRICE_PRECISION) / &depth;
         let mut weight = price_weight(e, &price, &min_price_p8);
 
@@ -236,7 +307,10 @@ pub(crate) fn get_liquidity(
         let depth_avg = (&depth + &prev_depth) / U256M::from_u32(e, 2);
         let weight_avg = (&weight + &prev_weight) / U256M::from_u32(e, 2);
         let d_price = &prev_price - &price;
-        let integration_result = depth_avg * U256M::from_u128(e, PRICE_PRECISION) * weight_avg / U256M::from_u128(e, PRICE_PRECISION) * d_price / U256M::from_u128(e, PRICE_PRECISION);
+        let integration_result = depth_avg * U256M::from_u128(e, PRICE_PRECISION) * weight_avg
+            / U256M::from_u128(e, PRICE_PRECISION)
+            * d_price
+            / U256M::from_u128(e, PRICE_PRECISION);
 
         result_big = result_big + integration_result;
 
@@ -246,5 +320,8 @@ pub(crate) fn get_liquidity(
         // let in_amt_prev = biguint_to_128(in_amt.clone());
         in_amt = get_next_in_amt(e, &in_amt);
     }
-    (result_big / U256M::from_u128(e, PRICE_PRECISION)).to_u128().unwrap()
+    (result_big / U256M::from_u128(e, PRICE_PRECISION))
+        .to_u128()
+        .unwrap()
+        * multiplier
 }

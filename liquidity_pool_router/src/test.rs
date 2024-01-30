@@ -84,7 +84,10 @@ mod liquidity_calculator {
 }
 
 fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator::Client<'a> {
-    liquidity_calculator::Client::new(e, &e.register_contract_wasm(None, liquidity_calculator::WASM))
+    liquidity_calculator::Client::new(
+        e,
+        &e.register_contract_wasm(None, liquidity_calculator::WASM),
+    )
 }
 
 fn jump(e: &Env, time: u64) {
@@ -164,9 +167,8 @@ fn test_total_liquidity() {
     }
 
     e.budget().reset_unlimited();
-    // e.budget().reset_default();
-    router.get_total_liquidity(&tokens);
-    // assert_eq!(router.get_total_liquidity(&tokens), 3220);
+    e.budget().reset_default();
+    assert_eq!(router.get_total_liquidity(&tokens), 3220);
     e.budget().print();
     e.budget().reset_unlimited();
 
@@ -184,11 +186,13 @@ fn test_total_liquidity() {
     }
 
     e.budget().reset_unlimited();
-    // e.budget().reset_default();
-    router.get_total_liquidity(&tokens);
-    // assert_eq!(router.get_total_liquidity(&tokens), 55202);
+    e.budget().reset_default();
+    assert_eq!(router.get_total_liquidity(&tokens), 26164);
     e.budget().print();
-    assert!(e.budget().cpu_instruction_cost() < 100_000_000, "budget exceed");
+    assert!(
+        e.budget().cpu_instruction_cost() < 100_000_000,
+        "budget exceed"
+    );
 }
 
 #[test]

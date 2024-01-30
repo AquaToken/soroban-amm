@@ -2,9 +2,9 @@
 
 mod constants;
 mod contract;
+mod liquidity;
 mod plane;
 mod plane_interface;
-mod liquidity;
 mod pool;
 mod pool_interface;
 mod rewards;

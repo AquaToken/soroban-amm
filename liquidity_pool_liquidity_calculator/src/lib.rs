@@ -2,18 +2,22 @@
 
 // extern crate alloc;
 
+mod calculator;
 mod constants;
 mod contract;
+mod interface;
 mod plane;
 mod stableswap_pool;
+mod stableswap_pool_u128;
 mod stableswap_pool_u256;
 mod standard_pool;
+mod standard_pool_u128;
+mod standard_pool_u256;
 mod storage;
 mod test;
-mod interface;
-mod utils;
 mod u256;
-mod calculator;
-mod standard_pool_u256;
+mod utils;
 
-pub use crate::contract::{LiquidityPoolLiquidityCalculator, LiquidityPoolLiquidityCalculatorClient};
+pub use crate::contract::{
+    LiquidityPoolLiquidityCalculator, LiquidityPoolLiquidityCalculatorClient,
+};

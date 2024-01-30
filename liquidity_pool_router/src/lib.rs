@@ -3,6 +3,7 @@
 mod constants;
 mod contract;
 mod events;
+mod liquidity_calculator;
 mod pool_contract;
 mod pool_interface;
 mod pool_utils;
@@ -11,6 +12,5 @@ mod router_interface;
 mod storage;
 mod swap_router;
 mod test;
-mod liquidity_calculator;
 
 pub use contract::{LiquidityPoolRouter, LiquidityPoolRouterClient};

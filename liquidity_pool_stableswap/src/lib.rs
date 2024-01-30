@@ -23,9 +23,9 @@ compile_error!("only one feature with tokens number should be specified");
 ))]
 compile_error!("please specify tokens number feature");
 
+mod liquidity;
 mod plane;
 mod plane_interface;
-mod liquidity;
 #[cfg(feature = "tokens_2")]
 mod pool_2_constants;
 #[cfg(feature = "tokens_3")]

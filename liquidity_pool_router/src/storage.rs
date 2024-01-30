@@ -109,7 +109,11 @@ generate_instance_storage_getter_and_setter_with_default!(
 );
 generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
 generate_instance_storage_getter_and_setter!(swap_router, DataKey::SwapRouter, Address);
-generate_instance_storage_getter_and_setter!(liquidity_calculator, DataKey::LiquidityCalculator, Address);
+generate_instance_storage_getter_and_setter!(
+    liquidity_calculator,
+    DataKey::LiquidityCalculator,
+    Address
+);
 generate_instance_storage_getter_and_setter_with_default!(
     rewards_config,
     DataKey::RewardsConfig,

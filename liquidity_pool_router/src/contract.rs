@@ -1,5 +1,6 @@
 use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::events::{Events, LiquidityPoolRouterEvents};
+use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_interface::{
     LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait, RewardsInterfaceTrait,
     SwapRouterInterface,
@@ -10,7 +11,16 @@ use crate::pool_utils::{
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
-use crate::storage::{add_pool, get_init_pool_payment_address, get_init_pool_payment_amount, get_init_pool_payment_token, get_pool, get_pool_plane, get_pools_plain, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_swap_router, has_pool, remove_pool, set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount, set_init_pool_payment_token, set_pool_plane, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_swap_router, set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo, LiquidityPoolType, set_liquidity_calculator, get_liquidity_calculator};
+use crate::storage::{
+    add_pool, get_init_pool_payment_address, get_init_pool_payment_amount,
+    get_init_pool_payment_token, get_liquidity_calculator, get_pool, get_pool_plane,
+    get_pools_plain, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config,
+    get_swap_router, has_pool, remove_pool, set_constant_product_pool_hash,
+    set_init_pool_payment_address, set_init_pool_payment_amount, set_init_pool_payment_token,
+    set_liquidity_calculator, set_pool_plane, set_reward_tokens, set_reward_tokens_detailed,
+    set_rewards_config, set_stableswap_pool_hash, set_swap_router, set_token_hash,
+    GlobalRewardsConfig, LiquidityPoolRewardInfo, LiquidityPoolType,
+};
 use crate::swap_router::SwapRouterClient;
 use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
@@ -19,7 +29,6 @@ use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
 };
 use utils::utils::check_vec_ordered;
-use crate::liquidity_calculator::LiquidityCalculatorClient;
 
 #[contract]
 pub struct LiquidityPoolRouter;
@@ -185,7 +194,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
 
         let calculator = get_liquidity_calculator(&e);
-        LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&Vec::from_array(&e, [pool_id])).get(0).expect("unable to get liquidity for the pool")
+        LiquidityCalculatorClient::new(&e, &calculator)
+            .get_liquidity(&Vec::from_array(&e, [pool_id]))
+            .get(0)
+            .expect("unable to get liquidity for the pool")
     }
 
     fn get_liquidity_calculator(e: Env) -> Address {
@@ -289,7 +301,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             pools_reversed.set(value, key);
         }
 
-        let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
+        let pools_liquidity =
+            LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
         let mut result = 0;
         for liquidity in pools_liquidity {
             result += liquidity;
