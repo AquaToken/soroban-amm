@@ -58,20 +58,6 @@ fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     PoolPlaneClient::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
 }
 
-mod liquidity_calculator {
-    soroban_sdk::contractimport!(
-        file =
-            "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_liquidity_calculator_contract.wasm"
-    );
-}
-
-fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator::Client<'a> {
-    liquidity_calculator::Client::new(
-        e,
-        &e.register_contract_wasm(None, liquidity_calculator::WASM),
-    )
-}
-
 fn jump(e: &Env, time: u64) {
     e.ledger().set(LedgerInfo {
         timestamp: e.ledger().timestamp().saturating_add(time),
@@ -1562,81 +1548,4 @@ fn test_ramp_a() {
     assert_eq!(liqpool.a(), 54);
     jump(&e, MIN_RAMP_TIME);
     assert_eq!(liqpool.a(), 99);
-}
-
-#[test]
-#[cfg(feature = "tokens_2")]
-fn test_liquidity() {
-    let e = Env::default();
-    e.mock_all_auths();
-    e.budget().reset_unlimited();
-
-    let mut admin1 = Address::generate(&e);
-    let mut admin2 = Address::generate(&e);
-
-    let mut token1 = create_token_contract(&e, &admin1);
-    let mut token2 = create_token_contract(&e, &admin2);
-    let token_reward = create_token_contract(&e, &admin1);
-    if &token2.address < &token1.address {
-        std::mem::swap(&mut token1, &mut token2);
-        std::mem::swap(&mut admin1, &mut admin2);
-    }
-    let token1_admin_client = get_token_admin_client(&e, &token1.address);
-    let token2_admin_client = get_token_admin_client(&e, &token2.address);
-    let user1 = Address::generate(&e);
-    let plane = create_plane_contract(&e);
-    let liquidity_calculator = create_liquidity_calculator_contract(&e);
-    liquidity_calculator.init_admin(&admin1);
-    liquidity_calculator.set_pools_plane(&admin1, &plane.address);
-
-    token1_admin_client.mint(&user1, &1_000_000_000_000_000_000_0000000);
-    token2_admin_client.mint(&user1, &1_000_000_000_000_000_000_0000000);
-
-    for config in [
-        (10, 10, 2),
-        (30, 30, 8),
-        (100, 100, 28),
-        (3000, 3000, 840),
-        (1000, 3000, 529),
-        (3000, 1000, 529),
-        (10_0000000, 30_0000000, 52979487),
-        (30_0000000, 10_0000000, 52979487),
-        (
-            30_000_000_000_0000000,
-            10_000_000_000_0000000,
-            52979179440000000,
-        ),
-    ] {
-        let liqpool = create_liqpool_contract(
-            &e,
-            &user1,
-            &install_token_wasm(&e),
-            &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-            85,
-            30, // 0.3%
-            0,
-            &token_reward.address,
-            &plane.address,
-        );
-        token1.approve(
-            &user1,
-            &liqpool.address,
-            &1_000_000_000_000_000_000_0000000,
-            &99999,
-        );
-        token2.approve(
-            &user1,
-            &liqpool.address,
-            &1_000_000_000_000_000_000_0000000,
-            &99999,
-        );
-        liqpool.deposit(&user1, &Vec::from_array(&e, [config.0, config.1]));
-        assert_eq!(
-            liquidity_calculator
-                .get_liquidity(&Vec::from_array(&e, [liqpool.address]))
-                .get(0)
-                .unwrap(),
-            config.2
-        );
-    }
 }

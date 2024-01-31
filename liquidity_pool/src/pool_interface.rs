@@ -67,8 +67,6 @@ pub trait LiquidityPoolTrait {
     // Fee fraction getter. 1 = 0.01%
     fn get_fee_fraction(e: Env) -> u32;
 
-    fn get_liquidity(e: Env) -> u128;
-
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> Map<Symbol, Val>;
 }

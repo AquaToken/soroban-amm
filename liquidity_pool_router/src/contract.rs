@@ -295,10 +295,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
         let calculator = get_liquidity_calculator(&e);
         let mut pools_vec: Vec<Address> = Vec::new(&e);
-        let mut pools_reversed: Map<Address, BytesN<32>> = Map::new(&e);
-        for (key, value) in pools {
+        for (_key, value) in pools {
             pools_vec.push_back(value.clone());
-            pools_reversed.set(value, key);
         }
 
         let pools_liquidity =
@@ -367,7 +365,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
         let rewards_config = get_rewards_config(&e);
         let salt = pool_salt(&e, tokens.clone());
-        let (pools, total_liquidity) = get_total_liquidity(&e, tokens.clone());
+        let calculator = get_liquidity_calculator(&e);
+        let (pools, total_liquidity) = get_total_liquidity(&e, tokens.clone(), calculator);
         let mut tokens_with_liquidity = get_reward_tokens(&e, rewards_config.current_block);
         let mut token_data = tokens_with_liquidity
             .get(tokens.clone())

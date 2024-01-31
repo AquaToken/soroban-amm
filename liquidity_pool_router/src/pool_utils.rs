@@ -1,4 +1,5 @@
 use crate::events::{Events, LiquidityPoolRouterEvents};
+use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
@@ -198,15 +199,29 @@ pub fn pool_salt(e: &Env, tokens: Vec<Address>) -> BytesN<32> {
     e.crypto().sha256(&salt)
 }
 
-pub fn get_total_liquidity(e: &Env, tokens: Vec<Address>) -> (Map<BytesN<32>, u128>, u128) {
+pub fn get_total_liquidity(
+    e: &Env,
+    tokens: Vec<Address>,
+    calculator: Address,
+) -> (Map<BytesN<32>, u128>, u128) {
     let salt = pool_salt(&e, tokens);
-    let mut result = 0;
-    let mut pools = Map::new(&e);
-    for (hash, pool_id) in get_pools_plain(&e, &salt) {
-        let liquidity =
-            e.invoke_contract::<u128>(&pool_id, &Symbol::new(&e, "get_liquidity"), Vec::new(&e));
-        result += liquidity;
-        pools.set(hash, liquidity);
+    let pools = get_pools_plain(&e, &salt);
+    let pools_count = pools.len();
+    let mut pools_map = Map::new(&e);
+
+    let mut pools_vec: Vec<Address> = Vec::new(&e);
+    let mut hashes_vec: Vec<BytesN<32>> = Vec::new(&e);
+    for (key, value) in pools {
+        pools_vec.push_back(value.clone());
+        hashes_vec.push_back(key.clone());
     }
-    (pools, result)
+
+    let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
+    let mut result = 0;
+    for i in 0..pools_count {
+        let value = pools_liquidity.get(i).unwrap();
+        pools_map.set(hashes_vec.get(i).unwrap(), value);
+        result += value;
+    }
+    (pools_map, result)
 }

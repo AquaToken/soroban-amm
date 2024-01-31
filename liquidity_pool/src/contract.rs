@@ -1,5 +1,4 @@
 use crate::constants::FEE_MULTIPLIER;
-use crate::liquidity::get_liquidity;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool;
@@ -373,14 +372,6 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn get_fee_fraction(e: Env) -> u32 {
         // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
         get_fee_fraction(&e)
-    }
-
-    fn get_liquidity(e: Env) -> u128 {
-        let reserve_a = get_reserve_a(&e);
-        let reserve_b = get_reserve_b(&e);
-        let fee_fraction = get_fee_fraction(&e) as u128;
-        get_liquidity(reserve_a, reserve_b, fee_fraction)
-            + get_liquidity(reserve_b, reserve_a, fee_fraction)
     }
 
     fn get_info(e: Env) -> Map<Symbol, Val> {

@@ -13,7 +13,6 @@ tasks:
     cmds:
       - task -d ../token build || exit 1
       - task -d ../liquidity_pool_plane build || exit 1
-      - task -d ../liquidity_pool_liquidity_calculator build || exit 1
       - soroban contract build --package soroban-liquidity-pool-stableswap-contract
       - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract_2_tokens.wasm
       - soroban contract build --no-default-features --features=tokens_3 --package soroban-liquidity-pool-stableswap-contract
