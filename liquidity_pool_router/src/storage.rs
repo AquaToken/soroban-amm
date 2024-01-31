@@ -1,7 +1,7 @@
 use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
 use crate::pool_utils::pool_salt;
 use paste::paste;
-use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, Map, Vec};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, Map, Vec, U256};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
@@ -39,7 +39,7 @@ pub struct GlobalRewardsConfig {
 pub struct LiquidityPoolRewardInfo {
     pub voting_share: u32,
     pub processed: bool,
-    pub total_liquidity: u128,
+    pub total_liquidity: U256,
 }
 
 #[derive(Clone)]
@@ -141,7 +141,7 @@ pub fn set_reward_tokens(e: &Env, block: u64, value: &Map<Vec<Address>, Liquidit
     result
 }
 
-pub fn get_reward_tokens_detailed(e: &Env, block: u64, salt: BytesN<32>) -> Map<BytesN<32>, u128> {
+pub fn get_reward_tokens_detailed(e: &Env, block: u64, salt: BytesN<32>) -> Map<BytesN<32>, U256> {
     let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
     bump_persistent(e, &key);
     e.storage()
@@ -154,7 +154,7 @@ pub fn set_reward_tokens_detailed(
     e: &Env,
     block: u64,
     salt: BytesN<32>,
-    value: &Map<BytesN<32>, u128>,
+    value: &Map<BytesN<32>, U256>,
 ) {
     let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
     let result = e.storage().persistent().set(&key, value);

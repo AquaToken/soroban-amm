@@ -6,9 +6,9 @@ use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
 use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, BytesN, Env, FromVal, IntoVal, Symbol,
-    Val, Vec,
+    Val, Vec, U256,
 };
-use utils::test_utils::assert_approx_eq_abs;
+use utils::test_utils::{assert_approx_eq_abs, assert_approx_eq_abs_u256};
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
@@ -169,7 +169,10 @@ fn test_total_liquidity() {
 
     e.budget().reset_unlimited();
     e.budget().reset_default();
-    assert_eq!(router.get_total_liquidity(&tokens), 3294);
+    assert_eq!(
+        router.get_total_liquidity(&tokens),
+        U256::from_u32(&e, 3294)
+    );
     e.budget().print();
     e.budget().reset_unlimited();
 
@@ -188,7 +191,10 @@ fn test_total_liquidity() {
 
     e.budget().reset_unlimited();
     e.budget().reset_default();
-    assert_eq!(router.get_total_liquidity(&tokens), 28512);
+    assert_eq!(
+        router.get_total_liquidity(&tokens),
+        U256::from_u32(&e, 28512)
+    );
     e.budget().print();
     assert!(
         e.budget().cpu_instruction_cost() < 100_000_000,
@@ -270,7 +276,7 @@ fn test_constant_product_pool() {
 
     let desired_amounts = Vec::from_array(&e, [100, 100]);
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
-    assert_eq!(router.get_total_liquidity(&tokens), 2);
+    assert_eq!(router.get_total_liquidity(&tokens), U256::from_u32(&e, 2));
 
     assert_eq!(token_share.balance(&user1), 100);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -577,7 +583,10 @@ fn test_stableswap_pool() {
 
     let desired_amounts = Vec::from_array(&e, [100_0000000, 100_0000000]);
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
-    assert_eq!(router.get_total_liquidity(&tokens), 177168630);
+    assert_eq!(
+        router.get_total_liquidity(&tokens),
+        U256::from_u32(&e, 177168630)
+    );
 
     assert_eq!(token_share.balance(&user1), 200_0000000);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -745,7 +754,10 @@ fn test_stableswap_3_pool() {
 
     let desired_amounts = Vec::from_array(&e, [100_0000000, 100_0000000, 100_0000000]);
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
-    assert_eq!(router.get_total_liquidity(&tokens), 531505890);
+    assert_eq!(
+        router.get_total_liquidity(&tokens),
+        U256::from_u32(&e, 531505890)
+    );
 
     assert_eq!(token_share.balance(&user1), 300_0000000);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -960,7 +972,7 @@ fn test_custom_pool() {
 
     let desired_amounts = Vec::from_array(&e, [100, 100]);
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
-    assert_eq!(router.get_total_liquidity(&tokens), 2);
+    assert_eq!(router.get_total_liquidity(&tokens), U256::from_u32(&e, 2));
 
     assert_eq!(
         router.swap(
@@ -1060,15 +1072,18 @@ fn test_simple_ongoing_reward() {
         &Vec::from_array(&e, [1000, 1000]),
     );
     let standard_liquidity = router.get_total_liquidity(&tokens);
-    assert_eq!(standard_liquidity, 36);
+    assert_eq!(standard_liquidity, U256::from_u32(&e, 36));
     router.deposit(
         &user1,
         &tokens,
         &stable_pool_hash,
         &Vec::from_array(&e, [1000, 1000]),
     );
-    let stable_liquidity = router.get_total_liquidity(&tokens) - standard_liquidity;
-    assert_eq!(standard_liquidity + stable_liquidity, 212);
+    let stable_liquidity = router.get_total_liquidity(&tokens).sub(&standard_liquidity);
+    assert_eq!(
+        standard_liquidity.add(&stable_liquidity),
+        U256::from_u32(&e, 212)
+    );
 
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
     router.config_global_rewards(
@@ -1086,15 +1101,19 @@ fn test_simple_ongoing_reward() {
     e.budget().reset_unlimited();
     let stable_pool_tps = router.config_pool_rewards(&admin, &tokens, &stable_pool_hash);
 
-    assert_approx_eq_abs(
-        total_reward_1 * standard_liquidity / (standard_liquidity + stable_liquidity),
-        standard_pool_tps * 60,
-        100,
+    assert_approx_eq_abs_u256(
+        U256::from_u128(&e, total_reward_1)
+            .mul(&standard_liquidity)
+            .div(&(standard_liquidity.add(&stable_liquidity))),
+        U256::from_u128(&e, standard_pool_tps * 60),
+        U256::from_u32(&e, 100),
     );
-    assert_approx_eq_abs(
-        total_reward_1 * stable_liquidity / (standard_liquidity + stable_liquidity),
-        stable_pool_tps * 60,
-        100,
+    assert_approx_eq_abs_u256(
+        U256::from_u128(&e, total_reward_1)
+            .mul(&stable_liquidity)
+            .div(&(standard_liquidity.add(&stable_liquidity))),
+        U256::from_u128(&e, stable_pool_tps * 60),
+        U256::from_u32(&e, 100),
     );
 
     assert_eq!(reward_token.balance(&user1), 0);
@@ -1381,7 +1400,7 @@ fn test_event_correct() {
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
     let (amounts, share_amount) = router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
-    assert_eq!(router.get_total_liquidity(&tokens), 2);
+    assert_eq!(router.get_total_liquidity(&tokens), U256::from_u32(&e, 2));
 
     let pool_id = router.get_pool(&tokens, &pool_hash);
 

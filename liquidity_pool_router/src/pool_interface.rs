@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec, U256};
 
 pub trait LiquidityPoolInterfaceTrait {
     // Get symbolic explanation of pool type.
@@ -70,7 +70,7 @@ pub trait LiquidityPoolInterfaceTrait {
         min_amounts: Vec<u128>,
     ) -> Vec<u128>;
 
-    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
 
     // Set liquidity calculator address. it's separate contract optimized to estimate liquidity for multiple pools
     fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
@@ -84,7 +84,7 @@ pub trait RewardsInterfaceTrait {
     // being distributed across all liquidity providers
     // after expired_at timestamp distribution ends
     fn get_rewards_config(e: Env) -> Map<Symbol, Val>;
-    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> u128;
+    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256;
     fn config_global_rewards(
         e: Env,
         admin: Address,

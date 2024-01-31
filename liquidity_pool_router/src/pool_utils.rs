@@ -9,7 +9,7 @@ use crate::storage::{
 use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::{
-    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
+    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol, Val, Vec, U256,
 };
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
@@ -203,11 +203,11 @@ pub fn get_total_liquidity(
     e: &Env,
     tokens: Vec<Address>,
     calculator: Address,
-) -> (Map<BytesN<32>, u128>, u128) {
+) -> (Map<BytesN<32>, U256>, U256) {
     let salt = pool_salt(&e, tokens);
     let pools = get_pools_plain(&e, &salt);
     let pools_count = pools.len();
-    let mut pools_map = Map::new(&e);
+    let mut pools_map: Map<BytesN<32>, U256> = Map::new(&e);
 
     let mut pools_vec: Vec<Address> = Vec::new(&e);
     let mut hashes_vec: Vec<BytesN<32>> = Vec::new(&e);
@@ -217,11 +217,11 @@ pub fn get_total_liquidity(
     }
 
     let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
-    let mut result = 0;
+    let mut result = U256::from_u32(&e, 0);
     for i in 0..pools_count {
         let value = pools_liquidity.get(i).unwrap();
-        pools_map.set(hashes_vec.get(i).unwrap(), value);
-        result += value;
+        pools_map.set(hashes_vec.get(i).unwrap(), value.clone());
+        result = result.add(&value);
     }
     (pools_map, result)
 }

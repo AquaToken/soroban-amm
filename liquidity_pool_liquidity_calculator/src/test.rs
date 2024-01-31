@@ -3,7 +3,7 @@ extern crate std;
 
 use crate::{contract::LiquidityPoolLiquidityCalculator, LiquidityPoolLiquidityCalculatorClient};
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{symbol_short, Address, Env, Vec};
+use soroban_sdk::{symbol_short, Address, Bytes, Env, Vec, U256};
 
 fn create_contract<'a>(e: &Env) -> LiquidityPoolLiquidityCalculatorClient<'a> {
     let client = LiquidityPoolLiquidityCalculatorClient::new(
@@ -99,7 +99,14 @@ fn test() {
         results,
         Vec::from_array(
             &e,
-            [365671400, 547424532, 55233846, 2802265656, 2802226894, 2802235260,]
+            [
+                U256::from_u128(&e, 365671400),
+                U256::from_u128(&e, 547424532),
+                U256::from_u128(&e, 55233846),
+                U256::from_u128(&e, 2802265656),
+                U256::from_u128(&e, 2802226894),
+                U256::from_u128(&e, 2802235260),
+            ]
         )
     );
 }
@@ -180,12 +187,12 @@ fn test_norm() {
         Vec::from_array(
             &e,
             [
-                54969136250,
-                5487768725,
-                563878134,
-                345061368750,
-                34478855100,
-                3447885296,
+                U256::from_u128(&e, 54969136250),
+                U256::from_u128(&e, 5487768725),
+                U256::from_u128(&e, 563878134),
+                U256::from_u128(&e, 345061368750),
+                U256::from_u128(&e, 34478855100),
+                U256::from_u128(&e, 3447885296),
             ]
         )
     );
@@ -261,7 +268,20 @@ fn test_small() {
         ],
     ));
     e.budget().reset_unlimited();
-    assert_eq!(results, Vec::from_array(&e, [0, 2, 36, 2, 28, 280,]));
+    assert_eq!(
+        results,
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 0),
+                U256::from_u128(&e, 2),
+                U256::from_u128(&e, 36),
+                U256::from_u128(&e, 2),
+                U256::from_u128(&e, 28),
+                U256::from_u128(&e, 280),
+            ]
+        )
+    );
 }
 
 #[test]
@@ -318,7 +338,18 @@ fn test_reversed() {
         ],
     ));
     e.budget().reset_unlimited();
-    assert_eq!(results, Vec::from_array(&e, [72, 72, 529, 529,]));
+    assert_eq!(
+        results,
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 72),
+                U256::from_u128(&e, 72),
+                U256::from_u128(&e, 529),
+                U256::from_u128(&e, 529),
+            ]
+        )
+    );
 }
 
 #[test]
@@ -360,8 +391,8 @@ fn test_liquidity_overflow() {
         Vec::from_array(
             &e,
             [
-                12443152950729325724850104142337850200,
-                95354840013982973403610470893703822242,
+                U256::from_u128(&e, 12443152950729325724850104142337850200),
+                U256::from_u128(&e, 95354840013982973403610470893703822242),
             ]
         )
     );
@@ -384,31 +415,19 @@ fn test_multiple_tokens() {
         &address1,
         &symbol_short!("stable"),
         &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
-        &Vec::from_array(&e, [u128::MAX / 3, u128::MAX / 3, u128::MAX / 3]),
+        &Vec::from_array(&e, [u128::MAX, u128::MAX, u128::MAX]),
     );
     plane.update(
         &address2,
         &symbol_short!("stable"),
         &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
-        &Vec::from_array(
-            &e,
-            [u128::MAX / 3, u128::MAX / 3, u128::MAX / 3, u128::MAX / 3],
-        ),
+        &Vec::from_array(&e, [u128::MAX, u128::MAX, u128::MAX, u128::MAX]),
     );
     plane.update(
         &address3,
         &symbol_short!("stable"),
         &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
-        &Vec::from_array(
-            &e,
-            [
-                u128::MAX / 3,
-                u128::MAX / 3,
-                u128::MAX / 3,
-                u128::MAX / 3,
-                u128::MAX / 3,
-            ],
-        ),
+        &Vec::from_array(&e, [u128::MAX, u128::MAX, u128::MAX, u128::MAX, u128::MAX]),
     );
 
     let calculator = create_contract(&e);
@@ -422,14 +441,45 @@ fn test_multiple_tokens() {
     ));
     e.budget().print();
     e.budget().reset_unlimited();
+
+    for i in [1, 2] {
+        assert!(results.get(i).unwrap() > U256::from_u128(&e, u128::MAX));
+    }
     assert_eq!(
         results,
         Vec::from_array(
             &e,
             [
-                95354840013982973403610470888099368454,
-                190709680027965946807220941776198736908,
-                317849466713276578012034902960331228180,
+                U256::from_be_bytes(
+                    &e,
+                    &Bytes::from_array(
+                        &e,
+                        &[
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 215, 54, 5, 195, 181,
+                            227, 43, 124, 233, 49, 71, 208, 106, 111, 114, 230
+                        ]
+                    )
+                ),
+                U256::from_be_bytes(
+                    &e,
+                    &Bytes::from_array(
+                        &e,
+                        &[
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 174, 108, 11, 135, 107,
+                            198, 86, 249, 210, 98, 143, 160, 212, 222, 229, 204
+                        ]
+                    )
+                ),
+                U256::from_be_bytes(
+                    &e,
+                    &Bytes::from_array(
+                        &e,
+                        &[
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 205, 94, 189, 225, 179,
+                            159, 230, 75, 9, 78, 239, 97, 98, 200, 212, 84
+                        ]
+                    )
+                ),
             ]
         )
     );
@@ -469,7 +519,10 @@ fn test_empty_pool() {
         calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.budget().print();
     e.budget().reset_unlimited();
-    assert_eq!(results, Vec::from_array(&e, [0, 0]));
+    assert_eq!(
+        results,
+        Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)])
+    );
 }
 
 #[test]
@@ -500,5 +553,8 @@ fn test_bad_address() {
         calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.budget().print();
     e.budget().reset_unlimited();
-    assert_eq!(results, Vec::from_array(&e, [0, 0]));
+    assert_eq!(
+        results,
+        Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)])
+    );
 }

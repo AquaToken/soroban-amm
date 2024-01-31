@@ -27,6 +27,7 @@ use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
+    U256,
 };
 use utils::utils::check_vec_ordered;
 
@@ -190,7 +191,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         amounts
     }
 
-    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256 {
         let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
 
         let calculator = get_liquidity_calculator(&e);
@@ -286,7 +287,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         result
     }
 
-    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> u128 {
+    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256 {
         if !check_vec_ordered(&tokens) {
             panic!("tokens are not sorted")
         }
@@ -301,9 +302,9 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
         let pools_liquidity =
             LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
-        let mut result = 0;
+        let mut result = U256::from_u32(&e, 0);
         for liquidity in pools_liquidity {
-            result += liquidity;
+            result = result.add(&liquidity);
         }
         result
     }
@@ -333,7 +334,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
                 LiquidityPoolRewardInfo {
                     voting_share: token.1,
                     processed: false,
-                    total_liquidity: 0,
+                    total_liquidity: U256::from_u32(&e, 0),
                 },
             );
         }
@@ -397,9 +398,11 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         let tokens_reward_info = tokens_reward.get(tokens.clone());
 
         let pool_liquidity = if tokens_reward_info.is_some() {
-            tokens_detailed.get(pool_index).unwrap_or(0)
+            tokens_detailed
+                .get(pool_index)
+                .unwrap_or(U256::from_u32(&e, 0))
         } else {
-            0
+            U256::from_u32(&e, 0)
         };
 
         let reward_info = match tokens_reward_info {
@@ -408,17 +411,22 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             None => LiquidityPoolRewardInfo {
                 voting_share: 0,
                 processed: true,
-                total_liquidity: 0,
+                total_liquidity: U256::from_u32(&e, 0),
             },
         };
 
         if !reward_info.processed {
             panic!("liquidity info not available yet. run `fill_liquidity` first")
         }
-        let pool_tps = if pool_liquidity > 0 {
-            rewards_config.tps * reward_info.voting_share as u128 * pool_liquidity
-                / reward_info.total_liquidity
-                / 1_0000000
+        // it's safe to convert tps to u128 since it cannot be bigger than total tps which is u128
+        let pool_tps = if pool_liquidity > U256::from_u32(&e, 0) {
+            U256::from_u128(&e, rewards_config.tps)
+                .mul(&U256::from_u32(&e, reward_info.voting_share))
+                .mul(&pool_liquidity)
+                .div(&reward_info.total_liquidity)
+                .div(&U256::from_u32(&e, 1_0000000))
+                .to_u128()
+                .unwrap()
         } else {
             0
         };
