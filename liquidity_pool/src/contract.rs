@@ -147,6 +147,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
 
+        if (reserve_a == 0 && reserve_b == 0) && (desired_a == 0 || desired_b == 0) {
+            panic!("initial deposit requires all coins");
+        }
+
         // let min_a = min_amounts.get(0).unwrap();
         // let min_b = min_amounts.get(1).unwrap();
         let (min_a, min_b) = (0, 0);
