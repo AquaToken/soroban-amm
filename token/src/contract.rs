@@ -60,7 +60,7 @@ impl Token {
 
         bump_instance(&e);
 
-        access_control.set_admin(&admin);
+        access_control.set_admin(&new_admin);
         TokenUtils::new(&e).events().set_admin(admin, new_admin);
     }
 }
