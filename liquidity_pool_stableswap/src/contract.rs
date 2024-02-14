@@ -345,18 +345,11 @@ impl InternalInterfaceTrait for LiquidityPool {
 
         if in_idx == out_idx {
             panic!("same coin")
-        } // dev: same coin
-          // if !(j >= 0) {
-          //     panic!("j below zero")
-          // } // dev: j below zero
+        }
         if out_idx >= N_COINS as u32 {
             panic!("j above N_COINS")
-        } // dev: j above N_COINS
+        }
 
-        // should be unreachable, but good for safety
-        // if !(i >= 0) {
-        //     panic!("bad arguments")
-        // }
         if in_idx >= N_COINS as u32 {
             panic!("bad arguments")
         }
@@ -409,9 +402,6 @@ impl InternalInterfaceTrait for LiquidityPool {
 
         // x in the input is converted to the same price/precision
 
-        // if !(i >= 0) {
-        //     panic!("i below zero")
-        // }
         if in_idx >= N_COINS as u32 {
             panic!("i above N_COINS")
         }
@@ -746,7 +736,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_tokens(&e, &coins);
 
         // LP token
-        // let share_contract = create_contract(&e, token_wasm_hash, &token_a, &token_b);
         let share_contract = create_contract(&e, token_wasm_hash);
         LPToken::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
@@ -796,12 +785,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         get_tokens(&e)
     }
 
-    fn deposit(
-        e: Env,
-        user: Address,
-        amounts: Vec<u128>,
-        // min_mint_amount: u128
-    ) -> (Vec<u128>, u128) {
+    fn deposit(e: Env, user: Address, amounts: Vec<u128>) -> (Vec<u128>, u128) {
         user.require_auth();
         if get_is_killed(&e) {
             panic!("is killed")
@@ -894,10 +878,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         } else {
             token_supply * (d2 - d0) / d0
         };
-
-        // if mint_amount < min_mint_amount {
-        //     panic!("Slippage screwed you");
-        // }
 
         // Mint pool tokens
         mint_shares(&e, user, mint_amount as i128);

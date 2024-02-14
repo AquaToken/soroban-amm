@@ -95,8 +95,6 @@ impl Manager {
                     pool_data.block,
                     user_balance_shares,
                 );
-                // let new_reward =
-                //     (pool_data.accumulated - user_data.pool_accumulated) * user_shares / total_shares;
                 self.create_new_user_data(user, pool_data, user_data.to_claim + reward)
             }
             None => self.create_new_user_data(user, pool_data, 0),
