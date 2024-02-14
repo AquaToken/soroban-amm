@@ -25,6 +25,19 @@ fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #103)")]
+fn test_init_admin_twice() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let router = create_contract(&e);
+    router.init_admin(&admin);
+    router.init_admin(&admin);
+}
+
+#[test]
 fn test() {
     let e = Env::default();
     e.mock_all_auths();

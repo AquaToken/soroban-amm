@@ -7,6 +7,7 @@ use utils::bump::bump_instance;
 pub enum AccessControlError {
     AdminNotFound = 101,
     UserNotAdmin = 102,
+    AdminAlreadySet = 103,
 }
 
 #[derive(Clone)]

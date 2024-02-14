@@ -18,11 +18,12 @@ use crate::storage::{
     set_stableswap_pool_hash, set_swap_router, set_token_hash, LiquidityPoolType,
 };
 use crate::swap_router::SwapRouterClient;
-use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::access::{AccessControl, AccessControlError, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
+    contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
+    Symbol, Val, Vec,
 };
 use utils::utils::check_vec_ordered;
 
@@ -204,9 +205,10 @@ impl UpgradeableContract for LiquidityPoolRouter {
 impl AdminInterface for LiquidityPoolRouter {
     fn init_admin(e: Env, account: Address) {
         let access_control = AccessControl::new(&e);
-        if !access_control.has_admin() {
-            access_control.set_admin(&account)
+        if access_control.has_admin() {
+            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
         }
+        access_control.set_admin(&account);
     }
 
     fn set_token_hash(e: Env, new_hash: BytesN<32>) {
