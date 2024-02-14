@@ -30,7 +30,6 @@ fn create_liqpool_contract<'a>(
     admin_fee: u32,
     token_reward: &Address,
     plane: &Address,
-    // fee_fraction: u32,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize_all(
@@ -562,9 +561,7 @@ fn test_withdraw_partial() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let user1 = Address::generate(&e);
-    // let fee = 20000_u128;
     let fee = 0_u128;
-    // let admin_fee = 300000_u128;
     let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(

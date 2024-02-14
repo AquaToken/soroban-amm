@@ -123,12 +123,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
     }
 
-    fn deposit(
-        e: Env,
-        user: Address,
-        desired_amounts: Vec<u128>,
-        // min_amounts: Vec<u128>,
-    ) -> (Vec<u128>, u128) {
+    fn deposit(e: Env, user: Address, desired_amounts: Vec<u128>) -> (Vec<u128>, u128) {
         // Depositor needs to authorize the deposit
         user.require_auth();
 
@@ -147,8 +142,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
 
-        // let min_a = min_amounts.get(0).unwrap();
-        // let min_b = min_amounts.get(1).unwrap();
         let (min_a, min_b) = (0, 0);
 
         // Calculate deposit amounts
@@ -399,9 +392,6 @@ impl UpgradeableContractTrait for LiquidityPool {
 #[contractimpl]
 impl RewardsTrait for LiquidityPool {
     fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) {
-        // admin.require_auth();
-        // check_admin(&e, &admin);
-
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
             panic!("rewards config already initialized")

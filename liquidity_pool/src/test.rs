@@ -323,7 +323,7 @@ fn test_simple_reward() {
     assert_eq!(token_reward.balance(&users[0]), 0);
     // full reward should be available to the user
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1);
-    // assert_eq!(token_reward.balance(&users[0]) as u128, total_reward_1);
+    assert_eq!(token_reward.balance(&users[0]) as u128, total_reward_1);
 }
 
 #[test]
