@@ -81,6 +81,10 @@ impl LiquidityPoolTrait for LiquidityPool {
     }
 
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128 {
+        if amounts.len() != N_COINS as u32 {
+            panic!("wrong amounts vector size");
+        }
+
         let mut balances = get_reserves(&e);
         let amp = Self::a(e.clone());
         let d0 = Self::get_d_mem(e.clone(), balances.clone(), amp);
@@ -134,6 +138,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         max_burn_amount: u128,
     ) -> u128 {
         user.require_auth();
+
+        if amounts.len() != N_COINS as u32 {
+            panic!("wrong amounts vector size");
+        }
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let rewards = get_rewards_manager(&e);
@@ -733,6 +741,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         access_control.set_admin(&admin);
         put_admin_fee(&e, &admin_fee);
 
+        if coins.len() != N_COINS as u32 {
+            panic!("unexpected tokens vector size");
+        }
+
         put_tokens(&e, &coins);
 
         // LP token
@@ -789,6 +801,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         user.require_auth();
         if get_is_killed(&e) {
             panic!("is killed")
+        }
+
+        if amounts.len() != N_COINS as u32 {
+            panic!("wrong amounts vector size");
         }
 
         // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward

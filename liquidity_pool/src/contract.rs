@@ -81,6 +81,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
         access_control.set_admin(&admin);
 
+        if tokens.len() != 2 {
+            panic!("wrong tokens vector size");
+        }
+
         let token_a = tokens.get(0).unwrap();
         let token_b = tokens.get(1).unwrap();
 
@@ -126,6 +130,10 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn deposit(e: Env, user: Address, desired_amounts: Vec<u128>) -> (Vec<u128>, u128) {
         // Depositor needs to authorize the deposit
         user.require_auth();
+
+        if desired_amounts.len() != 2 {
+            panic!("wrong desired_amounts vector size");
+        }
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
@@ -311,6 +319,10 @@ impl LiquidityPoolTrait for LiquidityPool {
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
         user.require_auth();
+
+        if min_amounts.len() != 2 {
+            panic!("wrong min_amounts vector size");
+        }
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let rewards = get_rewards_manager(&e);
