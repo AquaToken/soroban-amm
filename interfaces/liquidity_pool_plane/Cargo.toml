@@ -1,0 +1,12 @@
+[package]
+name = "liquidity_pool_plane_interface"
+version.workspace = true
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }

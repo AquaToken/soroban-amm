@@ -12,6 +12,7 @@ members = [
     "liquidity_pool_router",
     "liquidity_pool_swap_router",
     "liquidity_pool_plane",
+    "interfaces/liquidity_pool_plane",
 ]
 
 [workspace.package]
@@ -27,6 +28,7 @@ utils = { path = "utils" }
 access_control = { path = "access_control" }
 token_share = { path = "token_share" }
 rewards = { path = "rewards" }
+liquidity_pool_plane_interface = { path = "interfaces/liquidity_pool_plane" }
 
 [profile.release]
 opt-level = "z"

@@ -14,6 +14,7 @@ num-integer = { workspace = true }
 rewards = { workspace = true }
 token_share = { workspace = true }
 access_control = { workspace = true }
+liquidity_pool_plane_interface = { workspace = true }
 utils = { workspace = true }
 
 [dev_dependencies]

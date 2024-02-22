@@ -21,10 +21,10 @@ use token_share::{
 };
 
 use crate::plane::update_plane;
-use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
+use liquidity_pool_plane_interface::interface::Plane;
 use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{

@@ -634,6 +634,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 
 [[package]]
+name = "liquidity_pool_plane_interface"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1060,6 +1067,7 @@ name = "soroban-liquidity-pool-contract"
 version = "0.1.0"
 dependencies = [
  "access_control",
+ "liquidity_pool_plane_interface",
  "num-integer",
  "rewards",
  "soroban-sdk",
@@ -1093,6 +1101,7 @@ version = "0.1.0"
 dependencies = [
  "access_control",
  "cast",
+ "liquidity_pool_plane_interface",
  "rewards",
  "soroban-sdk",
  "token_share",

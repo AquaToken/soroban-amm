@@ -1,0 +1,30 @@
+version: '3'
+tasks:
+  clean:
+    cmd: exit 0
+
+  fmt:
+    cmd: cargo fmt --all
+
+  check:
+    cmd: exit 0
+
+  build:
+    cmd: exit 0
+
+  test:
+    cmd: exit 0
+
+  test_slow:
+    cmd: exit 0
+
+  default:
+    cmd: exit 0
+
+  all:
+    cmds:
+      - task: clean
+      - task: fmt
+      - task: build
+      - task: check
+      - task: test

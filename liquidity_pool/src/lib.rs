@@ -3,7 +3,6 @@
 mod constants;
 mod contract;
 mod plane;
-mod plane_interface;
 mod pool;
 mod pool_interface;
 mod rewards;

@@ -1,6 +1,5 @@
 use crate::constants::FEE_MULTIPLIER;
 use crate::plane::update_plane;
-use crate::plane_interface::Plane;
 use crate::pool;
 use crate::pool_interface::{
     LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait,
@@ -12,6 +11,7 @@ use crate::storage::{
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
+use liquidity_pool_plane_interface::interface::Plane;
 use num_integer::Roots;
 use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
