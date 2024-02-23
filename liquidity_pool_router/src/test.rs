@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
+use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_POOLS};
 use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
 use soroban_sdk::{
@@ -772,105 +772,6 @@ fn test_init_pool_twice() {
 }
 
 #[test]
-fn test_custom_pool() {
-    let e = Env::default();
-    e.mock_all_auths();
-    e.budget().reset_unlimited();
-
-    let mut admin1 = Address::generate(&e);
-    let mut admin2 = Address::generate(&e);
-
-    let mut token1 = create_token_contract(&e, &admin1);
-    let mut token2 = create_token_contract(&e, &admin2);
-    if &token2.address < &token1.address {
-        std::mem::swap(&mut token1, &mut token2);
-        std::mem::swap(&mut admin1, &mut admin2);
-    }
-    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
-
-    let reward_admin = Address::generate(&e);
-    let admin = Address::generate(&e);
-
-    let reward_token = create_token_contract(&e, &reward_admin);
-
-    let user1 = Address::generate(&e);
-
-    let pool_hash = install_liq_pool_hash(&e);
-    let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
-    let token_hash = install_token_wasm(&e);
-    let plane = create_plane_contract(&e);
-
-    let router = create_liqpool_router_contract(&e);
-    router.init_admin(&admin);
-    router.set_pool_hash(&pool_hash);
-    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
-    router.set_token_hash(&token_hash);
-    router.set_reward_token(&reward_token.address);
-    router.set_pools_plane(&admin, &plane.address);
-
-    let router_1 = create_liqpool_router_contract(&e);
-    router_1.init_admin(&admin);
-    router_1.set_pool_hash(&pool_hash);
-    router_1.set_token_hash(&token_hash);
-    router_1.set_reward_token(&reward_token.address);
-    router_1.set_pools_plane(&admin, &plane.address);
-
-    let (_original_pool_hash, custom_pool_address) =
-        router_1.init_standard_pool(&user1, &tokens, &30);
-
-    let pool_hash = router.add_custom_pool(
-        &admin,
-        &tokens,
-        &custom_pool_address,
-        &symbol_short!("custom"),
-        &Vec::<Val>::from_array(&e, [42_i128.into_val(&e)]),
-    );
-
-    let pools = router.get_pools(&tokens);
-
-    assert_eq!(pools.len(), 1);
-
-    let token_share = test_token::Client::new(&e, &router.share_id(&tokens, &pool_hash));
-
-    token1.mint(&user1, &1000);
-    assert_eq!(token1.balance(&user1), 1000);
-
-    token2.mint(&user1, &1000);
-    assert_eq!(token2.balance(&user1), 1000);
-    token1.approve(&user1, &custom_pool_address, &1000, &99999);
-    token2.approve(&user1, &custom_pool_address, &1000, &99999);
-
-    assert_eq!(token_share.balance(&user1), 0);
-
-    let desired_amounts = Vec::from_array(&e, [100, 100]);
-    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
-
-    assert_eq!(
-        router.swap(
-            &user1,
-            &tokens,
-            &token1.address,
-            &token2.address,
-            &pool_hash,
-            &97_u128,
-            &49_u128,
-        ),
-        49
-    );
-    token_share.approve(&user1, &custom_pool_address, &100, &99999);
-    assert_eq!(
-        router.withdraw(
-            &user1,
-            &tokens,
-            &pool_hash,
-            &100_u128,
-            &Vec::from_array(&e, [197_u128, 51_u128]),
-        ),
-        Vec::from_array(&e, [197_u128, 51_u128]),
-    );
-}
-
-#[test]
 fn test_simple_ongoing_reward() {
     let e = Env::default();
     e.mock_all_auths();
@@ -944,68 +845,6 @@ fn test_simple_ongoing_reward() {
         total_reward_1 / 2
     );
     assert_eq!(reward_token.balance(&user1) as u128, total_reward_1 / 2);
-}
-
-// need rewrite test for Vec<tokens>
-#[test]
-#[should_panic(expected = "pools amount is over max")]
-fn test_max_pools_for_pair() {
-    let e = Env::default();
-    e.mock_all_auths();
-    e.budget().reset_unlimited();
-
-    let mut admin1 = Address::generate(&e);
-    let mut admin2 = Address::generate(&e);
-
-    let mut token1 = create_token_contract(&e, &admin1);
-    let mut token2 = create_token_contract(&e, &admin2);
-    if &token2.address < &token1.address {
-        std::mem::swap(&mut token1, &mut token2);
-        std::mem::swap(&mut admin1, &mut admin2);
-    }
-    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
-
-    let reward_admin = Address::generate(&e);
-    let admin = Address::generate(&e);
-
-    let reward_token = create_token_contract(&e, &reward_admin);
-
-    let user1 = Address::generate(&e);
-
-    let pool_hash = install_liq_pool_hash(&e);
-    let stableswap_pool_hash = install_stableswap_two_tokens_liq_pool_hash(&e);
-    let token_hash = install_token_wasm(&e);
-    let plane = create_plane_contract(&e);
-    let router = create_liqpool_router_contract(&e);
-    router.init_admin(&admin);
-    router.set_pool_hash(&pool_hash);
-    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash);
-    router.set_token_hash(&token_hash);
-    router.set_reward_token(&reward_token.address);
-    router.set_pools_plane(&admin, &plane.address);
-
-    let (_original_pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
-
-    for n in 1..MAX_POOLS_FOR_PAIR {
-        // 1 standard + 9 in cycle = 10 - inclusive
-        let args = Vec::<Val>::from_array(&e, [(42_i128 + i128::from(n)).into_val(&e)]);
-
-        router.add_custom_pool(
-            &admin,
-            &tokens,
-            &pool_address,
-            &symbol_short!("custom"),
-            &args,
-        );
-    }
-    // if add one more - error
-    router.add_custom_pool(
-        &admin,
-        &tokens,
-        &pool_address,
-        &symbol_short!("custom"),
-        &Vec::<Val>::from_array(&e, [42_i128.into_val(&e)]),
-    );
 }
 
 #[test]
@@ -1092,13 +931,6 @@ fn test_event_correct() {
     router.set_pools_plane(&admin, &plane.address);
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
-    let router_1 = create_liqpool_router_contract(&e);
-    router_1.init_admin(&admin);
-    router_1.set_pool_hash(&pool_hash);
-    router_1.set_token_hash(&token_hash);
-    router_1.set_reward_token(&reward_token.address);
-    router_1.set_pools_plane(&admin, &plane.address);
-    let (_pool_hash, custom_pool_address) = router_1.init_standard_pool(&user1, &tokens, &30);
     reward_token.mint(&user1, &10000000_0000000);
     reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
     let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1];
@@ -1154,34 +986,6 @@ fn test_event_correct() {
                     symbol_short!("constant"),
                     pool_hash.clone(),
                     Vec::<Val>::from_array(&e, [fee.into_val(&e)]),
-                )
-                    .into_val(&e)
-            ),
-        ]
-    );
-
-    let subpool_salt = router.add_custom_pool(
-        &admin,
-        &tokens,
-        &custom_pool_address,
-        &symbol_short!("custom"),
-        &Vec::<Val>::from_array(&e, [42_i128.into_val(&e)]),
-    );
-
-    let add_custom_pool_event = e.events().all().last().unwrap();
-
-    assert_eq!(
-        vec![&e, add_custom_pool_event],
-        vec![
-            &e,
-            (
-                contract_id.clone(),
-                (Symbol::new(&e, "add_pool"), tokens.clone()).into_val(&e),
-                (
-                    custom_pool_address.clone(),
-                    symbol_short!("custom"),
-                    subpool_salt.clone(),
-                    Vec::<Val>::from_array(&e, [42_i128.into_val(&e)]),
                 )
                     .into_val(&e)
             ),
