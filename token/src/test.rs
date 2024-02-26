@@ -2,10 +2,11 @@
 extern crate std;
 
 use crate::{contract::Token, TokenClient};
+use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
-    Address, Env, IntoVal, Symbol,
+    Address, Env, IntoVal, Symbol, Vec,
 };
 
 fn create_token<'a>(e: &Env, admin: &Address) -> TokenClient<'a> {
@@ -115,6 +116,18 @@ fn test() {
             }
         )]
     );
+    // check new admin by calling protected method with manual auth
+    token
+        .mock_auths(&[MockAuth {
+            address: &admin2,
+            invoke: &MockAuthInvoke {
+                contract: &token.address,
+                fn_name: "mint",
+                args: Vec::from_array(&e, [user1.into_val(&e), 1000_i128.into_val(&e)]),
+                sub_invokes: &[],
+            },
+        }])
+        .mint(&user1, &1000);
 
     // Increase to 500
     token.approve(&user2, &user3, &500, &200);
