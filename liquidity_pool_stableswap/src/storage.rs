@@ -96,7 +96,7 @@ pub fn put_future_a(e: &Env, value: &u128) {
     e.storage().instance().set(&DataKey::FutureA, value);
 }
 
-// fitire A time
+// future A time
 pub fn get_future_a_time(e: &Env) -> u64 {
     bump_instance(e);
     e.storage()

@@ -45,7 +45,7 @@ fn get_d(n_coins: u32, xp: Vec<u128>, amp: u128) -> u128 {
         }
         d_prev = d;
         d = (ann * s + d_p * n_coins as u128) * d / ((ann - 1) * d + (n_coins as u128 + 1) * d_p);
-        // // Equality with the precision of 1
+        // Equality with the precision of 1
         if d > d_prev {
             if d - d_prev <= 1 {
                 break;
@@ -62,18 +62,11 @@ fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u12
 
     if in_idx == out_idx {
         panic!("same coin")
-    } // dev: same coin
-      // if !(j >= 0) {
-      //     panic!("j below zero")
-      // } // dev: j below zero
+    }
     if out_idx >= n_coins {
         panic!("j above N_COINS")
-    } // dev: j above N_COINS
+    }
 
-    // should be unreachable, but good for safety
-    // if !(i >= 0) {
-    //     panic!("bad arguments")
-    // }
     if in_idx >= n_coins {
         panic!("bad arguments")
     }

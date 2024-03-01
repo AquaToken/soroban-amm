@@ -13,7 +13,6 @@ use soroban_sdk::{
 };
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
-    // fixme: fee_fraction is mutable for pool. hash collision is possible to happen
     let mut salt = Bytes::new(e);
     salt.append(&symbol_short!("standard").to_xdr(e));
     salt.append(&symbol_short!("0x00").to_xdr(e));

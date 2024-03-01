@@ -81,6 +81,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
         access_control.set_admin(&admin);
 
+        if tokens.len() != 2 {
+            panic!("wrong tokens vector size");
+        }
+
         let token_a = tokens.get(0).unwrap();
         let token_b = tokens.get(1).unwrap();
 
@@ -123,14 +127,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
     }
 
-    fn deposit(
-        e: Env,
-        user: Address,
-        desired_amounts: Vec<u128>,
-        // min_amounts: Vec<u128>,
-    ) -> (Vec<u128>, u128) {
+    fn deposit(e: Env, user: Address, desired_amounts: Vec<u128>) -> (Vec<u128>, u128) {
         // Depositor needs to authorize the deposit
         user.require_auth();
+
+        if desired_amounts.len() != 2 {
+            panic!("wrong desired_amounts vector size");
+        }
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
@@ -151,8 +154,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic!("initial deposit requires all coins");
         }
 
-        // let min_a = min_amounts.get(0).unwrap();
-        // let min_b = min_amounts.get(1).unwrap();
         let (min_a, min_b) = (0, 0);
 
         // Calculate deposit amounts
@@ -323,6 +324,10 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
         user.require_auth();
 
+        if min_amounts.len() != 2 {
+            panic!("wrong min_amounts vector size");
+        }
+
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
@@ -403,9 +408,6 @@ impl UpgradeableContractTrait for LiquidityPool {
 #[contractimpl]
 impl RewardsTrait for LiquidityPool {
     fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) {
-        // admin.require_auth();
-        // check_admin(&e, &admin);
-
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
             panic!("rewards config already initialized")
