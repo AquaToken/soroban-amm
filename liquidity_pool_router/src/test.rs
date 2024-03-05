@@ -170,7 +170,7 @@ fn test_constant_product_pool() {
     assert_eq!(token_share.balance(&user1), 0);
 
     let desired_amounts = Vec::from_array(&e, [100, 100]);
-    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
+    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
 
     assert_eq!(token_share.balance(&user1), 100);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -472,7 +472,7 @@ fn test_stableswap_pool() {
     assert_eq!(token_share.balance(&user1), 0);
 
     let desired_amounts = Vec::from_array(&e, [100_0000000, 100_0000000]);
-    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
+    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
 
     assert_eq!(token_share.balance(&user1), 200_0000000);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -635,7 +635,7 @@ fn test_stableswap_3_pool() {
     assert_eq!(token_share.balance(&user1), 0);
 
     let desired_amounts = Vec::from_array(&e, [100_0000000, 100_0000000, 100_0000000]);
-    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
+    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
 
     assert_eq!(token_share.balance(&user1), 300_0000000);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -835,6 +835,7 @@ fn test_simple_ongoing_reward() {
         &tokens,
         &pool_hash,
         &Vec::from_array(&e, [100, 100]),
+        &0,
     );
 
     assert_eq!(reward_token.balance(&user1), 0);
@@ -1016,7 +1017,7 @@ fn test_event_correct() {
 
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
-    let (amounts, share_amount) = router.deposit(&user1, &tokens, &pool_hash, &desired_amounts);
+    let (amounts, share_amount) = router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
 
     let pool_id = router.get_pool(&tokens, &pool_hash);
 
@@ -1144,6 +1145,7 @@ fn test_swap_routed() {
         &tokens,
         &standard1_pool_hash,
         &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+        &0,
     );
 
     let (standard2_pool_hash, standard2_pool_address) =
@@ -1155,6 +1157,7 @@ fn test_swap_routed() {
         &tokens,
         &standard2_pool_hash,
         &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+        &0,
     );
 
     let (standard3_pool_hash, standard3_pool_address) =
@@ -1166,6 +1169,7 @@ fn test_swap_routed() {
         &tokens,
         &standard3_pool_hash,
         &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+        &0,
     );
 
     let (stable1_pool_hash, stable1_pool_address) =
@@ -1177,6 +1181,7 @@ fn test_swap_routed() {
         &tokens,
         &stable1_pool_hash,
         &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+        &0,
     );
 
     let (stable2_pool_hash, stable2_pool_address) =
@@ -1188,6 +1193,7 @@ fn test_swap_routed() {
         &tokens,
         &stable2_pool_hash,
         &Vec::from_array(&e, [100_0000000_u128, 100_0000000_u128]),
+        &0,
     );
 
     let (stable3_pool_hash, stable3_pool_address) =
@@ -1199,6 +1205,7 @@ fn test_swap_routed() {
         &tokens,
         &stable3_pool_hash,
         &Vec::from_array(&e, [100_0000000_u128, 100_0000000_u128]),
+        &0,
     );
 
     e.budget().reset_default();

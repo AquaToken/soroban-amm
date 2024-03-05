@@ -49,7 +49,12 @@ pub trait LiquidityPoolInterfaceTrait {
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
-    fn deposit(e: Env, user: Address, desired_amounts: Vec<u128>) -> (Vec<u128>, u128);
+    fn deposit(
+        e: Env,
+        user: Address,
+        desired_amounts: Vec<u128>,
+        min_shares: u128,
+    ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
     // in_idx: Index value for the coin to send

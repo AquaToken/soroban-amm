@@ -797,7 +797,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         get_tokens(&e)
     }
 
-    fn deposit(e: Env, user: Address, amounts: Vec<u128>) -> (Vec<u128>, u128) {
+    fn deposit(e: Env, user: Address, amounts: Vec<u128>, min_shares: u128) -> (Vec<u128>, u128) {
         user.require_auth();
         if get_is_killed(&e) {
             panic!("is killed")
@@ -895,6 +895,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             token_supply * (d2 - d0) / d0
         };
 
+        if mint_amount < min_shares {
+            panic!("minted less than minimum")
+        }
         // Mint pool tokens
         mint_shares(&e, user, mint_amount as i128);
 

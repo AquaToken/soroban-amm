@@ -67,6 +67,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
+        min_shares: u128,
     ) -> (Vec<u128>, u128) {
         user.require_auth();
 
@@ -77,7 +78,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             &symbol_short!("deposit"),
             Vec::from_array(
                 &e,
-                [user.clone().into_val(&e), desired_amounts.into_val(&e)],
+                [
+                    user.clone().into_val(&e),
+                    desired_amounts.into_val(&e),
+                    min_shares.into_val(&e),
+                ],
             ),
         );
         Events::new(&e).deposit(tokens, user, pool_id, amounts.clone(), share_amount);

@@ -28,6 +28,7 @@ pub trait LiquidityPoolInterfaceTrait {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
+        min_shares: u128,
     ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
