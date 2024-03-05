@@ -215,7 +215,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         if out_idx > 1 {
-            panic!("in_idx out of bounds");
+            panic!("out_idx out of bounds");
         }
 
         let reserve_a = get_reserve_a(&e);
@@ -298,7 +298,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         if out_idx > 1 {
-            panic!("in_idx out of bounds");
+            panic!("out_idx out of bounds");
         }
 
         let reserve_a = get_reserve_a(&e);
