@@ -85,8 +85,6 @@ pub trait UpgradeableContractTrait {
 }
 
 pub trait RewardsTrait {
-    // todo: move rewards configuration to gauge
-
     // Initialize rewards settings: token address and storage address
     // from which transfer will be made on claim
     fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
