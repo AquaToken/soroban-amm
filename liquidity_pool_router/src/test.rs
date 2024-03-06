@@ -176,6 +176,7 @@ fn test_total_liquidity() {
             &tokens,
             &pool_hash,
             &Vec::from_array(&e, [30000, 30000]),
+            &0,
         );
     }
 
@@ -198,6 +199,7 @@ fn test_total_liquidity() {
             &tokens,
             &pool_hash,
             &Vec::from_array(&e, [30000, 30000]),
+            &0,
         );
     }
 
@@ -976,6 +978,7 @@ fn test_simple_ongoing_reward() {
         &tokens,
         &standard_pool_hash,
         &Vec::from_array(&e, [1000, 1000]),
+        &0,
     );
     let standard_liquidity = router.get_total_liquidity(&tokens);
     assert_eq!(standard_liquidity, U256::from_u32(&e, 36));
@@ -984,6 +987,7 @@ fn test_simple_ongoing_reward() {
         &tokens,
         &stable_pool_hash,
         &Vec::from_array(&e, [1000, 1000]),
+        &0,
     );
     let stable_liquidity = router.get_total_liquidity(&tokens).sub(&standard_liquidity);
     assert_eq!(
@@ -1020,7 +1024,6 @@ fn test_simple_ongoing_reward() {
             .div(&(standard_liquidity.add(&stable_liquidity))),
         U256::from_u128(&e, stable_pool_tps * 60),
         U256::from_u32(&e, 100),
-        &0,
     );
 
     assert_eq!(reward_token.balance(&user1), 0);
@@ -1197,13 +1200,15 @@ fn test_event_correct() {
 
     reward_token.mint(&router.address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;
-    router.set_rewards_config(
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
         &admin,
-        &tokens,
-        &pool_hash,
-        &e.ledger().timestamp().saturating_add(60),
         &reward_1_tps,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
     );
+    router.fill_liquidity(&admin, &tokens);
+    router.config_pool_rewards(&admin, &tokens, &pool_hash);
     reward_token.approve(&router.address, &pool_address, &1_000_000_0000000, &99999);
 
     token1.mint(&user1, &1000);

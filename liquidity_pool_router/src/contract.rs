@@ -12,14 +12,13 @@ use crate::pool_utils::{
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
-    add_pool, get_init_pool_payment_address, get_init_pool_payment_amount,
-    get_init_pool_payment_token, get_liquidity_calculator, get_pool, get_pool_plane,
-    get_pools_plain, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config,
-    get_swap_router, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_init_pool_payment_address, set_init_pool_payment_amount, set_init_pool_payment_token,
-    set_liquidity_calculator, set_pool_plane, set_reward_tokens, set_reward_tokens_detailed,
-    set_rewards_config, set_stableswap_pool_hash, set_swap_router, set_token_hash,
-    GlobalRewardsConfig, LiquidityPoolRewardInfo, LiquidityPoolType,
+    get_init_pool_payment_address, get_init_pool_payment_amount, get_init_pool_payment_token,
+    get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_reward_tokens,
+    get_reward_tokens_detailed, get_rewards_config, get_swap_router, has_pool, remove_pool,
+    set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount,
+    set_init_pool_payment_token, set_liquidity_calculator, set_pool_plane, set_reward_tokens,
+    set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_swap_router,
+    set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
 use crate::swap_router::SwapRouterClient;
 use access_control::access::{AccessControl, AccessControlError, AccessControlTrait};
