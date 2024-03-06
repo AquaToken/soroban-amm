@@ -6,8 +6,8 @@ use crate::pool_interface::{
     SwapRouterInterface,
 };
 use crate::pool_utils::{
-    deploy_stableswap_pool, deploy_standard_pool,  get_stableswap_pool_salt,
-    get_standard_pool_salt, get_total_liquidity, pool_salt,
+    deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt, get_standard_pool_salt,
+    get_total_liquidity, pool_salt,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
@@ -27,8 +27,7 @@ use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
-    Symbol, Val, Vec,
-    U256,
+    Symbol, Val, Vec, U256,
 };
 use utils::utils::check_vec_ordered;
 
