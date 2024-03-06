@@ -6,7 +6,7 @@ use crate::pool_interface::{
     SwapRouterInterface,
 };
 use crate::pool_utils::{
-    deploy_stableswap_pool, deploy_standard_pool, get_custom_salt, get_stableswap_pool_salt,
+    deploy_stableswap_pool, deploy_standard_pool,  get_stableswap_pool_salt,
     get_standard_pool_salt, get_total_liquidity, pool_salt,
 };
 use crate::rewards::get_rewards_manager;
@@ -72,6 +72,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
+        min_shares: u128,
     ) -> (Vec<u128>, u128) {
         user.require_auth();
 
@@ -82,7 +83,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             &symbol_short!("deposit"),
             Vec::from_array(
                 &e,
-                [user.clone().into_val(&e), desired_amounts.into_val(&e)],
+                [
+                    user.clone().into_val(&e),
+                    desired_amounts.into_val(&e),
+                    min_shares.into_val(&e),
+                ],
             ),
         );
         Events::new(&e).deposit(tokens, user, pool_id, amounts.clone(), share_amount);
@@ -559,42 +564,6 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address> {
         let salt = pool_salt(&e, tokens);
         get_pools_plain(&e, &salt)
-    }
-
-    fn add_custom_pool(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        pool_address: Address,
-        pool_type: Symbol,
-        init_args: Vec<Val>,
-    ) -> BytesN<32> {
-        let access_control = AccessControl::new(&e);
-        user.require_auth();
-        access_control.check_admin(&user);
-        let salt = pool_salt(&e, tokens.clone());
-        let subpool_salt = get_custom_salt(&e, &pool_type, &init_args);
-
-        if has_pool(&e, &salt, subpool_salt.clone()) {
-            panic!("pool already exists")
-        }
-
-        add_pool(
-            &e,
-            &salt,
-            subpool_salt.clone(),
-            LiquidityPoolType::Custom,
-            pool_address.clone(),
-        );
-
-        Events::new(&e).add_pool(
-            tokens,
-            pool_address,
-            pool_type,
-            subpool_salt.clone(),
-            init_args,
-        );
-        subpool_salt
     }
 
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>) {

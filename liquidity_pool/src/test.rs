@@ -27,7 +27,7 @@ fn test() {
     let total_reward_1 = reward_1_tps * 60;
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
-    liq_pool.deposit(&user1, &desired_amounts);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
     assert_eq!(
         e.auths()[0],
         (
@@ -36,7 +36,14 @@ fn test() {
                 function: AuthorizedFunction::Contract((
                     liq_pool.address.clone(),
                     Symbol::new(&e, "deposit"),
-                    Vec::from_array(&e, [user1.to_val(), desired_amounts.to_val()]),
+                    Vec::from_array(
+                        &e,
+                        [
+                            user1.to_val(),
+                            desired_amounts.to_val(),
+                            0_u128.into_val(&e)
+                        ]
+                    ),
                 )),
                 sub_invocations: std::vec![],
             }
@@ -142,6 +149,34 @@ fn test() {
     assert_eq!(token1.balance(&liq_pool.address), 0);
     assert_eq!(token2.balance(&liq_pool.address), 0);
     assert_eq!(token_share.balance(&liq_pool.address), 0);
+}
+
+#[test]
+#[should_panic(expected = "minted less than minimum")]
+fn test_deposit_min_mint() {
+    let Setup {
+        env: e,
+        users,
+        token1,
+        token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        mint_to_user: i128::MAX,
+        ..TestConfig::default()
+    });
+    let user1 = users[0].clone();
+    token1.approve(&user1, &liq_pool.address, &i128::MAX, &99999);
+    token2.approve(&user1, &liq_pool.address, &i128::MAX, &99999);
+
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&e, [1_000_000_000_000_0000000, 1_000_000_000_000_0000000]),
+        &0,
+    );
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [1, 1]), &10);
 }
 
 #[test]
@@ -255,6 +290,7 @@ fn test_custom_fee() {
         liqpool.deposit(
             &setup.users[0],
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
+            &0,
         );
         assert_eq!(liqpool.estimate_swap(&1, &0, &fee_config.1), 1_0000000);
         assert_eq!(
@@ -280,7 +316,7 @@ fn test_simple_ongoing_reward() {
 
     // 10 seconds passed since config, user depositing
     jump(&env, 10);
-    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]));
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
 
     assert_eq!(token_reward.balance(&users[0]), 0);
     // 30 seconds passed, half of the reward is available for the user
@@ -304,7 +340,7 @@ fn test_estimate_ongoing_reward() {
 
     // 10 seconds passed since config, user depositing
     jump(&env, 10);
-    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]));
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
 
     assert_eq!(token_reward.balance(&users[0]), 0);
     // 30 seconds passed, half of the reward is available for the user
@@ -331,7 +367,7 @@ fn test_simple_reward() {
 
     // 10 seconds. user depositing
     jump(&env, 10);
-    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]));
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
 
     // 20 seconds. rewards set up for 60 seconds
     jump(&env, 10);
@@ -377,10 +413,10 @@ fn test_two_users_rewards() {
 
     // two users make deposit for equal value. second after 30 seconds after rewards start,
     //  so it gets only 1/4 of total reward
-    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]));
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
     jump(&env, 30);
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
-    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]));
+    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
     jump(&env, 100);
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 4);
     assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 4);
@@ -406,9 +442,9 @@ fn test_lazy_user_rewards() {
 
     let total_reward_1 = &TestConfig::default().reward_tps * 60;
 
-    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]));
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
     jump(&env, 59);
-    liq_pool.deposit(&users[1], &Vec::from_array(&env, [1000, 1000]));
+    liq_pool.deposit(&users[1], &Vec::from_array(&env, [1000, 1000]), &0);
     jump(&env, 100);
     let user1_claim = liq_pool.claim(&users[0]);
     let user2_claim = liq_pool.claim(&users[1]);
@@ -480,12 +516,12 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         expected_reward += reward_1_tps / (i + 1);
     }
 
-    liq_pool.deposit(&first_user, &Vec::from_array(&env, [1000, 1000]));
+    liq_pool.deposit(&first_user, &Vec::from_array(&env, [1000, 1000]), &0);
     jump(&env, 1);
 
     for i in 1..iterations_to_simulate as usize {
         let user = &users[i % 10];
-        liq_pool.deposit(user, &Vec::from_array(&env, [1000, 1000]));
+        liq_pool.deposit(user, &Vec::from_array(&env, [1000, 1000]), &0);
         jump(&env, 1);
     }
 

@@ -29,17 +29,6 @@ pub fn get_stableswap_pool_salt(e: &Env) -> BytesN<32> {
     e.crypto().sha256(&salt)
 }
 
-pub fn get_custom_salt(e: &Env, pool_type: &Symbol, init_args: &Vec<Val>) -> BytesN<32> {
-    let mut salt = Bytes::new(e);
-    salt.append(&pool_type.to_xdr(e));
-    salt.append(&symbol_short!("0x00").to_xdr(e));
-    for arg in init_args.clone().into_iter() {
-        salt.append(&arg.to_xdr(e));
-        salt.append(&symbol_short!("0x00").to_xdr(e));
-    }
-    e.crypto().sha256(&salt)
-}
-
 pub fn merge_salt(e: &Env, left: BytesN<32>, right: BytesN<32>) -> BytesN<32> {
     let mut salt = Bytes::new(e);
     salt.append(&left.to_xdr(e));

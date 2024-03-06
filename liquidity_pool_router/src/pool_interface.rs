@@ -28,6 +28,7 @@ pub trait LiquidityPoolInterfaceTrait {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
+        min_shares: u128,
     ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
@@ -147,16 +148,6 @@ pub trait PoolsManagementTrait {
 
     // Get pools for given pair
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address>;
-
-    // Add initialized custom pool to the list for given pair
-    fn add_custom_pool(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        pool_address: Address,
-        pool_type: Symbol,
-        init_args: Vec<Val>,
-    ) -> BytesN<32>;
 
     // Remove pool from the list
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>);
