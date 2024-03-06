@@ -934,10 +934,16 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             &(in_amount as i128),
         );
 
-        let x = xp.get(in_idx).unwrap() + dx_w_fee * rates[in_idx as usize] / PRECISION;
+        let reserve_sell = xp.get(in_idx).unwrap();
+        let reserve_buy = xp.get(out_idx).unwrap();
+        if reserve_sell == 0 || reserve_buy == 0 {
+            panic!("pool is empty. make deposit first.")
+        }
+
+        let x = reserve_sell + dx_w_fee * rates[in_idx as usize] / PRECISION;
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
-        let dy = xp.get(out_idx).unwrap() - y - 1; // -1 just in case there were some rounding errors
+        let dy = reserve_buy - y - 1; // -1 just in case there were some rounding errors
         let dy_fee = dy * get_fee(&e) as u128 / FEE_DENOMINATOR as u128;
 
         // Convert all to real units

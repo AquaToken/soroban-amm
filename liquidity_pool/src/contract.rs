@@ -226,8 +226,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
         let tokens = Self::get_tokens(e.clone());
+
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
+        if reserve_sell == 0 || reserve_buy == 0 {
+            panic!("pool is empty. make deposit first.")
+        }
 
         let fee_fraction = get_fee_fraction(&e);
 
