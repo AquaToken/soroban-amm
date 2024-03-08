@@ -40,7 +40,6 @@ fn create_liqpool_contract<'a>(
         &fee,
         &admin_fee,
         token_reward,
-        &liqpool.address,
         plane,
     );
     liqpool
@@ -138,8 +137,6 @@ fn test_happy_flow() {
     token2_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
-    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
     liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
     assert_eq!(liqpool.get_virtual_price(), 1_0000000);
@@ -167,13 +164,6 @@ fn test_happy_flow() {
     assert_eq!(token1.balance(&liqpool.address) as u128, 210_0000000);
     assert_eq!(token2.balance(&user1) as u128, 807_9637267);
     assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362733);
-
-    token_share.approve(
-        &user1,
-        &liqpool.address,
-        &(total_share_token_amount as i128),
-        &99999,
-    );
 
     liqpool.withdraw(
         &user1,
@@ -236,8 +226,6 @@ fn test_kill() {
     );
     token1_admin_client.mint(&user1, &1000_0000000);
     token2_admin_client.mint(&user1, &1000_0000000);
-    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
     liqpool.kill_me(&user1);
     liqpool.deposit(
@@ -370,9 +358,6 @@ fn test_happy_flow_3_tokens() {
     assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token3.balance(&user1) as u128, 1000_0000000);
-    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token3.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
     liqpool.deposit(
         &user1,
@@ -423,13 +408,6 @@ fn test_happy_flow_3_tokens() {
     assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362733);
     assert_eq!(token3.balance(&user1) as u128, 780_0000000);
     assert_eq!(token3.balance(&liqpool.address) as u128, 220_0000000);
-
-    token_share.approve(
-        &user1,
-        &liqpool.address,
-        &(total_share_token_amount as i128),
-        &99999,
-    );
 
     liqpool.withdraw(
         &user1,
@@ -521,10 +499,6 @@ fn test_happy_flow_4_tokens() {
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token3.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token4.balance(&user1) as u128, 1000_0000000);
-    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token3.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token4.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
     liqpool.deposit(
         &user1,
@@ -581,13 +555,6 @@ fn test_happy_flow_4_tokens() {
     assert_eq!(token3.balance(&liqpool.address) as u128, 200_0000000);
     assert_eq!(token4.balance(&user1) as u128, 780_0000000);
     assert_eq!(token4.balance(&liqpool.address) as u128, 220_0000000);
-
-    token_share.approve(
-        &user1,
-        &liqpool.address,
-        &(total_share_token_amount as i128),
-        &99999,
-    );
 
     liqpool.withdraw(
         &user1,
@@ -649,8 +616,6 @@ fn test_withdraw_partial() {
 
     token2_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
-    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
     liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
 
@@ -668,13 +633,6 @@ fn test_withdraw_partial() {
     assert_eq!(token1.balance(&liqpool.address) as u128, 110_0000000);
     assert_eq!(token2.balance(&user1) as u128, 909_9091734 - fee);
     assert_eq!(token2.balance(&liqpool.address) as u128, 90_0908266 + fee);
-
-    token_share.approve(
-        &user1,
-        &liqpool.address,
-        &(share_token_amount as i128),
-        &99999,
-    );
 
     liqpool.withdraw(
         &user1,
@@ -733,8 +691,6 @@ fn test_withdraw_one_token() {
 
     token2_admin_client.mint(&user1, &1000_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
-    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
     liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
 
@@ -745,13 +701,6 @@ fn test_withdraw_one_token() {
     assert_eq!(token1.balance(&liqpool.address) as u128, 100_0000000);
     assert_eq!(token2.balance(&user1) as u128, 900_0000000);
     assert_eq!(token2.balance(&liqpool.address) as u128, 100_0000000);
-
-    token_share.approve(
-        &user1,
-        &liqpool.address,
-        &(share_token_amount as i128),
-        &99999,
-    );
 
     liqpool.withdraw_one_coin(&user1, &100_0000000, &0, &10_0000000);
 
@@ -816,8 +765,6 @@ fn test_custom_fee() {
             &token_reward.address,
             &plane.address,
         );
-        token1.approve(&user1, &liqpool.address, &100000_0000000, &99999);
-        token2.approve(&user1, &liqpool.address, &100000_0000000, &99999);
         liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
         assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.2);
         assert_eq!(liqpool.swap(&user1, &0, &1, &1_0000000, &0), fee_config.2);
@@ -859,8 +806,6 @@ fn test_deposit_inequal() {
 
     token1_admin_client.mint(&user1, &1000_0000000);
     token2_admin_client.mint(&user1, &1000_0000000);
-    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
     liqpool.deposit(&user1, &Vec::from_array(&e, [10_0000000, 100_0000000]), &0);
 
@@ -907,20 +852,12 @@ fn test_simple_ongoing_reward() {
         &e.ledger().timestamp().saturating_add(60),
         &reward_1_tps,
     );
-    token_reward.approve(
-        &liqpool.address,
-        &liqpool.address,
-        &1_000_000_0000000,
-        &99999,
-    );
 
     token1_admin_client.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1) as u128, 1000);
 
     token2_admin_client.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1) as u128, 1000);
-    token1.approve(&user1, &liqpool.address, &1000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000, &99999);
 
     // 10 seconds passed since config, user depositing
     jump(&e, 10);
@@ -969,8 +906,6 @@ fn test_simple_reward() {
 
     token2_admin_client.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1) as u128, 1000);
-    token1.approve(&user1, &liqpool.address, &1000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000, &99999);
 
     // 10 seconds. user depositing
     jump(&e, 10);
@@ -985,12 +920,6 @@ fn test_simple_reward() {
         &user1,
         &e.ledger().timestamp().saturating_add(60),
         &reward_1_tps,
-    );
-    token_reward.approve(
-        &liqpool.address,
-        &liqpool.address,
-        &1_000_000_0000000,
-        &99999,
     );
 
     // 90 seconds. rewards ended.
@@ -1047,12 +976,6 @@ fn test_two_users_rewards() {
         &e.ledger().timestamp().saturating_add(60),
         &reward_1_tps,
     );
-    token_reward.approve(
-        &liqpool.address,
-        &liqpool.address,
-        &1_000_000_0000000,
-        &99999,
-    );
 
     for user in [&user1, &user2] {
         token1_admin_client.mint(user, &1000);
@@ -1060,9 +983,6 @@ fn test_two_users_rewards() {
 
         token2_admin_client.mint(user, &1000);
         assert_eq!(token2.balance(user) as u128, 1000);
-
-        token1.approve(user, &liqpool.address, &1000, &99999);
-        token2.approve(user, &liqpool.address, &1000, &99999);
     }
 
     // two users make deposit for equal value. second after 30 seconds after rewards start,
@@ -1123,12 +1043,6 @@ fn test_lazy_user_rewards() {
         &e.ledger().timestamp().saturating_add(60),
         &reward_1_tps,
     );
-    token_reward.approve(
-        &liqpool.address,
-        &liqpool.address,
-        &1_000_000_0000000,
-        &99999,
-    );
 
     for user in [&user1, &user2] {
         token1_admin_client.mint(user, &1000);
@@ -1136,9 +1050,6 @@ fn test_lazy_user_rewards() {
 
         token2_admin_client.mint(user, &1000);
         assert_eq!(token2.balance(user) as u128, 1000);
-
-        token1.approve(user, &liqpool.address, &1000, &99999);
-        token2.approve(user, &liqpool.address, &1000, &99999);
     }
 
     liqpool.deposit(&user1, &Vec::from_array(&e, [100, 100]), &0);
@@ -1612,8 +1523,6 @@ fn test_deposit_min_mint() {
     let user1 = Address::generate(&e);
     token1_admin_client.mint(&user1, &i128::MAX);
     token2_admin_client.mint(&user1, &i128::MAX);
-    token1.approve(&user1, &liqpool.address, &i128::MAX, &99999);
-    token2.approve(&user1, &liqpool.address, &i128::MAX, &99999);
 
     liqpool.deposit(
         &user1,
@@ -1621,4 +1530,51 @@ fn test_deposit_min_mint() {
         &0,
     );
     liqpool.deposit(&user1, &Vec::from_array(&e, [1, 1]), &10);
+}
+
+#[test]
+#[cfg(feature = "tokens_2")]
+fn test_deposit_inequal_ok() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+
+    let user1 = Address::generate(&e);
+    token1_admin_client.mint(&user1, &i128::MAX);
+    token2_admin_client.mint(&user1, &i128::MAX);
+
+    liqpool.deposit(&user1, &Vec::from_array(&e, [100, 100]), &0);
+
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
+    assert_eq!(token1.balance(&liqpool.address), 100);
+    assert_eq!(token2.balance(&liqpool.address), 100);
+    assert_eq!(token_share.balance(&user1), 200);
+    liqpool.deposit(&user1, &Vec::from_array(&e, [200, 100]), &0);
+    assert_eq!(token1.balance(&liqpool.address), 300);
+    assert_eq!(token2.balance(&liqpool.address), 200);
+    assert_eq!(token_share.balance(&user1), 499);
 }

@@ -207,8 +207,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer_from(
-            &e.current_contract_address(),
+        share_token_client.transfer(
             &user,
             &e.current_contract_address(),
             &(token_amount as i128),
@@ -269,8 +268,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer_from(
-            &e.current_contract_address(),
+        share_token_client.transfer(
             &user,
             &e.current_contract_address(),
             &(token_amount as i128),
@@ -707,14 +705,13 @@ impl ManagedLiquidityPool for LiquidityPool {
         fee: u32,
         admin_fee: u32,
         reward_token: Address,
-        reward_storage: Address,
         plane: Address,
     ) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::set_pools_plane(e.clone(), plane);
         Self::initialize(e.clone(), admin, token_wasm_hash, coins, a, fee, admin_fee);
-        Self::initialize_rewards_config(e.clone(), reward_token, reward_storage);
+        Self::initialize_rewards_config(e.clone(), reward_token);
     }
 }
 
@@ -842,8 +839,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             // Take coins from the sender
             if in_amount > 0 {
                 let token_client = SorobanTokenClient::new(&e, &in_coin);
-                token_client.transfer_from(
-                    &e.current_contract_address(),
+                token_client.transfer(
                     &user,
                     &e.current_contract_address(),
                     &(amounts.get(i).unwrap() as i128),
@@ -930,12 +926,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let input_coin = coins.get(in_idx).unwrap();
 
         let token_client = SorobanTokenClient::new(&e, &input_coin);
-        token_client.transfer_from(
-            &e.current_contract_address(),
-            &user,
-            &e.current_contract_address(),
-            &(in_amount as i128),
-        );
+        token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
 
         let reserve_sell = xp.get(in_idx).unwrap();
         let reserve_buy = xp.get(out_idx).unwrap();
@@ -1018,8 +1009,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer_from(
-            &e.current_contract_address(),
+        share_token_client.transfer(
             &user,
             &e.current_contract_address(),
             &(share_amount as i128),
@@ -1060,13 +1050,12 @@ impl UpgradeableContractTrait for LiquidityPool {
 
 #[contractimpl]
 impl RewardsTrait for LiquidityPool {
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) {
+    fn initialize_rewards_config(e: Env, reward_token: Address) {
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
             panic!("rewards config already initialized")
         }
         rewards.storage().put_reward_token(reward_token);
-        rewards.storage().put_reward_storage(reward_storage);
     }
 
     fn set_rewards_config(

@@ -542,8 +542,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         let init_pool_token = get_init_pool_payment_token(&e);
         let init_pool_amount = get_init_pool_payment_amount(&e);
         let init_pool_address = get_init_pool_payment_address(&e);
-        SorobanTokenClient::new(&e, &init_pool_token).transfer_from(
-            &e.current_contract_address(),
+        SorobanTokenClient::new(&e, &init_pool_token).transfer(
             &user,
             &init_pool_address,
             &(init_pool_amount as i128),
@@ -636,64 +635,5 @@ impl SwapRouterInterface for LiquidityPoolRouter {
             best_pool_address,
             swap_result,
         )
-    }
-
-    fn swap_routed(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
-        in_amount: u128,
-        out_min: u128,
-        expiration_ledger: u32,
-    ) -> u128 {
-        user.require_auth();
-
-        if !check_vec_ordered(&tokens) {
-            panic!("tokens are not sorted")
-        }
-
-        let (pool_index, pool_id, _result) = Self::estimate_swap_routed(
-            e.clone(),
-            tokens.clone(),
-            token_in.clone(),
-            token_out.clone(),
-            in_amount,
-        );
-        SorobanTokenClient::new(&e, &token_in).approve(
-            &user,
-            &pool_id,
-            &(in_amount as i128),
-            &expiration_ledger,
-        );
-
-        let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
-
-        let out_amt = e.invoke_contract(
-            &pool_id,
-            &symbol_short!("swap"),
-            Vec::from_array(
-                &e,
-                [
-                    user.into_val(&e),
-                    tokens
-                        .first_index_of(token_in.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    tokens
-                        .first_index_of(token_out.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    in_amount.into_val(&e),
-                    out_min.into_val(&e),
-                ],
-            ),
-        );
-
-        Events::new(&e).swap(
-            tokens, user, pool_id, token_in, token_out, in_amount, out_amt,
-        );
-        out_amt
     }
 }
