@@ -207,8 +207,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer_from(
-            &e.current_contract_address(),
+        share_token_client.transfer(
             &user,
             &e.current_contract_address(),
             &(token_amount as i128),
@@ -269,8 +268,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer_from(
-            &e.current_contract_address(),
+        share_token_client.transfer(
             &user,
             &e.current_contract_address(),
             &(token_amount as i128),
@@ -841,8 +839,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             // Take coins from the sender
             if in_amount > 0 {
                 let token_client = SorobanTokenClient::new(&e, &in_coin);
-                token_client.transfer_from(
-                    &e.current_contract_address(),
+                token_client.transfer(
                     &user,
                     &e.current_contract_address(),
                     &(amounts.get(i).unwrap() as i128),
@@ -929,12 +926,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let input_coin = coins.get(in_idx).unwrap();
 
         let token_client = SorobanTokenClient::new(&e, &input_coin);
-        token_client.transfer_from(
-            &e.current_contract_address(),
-            &user,
-            &e.current_contract_address(),
-            &(in_amount as i128),
-        );
+        token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
 
         let x = xp.get(in_idx).unwrap() + dx_w_fee * rates[in_idx as usize] / PRECISION;
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
@@ -1011,8 +1003,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer_from(
-            &e.current_contract_address(),
+        share_token_client.transfer(
             &user,
             &e.current_contract_address(),
             &(share_amount as i128),

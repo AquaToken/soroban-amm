@@ -156,8 +156,6 @@ fn test() {
     assert_eq!(token2.balance(&user1), 949);
     assert_eq!(token2.balance(&liq_pool.address), 51);
 
-    token_share.approve(&user1, &liq_pool.address, &100, &99999);
-
     liq_pool.withdraw(&user1, &100_u128, &Vec::from_array(&e, [197_u128, 51_u128]));
     assert_eq!(
         e.auths()[0],
@@ -216,8 +214,8 @@ fn test_deposit_min_mint() {
     let Setup {
         env: e,
         users,
-        token1,
-        token2,
+        token1: _token1,
+        token2: _token2,
         token_reward: _token_reward,
         token_share: _token_share,
         liq_pool,
@@ -227,8 +225,6 @@ fn test_deposit_min_mint() {
         ..TestConfig::default()
     });
     let user1 = users[0].clone();
-    token1.approve(&user1, &liq_pool.address, &i128::MAX, &99999);
-    token2.approve(&user1, &liq_pool.address, &i128::MAX, &99999);
 
     liq_pool.deposit(
         &user1,
@@ -305,12 +301,6 @@ fn test_custom_fee() {
             fee_config.0, // ten percent
             &setup.plane.address,
         );
-        setup
-            .token1
-            .approve(&setup.users[0], &liqpool.address, &100000_0000000, &99999);
-        setup
-            .token2
-            .approve(&setup.users[0], &liqpool.address, &100000_0000000, &99999);
         liqpool.deposit(
             &setup.users[0],
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
@@ -512,17 +502,9 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         };
         token1.mint(user, &1_000_000_000);
         token2.mint(user, &1_000_000_000);
-        token1.approve(user, &liq_pool.address, &1_000_000_000, &99999);
-        token2.approve(user, &liq_pool.address, &1_000_000_000, &99999);
     }
 
     token_reward.mint(&liq_pool.address, &1_000_000_000_000_0000000);
-    token_reward.approve(
-        &liq_pool.address,
-        &liq_pool.address,
-        &1_000_000_000_000_0000000,
-        &99999,
-    );
 
     let reward_1_tps = 10_5000000_u128;
     liq_pool.set_rewards_config(
