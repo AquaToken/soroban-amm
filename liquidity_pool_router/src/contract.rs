@@ -370,8 +370,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         let init_pool_token = get_init_pool_payment_token(&e);
         let init_pool_amount = get_init_pool_payment_amount(&e);
         let init_pool_address = get_init_pool_payment_address(&e);
-        SorobanTokenClient::new(&e, &init_pool_token).transfer_from(
-            &e.current_contract_address(),
+        SorobanTokenClient::new(&e, &init_pool_token).transfer(
             &user,
             &init_pool_address,
             &(init_pool_amount as i128),
