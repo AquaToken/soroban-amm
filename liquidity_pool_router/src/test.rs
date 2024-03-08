@@ -162,15 +162,12 @@ fn test_total_liquidity() {
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
     reward_token.mint(&user1, &3_0000000);
-    reward_token.approve(&user1, &router.address, &3_0000000, &99999);
 
     token1.mint(&user1, &1000000);
     token2.mint(&user1, &1000000);
 
     for pool_fee in CONSTANT_PRODUCT_FEE_AVAILABLE {
-        let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &pool_fee);
-        token1.approve(&user1, &pool_address, &30000, &99999);
-        token2.approve(&user1, &pool_address, &30000, &99999);
+        let (pool_hash, _pool_address) = router.init_standard_pool(&user1, &tokens, &pool_fee);
         router.deposit(
             &user1,
             &tokens,
@@ -190,10 +187,8 @@ fn test_total_liquidity() {
     e.budget().reset_unlimited();
 
     for pool_fee in [10, 30, 100] {
-        let (pool_hash, pool_address) =
+        let (pool_hash, _pool_address) =
             router.init_stableswap_pool(&user1, &tokens, &85, &pool_fee, &0);
-        token1.approve(&user1, &pool_address, &30000, &99999);
-        token2.approve(&user1, &pool_address, &30000, &99999);
         router.deposit(
             &user1,
             &tokens,
@@ -931,7 +926,6 @@ fn test_simple_ongoing_reward() {
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
     reward_token.mint(&user1, &1000_0000000);
-    reward_token.approve(&user1, &router.address, &1000_0000000, &99999);
 
     let (standard_pool_hash, standard_pool_address) =
         router.init_standard_pool(&user1, &tokens, &30);
@@ -1186,7 +1180,6 @@ fn test_event_correct() {
     );
     router.fill_liquidity(&admin, &tokens);
     router.config_pool_rewards(&admin, &tokens, &pool_hash);
-    reward_token.approve(&router.address, &pool_address, &1_000_000_0000000, &99999);
 
     token1.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1), 1000);
