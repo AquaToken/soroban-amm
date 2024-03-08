@@ -45,7 +45,38 @@ fn test() {
                         ]
                     ),
                 )),
-                sub_invocations: std::vec![],
+                sub_invocations: std::vec![
+                    AuthorizedInvocation {
+                        function: AuthorizedFunction::Contract((
+                            token1.address.clone(),
+                            Symbol::new(&e, "transfer"),
+                            Vec::from_array(
+                                &e,
+                                [
+                                    user1.to_val(),
+                                    liq_pool.address.to_val(),
+                                    (desired_amounts.get(0).unwrap() as i128).into_val(&e),
+                                ]
+                            ),
+                        )),
+                        sub_invocations: std::vec![],
+                    },
+                    AuthorizedInvocation {
+                        function: AuthorizedFunction::Contract((
+                            token2.address.clone(),
+                            Symbol::new(&e, "transfer"),
+                            Vec::from_array(
+                                &e,
+                                [
+                                    user1.to_val(),
+                                    liq_pool.address.to_val(),
+                                    (desired_amounts.get(1).unwrap() as i128).into_val(&e),
+                                ]
+                            ),
+                        )),
+                        sub_invocations: std::vec![],
+                    }
+                ],
             }
         )
     );
@@ -101,7 +132,21 @@ fn test() {
                     Symbol::new(&e, "swap"),
                     (&user1, 0_u32, 1_u32, 97_u128, 49_u128).into_val(&e)
                 )),
-                sub_invocations: std::vec![],
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token1.address.clone(),
+                        Symbol::new(&e, "transfer"),
+                        Vec::from_array(
+                            &e,
+                            [
+                                user1.to_val(),
+                                liq_pool.address.to_val(),
+                                97_i128.into_val(&e),
+                            ]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                },],
             }
         )
     );
@@ -110,8 +155,6 @@ fn test() {
     assert_eq!(token1.balance(&liq_pool.address), 197);
     assert_eq!(token2.balance(&user1), 949);
     assert_eq!(token2.balance(&liq_pool.address), 51);
-
-    token_share.approve(&user1, &liq_pool.address, &100, &99999);
 
     liq_pool.withdraw(&user1, &100_u128, &Vec::from_array(&e, [197_u128, 51_u128]));
     assert_eq!(
@@ -131,7 +174,21 @@ fn test() {
                         ],
                     )
                 )),
-                sub_invocations: std::vec![],
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token_share.address.clone(),
+                        Symbol::new(&e, "transfer"),
+                        Vec::from_array(
+                            &e,
+                            [
+                                user1.to_val(),
+                                liq_pool.address.to_val(),
+                                100_i128.into_val(&e),
+                            ]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                }],
             }
         )
     );
@@ -157,8 +214,8 @@ fn test_deposit_min_mint() {
     let Setup {
         env: e,
         users,
-        token1,
-        token2,
+        token1: _token1,
+        token2: _token2,
         token_reward: _token_reward,
         token_share: _token_share,
         liq_pool,
@@ -168,8 +225,6 @@ fn test_deposit_min_mint() {
         ..TestConfig::default()
     });
     let user1 = users[0].clone();
-    token1.approve(&user1, &liq_pool.address, &i128::MAX, &99999);
-    token2.approve(&user1, &liq_pool.address, &i128::MAX, &99999);
 
     liq_pool.deposit(
         &user1,
@@ -211,7 +266,6 @@ fn initialize_already_initialized_plane() {
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         &10_u32,
         &token1.address,
-        &setup.liq_pool.address,
         &setup.plane.address,
     );
 }
@@ -247,12 +301,6 @@ fn test_custom_fee() {
             fee_config.0, // ten percent
             &setup.plane.address,
         );
-        setup
-            .token1
-            .approve(&setup.users[0], &liqpool.address, &100000_0000000, &99999);
-        setup
-            .token2
-            .approve(&setup.users[0], &liqpool.address, &100000_0000000, &99999);
         liqpool.deposit(
             &setup.users[0],
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
@@ -454,17 +502,9 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         };
         token1.mint(user, &1_000_000_000);
         token2.mint(user, &1_000_000_000);
-        token1.approve(user, &liq_pool.address, &1_000_000_000, &99999);
-        token2.approve(user, &liq_pool.address, &1_000_000_000, &99999);
     }
 
     token_reward.mint(&liq_pool.address, &1_000_000_000_000_0000000);
-    token_reward.approve(
-        &liq_pool.address,
-        &liq_pool.address,
-        &1_000_000_000_000_0000000,
-        &99999,
-    );
 
     let reward_1_tps = 10_5000000_u128;
     liq_pool.set_rewards_config(
@@ -497,6 +537,27 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     let user1_claim = liq_pool.claim(&first_user);
     env.budget().print();
     assert_eq!(user1_claim, expected_reward);
+}
+
+#[test]
+fn test_deposit_inequal_return_change() {
+    let Setup {
+        env: e,
+        users,
+        token1,
+        token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::default();
+    let user1 = users[0].clone();
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 100]), &0);
+    assert_eq!(token1.balance(&liq_pool.address), 100);
+    assert_eq!(token2.balance(&liq_pool.address), 100);
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [200, 100]), &0);
+    assert_eq!(token1.balance(&liq_pool.address), 200);
+    assert_eq!(token2.balance(&liq_pool.address), 200);
 }
 
 #[test]
