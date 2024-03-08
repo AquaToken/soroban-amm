@@ -707,14 +707,13 @@ impl ManagedLiquidityPool for LiquidityPool {
         fee: u32,
         admin_fee: u32,
         reward_token: Address,
-        reward_storage: Address,
         plane: Address,
     ) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::set_pools_plane(e.clone(), plane);
         Self::initialize(e.clone(), admin, token_wasm_hash, coins, a, fee, admin_fee);
-        Self::initialize_rewards_config(e.clone(), reward_token, reward_storage);
+        Self::initialize_rewards_config(e.clone(), reward_token);
     }
 }
 
@@ -1054,13 +1053,12 @@ impl UpgradeableContractTrait for LiquidityPool {
 
 #[contractimpl]
 impl RewardsTrait for LiquidityPool {
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) {
+    fn initialize_rewards_config(e: Env, reward_token: Address) {
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
             panic!("rewards config already initialized")
         }
         rewards.storage().put_reward_token(reward_token);
-        rewards.storage().put_reward_storage(reward_storage);
     }
 
     fn set_rewards_config(

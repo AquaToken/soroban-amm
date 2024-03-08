@@ -133,7 +133,6 @@ fn init_standard_pool(
         tokens,
         &fee_fraction,
         &reward_token,
-        &liq_pool_client.address,
         &plane,
     );
 }
@@ -165,7 +164,6 @@ fn init_stableswap_pool(
                 fee_fraction.into_val(e),
                 admin_fee_fraction.into_val(e),
                 reward_token.into_val(e),
-                pool_contract_id.clone().into_val(e),
                 plane.into_val(e),
             ],
         ),

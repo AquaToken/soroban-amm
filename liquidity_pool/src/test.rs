@@ -45,7 +45,38 @@ fn test() {
                         ]
                     ),
                 )),
-                sub_invocations: std::vec![],
+                sub_invocations: std::vec![
+                    AuthorizedInvocation {
+                        function: AuthorizedFunction::Contract((
+                            token1.address.clone(),
+                            Symbol::new(&e, "transfer"),
+                            Vec::from_array(
+                                &e,
+                                [
+                                    user1.to_val(),
+                                    liq_pool.address.to_val(),
+                                    (desired_amounts.get(0).unwrap() as i128).into_val(&e),
+                                ]
+                            ),
+                        )),
+                        sub_invocations: std::vec![],
+                    },
+                    AuthorizedInvocation {
+                        function: AuthorizedFunction::Contract((
+                            token2.address.clone(),
+                            Symbol::new(&e, "transfer"),
+                            Vec::from_array(
+                                &e,
+                                [
+                                    user1.to_val(),
+                                    liq_pool.address.to_val(),
+                                    (desired_amounts.get(1).unwrap() as i128).into_val(&e),
+                                ]
+                            ),
+                        )),
+                        sub_invocations: std::vec![],
+                    }
+                ],
             }
         )
     );
@@ -101,7 +132,21 @@ fn test() {
                     Symbol::new(&e, "swap"),
                     (&user1, 0_u32, 1_u32, 97_u128, 49_u128).into_val(&e)
                 )),
-                sub_invocations: std::vec![],
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token1.address.clone(),
+                        Symbol::new(&e, "transfer"),
+                        Vec::from_array(
+                            &e,
+                            [
+                                user1.to_val(),
+                                liq_pool.address.to_val(),
+                                97_i128.into_val(&e),
+                            ]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                },],
             }
         )
     );
@@ -131,7 +176,21 @@ fn test() {
                         ],
                     )
                 )),
-                sub_invocations: std::vec![],
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token_share.address.clone(),
+                        Symbol::new(&e, "transfer"),
+                        Vec::from_array(
+                            &e,
+                            [
+                                user1.to_val(),
+                                liq_pool.address.to_val(),
+                                100_i128.into_val(&e),
+                            ]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                }],
             }
         )
     );
@@ -211,7 +270,6 @@ fn initialize_already_initialized_plane() {
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         &10_u32,
         &token1.address,
-        &setup.liq_pool.address,
         &setup.plane.address,
     );
 }

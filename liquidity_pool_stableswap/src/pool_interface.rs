@@ -11,7 +11,6 @@ pub trait ManagedLiquidityPool {
         fee: u32,
         admin_fee: u32,
         reward_token: Address,
-        reward_storage: Address,
         plane: Address,
     );
 }
@@ -93,9 +92,8 @@ pub trait UpgradeableContractTrait {
 }
 
 pub trait RewardsTrait {
-    // Initialize rewards settings: token address and storage address
-    // from which transfer will be made on claim
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
+    // Initialize rewards token address
+    fn initialize_rewards_config(e: Env, reward_token: Address);
 
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers

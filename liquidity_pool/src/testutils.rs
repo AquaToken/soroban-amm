@@ -169,7 +169,6 @@ pub fn create_liqpool_contract<'a>(
         tokens,
         &fee_fraction,
         token_reward,
-        &liqpool.address,
         plane,
     );
     liqpool
