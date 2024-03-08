@@ -126,21 +126,11 @@ impl Manager {
 
         // transfer reward
         let reward_token = self.storage.get_reward_token();
-        let rewards_storage = self.storage.get_reward_storage();
-        if rewards_storage == self.env.current_contract_address() {
-            Client::new(&self.env, &reward_token).transfer(
-                &rewards_storage,
-                user,
-                &(reward_amount as i128),
-            );
-        } else {
-            Client::new(&self.env, &reward_token).transfer_from(
-                &self.env.current_contract_address(),
-                &rewards_storage,
-                user,
-                &(reward_amount as i128),
-            );
-        };
+        Client::new(&self.env, &reward_token).transfer(
+            &self.env.current_contract_address(),
+            user,
+            &(reward_amount as i128),
+        );
 
         // set available reward to zero
         let new_data = UserRewardData {

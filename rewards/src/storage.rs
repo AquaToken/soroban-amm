@@ -65,9 +65,6 @@ pub trait RewardsStorageTrait {
     fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Map<u64, u128>);
     fn bump_reward_inv_data(&self, pow: u32, page_number: u64);
 
-    fn get_reward_storage(&self) -> Address;
-    fn put_reward_storage(&self, contract: Address);
-
     fn get_reward_token(&self) -> Address;
     fn put_reward_token(&self, contract: Address);
     fn has_reward_token(&self) -> bool;
@@ -156,14 +153,6 @@ impl RewardsStorageTrait for Storage {
         bump_persistent(&self.env, &DataKey::RewardInvData(pow, page_number))
     }
 
-    fn get_reward_storage(&self) -> Address {
-        self.env
-            .storage()
-            .instance()
-            .get(&DataKey::RewardStorage)
-            .expect("Trying to get reward storage")
-    }
-
     fn get_reward_token(&self) -> Address {
         self.env
             .storage()
@@ -181,12 +170,5 @@ impl RewardsStorageTrait for Storage {
 
     fn has_reward_token(&self) -> bool {
         self.env.storage().instance().has(&DataKey::RewardToken)
-    }
-
-    fn put_reward_storage(&self, contract: Address) {
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::RewardStorage, &contract)
     }
 }

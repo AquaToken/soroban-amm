@@ -40,7 +40,6 @@ fn create_liqpool_contract<'a>(
         &fee,
         &admin_fee,
         token_reward,
-        &liqpool.address,
         plane,
     );
     liqpool
