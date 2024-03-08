@@ -946,8 +946,8 @@ fn test_simple_ongoing_reward() {
     token1.mint(&user1, &2000);
     assert_eq!(token1.balance(&user1), 2000);
 
-    token2.mint(&user1, &1000);
-    assert_eq!(token2.balance(&user1), 1000);
+    token2.mint(&user1, &2000);
+    assert_eq!(token2.balance(&user1), 2000);
 
     // 10 seconds passed since config, user depositing
     jump(&e, 10);
