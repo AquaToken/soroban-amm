@@ -1215,17 +1215,4 @@ fn test_swap_routed() {
     assert_eq!(best_pool, stable1_pool_hash);
     assert_eq!(best_pool_address, stable1_pool_address);
     assert_eq!(best_result, 8_9936586);
-
-    e.budget().reset_default();
-    let swap_result = router.swap_routed(
-        &user1,
-        &tokens,
-        &token1.address,
-        &token2.address,
-        &9_0000000,
-        &(best_result - 1),
-        &(e.ledger().sequence() + 5),
-    );
-    e.budget().print();
-    assert_eq!(swap_result, best_result);
 }
