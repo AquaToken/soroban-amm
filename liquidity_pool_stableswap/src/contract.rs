@@ -926,11 +926,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let input_coin = coins.get(in_idx).unwrap();
 
         let token_client = SorobanTokenClient::new(&e, &input_coin);
-        token_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &(in_amount as i128),
-        );
+        token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
 
         let x = xp.get(in_idx).unwrap() + dx_w_fee * rates[in_idx as usize] / PRECISION;
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
