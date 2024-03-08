@@ -164,8 +164,6 @@ fn test_constant_product_pool() {
 
     token2.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1), 1000);
-    token1.approve(&user1, &pool_address, &1000, &99999);
-    token2.approve(&user1, &pool_address, &1000, &99999);
 
     assert_eq!(token_share.balance(&user1), 0);
 
@@ -213,8 +211,6 @@ fn test_constant_product_pool() {
         router.get_reserves(&tokens, &pool_hash),
         Vec::from_array(&e, [197, 51])
     );
-
-    token_share.approve(&user1, &pool_address, &100, &99999);
 
     router.withdraw(
         &user1,
@@ -279,7 +275,6 @@ fn test_stableswap_pools_amount_over_max() {
         router.init_standard_pool(&admin, &tokens, &fee_fraction);
     }
     reward_token.mint(&admin, &10000000_0000000);
-    reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
     for i in 0..STABLESWAP_MAX_POOLS + 1 {
         router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
         assert_eq!(
@@ -335,7 +330,6 @@ fn test_stableswap_pools_amount_ok() {
         router.init_standard_pool(&admin, &tokens, &fee_fraction);
     }
     reward_token.mint(&admin, &10000000_0000000);
-    reward_token.approve(&admin, &router.address, &10000000_0000000, &99999);
     for i in 0..STABLESWAP_MAX_POOLS {
         router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
         assert_eq!(
@@ -346,8 +340,8 @@ fn test_stableswap_pools_amount_ok() {
 }
 
 #[test]
-#[should_panic(expected = "not enough allowance to spend")]
-fn test_stableswap_pool_no_allowance() {
+#[should_panic(expected = "zero balance is not sufficient to spend")]
+fn test_stableswap_pool_no_balance() {
     let e = Env::default();
     e.mock_all_auths();
     e.budget().reset_unlimited();
@@ -439,7 +433,6 @@ fn test_stableswap_pool() {
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     reward_token.mint(&user1, &10000000_0000000);
-    reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
     e.budget().reset_default();
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
     e.budget().print();
@@ -466,8 +459,6 @@ fn test_stableswap_pool() {
 
     token2.mint(&user1, &1000_0000000);
     assert_eq!(token2.balance(&user1), 1000_0000000);
-    token1.approve(&user1, &pool_address, &1000_0000000, &99999);
-    token2.approve(&user1, &pool_address, &1000_0000000, &99999);
 
     assert_eq!(token_share.balance(&user1), 0);
 
@@ -517,8 +508,6 @@ fn test_stableswap_pool() {
         router.get_reserves(&tokens, &pool_hash),
         Vec::from_array(&e, [197_0000000, 19_5426294])
     );
-
-    token_share.approve(&user1, &pool_address, &200_0000000, &99999);
 
     router.withdraw(
         &user1,
@@ -603,7 +592,6 @@ fn test_stableswap_3_pool() {
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     reward_token.mint(&user1, &10000000_0000000);
-    reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
@@ -627,10 +615,6 @@ fn test_stableswap_3_pool() {
     assert_eq!(token2.balance(&user1), 1000_0000000);
     token3.mint(&user1, &1000_0000000);
     assert_eq!(token3.balance(&user1), 1000_0000000);
-
-    token1.approve(&user1, &pool_address, &1000_0000000, &99999);
-    token2.approve(&user1, &pool_address, &1000_0000000, &99999);
-    token3.approve(&user1, &pool_address, &1000_0000000, &99999);
 
     assert_eq!(token_share.balance(&user1), 0);
 
@@ -701,8 +685,6 @@ fn test_stableswap_3_pool() {
         router.get_reserves(&tokens, &pool_hash),
         Vec::from_array(&e, [197_0000000, 39_5426294, 71_9304879])
     );
-
-    token_share.approve(&user1, &pool_address, &300_0000000, &99999);
 
     router.withdraw(
         &user1,
@@ -825,8 +807,6 @@ fn test_simple_ongoing_reward() {
 
     token2.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1), 1000);
-    token1.approve(&user1, &pool_address, &1000, &99999);
-    token2.approve(&user1, &pool_address, &1000, &99999);
 
     // 10 seconds passed since config, user depositing
     jump(&e, 10);
@@ -933,7 +913,6 @@ fn test_event_correct() {
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     reward_token.mint(&user1, &10000000_0000000);
-    reward_token.approve(&user1, &router.address, &10000000_0000000, &99999);
     let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1];
     let admin_fee = 0;
 
@@ -1002,15 +981,12 @@ fn test_event_correct() {
         &e.ledger().timestamp().saturating_add(60),
         &reward_1_tps,
     );
-    reward_token.approve(&router.address, &pool_address, &1_000_000_0000000, &99999);
 
     token1.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1), 1000);
 
     token2.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1), 1000);
-    token1.approve(&user1, &pool_address, &1000, &99999);
-    token2.approve(&user1, &pool_address, &1000, &99999);
 
     // 10 seconds passed since config, user depositing
     jump(&e, 10);
@@ -1064,9 +1040,6 @@ fn test_event_correct() {
             ),
         ]
     );
-
-    let token_share = test_token::Client::new(&e, &router.share_id(&tokens, &pool_hash));
-    token_share.approve(&user1, &pool_address, &100, &99999);
 
     let amounts = router.withdraw(
         &user1,
@@ -1132,14 +1105,11 @@ fn test_swap_routed() {
     router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
 
     reward_token.mint(&user1, &3_0000000);
-    reward_token.approve(&user1, &router.address, &3_0000000, &99999);
     token1.mint(&user1, &100000_0000000);
     token2.mint(&user1, &100000_0000000);
 
-    let (standard1_pool_hash, standard1_pool_address) =
+    let (standard1_pool_hash, _standard1_pool_address) =
         router.init_standard_pool(&user1, &tokens, &10);
-    token1.approve(&user1, &standard1_pool_address, &1000_0000000, &99999);
-    token2.approve(&user1, &standard1_pool_address, &1000_0000000, &99999);
     router.deposit(
         &user1,
         &tokens,
@@ -1148,10 +1118,8 @@ fn test_swap_routed() {
         &0,
     );
 
-    let (standard2_pool_hash, standard2_pool_address) =
+    let (standard2_pool_hash, _standard2_pool_address) =
         router.init_standard_pool(&user1, &tokens, &30);
-    token1.approve(&user1, &standard2_pool_address, &1000_0000000, &99999);
-    token2.approve(&user1, &standard2_pool_address, &1000_0000000, &99999);
     router.deposit(
         &user1,
         &tokens,
@@ -1160,10 +1128,8 @@ fn test_swap_routed() {
         &0,
     );
 
-    let (standard3_pool_hash, standard3_pool_address) =
+    let (standard3_pool_hash, _standard3_pool_address) =
         router.init_standard_pool(&user1, &tokens, &100);
-    token1.approve(&user1, &standard3_pool_address, &1000_0000000, &99999);
-    token2.approve(&user1, &standard3_pool_address, &1000_0000000, &99999);
     router.deposit(
         &user1,
         &tokens,
@@ -1174,8 +1140,6 @@ fn test_swap_routed() {
 
     let (stable1_pool_hash, stable1_pool_address) =
         router.init_stableswap_pool(&user1, &tokens, &85, &6, &0);
-    token1.approve(&user1, &stable1_pool_address, &1000_0000000, &99999);
-    token2.approve(&user1, &stable1_pool_address, &1000_0000000, &99999);
     router.deposit(
         &user1,
         &tokens,
@@ -1184,10 +1148,8 @@ fn test_swap_routed() {
         &0,
     );
 
-    let (stable2_pool_hash, stable2_pool_address) =
+    let (stable2_pool_hash, _stable2_pool_address) =
         router.init_stableswap_pool(&user1, &tokens, &85, &6, &0);
-    token1.approve(&user1, &stable2_pool_address, &100_0000000, &99999);
-    token2.approve(&user1, &stable2_pool_address, &100_0000000, &99999);
     router.deposit(
         &user1,
         &tokens,
@@ -1196,10 +1158,8 @@ fn test_swap_routed() {
         &0,
     );
 
-    let (stable3_pool_hash, stable3_pool_address) =
+    let (stable3_pool_hash, _stable3_pool_address) =
         router.init_stableswap_pool(&user1, &tokens, &85, &6, &0);
-    token1.approve(&user1, &stable3_pool_address, &100_0000000, &99999);
-    token2.approve(&user1, &stable3_pool_address, &100_0000000, &99999);
     router.deposit(
         &user1,
         &tokens,

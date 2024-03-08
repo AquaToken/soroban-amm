@@ -92,13 +92,6 @@ impl Setup<'_> {
         );
         token_reward.mint(&liq_pool.address, &config.rewards_count);
 
-        token_reward.approve(
-            &liq_pool.address,
-            &liq_pool.address,
-            &config.rewards_count,
-            &99999,
-        );
-
         let token_share = Client::new(&e, &liq_pool.share_id());
 
         Self {
@@ -128,11 +121,6 @@ impl Setup<'_> {
 
             self.token2.mint(user, amount);
             assert_eq!(self.token2.balance(user), amount.clone());
-
-            self.token1
-                .approve(user, &self.liq_pool.address, amount, &99999);
-            self.token2
-                .approve(user, &self.liq_pool.address, amount, &99999);
         }
     }
 
@@ -169,7 +157,6 @@ pub fn create_liqpool_contract<'a>(
         tokens,
         &fee_fraction,
         token_reward,
-        &liqpool.address,
         plane,
     );
     liqpool
