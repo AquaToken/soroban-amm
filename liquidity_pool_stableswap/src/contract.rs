@@ -206,12 +206,20 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // First transfer the pool shares that need to be redeemed
+        // Transfer max amount and return back change to avoid auth race condition
         let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
         share_token_client.transfer(
             &user,
             &e.current_contract_address(),
-            &(token_amount as i128),
+            &(max_burn_amount as i128),
         );
+        if max_burn_amount > token_amount {
+            share_token_client.transfer(
+                &e.current_contract_address(),
+                &user,
+                &((max_burn_amount - token_amount) as i128),
+            );
+        }
         burn_shares(&e, token_amount as i128);
 
         for i in 0..N_COINS as u32 {
@@ -839,11 +847,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             // Take coins from the sender
             if in_amount > 0 {
                 let token_client = SorobanTokenClient::new(&e, &in_coin);
-                token_client.transfer(
-                    &user,
-                    &e.current_contract_address(),
-                    &(amounts.get(i).unwrap() as i128),
-                );
+                token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
             }
 
             new_balances.set(i, old_balances.get(i).unwrap() + in_amount);

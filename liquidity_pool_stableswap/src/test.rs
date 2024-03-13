@@ -734,9 +734,60 @@ fn test_deposit_inequal() {
     token2_admin_client.mint(&user1, &1000_0000000);
 
     liqpool.deposit(&user1, &Vec::from_array(&e, [10_0000000, 100_0000000]), &0);
-
     assert_eq!(token_share.balance(&user1) as u128, 101_8767615);
-    assert_eq!(liqpool.get_virtual_price(), 1_0000000);
+    assert_eq!(token1.balance(&user1) as u128, 990_0000000);
+    assert_eq!(token2.balance(&user1) as u128, 900_0000000);
+    liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 10_0000000]), &0);
+    assert_eq!(token1.balance(&user1) as u128, 890_0000000);
+    assert_eq!(token2.balance(&user1) as u128, 890_0000000);
+}
+
+#[cfg(feature = "tokens_2")]
+#[test]
+fn test_remove_liquidity_imbalance() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
+
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+
+    liqpool.deposit(&user1, &Vec::from_array(&e, [10_0000000, 100_0000000]), &0);
+    assert_eq!(token1.balance(&user1) as u128, 990_0000000);
+    assert_eq!(token2.balance(&user1) as u128, 900_0000000);
+    assert_eq!(token_share.balance(&user1) as u128, 101_8767615);
+    liqpool.remove_liquidity_imbalance(
+        &user1,
+        &Vec::from_array(&e, [9_0000000, 9_0000000]),
+        &90_0000000,
+    );
+    assert_eq!(token1.balance(&user1) as u128, 999_0000000);
+    assert_eq!(token2.balance(&user1) as u128, 909_0000000);
+    assert_eq!(token_share.balance(&user1) as u128, 62_1428988);
 }
 
 #[cfg(feature = "tokens_2")]
