@@ -30,6 +30,9 @@ pub trait LiquidityPoolTrait {
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
 
+    // Returns the total amount of shares
+    fn get_total_shares(e: Env) -> u128;
+
     fn get_tokens(e: Env) -> Vec<Address>;
 
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted

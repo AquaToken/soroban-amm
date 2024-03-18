@@ -40,6 +40,9 @@ pub trait LiquidityPoolInterfaceTrait {
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
 
+    // Returns the total amount of shares
+    fn get_total_shares(e: Env) -> u128;
+
     // Getter for the pool balances array.
     fn get_reserves(e: Env) -> Vec<u128>;
 
