@@ -794,6 +794,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         get_token_share(&e)
     }
 
+    fn get_total_shares(e: Env) -> u128 {
+        get_total_shares(&e)
+    }
+
     fn get_reserves(e: Env) -> Vec<u128> {
         get_reserves(&e)
     }
