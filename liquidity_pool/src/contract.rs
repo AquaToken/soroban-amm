@@ -122,6 +122,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         get_token_share(&e)
     }
 
+    fn get_total_shares(e: Env) -> u128 {
+        get_total_shares(&e)
+    }
+
     fn get_tokens(e: Env) -> Vec<Address> {
         Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
     }
