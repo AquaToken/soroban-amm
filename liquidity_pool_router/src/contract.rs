@@ -51,6 +51,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "share_id"), Vec::new(&e))
     }
 
+    fn get_total_shares(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_total_shares"), Vec::new(&e))
+    }
+
     fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128> {
         let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
