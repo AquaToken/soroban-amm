@@ -6,7 +6,7 @@ use crate::pool_interface::{
 };
 use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_custom_salt, get_stableswap_pool_salt,
-    get_standard_pool_salt, pool_salt,
+    get_standard_pool_salt, get_tokens_salt,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
@@ -325,7 +325,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 #[contractimpl]
 impl PoolsManagementTrait for LiquidityPoolRouter {
     fn init_pool(e: Env, tokens: Vec<Address>) -> (BytesN<32>, Address) {
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
         if pools.is_empty() {
             deploy_standard_pool(&e, tokens, 30)
@@ -346,7 +346,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             panic!("non-standard fee");
         }
 
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
         let pool_index = get_standard_pool_salt(&e, &fee_fraction);
 
@@ -377,7 +377,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             &(init_pool_amount as i128),
         );
 
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
         let pool_index = get_stableswap_pool_salt(&e);
 
@@ -388,7 +388,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     }
 
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address> {
-        let salt = pool_salt(&e, tokens);
+        let salt = get_tokens_salt(&e, tokens);
         get_pools_plain(&e, &salt)
     }
 
@@ -403,7 +403,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         let access_control = AccessControl::new(&e);
         user.require_auth();
         access_control.check_admin(&user);
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         let subpool_salt = get_custom_salt(&e, &pool_type, &init_args);
 
         if has_pool(&e, &salt, subpool_salt.clone()) {
@@ -432,7 +432,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         let access_control = AccessControl::new(&e);
         user.require_auth();
         access_control.check_admin(&user);
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         if has_pool(&e, &salt, pool_hash.clone()) {
             remove_pool(&e, &salt, pool_hash)
         }
@@ -474,7 +474,7 @@ impl SwapRouterInterface for LiquidityPoolRouter {
         token_out: Address,
         in_amount: u128,
     ) -> (BytesN<32>, Address, u128) {
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
 
         let swap_router = get_swap_router(&e);

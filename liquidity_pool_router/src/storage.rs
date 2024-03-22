@@ -1,5 +1,5 @@
 use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
-use crate::pool_utils::pool_salt;
+use crate::pool_utils::get_tokens_salt;
 use paste::paste;
 use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, Map, Vec};
 use utils::bump::{bump_instance, bump_persistent};
@@ -36,7 +36,7 @@ enum DataKey {
     InitPoolPaymentAddress,
     ConstantPoolHash,
     StableSwapPoolHash(u32),
-    StableSwapCounter,
+    PoolCounter,
     PoolPlane,
     SwapRouter,
 }
@@ -82,8 +82,8 @@ generate_instance_storage_getter_and_setter!(
     Address
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    stableswap_counter,
-    DataKey::StableSwapCounter,
+    pool_counter,
+    DataKey::PoolCounter,
     u128,
     0
 );
@@ -133,7 +133,7 @@ pub fn get_pool(
     tokens: Vec<Address>,
     pool_index: BytesN<32>,
 ) -> Result<Address, PoolError> {
-    let salt = pool_salt(e, tokens);
+    let salt = get_tokens_salt(e, tokens);
     let pools = get_pools(e, &salt);
     match pools.contains_key(pool_index.clone()) {
         true => Ok(pools.get(pool_index).unwrap().address),
@@ -181,8 +181,8 @@ pub fn remove_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) {
     put_pools(e, salt, &pools);
 }
 
-pub fn get_stableswap_next_counter(e: &Env) -> u128 {
-    let value = get_stableswap_counter(e);
-    set_stableswap_counter(e, &(value + 1));
+pub fn get_pool_next_counter(e: &Env) -> u128 {
+    let value = get_pool_counter(e);
+    set_pool_counter(e, &(value + 1));
     value
 }
