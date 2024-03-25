@@ -19,13 +19,20 @@ fn test() {
         token_share,
         liq_pool,
         plane: _plane,
-    } = Setup::default();
+    } = Setup::new_with_config(&TestConfig {
+        mint_to_user: i128::MAX,
+        ..TestConfig::default()
+    });
     let user1 = users[0].clone();
     let reward_1_tps = 10_5000000_u128;
     let reward_2_tps = 20_0000000_u128;
     let reward_3_tps = 6_0000000_u128;
     let total_reward_1 = reward_1_tps * 60;
-    let desired_amounts = Vec::from_array(&e, [100, 100]);
+    let amount_to_deposit = 100;
+    // let amount_to_deposit = 1_000_0000000;
+    // let amount_to_deposit = 1_000_000_000_000_000_000_000_0000000;
+    // let amount_to_deposit = u128::MAX / 1_000_000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
 
     liq_pool.deposit(&user1, &desired_amounts);
     assert_eq!(
@@ -75,15 +82,27 @@ fn test() {
         total_reward_1 + total_reward_2 + total_reward_3
     );
 
-    assert_eq!(token_share.balance(&user1), 100);
+    // when we deposit equal amounts, we gotta have deposited amount of share tokens
+    let expected_share_amount = amount_to_deposit as i128;
+    assert_eq!(token_share.balance(&user1), expected_share_amount);
     assert_eq!(token_share.balance(&liq_pool.address), 0);
-    assert_eq!(token1.balance(&user1), 900);
-    assert_eq!(token1.balance(&liq_pool.address), 100);
-    assert_eq!(token2.balance(&user1), 900);
-    assert_eq!(token2.balance(&liq_pool.address), 100);
+    assert_eq!(
+        token1.balance(&user1),
+        i128::MAX - amount_to_deposit as i128
+    );
+    assert_eq!(token1.balance(&liq_pool.address), amount_to_deposit as i128);
+    assert_eq!(
+        token2.balance(&user1),
+        i128::MAX - amount_to_deposit as i128
+    );
+    assert_eq!(token2.balance(&liq_pool.address), amount_to_deposit as i128);
 
-    assert_eq!(liq_pool.estimate_swap(&0, &1, &97), 49);
-    assert_eq!(liq_pool.swap(&user1, &0, &1, &97_u128, &49_u128), 49);
+    let expected_swap_result = 49;
+    assert_eq!(liq_pool.estimate_swap(&0, &1, &97), expected_swap_result);
+    assert_eq!(
+        liq_pool.swap(&user1, &0, &1, &97_u128, &expected_swap_result),
+        expected_swap_result
+    );
     assert_eq!(
         e.auths()[0],
         (
@@ -92,21 +111,41 @@ fn test() {
                 function: AuthorizedFunction::Contract((
                     liq_pool.address.clone(),
                     Symbol::new(&e, "swap"),
-                    (&user1, 0_u32, 1_u32, 97_u128, 49_u128).into_val(&e)
+                    (&user1, 0_u32, 1_u32, 97_u128, expected_swap_result).into_val(&e)
                 )),
                 sub_invocations: std::vec![],
             }
         )
     );
 
-    assert_eq!(token1.balance(&user1), 803);
-    assert_eq!(token1.balance(&liq_pool.address), 197);
-    assert_eq!(token2.balance(&user1), 949);
-    assert_eq!(token2.balance(&liq_pool.address), 51);
+    assert_eq!(
+        token1.balance(&user1),
+        i128::MAX - amount_to_deposit as i128 - 97
+    );
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        amount_to_deposit as i128 + 97
+    );
+    assert_eq!(
+        token2.balance(&user1),
+        i128::MAX - amount_to_deposit as i128 + expected_swap_result as i128
+    );
+    assert_eq!(
+        token2.balance(&liq_pool.address),
+        amount_to_deposit as i128 - expected_swap_result as i128
+    );
 
-    token_share.approve(&user1, &liq_pool.address, &100, &99999);
+    token_share.approve(&user1, &liq_pool.address, &expected_share_amount, &99999);
 
-    liq_pool.withdraw(&user1, &100_u128, &Vec::from_array(&e, [197_u128, 51_u128]));
+    let withdraw_amounts = [
+        amount_to_deposit + 97,
+        amount_to_deposit - expected_swap_result,
+    ];
+    liq_pool.withdraw(
+        &user1,
+        &(expected_share_amount as u128),
+        &Vec::from_array(&e, withdraw_amounts),
+    );
     assert_eq!(
         e.auths()[0],
         (
@@ -119,8 +158,8 @@ fn test() {
                         &e,
                         [
                             user1.clone().into_val(&e),
-                            100_u128.into_val(&e),
-                            Vec::from_array(&e, [197_u128, 51_u128]).into_val(&e)
+                            (expected_share_amount as u128).into_val(&e),
+                            Vec::from_array(&e, withdraw_amounts).into_val(&e)
                         ],
                     )
                 )),
@@ -136,8 +175,90 @@ fn test() {
         total_reward_1 + total_reward_2 + total_reward_3
     );
 
-    assert_eq!(token1.balance(&user1), 1000);
-    assert_eq!(token2.balance(&user1), 1000);
+    assert_eq!(token1.balance(&user1), i128::MAX);
+    assert_eq!(token2.balance(&user1), i128::MAX);
+    assert_eq!(token_share.balance(&user1), 0);
+    assert_eq!(token1.balance(&liq_pool.address), 0);
+    assert_eq!(token2.balance(&liq_pool.address), 0);
+    assert_eq!(token_share.balance(&liq_pool.address), 0);
+}
+
+#[test]
+fn test_large_numbers() {
+    let Setup {
+        env: e,
+        users,
+        token1,
+        token2,
+        token_reward: _token_reward,
+        token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        mint_to_user: i128::MAX,
+        ..TestConfig::default()
+    });
+    let user1 = users[0].clone();
+    let amount_to_deposit = u128::MAX / 1_000_000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+
+    liq_pool.deposit(&user1, &desired_amounts);
+
+    // when we deposit equal amounts, we gotta have deposited amount of share tokens
+    let expected_share_amount = amount_to_deposit as i128;
+    assert_eq!(token_share.balance(&user1), expected_share_amount);
+    assert_eq!(token_share.balance(&liq_pool.address), 0);
+    assert_eq!(
+        token1.balance(&user1),
+        i128::MAX - amount_to_deposit as i128
+    );
+    assert_eq!(token1.balance(&liq_pool.address), amount_to_deposit as i128);
+    assert_eq!(
+        token2.balance(&user1),
+        i128::MAX - amount_to_deposit as i128
+    );
+    assert_eq!(token2.balance(&liq_pool.address), amount_to_deposit as i128);
+
+    let swap_in = amount_to_deposit / 10;
+    let expected_swap_result_delta = swap_in / 10; // swap out shouldn't differ for more than 10%
+    let estimate_swap_result = liq_pool.estimate_swap(&0, &1, &swap_in);
+    assert_approx_eq_abs(estimate_swap_result, swap_in, expected_swap_result_delta);
+    assert_eq!(
+        liq_pool.swap(&user1, &0, &1, &swap_in, &estimate_swap_result),
+        estimate_swap_result
+    );
+
+    assert_eq!(
+        token1.balance(&user1),
+        i128::MAX - amount_to_deposit as i128 - swap_in as i128
+    );
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        amount_to_deposit as i128 + swap_in as i128
+    );
+    assert_eq!(
+        token2.balance(&user1),
+        i128::MAX - amount_to_deposit as i128 + estimate_swap_result as i128
+    );
+    assert_eq!(
+        token2.balance(&liq_pool.address),
+        amount_to_deposit as i128 - estimate_swap_result as i128
+    );
+
+    token_share.approve(&user1, &liq_pool.address, &expected_share_amount, &99999);
+
+    let withdraw_amounts = [
+        amount_to_deposit + swap_in,
+        amount_to_deposit - estimate_swap_result,
+    ];
+    liq_pool.withdraw(
+        &user1,
+        &(expected_share_amount as u128),
+        &Vec::from_array(&e, withdraw_amounts),
+    );
+
+    assert_eq!(token1.balance(&user1), i128::MAX);
+    assert_eq!(token2.balance(&user1), i128::MAX);
     assert_eq!(token_share.balance(&user1), 0);
     assert_eq!(token1.balance(&liq_pool.address), 0);
     assert_eq!(token2.balance(&liq_pool.address), 0);
