@@ -1,4 +1,5 @@
-use soroban_sdk::{Env, U256};
+use soroban_fixed_point_math::SorobanFixedPoint;
+use soroban_sdk::Env;
 
 pub fn get_deposit_amounts(
     e: &Env,
@@ -13,20 +14,14 @@ pub fn get_deposit_amounts(
         return (desired_a, desired_b);
     }
 
-    let amount_b = U256::from_u128(e, desired_a)
-        .mul(&U256::from_u128(e, reserve_b).div(&U256::from_u128(e, reserve_a)))
-        .to_u128()
-        .expect("math overflow");
+    let amount_b = desired_a.fixed_mul_floor(e, reserve_b, reserve_a);
     if amount_b <= desired_b {
         if amount_b < min_b {
             panic!("amount_b less than min")
         }
         (desired_a, amount_b)
     } else {
-        let amount_a = U256::from_u128(e, desired_b)
-            .mul(&U256::from_u128(e, reserve_a).div(&U256::from_u128(e, reserve_b)))
-            .to_u128()
-            .expect("math overflow");
+        let amount_a = desired_b.fixed_mul_floor(&e, reserve_a, reserve_b);
         if amount_a > desired_a || desired_a < min_a {
             panic!("amount_a invalid")
         }

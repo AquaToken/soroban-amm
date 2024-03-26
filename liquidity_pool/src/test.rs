@@ -702,8 +702,9 @@ fn test_large_numbers() {
     );
     assert_eq!(token2.balance(&liq_pool.address), amount_to_deposit as i128);
 
-    let swap_in = amount_to_deposit / 10;
-    let expected_swap_result_delta = swap_in / 10; // swap out shouldn't differ for more than 10%
+    let swap_in = amount_to_deposit / 1_000;
+    // swap out shouldn't differ for more than 0.4% since fee is 0.3%
+    let expected_swap_result_delta = swap_in / 250;
     let estimate_swap_result = liq_pool.estimate_swap(&0, &1, &swap_in);
     assert_approx_eq_abs(estimate_swap_result, swap_in, expected_swap_result_delta);
     assert_eq!(

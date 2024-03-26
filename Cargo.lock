@@ -1104,6 +1104,7 @@ dependencies = [
  "access_control",
  "cast",
  "rewards",
+ "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
  "utils",
@@ -1114,6 +1115,7 @@ name = "soroban-liquidity-pool-swap-router-contract"
 version = "0.1.0"
 dependencies = [
  "access_control",
+ "soroban-fixed-point-math",
  "soroban-sdk",
 ]
 

@@ -191,3 +191,48 @@ fn test_bad_address() {
     assert_eq!(best_pool, address1);
     assert_eq!(best_result, 0);
 }
+#[test]
+fn test_large_numbers() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let reserves = u128::MAX / 1_000_000;
+    let swap_in = reserves / 1_000;
+    // swap out shouldn't differ for more than 0.1% since we're getting best swap through stableswap with fee 0.06%
+    let expected_swap_result_delta = swap_in / 1000;
+
+    let admin = Address::generate(&e);
+    let address1 = Address::generate(&e);
+    let address2 = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &address1,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [reserves, reserves]),
+    );
+    plane.update(
+        &address2,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [reserves, reserves]),
+    );
+
+    let router = create_contract(&e);
+    router.init_admin(&admin);
+    router.set_pools_plane(&admin, &plane.address);
+
+    e.budget().reset_default();
+    let (best_pool, best_result) = router.estimate_swap(
+        &Vec::from_array(&e, [address1.clone(), address2.clone()]),
+        &0,
+        &1,
+        &swap_in,
+    );
+    e.budget().print();
+    e.budget().reset_unlimited();
+    assert_eq!(best_pool, address2);
+    assert!(swap_in - best_result < expected_swap_result_delta);
+}

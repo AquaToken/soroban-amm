@@ -26,10 +26,11 @@ use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
 use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, Address,
-    BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
+    BytesN, Env, IntoVal, Map, Symbol, Val, Vec, U256,
 };
 use utils::bump::bump_instance;
 
@@ -62,9 +63,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             let t0 = get_initial_a_time(&e) as u128;
             // Expressions in u128 cannot have negative numbers, thus "if"
             if a1 > a0 {
-                a0 + (a1 - a0) * (now - t0) / (t1 - t0)
+                a0 + (a1 - a0).fixed_mul_floor(&e, now - t0, t1 - t0)
             } else {
-                a0 - (a0 - a1) * (now - t0) / (t1 - t0)
+                a0 - (a0 - a1).fixed_mul_floor(&e, now - t0, t1 - t0)
             }
         } else {
             // when t1 == 0 or block.timestamp >= t1
@@ -77,7 +78,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         // D is in the units similar to DAI (e.g. converted to precision 1e7)
         // When balanced, D = n * x_u - total virtual value of the portfolio
         let token_supply = get_total_shares(&e);
-        d * PRECISION / token_supply
+        d.fixed_mul_floor(&e, PRECISION, token_supply)
     }
 
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128 {
@@ -98,7 +99,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let d1 = Self::get_d_mem(e.clone(), balances, amp);
         let token_amount = get_total_shares(&e);
         let diff = if deposit { d1 - d0 } else { d0 - d1 };
-        diff * token_amount / d0
+        diff.fixed_mul_floor(&e, token_amount, d0)
     }
 
     fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128 {
@@ -106,7 +107,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let rates = RATES;
         let xp = Self::xp(e.clone());
 
-        let x = xp.get(i).unwrap() + (dx * rates[i as usize] / PRECISION);
+        let x = xp.get(i).unwrap() + (dx.fixed_mul_floor(&e, rates[i as usize], PRECISION));
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
 
         if y == 0 {
@@ -114,8 +115,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             return 0;
         }
 
-        let dy = (xp.get(j).unwrap() - y - 1) * PRECISION / rates[j as usize];
-        let fee = get_fee(&e) as u128 * dy / FEE_DENOMINATOR as u128;
+        let dy = (xp.get(j).unwrap() - y - 1).fixed_mul_floor(&e, PRECISION, rates[j as usize]);
+        let fee = (get_fee(&e) as u128).fixed_mul_floor(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
 
@@ -127,7 +128,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let x = xp.get(i).unwrap() + dx * precisions[i as usize];
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
         let dy = (xp.get(j).unwrap() - y - 1) / precisions[j as usize];
-        let fee = get_fee(&e) as u128 * dy / FEE_DENOMINATOR as u128;
+        let fee = (get_fee(&e) as u128).fixed_mul_floor(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
 
@@ -161,7 +162,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         if token_supply == 0 {
             panic!("zero total supply")
         }
-        let fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let fee =
+            (get_fee(&e) as u128).fixed_mul_floor(&e, N_COINS as u128, 4 * (N_COINS as u128 - 1));
         let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
         let mut reserves = get_reserves(&e);
@@ -178,17 +180,24 @@ impl LiquidityPoolTrait for LiquidityPool {
         let mut fees = Vec::from_array(&e, [0; N_COINS]);
 
         for i in 0..N_COINS as u32 {
-            let ideal_balance = d1 * old_balances.get(i).unwrap() / d0;
+            let ideal_balance = d1.fixed_mul_floor(&e, old_balances.get(i).unwrap(), d0);
             let difference = if ideal_balance > new_balances.get(i).unwrap() {
                 ideal_balance - new_balances.get(i).unwrap()
             } else {
                 new_balances.get(i).unwrap() - ideal_balance
             };
-            fees.set(i, fee * difference / FEE_DENOMINATOR as u128);
+            fees.set(
+                i,
+                fee.fixed_mul_floor(&e, difference, FEE_DENOMINATOR as u128),
+            );
             reserves.set(
                 i,
                 new_balances.get(i).unwrap()
-                    - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR as u128),
+                    - (fees.get(i).unwrap().fixed_mul_floor(
+                        &e,
+                        admin_fee,
+                        FEE_DENOMINATOR as u128,
+                    )),
             );
             new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
         }
@@ -196,7 +205,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let d2 = Self::get_d_mem(e.clone(), new_balances, amp);
 
-        let mut token_amount = (d0 - d2) * token_supply / d0;
+        let mut token_amount = (d0 - d2).fixed_mul_floor(&e, token_supply, d0);
         if token_amount == 0 {
             panic!("zero tokens burned")
         }
@@ -270,7 +279,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         reserves.set(
             i,
             reserves.get(i).unwrap()
-                - (dy + dy_fee * get_admin_fee(&e) as u128 / FEE_DENOMINATOR as u128),
+                - (dy
+                    + dy_fee.fixed_mul_floor(
+                        &e,
+                        get_admin_fee(&e) as u128,
+                        FEE_DENOMINATOR as u128,
+                    )),
         );
         put_reserves(&e, &reserves);
 
@@ -299,7 +313,11 @@ impl InternalInterfaceTrait for LiquidityPool {
         for i in 0..N_COINS as u32 {
             result.set(
                 i,
-                result.get(i).unwrap() * reserves.get(i).unwrap() / LENDING_PRECISION,
+                result.get(i).unwrap().fixed_mul_floor(
+                    &e,
+                    reserves.get(i).unwrap(),
+                    LENDING_PRECISION,
+                ),
             );
         }
         result
@@ -311,14 +329,17 @@ impl InternalInterfaceTrait for LiquidityPool {
         for i in 0..N_COINS as u32 {
             result.set(
                 i,
-                result.get(i).unwrap() * reserves.get(i).unwrap() / PRECISION,
+                result
+                    .get(i)
+                    .unwrap()
+                    .fixed_mul_floor(&e, reserves.get(i).unwrap(), PRECISION),
             );
         }
         result
     }
 
     // xp size = N_COINS
-    fn get_d(_e: Env, xp: Vec<u128>, amp: u128) -> u128 {
+    fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128 {
         let mut s = 0;
         for x in xp.clone() {
             s += x;
@@ -331,13 +352,17 @@ impl InternalInterfaceTrait for LiquidityPool {
         let mut d = s;
         let ann = amp * N_COINS as u128;
         for _i in 0..255 {
-            let mut d_p = d;
+            let mut d_p = d.clone();
             for x1 in xp.clone() {
-                d_p = d_p * d / (x1 * N_COINS as u128) // If division by 0, this will be borked: only withdrawal will work. And that is good
+                d_p = d_p.fixed_mul_floor(&e, d, x1 * N_COINS as u128);
             }
-            d_prev = d;
-            d = (ann * s + d_p * N_COINS as u128) * d
-                / ((ann - 1) * d + (N_COINS as u128 + 1) * d_p);
+            d_prev = d.clone();
+            d = (ann * s + d_p * N_COINS as u128).fixed_mul_floor(
+                &e,
+                d,
+                (ann - 1) * d + (N_COINS as u128 + 1) * d_p,
+            );
+
             // // Equality with the precision of 1
             if d > d_prev {
                 if d - d_prev <= 1 {
@@ -384,15 +409,24 @@ impl InternalInterfaceTrait for LiquidityPool {
                 continue;
             }
             s += x1;
-            c = c * d / (x1 * N_COINS as u128);
+            c = c.fixed_mul_floor(&e, d, x1 * N_COINS as u128);
         }
-        c = c * d / (ann * N_COINS as u128);
+        let c_256 = U256::from_u128(&e, c)
+            .mul(&U256::from_u128(&e, d))
+            .div(&U256::from_u128(&e, ann * N_COINS as u128));
         let b = s + d / ann; // - D
         let mut y_prev;
         let mut y = d;
         for _i in 0..255 {
             y_prev = y;
-            y = (y * y + c) / (2 * y + b - d);
+            let y_256 = U256::from_u128(&e, y);
+            y = y_256
+                .mul(&y_256)
+                .add(&c_256)
+                .div(&U256::from_u128(&e, 2 * y + b - d))
+                .to_u128()
+                .expect("math overflow");
+
             // Equality with the precision of 1
             if y > y_prev {
                 if y - y_prev <= 1 {
@@ -405,7 +439,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         y
     }
 
-    fn get_y_d(_e: Env, a: u128, in_idx: u32, xp: Vec<u128>, d: u128) -> u128 {
+    fn get_y_d(e: Env, a: u128, in_idx: u32, xp: Vec<u128>, d: u128) -> u128 {
         // Calculate x[i] if one reduces D from being calculated for xp to D
         //
         // Done by solving quadratic equation iteratively.
@@ -432,9 +466,11 @@ impl InternalInterfaceTrait for LiquidityPool {
                 continue;
             }
             s += x;
-            c = c * d / (x * N_COINS as u128);
+            c = c.fixed_mul_floor(&e, d, x * N_COINS as u128);
         }
-        c = c * d / (ann * N_COINS as u128);
+        let c_256 = U256::from_u128(&e, c)
+            .mul(&U256::from_u128(&e, d))
+            .div(&U256::from_u128(&e, ann * N_COINS as u128));
 
         let b = s + d / ann;
         let mut y_prev;
@@ -442,7 +478,13 @@ impl InternalInterfaceTrait for LiquidityPool {
 
         for _i in 0..255 {
             y_prev = y;
-            y = (y * y + c) / (2 * y + b - d);
+            let y_256 = U256::from_u128(&e, y);
+            y = y_256
+                .mul(&y_256)
+                .add(&c_256)
+                .div(&U256::from_u128(&e, 2 * y + b - d))
+                .to_u128()
+                .expect("math overflow");
 
             // Equality with the precision of 1
             if y > y_prev {
@@ -942,20 +984,21 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic!("pool is empty. make deposit first.")
         }
 
-        let x = reserve_sell + dx_w_fee * rates[in_idx as usize] / PRECISION;
+        let x = reserve_sell + dx_w_fee.fixed_mul_floor(&e, rates[in_idx as usize], PRECISION);
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = reserve_buy - y - 1; // -1 just in case there were some rounding errors
-        let dy_fee = dy * get_fee(&e) as u128 / FEE_DENOMINATOR as u128;
+        let dy_fee = dy.fixed_mul_floor(&e, get_fee(&e) as u128, FEE_DENOMINATOR as u128);
 
         // Convert all to real units
-        let dy = (dy - dy_fee) * PRECISION / rates[out_idx as usize];
+        let dy = (dy - dy_fee).fixed_mul_floor(&e, PRECISION, rates[out_idx as usize]);
         if dy < out_min {
             panic!("Exchange resulted in fewer coins than expected")
         }
 
-        let mut dy_admin_fee = dy_fee * get_admin_fee(&e) as u128 / FEE_DENOMINATOR as u128;
-        dy_admin_fee = dy_admin_fee * PRECISION / rates[out_idx as usize];
+        let mut dy_admin_fee =
+            dy_fee.fixed_mul_floor(&e, get_admin_fee(&e) as u128, FEE_DENOMINATOR as u128);
+        dy_admin_fee = dy_admin_fee.fixed_mul_floor(&e, PRECISION, rates[out_idx as usize]);
 
         // Change balances exactly in same way as we change actual ERC20 coin amounts
         let mut reserves = get_reserves(&e);
@@ -1003,7 +1046,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let coins = get_tokens(&e);
 
         for i in 0..N_COINS as u32 {
-            let value = reserves.get(i).unwrap() * share_amount / total_supply;
+            let value = reserves
+                .get(i)
+                .unwrap()
+                .fixed_mul_floor(&e, share_amount, total_supply);
             if value < min_amounts.get(i).unwrap() {
                 panic!("Withdrawal resulted in fewer coins than expected")
             }
