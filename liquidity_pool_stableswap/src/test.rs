@@ -266,10 +266,8 @@ fn test_zero_initial_deposit() {
     );
     token1_admin_client.mint(&user1, &1000_0000000);
     token2_admin_client.mint(&user1, &1000_0000000);
-    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
-    liqpool.deposit(&user1, &Vec::from_array(&e, [1000_0000000, 0]));
+    liqpool.deposit(&user1, &Vec::from_array(&e, [1000_0000000, 0]), &0);
 }
 
 #[cfg(feature = "tokens_2")]
@@ -302,11 +300,9 @@ fn test_zero_deposit_ok() {
     );
     token1_admin_client.mint(&user1, &1000_0000000);
     token2_admin_client.mint(&user1, &1000_0000000);
-    token1.approve(&user1, &liqpool.address, &1000_0000000, &99999);
-    token2.approve(&user1, &liqpool.address, &1000_0000000, &99999);
 
-    liqpool.deposit(&user1, &Vec::from_array(&e, [500_0000000, 500_0000000]));
-    liqpool.deposit(&user1, &Vec::from_array(&e, [500_0000000, 0]));
+    liqpool.deposit(&user1, &Vec::from_array(&e, [500_0000000, 500_0000000]), &0);
+    liqpool.deposit(&user1, &Vec::from_array(&e, [500_0000000, 0]), &0);
 }
 
 #[cfg(feature = "tokens_3")]
