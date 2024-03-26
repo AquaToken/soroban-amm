@@ -171,6 +171,7 @@ fn test_constant_product_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
 
     assert_eq!(token_share.balance(&user1), 100);
+    assert_eq!(router.get_total_shares(&tokens, &pool_hash), 100);
     assert_eq!(token_share.balance(&pool_address), 0);
     assert_eq!(token1.balance(&user1), 900);
     assert_eq!(token1.balance(&pool_address), 100);
@@ -513,6 +514,7 @@ fn test_stableswap_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
 
     assert_eq!(token_share.balance(&user1), 200_0000000);
+    assert_eq!(router.get_total_shares(&tokens, &pool_hash), 200_0000000);
     assert_eq!(token_share.balance(&pool_address), 0);
     assert_eq!(token1.balance(&user1), 900_0000000);
     assert_eq!(token1.balance(&pool_address), 100_0000000);
