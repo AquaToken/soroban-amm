@@ -154,6 +154,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
 
+        if (reserve_a == 0 && reserve_b == 0) && (desired_a == 0 || desired_b == 0) {
+            panic!("initial deposit requires all coins");
+        }
+
         let token_a_client = SorobanTokenClient::new(&e, &get_token_a(&e));
         let token_b_client = SorobanTokenClient::new(&e, &get_token_b(&e));
         // transfer full amount then return back remaining parts to have tx auth deterministic
