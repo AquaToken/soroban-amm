@@ -248,7 +248,7 @@ fn test_zero_initial_deposit() {
         plane: _plane,
     } = Setup::default();
     let user1 = users[0].clone();
-    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 0]));
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 0]), &0);
 }
 
 #[test]
@@ -264,8 +264,8 @@ fn test_zero_deposit_ok() {
         plane: _plane,
     } = Setup::default();
     let user1 = users[0].clone();
-    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 100]));
-    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 0]));
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 100]), &0);
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 0]), &0);
 }
 
 #[test]
