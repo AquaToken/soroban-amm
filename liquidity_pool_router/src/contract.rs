@@ -1,8 +1,8 @@
 use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_interface::{
-    LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait, RewardsInterfaceTrait,
-    SwapRouterInterface,
+    CombinedSwapInterface, LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait,
+    RewardsInterfaceTrait, SwapRouterInterface,
 };
 use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt, get_standard_pool_salt,
@@ -468,5 +468,69 @@ impl SwapRouterInterface for LiquidityPoolRouter {
             best_pool_address,
             swap_result,
         )
+    }
+}
+
+#[contractimpl]
+impl CombinedSwapInterface for LiquidityPoolRouter {
+    fn swap_chained(
+        e: Env,
+        user: Address,
+        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
+        token_in: Address,
+        in_amount: u128,
+        out_min: u128,
+    ) -> u128 {
+        user.require_auth();
+        let mut last_token_out: Option<Address> = None;
+        let mut last_swap_result = 0;
+
+        if swaps_chain.len() == 0 {
+            panic!("path is empty")
+        }
+
+        SorobanTokenClient::new(&e, &token_in).transfer(
+            &user,
+            &e.current_contract_address(),
+            &(in_amount as i128),
+        );
+
+        for i in 0..swaps_chain.len() {
+            let (tokens, pool_index, token_out) = swaps_chain.get(i).unwrap();
+            let mut out_min_local = 0;
+            let token_in_local;
+            let in_amount_local;
+            if i == 0 {
+                token_in_local = token_in.clone();
+                in_amount_local = in_amount;
+            } else {
+                token_in_local = last_token_out.expect("token_out not initialized");
+                in_amount_local = last_swap_result;
+            }
+
+            if i == swaps_chain.len() - 1 {
+                out_min_local = out_min;
+            }
+
+            last_swap_result = Self::swap(
+                e.clone(),
+                e.current_contract_address(),
+                tokens,
+                token_in_local,
+                token_out.clone(),
+                pool_index,
+                in_amount_local,
+                out_min_local,
+            );
+            last_token_out = Some(token_out);
+        }
+
+        SorobanTokenClient::new(&e, &last_token_out.expect("token_out not initialized")).transfer(
+            &e.current_contract_address(),
+            &user,
+            &(last_swap_result as i128),
+        );
+
+        last_swap_result
     }
 }
