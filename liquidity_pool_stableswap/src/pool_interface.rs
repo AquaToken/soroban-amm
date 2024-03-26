@@ -11,7 +11,6 @@ pub trait ManagedLiquidityPool {
         fee: u32,
         admin_fee: u32,
         reward_token: Address,
-        reward_storage: Address,
         plane: Address,
     );
 }
@@ -52,7 +51,12 @@ pub trait LiquidityPoolInterfaceTrait {
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
-    fn deposit(e: Env, user: Address, desired_amounts: Vec<u128>) -> (Vec<u128>, u128);
+    fn deposit(
+        e: Env,
+        user: Address,
+        desired_amounts: Vec<u128>,
+        min_shares: u128,
+    ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
     // in_idx: Index value for the coin to send
@@ -91,11 +95,8 @@ pub trait UpgradeableContractTrait {
 }
 
 pub trait RewardsTrait {
-    // todo: move rewards configuration to gauge
-
-    // Initialize rewards settings: token address and storage address
-    // from which transfer will be made on claim
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
+    // Initialize rewards token address
+    fn initialize_rewards_config(e: Env, reward_token: Address);
 
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers

@@ -47,7 +47,6 @@ impl Manager {
         if now < config.expired_at {
             self.update_rewards_data_snapshot(now, &config, &data, total_shares)
         } else if data.last_time > config.expired_at {
-            // todo: try to avoid unneeded block increments
             self.create_new_rewards_data(
                 0,
                 total_shares,
@@ -127,21 +126,11 @@ impl Manager {
 
         // transfer reward
         let reward_token = self.storage.get_reward_token();
-        let rewards_storage = self.storage.get_reward_storage();
-        if rewards_storage == self.env.current_contract_address() {
-            Client::new(&self.env, &reward_token).transfer(
-                &rewards_storage,
-                user,
-                &(reward_amount as i128),
-            );
-        } else {
-            Client::new(&self.env, &reward_token).transfer_from(
-                &self.env.current_contract_address(),
-                &rewards_storage,
-                user,
-                &(reward_amount as i128),
-            );
-        };
+        Client::new(&self.env, &reward_token).transfer(
+            &self.env.current_contract_address(),
+            user,
+            &(reward_amount as i128),
+        );
 
         // set available reward to zero
         let new_data = UserRewardData {
@@ -305,7 +294,6 @@ impl Manager {
             last_time: config.expired_at,
         };
         self.create_new_rewards_data(generated_tokens, total_shares, catchup_data.clone());
-        // todo: don't increase block when config not enabled thus keeping invariants list small
         self.create_new_rewards_data(
             0,
             total_shares,

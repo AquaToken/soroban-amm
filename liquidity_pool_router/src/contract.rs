@@ -5,17 +5,17 @@ use crate::pool_interface::{
     SwapRouterInterface,
 };
 use crate::pool_utils::{
-    deploy_stableswap_pool, deploy_standard_pool, get_custom_salt, get_stableswap_pool_salt,
-    get_standard_pool_salt, pool_salt,
+    deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt, get_standard_pool_salt,
+    get_tokens_salt,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
-    add_pool, get_init_pool_payment_address, get_init_pool_payment_amount,
-    get_init_pool_payment_token, get_pool, get_pool_plane, get_pools_plain, get_swap_router,
-    has_pool, remove_pool, set_constant_product_pool_hash, set_init_pool_payment_address,
-    set_init_pool_payment_amount, set_init_pool_payment_token, set_pool_plane,
-    set_stableswap_pool_hash, set_swap_router, set_token_hash, LiquidityPoolType,
+    get_init_pool_payment_address, get_init_pool_payment_amount, get_init_pool_payment_token,
+    get_pool, get_pool_plane, get_pools_plain, get_swap_router, has_pool, remove_pool,
+    set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount,
+    set_init_pool_payment_token, set_pool_plane, set_stableswap_pool_hash, set_swap_router,
+    set_token_hash,
 };
 use crate::swap_router::SwapRouterClient;
 use access_control::access::{AccessControl, AccessControlError, AccessControlTrait};
@@ -72,6 +72,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
+        min_shares: u128,
     ) -> (Vec<u128>, u128) {
         user.require_auth();
 
@@ -82,7 +83,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             &symbol_short!("deposit"),
             Vec::from_array(
                 &e,
-                [user.clone().into_val(&e), desired_amounts.into_val(&e)],
+                [
+                    user.clone().into_val(&e),
+                    desired_amounts.into_val(&e),
+                    min_shares.into_val(&e),
+                ],
             ),
         );
         Events::new(&e).deposit(tokens, user, pool_id, amounts.clone(), share_amount);
@@ -325,7 +330,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 #[contractimpl]
 impl PoolsManagementTrait for LiquidityPoolRouter {
     fn init_pool(e: Env, tokens: Vec<Address>) -> (BytesN<32>, Address) {
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
         if pools.is_empty() {
             deploy_standard_pool(&e, tokens, 30)
@@ -346,7 +351,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             panic!("non-standard fee");
         }
 
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
         let pool_index = get_standard_pool_salt(&e, &fee_fraction);
 
@@ -370,14 +375,13 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         let init_pool_token = get_init_pool_payment_token(&e);
         let init_pool_amount = get_init_pool_payment_amount(&e);
         let init_pool_address = get_init_pool_payment_address(&e);
-        SorobanTokenClient::new(&e, &init_pool_token).transfer_from(
-            &e.current_contract_address(),
+        SorobanTokenClient::new(&e, &init_pool_token).transfer(
             &user,
             &init_pool_address,
             &(init_pool_amount as i128),
         );
 
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
         let pool_index = get_stableswap_pool_salt(&e);
 
@@ -388,51 +392,15 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     }
 
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address> {
-        let salt = pool_salt(&e, tokens);
+        let salt = get_tokens_salt(&e, tokens);
         get_pools_plain(&e, &salt)
-    }
-
-    fn add_custom_pool(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        pool_address: Address,
-        pool_type: Symbol,
-        init_args: Vec<Val>,
-    ) -> BytesN<32> {
-        let access_control = AccessControl::new(&e);
-        user.require_auth();
-        access_control.check_admin(&user);
-        let salt = pool_salt(&e, tokens.clone());
-        let subpool_salt = get_custom_salt(&e, &pool_type, &init_args);
-
-        if has_pool(&e, &salt, subpool_salt.clone()) {
-            panic!("pool already exists")
-        }
-
-        add_pool(
-            &e,
-            &salt,
-            subpool_salt.clone(),
-            LiquidityPoolType::Custom,
-            pool_address.clone(),
-        );
-
-        Events::new(&e).add_pool(
-            tokens,
-            pool_address,
-            pool_type,
-            subpool_salt.clone(),
-            init_args,
-        );
-        subpool_salt
     }
 
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         user.require_auth();
         access_control.check_admin(&user);
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         if has_pool(&e, &salt, pool_hash.clone()) {
             remove_pool(&e, &salt, pool_hash)
         }
@@ -474,7 +442,7 @@ impl SwapRouterInterface for LiquidityPoolRouter {
         token_out: Address,
         in_amount: u128,
     ) -> (BytesN<32>, Address, u128) {
-        let salt = pool_salt(&e, tokens.clone());
+        let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
 
         let swap_router = get_swap_router(&e);
@@ -500,64 +468,5 @@ impl SwapRouterInterface for LiquidityPoolRouter {
             best_pool_address,
             swap_result,
         )
-    }
-
-    fn swap_routed(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
-        in_amount: u128,
-        out_min: u128,
-        expiration_ledger: u32,
-    ) -> u128 {
-        user.require_auth();
-
-        if !check_vec_ordered(&tokens) {
-            panic!("tokens are not sorted")
-        }
-
-        let (pool_index, pool_id, _result) = Self::estimate_swap_routed(
-            e.clone(),
-            tokens.clone(),
-            token_in.clone(),
-            token_out.clone(),
-            in_amount,
-        );
-        SorobanTokenClient::new(&e, &token_in).approve(
-            &user,
-            &pool_id,
-            &(in_amount as i128),
-            &expiration_ledger,
-        );
-
-        let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
-
-        let out_amt = e.invoke_contract(
-            &pool_id,
-            &symbol_short!("swap"),
-            Vec::from_array(
-                &e,
-                [
-                    user.into_val(&e),
-                    tokens
-                        .first_index_of(token_in.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    tokens
-                        .first_index_of(token_out.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    in_amount.into_val(&e),
-                    out_min.into_val(&e),
-                ],
-            ),
-        );
-
-        Events::new(&e).swap(
-            tokens, user, pool_id, token_in, token_out, in_amount, out_amt,
-        );
-        out_amt
     }
 }

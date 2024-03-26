@@ -52,14 +52,13 @@ impl LiquidityPoolCrunch for LiquidityPool {
         tokens: Vec<Address>,
         fee_fraction: u32,
         reward_token: Address,
-        reward_storage: Address,
         plane: Address,
     ) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::set_pools_plane(e.clone(), plane);
         Self::initialize(e.clone(), admin, lp_token_wasm_hash, tokens, fee_fraction);
-        Self::initialize_rewards_config(e.clone(), reward_token, reward_storage);
+        Self::initialize_rewards_config(e.clone(), reward_token);
     }
 }
 
@@ -132,7 +131,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
     }
 
-    fn deposit(e: Env, user: Address, desired_amounts: Vec<u128>) -> (Vec<u128>, u128) {
+    fn deposit(
+        e: Env,
+        user: Address,
+        desired_amounts: Vec<u128>,
+        min_shares: u128,
+    ) -> (Vec<u128>, u128) {
         // Depositor needs to authorize the deposit
         user.require_auth();
 
@@ -159,27 +163,32 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic!("initial deposit requires all coins");
         }
 
+        let token_a_client = SorobanTokenClient::new(&e, &get_token_a(&e));
+        let token_b_client = SorobanTokenClient::new(&e, &get_token_b(&e));
+        // transfer full amount then return back remaining parts to have tx auth deterministic
+        token_a_client.transfer(&user, &e.current_contract_address(), &(desired_a as i128));
+        token_b_client.transfer(&user, &e.current_contract_address(), &(desired_b as i128));
+
         let (min_a, min_b) = (0, 0);
 
         // Calculate deposit amounts
         let amounts =
             pool::get_deposit_amounts(&e, desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
 
-        let token_a_client = SorobanTokenClient::new(&e, &get_token_a(&e));
-        let token_b_client = SorobanTokenClient::new(&e, &get_token_b(&e));
-
-        token_a_client.transfer_from(
-            &e.current_contract_address(),
-            &user,
-            &e.current_contract_address(),
-            &(amounts.0 as i128),
-        );
-        token_b_client.transfer_from(
-            &e.current_contract_address(),
-            &user,
-            &e.current_contract_address(),
-            &(amounts.1 as i128),
-        );
+        if amounts.0 < desired_a {
+            token_a_client.transfer(
+                &e.current_contract_address(),
+                &user,
+                &((desired_a - amounts.0) as i128),
+            );
+        }
+        if amounts.1 < desired_b {
+            token_b_client.transfer(
+                &e.current_contract_address(),
+                &user,
+                &((desired_b - amounts.1) as i128),
+            );
+        }
 
         // Now calculate how many new pool shares to mint
         let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
@@ -202,6 +211,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         };
 
         let shares_to_mint = new_total_shares - total_shares;
+        if shares_to_mint < min_shares {
+            panic!("minted less than minimum")
+        }
         mint_shares(&e, user, shares_to_mint as i128);
         put_reserve_a(&e, balance_a);
         put_reserve_b(&e, balance_b);
@@ -231,7 +243,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         if out_idx > 1 {
-            panic!("in_idx out of bounds");
+            panic!("out_idx out of bounds");
         }
 
         let reserve_a = get_reserve_a(&e);
@@ -264,12 +276,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         // Transfer the amount being sold to the contract
         let sell_token = tokens.get(in_idx).unwrap();
         let sell_token_client = SorobanTokenClient::new(&e, &sell_token);
-        sell_token_client.transfer_from(
-            &e.current_contract_address(),
-            &user,
-            &e.current_contract_address(),
-            &(in_amount as i128),
-        );
+        sell_token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
 
         let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
 
@@ -328,7 +335,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         if out_idx > 1 {
-            panic!("in_idx out of bounds");
+            panic!("out_idx out of bounds");
         }
 
         let reserve_a = get_reserve_a(&e);
@@ -369,8 +376,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // First transfer the pool shares that need to be redeemed
         let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer_from(
-            &e.current_contract_address(),
+        share_token_client.transfer(
             &user,
             &e.current_contract_address(),
             &(share_amount as i128),
@@ -436,14 +442,13 @@ impl UpgradeableContractTrait for LiquidityPool {
 
 #[contractimpl]
 impl RewardsTrait for LiquidityPool {
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address) {
+    fn initialize_rewards_config(e: Env, reward_token: Address) {
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
             panic!("rewards config already initialized")
         }
 
         rewards.storage().put_reward_token(reward_token);
-        rewards.storage().put_reward_storage(reward_storage);
     }
 
     fn set_rewards_config(

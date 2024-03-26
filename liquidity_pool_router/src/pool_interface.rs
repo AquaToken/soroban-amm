@@ -31,6 +31,7 @@ pub trait LiquidityPoolInterfaceTrait {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
+        min_shares: u128,
     ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
@@ -135,16 +136,6 @@ pub trait PoolsManagementTrait {
     // Get pools for given pair
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address>;
 
-    // Add initialized custom pool to the list for given pair
-    fn add_custom_pool(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        pool_address: Address,
-        pool_type: Symbol,
-        init_args: Vec<Val>,
-    ) -> BytesN<32>;
-
     // Remove pool from the list
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>);
 }
@@ -167,20 +158,6 @@ pub trait SwapRouterInterface {
         token_out: Address,
         in_amount: u128,
     ) -> (BytesN<32>, Address, u128);
-
-    // Swap tokens using best pool available
-    //   expiration_ledger is argument for sub invocation of token.approve to keep code execution consistent
-    //      both for preflight and execution
-    fn swap_routed(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
-        in_amount: u128,
-        out_min: u128,
-        expiration_ledger: u32,
-    ) -> u128;
 
     // Set swap router address. it's separate contract optimized to estimate swap for multiple pools
     fn set_swap_router(e: Env, admin: Address, router: Address);
