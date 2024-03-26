@@ -571,10 +571,20 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
             0 => &first_user,
             val => &users[val - 1],
         };
-        token1.mint(user, &1_000_000_000);
-        token2.mint(user, &1_000_000_000);
-        token1.approve(user, &liq_pool.address, &1_000_000_000, &99999);
-        token2.approve(user, &liq_pool.address, &1_000_000_000, &99999);
+        token1.mint(user, &1_000_000_000_000_000_000_000);
+        token2.mint(user, &1_000_000_000_000_000_000_000);
+        token1.approve(
+            user,
+            &liq_pool.address,
+            &1_000_000_000_000_000_000_000,
+            &99999,
+        );
+        token2.approve(
+            user,
+            &liq_pool.address,
+            &1_000_000_000_000_000_000_000,
+            &99999,
+        );
     }
 
     token_reward.mint(&liq_pool.address, &1_000_000_000_000_0000000);
@@ -601,12 +611,18 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         expected_reward += reward_1_tps / (i + 1);
     }
 
-    liq_pool.deposit(&first_user, &Vec::from_array(&env, [1000, 1000]));
+    liq_pool.deposit(
+        &first_user,
+        &Vec::from_array(&env, [1_000_000_000_000_0000000, 1_000_000_000_000_0000000]),
+    );
     jump(&env, 1);
 
     for i in 1..iterations_to_simulate as usize {
         let user = &users[i % 10];
-        liq_pool.deposit(user, &Vec::from_array(&env, [1000, 1000]));
+        liq_pool.deposit(
+            user,
+            &Vec::from_array(&env, [1_000_000_000_000_0000000, 1_000_000_000_000_0000000]),
+        );
         jump(&env, 1);
     }
 
@@ -615,7 +631,7 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     env.budget().reset_tracker();
     let user1_claim = liq_pool.claim(&first_user);
     env.budget().print();
-    assert_eq!(user1_claim, expected_reward);
+    assert_approx_eq_abs(user1_claim, expected_reward, 10000); // small loss because of rounding is fine
 }
 
 #[test]

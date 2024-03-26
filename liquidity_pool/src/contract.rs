@@ -163,7 +163,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // Calculate deposit amounts
         let amounts =
-            pool::get_deposit_amounts(desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
+            pool::get_deposit_amounts(&e, desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
 
         let token_a_client = SorobanTokenClient::new(&e, &get_token_a(&e));
         let token_b_client = SorobanTokenClient::new(&e, &get_token_b(&e));
@@ -187,8 +187,8 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let zero = 0;
         let new_total_shares = if reserve_a > zero && reserve_b > zero {
-            let shares_a = balance_a.fixed_mul_ceil(&e, total_shares, reserve_a);
-            let shares_b = balance_b.fixed_mul_ceil(&e, total_shares, reserve_b);
+            let shares_a = balance_a.fixed_mul_floor(&e, total_shares, reserve_a);
+            let shares_b = balance_b.fixed_mul_floor(&e, total_shares, reserve_b);
             shares_a.min(shares_b)
         } else {
             let sqrt_result = U256::from_u128(&e, balance_a)
@@ -381,8 +381,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let total_shares = get_total_shares(&e);
 
         // Now calculate the withdraw amounts
-        let out_a = balance_a.fixed_mul_ceil(&e, balance_shares, total_shares);
-        let out_b = balance_b.fixed_mul_ceil(&e, balance_shares, total_shares);
+        let out_a = balance_a.fixed_mul_floor(&e, balance_shares, total_shares);
+        let out_b = balance_b.fixed_mul_floor(&e, balance_shares, total_shares);
 
         let min_a = min_amounts.get(0).unwrap();
         let min_b = min_amounts.get(1).unwrap();
