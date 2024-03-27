@@ -9,7 +9,13 @@ pub(crate) fn estimate_swap(
     in_idx: u32,
     out_idx: u32,
     in_amount: u128,
-) -> u128 {
+) -> Option<u128> {
+    for i in 0..reserves.len() {
+        if reserves.get(i).unwrap() == 0 {
+            return None;
+        }
+    }
+
     let reserve_sell = reserves.get(in_idx).unwrap();
     let reserve_buy = reserves.get(out_idx).unwrap();
 
@@ -22,7 +28,7 @@ pub(crate) fn estimate_swap(
         .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
 
     match n.div(&d).to_u128() {
-        Some(v) => v,
+        Some(v) => Some(v),
         None => panic_with_error!(&e, MathError::NumberOverflow),
     }
 }

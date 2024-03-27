@@ -171,7 +171,21 @@ pub(crate) fn estimate_swap(
     in_idx: u32,
     out_idx: u32,
     in_amount: u128,
-) -> u128 {
+) -> Option<u128> {
+    for i in 0..reserves.len() {
+        if reserves.get(i).unwrap() == 0 {
+            return None;
+        }
+    }
+
     let a = a(e, initial_a, initial_a_time, future_a, future_a_time);
-    get_dy(e, reserves, fee_fraction, a, in_idx, out_idx, in_amount)
+    Some(get_dy(
+        e,
+        reserves,
+        fee_fraction,
+        a,
+        in_idx,
+        out_idx,
+        in_amount,
+    ))
 }
