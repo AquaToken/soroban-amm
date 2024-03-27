@@ -26,7 +26,8 @@ use token_share::{
     mint_shares, put_token_share, Client as LPTokenClient,
 };
 use utils::bump::bump_instance;
-use utils::num::ExtraMath;
+use utils::math_errors::MathError;
+use utils::u256_math::ExtraMath;
 
 // Metadata that is added on to the WASM custom section
 contractmeta!(
@@ -194,14 +195,12 @@ impl LiquidityPoolTrait for LiquidityPool {
             let shares_b = balance_b.fixed_mul_floor(&e, total_shares, reserve_b);
             shares_a.min(shares_b)
         } else {
-            let sqrt_result = U256::from_u128(&e, balance_a)
+            // if .mul doesn't fail, sqrt also won't -> safe to unwrap
+            U256::from_u128(&e, balance_a)
                 .mul(&U256::from_u128(&e, balance_b))
-                .sqrt();
-            if sqrt_result > U256::from_u128(&e, u128::MAX) {
-                panic!("math overflow")
-            } else {
-                sqrt_result.to_u128().unwrap()
-            }
+                .sqrt()
+                .to_u128()
+                .unwrap()
         };
 
         let shares_to_mint = new_total_shares - total_shares;
@@ -261,7 +260,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
             .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
 
-        let out = n.div(&d).to_u128().expect("math overflow");
+        let out = match n.div(&d).to_u128() {
+            Some(v) => v,
+            None => panic_with_error!(&e, MathError::NumberOverflow),
+        };
 
         if out < out_min {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
@@ -348,7 +350,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
             .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
 
-        n.div(&d).to_u128().expect("math overflow")
+        match n.div(&d).to_u128() {
+            Some(v) => v,
+            None => panic_with_error!(&e, MathError::NumberOverflow),
+        }
     }
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {

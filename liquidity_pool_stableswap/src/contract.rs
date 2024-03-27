@@ -35,6 +35,7 @@ use soroban_sdk::{
     IntoVal, Map, Symbol, Val, Vec, U256,
 };
 use utils::bump::bump_instance;
+use utils::math_errors::MathError;
 use utils::storage_errors::StorageError;
 
 contractmeta!(
@@ -415,12 +416,15 @@ impl InternalInterfaceTrait for LiquidityPool {
         for _i in 0..255 {
             y_prev = y;
             let y_256 = U256::from_u128(&e, y);
-            y = y_256
+            y = match y_256
                 .mul(&y_256)
                 .add(&c_256)
                 .div(&U256::from_u128(&e, 2 * y + b - d))
                 .to_u128()
-                .expect("math overflow");
+            {
+                Some(v) => v,
+                None => panic_with_error!(&e, MathError::NumberOverflow),
+            };
 
             // Equality with the precision of 1
             if y > y_prev {
@@ -474,12 +478,15 @@ impl InternalInterfaceTrait for LiquidityPool {
         for _i in 0..255 {
             y_prev = y;
             let y_256 = U256::from_u128(&e, y);
-            y = y_256
+            y = match y_256
                 .mul(&y_256)
                 .add(&c_256)
                 .div(&U256::from_u128(&e, 2 * y + b - d))
                 .to_u128()
-                .expect("math overflow");
+            {
+                Some(v) => v,
+                None => panic_with_error!(&e, MathError::NumberOverflow),
+            };
 
             // Equality with the precision of 1
             if y > y_prev {

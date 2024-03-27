@@ -1,6 +1,7 @@
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{panic_with_error, Env, Vec, U256};
+use utils::math_errors::MathError;
 
 const RATE: u128 = 1_0000000;
 const PRECISION: u128 = 1_0000000;
@@ -112,12 +113,15 @@ fn get_y(
     for _i in 0..255 {
         y_prev = y;
         let y_256 = U256::from_u128(&e, y);
-        y = y_256
+        y = match y_256
             .mul(&y_256)
             .add(&c_256)
             .div(&U256::from_u128(&e, 2 * y + b - d))
             .to_u128()
-            .expect("math overflow");
+        {
+            Some(v) => v,
+            None => panic_with_error!(&e, MathError::NumberOverflow),
+        };
 
         // Equality with the precision of 1
         if y > y_prev {

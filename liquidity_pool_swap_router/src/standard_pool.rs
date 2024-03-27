@@ -1,5 +1,6 @@
 use crate::constants::FEE_MULTIPLIER;
-use soroban_sdk::{Env, Vec, U256};
+use soroban_sdk::{panic_with_error, Env, Vec, U256};
+use utils::math_errors::MathError;
 
 pub(crate) fn estimate_swap(
     e: &Env,
@@ -20,5 +21,8 @@ pub(crate) fn estimate_swap(
     let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
         .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
 
-    n.div(&d).to_u128().expect("math overflow")
+    match n.div(&d).to_u128() {
+        Some(v) => v,
+        None => panic_with_error!(&e, MathError::NumberOverflow),
+    }
 }
