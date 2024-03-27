@@ -1265,7 +1265,13 @@ fn test_underlying_validation_fee_out_of_bounds() {
 
     reward_token.mint(&user1, &1_0000000);
 
-    router.init_stableswap_pool(&user1, &Vec::from_array(&e, [token1.address, token2.address]), &85, &10000, &0);
+    router.init_stableswap_pool(
+        &user1,
+        &Vec::from_array(&e, [token1.address, token2.address]),
+        &85,
+        &10000,
+        &0,
+    );
 }
 
 #[test]
