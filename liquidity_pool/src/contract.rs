@@ -14,18 +14,20 @@ use crate::storage::{
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
-use num_integer::Roots;
 use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
-    IntoVal, Map, Symbol, Val, Vec,
+    IntoVal, Map, Symbol, Val, Vec, U256,
 };
 use token_share::{
     burn_shares, get_balance_shares, get_token_share, get_total_shares, get_user_balance_shares,
     mint_shares, put_token_share, Client as LPTokenClient,
 };
 use utils::bump::bump_instance;
+use utils::math_errors::MathError;
+use utils::u256_math::ExtraMath;
 
 // Metadata that is added on to the WASM custom section
 contractmeta!(
@@ -189,11 +191,16 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let zero = 0;
         let new_total_shares = if reserve_a > zero && reserve_b > zero {
-            let shares_a = (balance_a * total_shares) / reserve_a;
-            let shares_b = (balance_b * total_shares) / reserve_b;
+            let shares_a = balance_a.fixed_mul_floor(&e, total_shares, reserve_a);
+            let shares_b = balance_b.fixed_mul_floor(&e, total_shares, reserve_b);
             shares_a.min(shares_b)
         } else {
-            (balance_a * balance_b).sqrt()
+            // if .mul doesn't fail, sqrt also won't -> safe to unwrap
+            U256::from_u128(&e, balance_a)
+                .mul(&U256::from_u128(&e, balance_b))
+                .sqrt()
+                .to_u128()
+                .unwrap()
         };
 
         let shares_to_mint = new_total_shares - total_shares;
@@ -247,9 +254,17 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // First calculate how much we can get with in_amount from the pool
         let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
-        let n = in_amount * reserve_buy * multiplier_with_fee;
-        let d = reserve_sell * FEE_MULTIPLIER + in_amount * multiplier_with_fee;
-        let out = n / d;
+        let n = U256::from_u128(&e, in_amount)
+            .mul(&U256::from_u128(&e, reserve_buy))
+            .mul(&U256::from_u128(&e, multiplier_with_fee));
+        let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
+            .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
+
+        let out = match n.div(&d).to_u128() {
+            Some(v) => v,
+            None => panic_with_error!(&e, MathError::NumberOverflow),
+        };
+
         if out < out_min {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
@@ -264,14 +279,19 @@ impl LiquidityPoolTrait for LiquidityPool {
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
         let residue_numerator = FEE_MULTIPLIER - fee_fraction as u128;
-        let residue_denominator = FEE_MULTIPLIER;
+        let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
 
         let new_invariant_factor = |balance: u128, reserve: u128, out: u128| {
             if balance - reserve > out {
-                residue_denominator * reserve + residue_numerator * (balance - reserve - out)
+                residue_denominator.mul(&U256::from_u128(&e, reserve)).add(
+                    &(U256::from_u128(&e, residue_numerator)
+                        .mul(&U256::from_u128(&e, balance - reserve - out))),
+                )
             } else {
-                residue_denominator * reserve + residue_denominator * balance
-                    - residue_denominator * (reserve + out)
+                residue_denominator
+                    .mul(&U256::from_u128(&e, reserve))
+                    .add(&residue_denominator.mul(&U256::from_u128(&e, balance)))
+                    .sub(&(residue_denominator.mul(&U256::from_u128(&e, reserve + out))))
             }
         };
 
@@ -279,10 +299,10 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let new_inv_a = new_invariant_factor(balance_a, reserve_a, out_a);
         let new_inv_b = new_invariant_factor(balance_b, reserve_b, out_b);
-        let old_inv_a = residue_denominator * reserve_a;
-        let old_inv_b = residue_denominator * reserve_b;
+        let old_inv_a = residue_denominator.mul(&U256::from_u128(&e, reserve_a));
+        let old_inv_b = residue_denominator.mul(&U256::from_u128(&e, reserve_b));
 
-        if new_inv_a * new_inv_b < old_inv_a * old_inv_b {
+        if new_inv_a.mul(&new_inv_b) < old_inv_a.mul(&old_inv_b) {
             panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
         }
 
@@ -324,10 +344,16 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // First calculate how much needs to be sold to buy amount out from the pool
         let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
-        let n = in_amount * reserve_buy * multiplier_with_fee;
-        let d = reserve_sell * FEE_MULTIPLIER + in_amount * multiplier_with_fee;
+        let n = U256::from_u128(&e, in_amount)
+            .mul(&U256::from_u128(&e, reserve_buy))
+            .mul(&U256::from_u128(&e, multiplier_with_fee));
+        let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
+            .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
 
-        n / d
+        match n.div(&d).to_u128() {
+            Some(v) => v,
+            None => panic_with_error!(&e, MathError::NumberOverflow),
+        }
     }
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
@@ -360,8 +386,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let total_shares = get_total_shares(&e);
 
         // Now calculate the withdraw amounts
-        let out_a = (balance_a * balance_shares) / total_shares;
-        let out_b = (balance_b * balance_shares) / total_shares;
+        let out_a = balance_a.fixed_mul_floor(&e, balance_shares, total_shares);
+        let out_b = balance_b.fixed_mul_floor(&e, balance_shares, total_shares);
 
         let min_a = min_amounts.get(0).unwrap();
         let min_b = min_amounts.get(1).unwrap();

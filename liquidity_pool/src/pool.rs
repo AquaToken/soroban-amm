@@ -1,4 +1,5 @@
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{panic_with_error, Env};
 
 pub fn get_deposit_amounts(
@@ -14,14 +15,14 @@ pub fn get_deposit_amounts(
         return (desired_a, desired_b);
     }
 
-    let amount_b = desired_a * reserve_b / reserve_a;
+    let amount_b = desired_a.fixed_mul_floor(e, reserve_b, reserve_a);
     if amount_b <= desired_b {
         if amount_b < min_b {
             panic_with_error!(e, LiquidityPoolValidationError::InvalidDepositAmount);
         }
         (desired_a, amount_b)
     } else {
-        let amount_a = desired_b * reserve_a / reserve_b;
+        let amount_a = desired_b.fixed_mul_floor(&e, reserve_a, reserve_b);
         if amount_a > desired_a || desired_a < min_a {
             panic_with_error!(e, LiquidityPoolValidationError::InvalidDepositAmount);
         }
