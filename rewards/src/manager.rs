@@ -4,7 +4,8 @@ use crate::storage::{
 };
 use crate::RewardsConfig;
 use cast::u128 as to_u128;
-use soroban_sdk::{token::TokenClient as Client, Address, Env, Map};
+use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Map};
+use utils::storage_errors::StorageError;
 
 pub struct Manager {
     env: Env,
@@ -193,7 +194,10 @@ impl Manager {
 
                     let page_number = block / self.config.page_size.pow(l_pow + 1);
                     let page = self.storage.get_reward_inv_data(l_pow, page_number);
-                    result += page.get(block).expect("unknown block");
+                    result += match page.get(block) {
+                        Some(v) => v,
+                        None => panic_with_error!(self.env, StorageError::ValueMissing),
+                    };
                     block = next_block;
                     block_increased = true;
                     break;
@@ -203,14 +207,20 @@ impl Manager {
                     let page = self
                         .storage
                         .get_reward_inv_data(0, block / self.config.page_size);
-                    result += page.get(block).expect("unknown block");
+                    result += match page.get(block) {
+                        Some(v) => v,
+                        None => panic_with_error!(self.env, StorageError::ValueMissing),
+                    };
                     block += 1;
                 }
             } else {
                 let page = self
                     .storage
                     .get_reward_inv_data(0, block / self.config.page_size);
-                result += page.get(block).expect("unknown block");
+                result += match page.get(block) {
+                    Some(v) => v,
+                    None => panic_with_error!(self.env, StorageError::ValueMissing),
+                };
                 block += 1;
             }
         }

@@ -1,3 +1,5 @@
+use liquidity_pool_validation_errors::LiquidityPoolValidationError;
+use soroban_sdk::{panic_with_error, Env, Vec};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Env, Vec, U256};
 
@@ -74,14 +76,14 @@ fn get_y(
     // x in the input is converted to the same price/precision
 
     if in_idx == out_idx {
-        panic!("same coin")
+        panic_with_error!(e, LiquidityPoolValidationError::AllCoinsRequired);
     }
     if out_idx >= n_coins {
-        panic!("j above N_COINS")
+        panic_with_error!(e, LiquidityPoolValidationError::OutTokenOutOfBounds);
     }
 
     if in_idx >= n_coins {
-        panic!("bad arguments")
+        panic_with_error!(e, LiquidityPoolValidationError::InTokenOutOfBounds);
     }
 
     let amp = a;

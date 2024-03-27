@@ -6,9 +6,11 @@ use crate::storage::{
     get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
+use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::{
-    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
+    panic_with_error, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val,
+    Vec,
 };
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
@@ -188,7 +190,7 @@ fn init_stableswap_pool(
 pub fn get_tokens_salt(e: &Env, tokens: Vec<Address>) -> BytesN<32> {
     for i in 0..tokens.len() - 1 {
         if tokens.get_unchecked(i) >= tokens.get_unchecked(i + 1) {
-            panic!("tokens must be sorted by ascending");
+            panic_with_error!(e, LiquidityPoolValidationError::TokensNotSorted);
         }
     }
 

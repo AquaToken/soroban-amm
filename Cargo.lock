@@ -6,6 +6,7 @@ version = 3
 name = "access_control"
 version = "0.1.0"
 dependencies = [
+ "liquidity-pool-validation-errors",
  "soroban-sdk",
  "utils",
 ]
@@ -634,6 +635,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 
 [[package]]
+name = "liquidity-pool-validation-errors"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1042,15 +1050,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-fixed-point-math"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "230e5902daf9de6e7591aa7864dcf763ff96914a4460a0294a5dfd62b3181e0f"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "soroban-ledger-snapshot"
 version = "20.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1069,9 +1068,9 @@ name = "soroban-liquidity-pool-contract"
 version = "0.1.0"
 dependencies = [
  "access_control",
+ "liquidity-pool-validation-errors",
  "num-integer",
  "rewards",
- "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
  "utils",
@@ -1089,6 +1088,7 @@ name = "soroban-liquidity-pool-router-contract"
 version = "0.1.0"
 dependencies = [
  "access_control",
+ "liquidity-pool-validation-errors",
  "num-integer",
  "paste",
  "rewards",
@@ -1103,8 +1103,8 @@ version = "0.1.0"
 dependencies = [
  "access_control",
  "cast",
+ "liquidity-pool-validation-errors",
  "rewards",
- "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
  "utils",
@@ -1115,8 +1115,9 @@ name = "soroban-liquidity-pool-swap-router-contract"
 version = "0.1.0"
 dependencies = [
  "access_control",
- "soroban-fixed-point-math",
+ "liquidity-pool-validation-errors",
  "soroban-sdk",
+ "utils",
 ]
 
 [[package]]

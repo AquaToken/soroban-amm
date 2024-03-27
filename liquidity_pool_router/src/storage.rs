@@ -1,8 +1,10 @@
 use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
+use crate::errors::LiquidityPoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
-use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, Map, Vec};
+use soroban_sdk::{contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Vec};
 use utils::bump::{bump_instance, bump_persistent};
+use utils::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
@@ -93,13 +95,20 @@ generate_instance_storage_getter_and_setter!(swap_router, DataKey::SwapRouter, A
 // pool hash
 pub fn get_stableswap_pool_hash(e: &Env, num_tokens: u32) -> BytesN<32> {
     if num_tokens == 1 || num_tokens > 3 {
-        panic!("unable to find hash for this amount of tokens")
+        panic_with_error!(
+            &e,
+            LiquidityPoolRouterError::StableswapUnsupportedTokensCount
+        );
     }
     bump_instance(e);
-    e.storage()
+    match e
+        .storage()
         .instance()
         .get(&DataKey::StableSwapPoolHash(num_tokens))
-        .expect("StableSwapPoolHash hash not initialized")
+    {
+        Some(v) => v,
+        None => panic_with_error!(&e, LiquidityPoolRouterError::StableswapHashMissing),
+    }
 }
 
 pub fn set_stableswap_pool_hash(e: &Env, num_tokens: u32, pool_hash: &BytesN<32>) {
@@ -165,12 +174,12 @@ pub fn add_pool(
             }
         }
         if stableswap_pools_amt > STABLESWAP_MAX_POOLS {
-            panic!("stableswap pools amount is over max")
+            panic_with_error!(&e, LiquidityPoolRouterError::StableswapPoolsOverMax);
         }
     }
 
     if pools.len() > MAX_POOLS_FOR_PAIR {
-        panic!("pools amount is over max")
+        panic_with_error!(&e, LiquidityPoolRouterError::PoolsOverMax);
     }
     put_pools(e, salt, &pools);
 }

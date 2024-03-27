@@ -10,6 +10,8 @@ crate-type = ["cdylib"]
 [dependencies]
 access_control = { workspace = true }
 soroban-sdk = { workspace = true }
+utils = { workspace = true }
+liquidity-pool-validation-errors = { workspace = true }
 soroban-fixed-point-math = { workspace = true }
 
 [dev_dependencies]

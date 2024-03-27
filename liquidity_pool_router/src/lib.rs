@@ -2,6 +2,7 @@
 
 mod constants;
 mod contract;
+pub mod errors;
 mod events;
 mod pool_contract;
 mod pool_interface;

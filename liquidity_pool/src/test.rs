@@ -248,7 +248,7 @@ fn test() {
 }
 
 #[test]
-#[should_panic(expected = "minted less than minimum")]
+#[should_panic(expected = "Error(Contract, #2006)")]
 fn test_deposit_min_mint() {
     let Setup {
         env: e,
@@ -274,7 +274,7 @@ fn test_deposit_min_mint() {
 }
 
 #[test]
-#[should_panic(expected = "initial deposit requires all coins")]
+#[should_panic(expected = "Error(Contract, #2004)")]
 fn test_zero_initial_deposit() {
     let Setup {
         env: e,
