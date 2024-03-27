@@ -1,7 +1,6 @@
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
-use soroban_sdk::{panic_with_error, Env, Vec};
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{Env, Vec, U256};
+use soroban_sdk::{panic_with_error, Env, Vec, U256};
 
 const RATE: u128 = 1_0000000;
 const PRECISION: u128 = 1_0000000;

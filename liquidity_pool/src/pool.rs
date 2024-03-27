@@ -1,8 +1,6 @@
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
-use soroban_sdk::{panic_with_error, Env};
-
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::Env;
+use soroban_sdk::{panic_with_error, Env};
 
 pub fn get_deposit_amounts(
     e: &Env,
