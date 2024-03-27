@@ -71,6 +71,7 @@ fn jump(e: &Env, time: u64) {
 
 #[cfg(feature = "tokens_2")]
 #[test]
+#[should_panic(expected = "Error(Contract, #2010)")]
 fn test_swap_empty_pool() {
     let e = Env::default();
     e.mock_all_auths();
@@ -81,6 +82,7 @@ fn test_swap_empty_pool() {
 
     let token1 = create_token_contract(&e, &admin1);
     let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token_reward = create_token_contract(&e, &admin1);
     let plane = create_plane_contract(&e);
     let user1 = Address::generate(&e);
@@ -98,6 +100,8 @@ fn test_swap_empty_pool() {
         &plane.address,
     );
     assert_eq!(liqpool.estimate_swap(&0, &1, &10_0000000), 0);
+    token1_admin_client.mint(&user1, &10_0000000);
+    assert_eq!(liqpool.swap(&user1, &0, &1, &10_0000000, &0), 0);
 }
 
 #[cfg(feature = "tokens_2")]

@@ -8,7 +8,13 @@ pub(crate) fn estimate_swap(
     in_idx: u32,
     out_idx: u32,
     in_amount: u128,
-) -> u128 {
+) -> Option<u128> {
+    for i in 0..reserves.len() {
+        if reserves.get(i).unwrap() == 0 {
+            return None;
+        }
+    }
+
     let reserve_sell = reserves.get(in_idx).unwrap();
     let reserve_buy = reserves.get(out_idx).unwrap();
 
@@ -17,5 +23,5 @@ pub(crate) fn estimate_swap(
     let n = in_amount * reserve_buy * multiplier_with_fee;
     let d = reserve_sell * FEE_MULTIPLIER + in_amount * multiplier_with_fee;
 
-    n / d
+    Some(n / d)
 }
