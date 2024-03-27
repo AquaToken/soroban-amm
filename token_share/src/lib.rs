@@ -3,7 +3,7 @@
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_instance;
 
 #[derive(Clone)]
@@ -19,6 +19,7 @@ pub mod token {
     );
 }
 pub use token::{self as token_contract, Client};
+use utils::storage_errors::StorageError;
 
 fn get_balance(e: &Env, contract: Address) -> u128 {
     bump_instance(e);
@@ -27,10 +28,10 @@ fn get_balance(e: &Env, contract: Address) -> u128 {
 
 pub fn get_token_share(e: &Env) -> Address {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::TokenShare)
-        .expect("Unable to get TokenShare")
+    match e.storage().instance().get(&DataKey::TokenShare) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_token_share(e: &Env, contract: Address) {

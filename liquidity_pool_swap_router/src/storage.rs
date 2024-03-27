@@ -1,4 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+use utils::storage_errors::StorageError;
 
 pub const DAY_IN_LEDGERS: u32 = 17280;
 
@@ -21,8 +22,8 @@ pub(crate) fn set_plane(e: &Env, plane: &Address) {
 
 pub(crate) fn get_plane(e: &Env) -> Address {
     let key = DataKey::Plane;
-    e.storage()
-        .instance()
-        .get(&key)
-        .expect("unable to get plane")
+    match e.storage().instance().get(&key) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }

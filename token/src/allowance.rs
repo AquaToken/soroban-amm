@@ -1,4 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env};
+use crate::errors::TokenError;
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 
 #[derive(Clone)]
 #[contracttype]
@@ -46,7 +47,7 @@ pub fn write_allowance(
     };
 
     if amount > 0 && expiration_ledger < e.ledger().sequence() {
-        panic!("expiration_ledger is less than ledger seq when amount > 0")
+        panic_with_error!(&e, TokenError::PastTimeNotAllowed);
     }
 
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
@@ -64,7 +65,7 @@ pub fn write_allowance(
 pub fn spend_allowance(e: &Env, from: Address, spender: Address, amount: i128) {
     let allowance = read_allowance(e, from.clone(), spender.clone());
     if allowance.amount < amount {
-        panic!("insufficient allowance");
+        panic_with_error!(&e, TokenError::InsufficientAllowance);
     }
     write_allowance(
         e,

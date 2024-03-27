@@ -1,5 +1,6 @@
-use soroban_sdk::{contracttype, Address, Env, Map};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map};
 use utils::bump::bump_persistent;
+use utils::storage_errors::StorageError;
 
 // Rewards configuration for specific pool
 #[derive(Clone)]
@@ -72,11 +73,15 @@ pub trait RewardsStorageTrait {
 
 impl RewardsStorageTrait for Storage {
     fn get_pool_reward_config(&self) -> PoolRewardConfig {
-        self.env
+        match self
+            .env
             .storage()
             .instance()
             .get(&DataKey::PoolRewardConfig)
-            .expect("Please, initialize pool reward config")
+        {
+            Some(v) => v,
+            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+        }
     }
 
     fn set_pool_reward_config(&self, config: &PoolRewardConfig) {
@@ -87,11 +92,10 @@ impl RewardsStorageTrait for Storage {
     }
 
     fn get_pool_reward_data(&self) -> PoolRewardData {
-        self.env
-            .storage()
-            .instance()
-            .get(&DataKey::PoolRewardData)
-            .expect("Please, initialize pool reward data")
+        match self.env.storage().instance().get(&DataKey::PoolRewardData) {
+            Some(v) => v,
+            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+        }
     }
 
     fn set_pool_reward_data(&self, data: &PoolRewardData) {
@@ -130,12 +134,10 @@ impl RewardsStorageTrait for Storage {
         match cached_value_result {
             Some(value) => value,
             None => {
-                let value: Map<u64, u128> = self
-                    .env
-                    .storage()
-                    .persistent()
-                    .get(&key)
-                    .expect("Please, initialize reward inv data");
+                let value: Map<u64, u128> = match self.env.storage().persistent().get(&key) {
+                    Some(v) => v,
+                    None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+                };
                 self.inv_cache.set(key, value.clone());
                 value
             }
@@ -154,11 +156,10 @@ impl RewardsStorageTrait for Storage {
     }
 
     fn get_reward_token(&self) -> Address {
-        self.env
-            .storage()
-            .instance()
-            .get(&DataKey::RewardToken)
-            .expect("Trying to get reward token")
+        match self.env.storage().instance().get(&DataKey::RewardToken) {
+            Some(v) => v,
+            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+        }
     }
 
     fn put_reward_token(&self, contract: Address) {
