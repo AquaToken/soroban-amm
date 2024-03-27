@@ -1,4 +1,5 @@
 use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
+use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_interface::{
     CombinedSwapInterface, LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait,
@@ -18,14 +19,16 @@ use crate::storage::{
     set_token_hash,
 };
 use crate::swap_router::SwapRouterClient;
-use access_control::access::{AccessControl, AccessControlError, AccessControlTrait};
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::errors::AccessControlError;
+use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
     Symbol, Val, Vec,
 };
-use utils::utils::check_vec_ordered;
+use utils::token_utils::check_vec_ordered;
 
 #[contract]
 pub struct LiquidityPoolRouter;
@@ -33,36 +36,57 @@ pub struct LiquidityPoolRouter;
 #[contractimpl]
 impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
         e.invoke_contract(&pool_id, &Symbol::new(&e, "pool_type"), Vec::new(&e))
     }
 
     fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val> {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_info"), Vec::new(&e))
     }
 
     fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
-        get_pool(&e, tokens, pool_index).expect("Error when get pool")
+        match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        }
     }
 
     fn share_id(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
         e.invoke_contract(&pool_id, &Symbol::new(&e, "share_id"), Vec::new(&e))
     }
 
     fn get_total_shares(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_total_shares"), Vec::new(&e))
     }
 
     fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128> {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
     }
 
     fn get_tokens(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<Address> {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_tokens"), Vec::new(&e))
     }
 
@@ -76,7 +100,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     ) -> (Vec<u128>, u128) {
         user.require_auth();
 
-        let pool_id = get_pool(&e, tokens.clone(), pool_index).expect("unable to find pool");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
 
         let (amounts, share_amount): (Vec<u128>, u128) = e.invoke_contract(
             &pool_id,
@@ -106,9 +133,12 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     ) -> u128 {
         user.require_auth();
         if !check_vec_ordered(&tokens) {
-            panic!("tokens are not sorted")
+            panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
         }
-        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         let out_amt = e.invoke_contract(
@@ -146,7 +176,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         pool_index: BytesN<32>,
         in_amount: u128,
     ) -> u128 {
-        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
         let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         e.invoke_contract(
@@ -178,7 +211,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         min_amounts: Vec<u128>,
     ) -> Vec<u128> {
         user.require_auth();
-        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
+
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
 
         let amounts: Vec<u128> = e.invoke_contract(
             &pool_id,
@@ -269,7 +306,10 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
 
-        let pool_id = get_pool(&e, tokens.clone(), pool_index.clone()).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
 
         e.invoke_contract::<Val>(
             &pool_id,
@@ -291,7 +331,10 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
     ) -> Map<Symbol, i128> {
-        let pool_id = get_pool(&e, tokens, pool_index.clone()).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
 
         e.invoke_contract(
             &pool_id,
@@ -306,7 +349,10 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
     ) -> u128 {
-        let pool_id = get_pool(&e, tokens, pool_index.clone()).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
 
         e.invoke_contract(
             &pool_id,
@@ -317,7 +363,11 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
     fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         user.require_auth();
-        let pool_id = get_pool(&e, tokens, pool_index.clone()).expect("Pool doesn't exist");
+
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
 
         e.invoke_contract(
             &pool_id,
@@ -348,7 +398,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     ) -> (BytesN<32>, Address) {
         user.require_auth();
         if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
-            panic!("non-standard fee");
+            panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
         }
 
         let salt = get_tokens_salt(&e, tokens.clone());
@@ -462,9 +512,10 @@ impl SwapRouterInterface for LiquidityPoolRouter {
             );
 
         (
-            pools_reversed
-                .get(best_pool_address.clone())
-                .expect("unable to reverse pool"),
+            match pools_reversed.get(best_pool_address.clone()) {
+                Some(v) => v,
+                None => panic_with_error!(e, LiquidityPoolRouterError::PoolNotFound),
+            },
             best_pool_address,
             swap_result,
         )

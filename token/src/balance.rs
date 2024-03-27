@@ -1,4 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env};
+use crate::errors::TokenError;
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_persistent;
 
 #[derive(Clone)]
@@ -32,7 +33,7 @@ pub fn receive_balance(e: &Env, addr: Address, amount: i128) {
 pub fn spend_balance(e: &Env, addr: Address, amount: i128) {
     let balance = read_balance(e, addr.clone());
     if balance < amount {
-        panic!("insufficient balance");
+        panic_with_error!(&e, TokenError::InsufficientBalance);
     }
     write_balance(e, addr, balance - amount);
 }

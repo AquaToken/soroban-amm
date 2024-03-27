@@ -1,4 +1,5 @@
-use soroban_sdk::{Env, Vec};
+use liquidity_pool_validation_errors::LiquidityPoolValidationError;
+use soroban_sdk::{panic_with_error, Env, Vec};
 
 const RATE: u128 = 1_0000000;
 const PRECISION: u128 = 1_0000000;
@@ -57,18 +58,26 @@ fn get_d(n_coins: u32, xp: Vec<u128>, amp: u128) -> u128 {
     d
 }
 
-fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u128) -> u128 {
+fn get_y(
+    e: &Env,
+    n_coins: u32,
+    in_idx: u32,
+    out_idx: u32,
+    x: u128,
+    xp: Vec<u128>,
+    a: u128,
+) -> u128 {
     // x in the input is converted to the same price/precision
 
     if in_idx == out_idx {
-        panic!("same coin")
+        panic_with_error!(e, LiquidityPoolValidationError::AllCoinsRequired);
     }
     if out_idx >= n_coins {
-        panic!("j above N_COINS")
+        panic_with_error!(e, LiquidityPoolValidationError::OutTokenOutOfBounds);
     }
 
     if in_idx >= n_coins {
-        panic!("bad arguments")
+        panic_with_error!(e, LiquidityPoolValidationError::InTokenOutOfBounds);
     }
 
     let amp = a;
@@ -108,12 +117,20 @@ fn get_y(n_coins: u32, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>, a: u12
     y
 }
 
-fn get_dy(reserves: Vec<u128>, fee_fraction: u128, a: u128, i: u32, j: u32, dx: u128) -> u128 {
+fn get_dy(
+    e: &Env,
+    reserves: Vec<u128>,
+    fee_fraction: u128,
+    a: u128,
+    i: u32,
+    j: u32,
+    dx: u128,
+) -> u128 {
     // dx and dy in c-units
     let xp = reserves.clone();
 
     let x = xp.get(i).unwrap() + (dx * RATE / PRECISION);
-    let y = get_y(reserves.len(), i, j, x, xp.clone(), a);
+    let y = get_y(e, reserves.len(), i, j, x, xp.clone(), a);
 
     if y == 0 {
         // pool is empty
@@ -138,5 +155,5 @@ pub(crate) fn estimate_swap(
     in_amount: u128,
 ) -> u128 {
     let a = a(e, initial_a, initial_a_time, future_a, future_a_time);
-    get_dy(reserves, fee_fraction, a, in_idx, out_idx, in_amount)
+    get_dy(e, reserves, fee_fraction, a, in_idx, out_idx, in_amount)
 }
