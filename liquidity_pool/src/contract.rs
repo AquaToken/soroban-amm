@@ -1,4 +1,5 @@
 use crate::constants::FEE_MULTIPLIER;
+use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool;
@@ -12,12 +13,13 @@ use crate::storage::{
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
+use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use num_integer::Roots;
 use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, Address,
-    BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
+    contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
+    IntoVal, Map, Symbol, Val, Vec,
 };
 use token_share::{
     burn_shares, get_balance_shares, get_token_share, get_total_shares, get_user_balance_shares,
@@ -30,14 +32,6 @@ contractmeta!(
     key = "Description",
     val = "Constant product AMM with configurable swap fee"
 );
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum LiquidityPoolError {
-    AlreadyInitialized = 201,
-    PlaneAlreadyInitialized = 202,
-}
 
 #[contract]
 pub struct LiquidityPool;
@@ -81,14 +75,14 @@ impl LiquidityPoolTrait for LiquidityPool {
         access_control.set_admin(&admin);
 
         if tokens.len() != 2 {
-            panic!("wrong tokens vector size");
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         let token_a = tokens.get(0).unwrap();
         let token_b = tokens.get(1).unwrap();
 
         if token_a >= token_b {
-            panic!("token_a must be less than token_b");
+            panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
         }
 
         let share_contract = create_contract(&e, lp_token_wasm_hash, &token_a, &token_b);
@@ -101,7 +95,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
         if fee_fraction > 9999 {
-            panic!("fee cannot be equal or greater than 100%");
+            panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
         put_fee_fraction(&e, fee_fraction);
 
@@ -140,7 +134,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         if desired_amounts.len() != 2 {
-            panic!("wrong desired_amounts vector size");
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -159,7 +153,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let desired_b = desired_amounts.get(1).unwrap();
 
         if (reserve_a == 0 && reserve_b == 0) && (desired_a == 0 || desired_b == 0) {
-            panic!("initial deposit requires all coins");
+            panic_with_error!(&e, LiquidityPoolValidationError::AllCoinsRequired);
         }
 
         let token_a_client = SorobanTokenClient::new(&e, &get_token_a(&e));
@@ -172,7 +166,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // Calculate deposit amounts
         let amounts =
-            pool::get_deposit_amounts(desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
+            pool::get_deposit_amounts(&e, desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
 
         if amounts.0 < desired_a {
             token_a_client.transfer(
@@ -204,7 +198,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let shares_to_mint = new_total_shares - total_shares;
         if shares_to_mint < min_shares {
-            panic!("minted less than minimum")
+            panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
         mint_shares(&e, user, shares_to_mint as i128);
         put_reserve_a(&e, balance_a);
@@ -227,15 +221,15 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         if in_idx == out_idx {
-            panic!("cannot swap token to same one")
+            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
         }
 
         if in_idx > 1 {
-            panic!("in_idx out of bounds");
+            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
         }
 
         if out_idx > 1 {
-            panic!("out_idx out of bounds");
+            panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
         }
 
         let reserve_a = get_reserve_a(&e);
@@ -246,7 +240,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
         if reserve_sell == 0 || reserve_buy == 0 {
-            panic!("pool is empty. make deposit first.")
+            panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
         let fee_fraction = get_fee_fraction(&e);
@@ -257,7 +251,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let d = reserve_sell * FEE_MULTIPLIER + in_amount * multiplier_with_fee;
         let out = n / d;
         if out < out_min {
-            panic!("out amount is less than min")
+            panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
         // Transfer the amount being sold to the contract
@@ -289,7 +283,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let old_inv_b = residue_denominator * reserve_b;
 
         if new_inv_a * new_inv_b < old_inv_a * old_inv_b {
-            panic!("constant product invariant does not hold");
+            panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
         }
 
         if out_idx == 0 {
@@ -309,15 +303,15 @@ impl LiquidityPoolTrait for LiquidityPool {
 
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
         if in_idx == out_idx {
-            panic!("cannot swap token to same one")
+            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
         }
 
         if in_idx > 1 {
-            panic!("in_idx out of bounds");
+            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
         }
 
         if out_idx > 1 {
-            panic!("out_idx out of bounds");
+            panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
         }
 
         let reserve_a = get_reserve_a(&e);
@@ -340,7 +334,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         if min_amounts.len() != 2 {
-            panic!("wrong min_amounts vector size");
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
@@ -373,7 +367,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let min_b = min_amounts.get(1).unwrap();
 
         if out_a < min_a || out_b < min_b {
-            panic!("min not satisfied");
+            panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
         burn_shares(&e, balance_shares as i128);
@@ -424,7 +418,7 @@ impl RewardsTrait for LiquidityPool {
     fn initialize_rewards_config(e: Env, reward_token: Address) {
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
-            panic!("rewards config already initialized")
+            panic_with_error!(&e, LiquidityPoolError::RewardsAlreadyInitialized);
         }
 
         rewards.storage().put_reward_token(reward_token);
@@ -438,6 +432,10 @@ impl RewardsTrait for LiquidityPool {
     ) {
         admin.require_auth();
         AccessControl::new(&e).check_admin(&admin);
+
+        if expired_at < e.ledger().timestamp() {
+            panic_with_error!(&e, LiquidityPoolValidationError::PastTimeNotAllowed);
+        }
 
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);

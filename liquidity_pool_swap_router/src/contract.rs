@@ -2,7 +2,9 @@ use crate::interface::{RouterInterface, UpgradeableContract};
 use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
-use access_control::access::{AccessControl, AccessControlError, AccessControlTrait};
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::errors::AccessControlError;
+use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, Symbol, Vec,
 };
@@ -42,15 +44,15 @@ impl RouterInterface for LiquidityPoolSwapRouter {
         in_amount: u128,
     ) -> (Address, u128) {
         if in_idx == out_idx {
-            panic!("cannot swap token to same one")
+            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
         }
 
         if in_idx > 1 {
-            panic!("in_idx out of bounds");
+            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
         }
 
         if out_idx > 1 {
-            panic!("out_idx out of bounds");
+            panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
         }
 
         let plane_client = PoolPlaneClient::new(&e, &get_plane(&e));
@@ -86,7 +88,7 @@ impl RouterInterface for LiquidityPoolSwapRouter {
                     in_amount,
                 );
             } else {
-                panic!("unknown pool type");
+                panic_with_error!(&e, LiquidityPoolValidationError::UnknownPoolType);
             };
 
             if best_result == 0 {

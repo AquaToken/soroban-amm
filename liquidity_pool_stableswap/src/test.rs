@@ -197,7 +197,7 @@ fn test_happy_flow() {
 
 #[cfg(feature = "tokens_2")]
 #[test]
-#[should_panic(expected = "is killed")]
+#[should_panic(expected = "Error(Contract, #2901)")]
 fn test_kill() {
     let e = Env::default();
     e.mock_all_auths();
@@ -237,7 +237,36 @@ fn test_kill() {
 
 #[cfg(feature = "tokens_2")]
 #[test]
-#[should_panic(expected = "initial deposit requires all coins")]
+#[should_panic(expected = "Error(Contract, #2003)")]
+fn test_bad_fee() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        10000,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+}
+
+#[cfg(feature = "tokens_2")]
+#[test]
+#[should_panic(expected = "Error(Contract, #2004)")]
 fn test_zero_initial_deposit() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1118,7 +1147,7 @@ fn test_lazy_user_rewards() {
 
 #[test]
 #[cfg(feature = "tokens_2")]
-#[should_panic(expected = "insufficient time")]
+#[should_panic(expected = "Error(Contract, #2908)")]
 fn test_update_fee_too_early() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1194,7 +1223,7 @@ fn test_update_fee() {
 
 #[test]
 #[cfg(feature = "tokens_2")]
-#[should_panic(expected = "insufficient time")]
+#[should_panic(expected = "Error(Contract, #2908)")]
 fn test_transfer_ownership_too_early() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1232,7 +1261,7 @@ fn test_transfer_ownership_too_early() {
 
 #[test]
 #[cfg(feature = "tokens_2")]
-#[should_panic(expected = "active transfer")]
+#[should_panic(expected = "Error(Contract, #2906)")]
 fn test_transfer_ownership_twice() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1267,7 +1296,7 @@ fn test_transfer_ownership_twice() {
 
 #[test]
 #[cfg(feature = "tokens_2")]
-#[should_panic(expected = "no active transfer")]
+#[should_panic(expected = "Error(Contract, #2907)")]
 fn test_transfer_ownership_not_committed() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1301,7 +1330,7 @@ fn test_transfer_ownership_not_committed() {
 
 #[test]
 #[cfg(feature = "tokens_2")]
-#[should_panic(expected = "no active transfer")]
+#[should_panic(expected = "Error(Contract, #2907)")]
 fn test_transfer_ownership_reverted() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1378,7 +1407,7 @@ fn test_transfer_ownership() {
 
 #[test]
 #[cfg(feature = "tokens_2")]
-#[should_panic(expected = "ramp time is less than minimal")]
+#[should_panic(expected = "Error(Contract, #2902)")]
 fn test_ramp_a_too_early() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1417,7 +1446,7 @@ fn test_ramp_a_too_early() {
 
 #[test]
 #[cfg(feature = "tokens_2")]
-#[should_panic(expected = "insufficient time")]
+#[should_panic(expected = "Error(Contract, #2903)")]
 fn test_ramp_a_too_short() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1456,7 +1485,7 @@ fn test_ramp_a_too_short() {
 
 #[test]
 #[cfg(feature = "tokens_2")]
-#[should_panic(expected = "too rapid change")]
+#[should_panic(expected = "Error(Contract, #2905)")]
 fn test_ramp_a_too_fast() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1537,7 +1566,7 @@ fn test_ramp_a() {
 
 #[test]
 #[cfg(feature = "tokens_2")]
-#[should_panic(expected = "minted less than minimum")]
+#[should_panic(expected = "Error(Contract, #2006)")]
 fn test_deposit_min_mint() {
     let e = Env::default();
     e.mock_all_auths();

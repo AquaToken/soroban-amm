@@ -277,7 +277,7 @@ fn test_add_pool_after_removal() {
 }
 
 #[test]
-#[should_panic(expected = "stableswap pools amount is over max")]
+#[should_panic(expected = "Error(Contract, #306)")]
 fn test_stableswap_pools_amount_over_max() {
     let e = Env::default();
     e.mock_all_auths();
@@ -878,7 +878,7 @@ fn test_simple_ongoing_reward() {
 }
 
 #[test]
-#[should_panic(expected = "non-standard fee")]
+#[should_panic(expected = "Error(Contract, #302)")]
 fn test_unexpected_fee() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1224,4 +1224,44 @@ fn test_swap_routed() {
     assert_eq!(best_pool, stable1_pool_hash);
     assert_eq!(best_pool_address, stable1_pool_address);
     assert_eq!(best_result, 8_9936586);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2003)")]
+fn test_underlying_validation_fee_out_of_bounds() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let stableswap_pool_hash_2 = install_stableswap_two_tokens_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash_2);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+
+    reward_token.mint(&user1, &1_0000000);
+
+    router.init_stableswap_pool(&user1, &Vec::from_array(&e, [token1.address, token2.address]), &85, &10000, &0);
 }

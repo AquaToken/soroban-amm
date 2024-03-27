@@ -1,17 +1,18 @@
 //! Implementation of the Soroban token interface.
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::balance::{read_balance, receive_balance, spend_balance};
+use crate::errors::TokenError;
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
 use access_control::access::{AccessControl, AccessControlTrait};
 use soroban_sdk::token::{self, Interface as _};
-use soroban_sdk::{contract, contractimpl, Address, Env, String};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, String};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
 use utils::bump::bump_instance;
 
-fn check_nonnegative_amount(amount: i128) {
+fn check_nonnegative_amount(e: &Env, amount: i128) {
     if amount < 0 {
-        panic!("negative amount is not allowed: {}", amount)
+        panic_with_error!(&e, TokenError::NegativeNotAllowed);
     }
 }
 
@@ -23,11 +24,11 @@ impl Token {
     pub fn initialize(e: Env, admin: Address, decimal: u32, name: String, symbol: String) {
         let access_control = AccessControl::new(&e);
         if access_control.has_admin() {
-            panic!("already initialized")
+            panic_with_error!(&e, TokenError::AlreadyInitialized);
         }
         access_control.set_admin(&admin);
         if decimal > u8::MAX.into() {
-            panic!("Decimal must fit in a u8");
+            panic_with_error!(&e, TokenError::DecimalTooLarge);
         }
 
         write_metadata(
@@ -41,7 +42,7 @@ impl Token {
     }
 
     pub fn mint(e: Env, to: Address, amount: i128) {
-        check_nonnegative_amount(amount);
+        check_nonnegative_amount(&e, amount);
         let access_control = AccessControl::new(&e);
         let admin = access_control.get_admin().unwrap();
         admin.require_auth();
@@ -74,7 +75,7 @@ impl token::Interface for Token {
     fn approve(e: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
         from.require_auth();
 
-        check_nonnegative_amount(amount);
+        check_nonnegative_amount(&e, amount);
 
         bump_instance(&e);
 
@@ -92,7 +93,7 @@ impl token::Interface for Token {
     fn transfer(e: Env, from: Address, to: Address, amount: i128) {
         from.require_auth();
 
-        check_nonnegative_amount(amount);
+        check_nonnegative_amount(&e, amount);
 
         bump_instance(&e);
 
@@ -104,7 +105,7 @@ impl token::Interface for Token {
     fn transfer_from(e: Env, spender: Address, from: Address, to: Address, amount: i128) {
         spender.require_auth();
 
-        check_nonnegative_amount(amount);
+        check_nonnegative_amount(&e, amount);
 
         bump_instance(&e);
 
@@ -117,7 +118,7 @@ impl token::Interface for Token {
     fn burn(e: Env, from: Address, amount: i128) {
         from.require_auth();
 
-        check_nonnegative_amount(amount);
+        check_nonnegative_amount(&e, amount);
 
         bump_instance(&e);
 
@@ -128,7 +129,7 @@ impl token::Interface for Token {
     fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
         spender.require_auth();
 
-        check_nonnegative_amount(amount);
+        check_nonnegative_amount(&e, amount);
 
         bump_instance(&e);
 
