@@ -10,4 +10,5 @@ pub enum LiquidityPoolRouterError {
     StableswapUnsupportedTokensCount = 304,
     PoolsOverMax = 305,
     StableswapPoolsOverMax = 306,
+    PathIsEmpty = 307,
 }

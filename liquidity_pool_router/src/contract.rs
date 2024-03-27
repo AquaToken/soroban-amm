@@ -28,6 +28,7 @@ use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
     Symbol, Val, Vec,
 };
+use utils::storage_errors::StorageError;
 use utils::token_utils::check_vec_ordered;
 
 #[contract]
@@ -537,7 +538,7 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
         let mut last_swap_result = 0;
 
         if swaps_chain.len() == 0 {
-            panic!("path is empty")
+            panic_with_error!(&e, LiquidityPoolRouterError::PathIsEmpty);
         }
 
         SorobanTokenClient::new(&e, &token_in).transfer(
@@ -555,7 +556,10 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
                 token_in_local = token_in.clone();
                 in_amount_local = in_amount;
             } else {
-                token_in_local = last_token_out.expect("token_out not initialized");
+                token_in_local = match last_token_out {
+                    Some(v) => v,
+                    None => panic_with_error!(&e, StorageError::ValueNotInitialized),
+                };
                 in_amount_local = last_swap_result;
             }
 
@@ -576,7 +580,11 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
             last_token_out = Some(token_out);
         }
 
-        SorobanTokenClient::new(&e, &last_token_out.expect("token_out not initialized")).transfer(
+        let token_out_address = match last_token_out {
+            Some(v) => v,
+            None => panic_with_error!(&e, StorageError::ValueNotInitialized),
+        };
+        SorobanTokenClient::new(&e, &token_out_address).transfer(
             &e.current_contract_address(),
             &user,
             &(last_swap_result as i128),

@@ -1406,7 +1406,7 @@ fn test_chained_swap() {
 }
 
 #[test]
-#[should_panic] // todo: expect specific error when they become standard
+#[should_panic(expected = "Error(Contract, #2006)")]
 fn test_chained_swap_min_not_met() {
     let e = Env::default();
     e.mock_all_auths();
