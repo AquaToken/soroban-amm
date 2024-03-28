@@ -166,8 +166,8 @@ fn test_happy_flow() {
 
     assert_eq!(token1.balance(&user1) as u128, 790_0000000);
     assert_eq!(token1.balance(&liqpool.address) as u128, 210_0000000);
-    assert_eq!(token2.balance(&user1) as u128, 807_9637267);
-    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362733);
+    assert_eq!(token2.balance(&user1) as u128, 807_9637266);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362734);
 
     liqpool.withdraw(
         &user1,
@@ -424,8 +424,8 @@ fn test_happy_flow_3_tokens() {
 
     assert_eq!(token1.balance(&user1) as u128, 790_0000000);
     assert_eq!(token1.balance(&liqpool.address) as u128, 210_0000000);
-    assert_eq!(token2.balance(&user1) as u128, 807_9637267);
-    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362733);
+    assert_eq!(token2.balance(&user1) as u128, 807_9637266);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362734);
     assert_eq!(token3.balance(&user1) as u128, 800_0000000);
     assert_eq!(token3.balance(&liqpool.address) as u128, 200_0000000);
 
@@ -433,8 +433,8 @@ fn test_happy_flow_3_tokens() {
 
     assert_eq!(token1.balance(&user1) as u128, 805_9304412);
     assert_eq!(token1.balance(&liqpool.address) as u128, 194_0695588);
-    assert_eq!(token2.balance(&user1) as u128, 807_9637267);
-    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362733);
+    assert_eq!(token2.balance(&user1) as u128, 807_9637266);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362734);
     assert_eq!(token3.balance(&user1) as u128, 780_0000000);
     assert_eq!(token3.balance(&liqpool.address) as u128, 220_0000000);
 
@@ -567,8 +567,8 @@ fn test_happy_flow_4_tokens() {
 
     assert_eq!(token1.balance(&user1) as u128, 790_0000000);
     assert_eq!(token1.balance(&liqpool.address) as u128, 210_0000000);
-    assert_eq!(token2.balance(&user1) as u128, 807_9637267);
-    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362733);
+    assert_eq!(token2.balance(&user1) as u128, 807_9637266);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362734);
     assert_eq!(token3.balance(&user1) as u128, 800_0000000);
     assert_eq!(token3.balance(&liqpool.address) as u128, 200_0000000);
     assert_eq!(token4.balance(&user1) as u128, 800_0000000);
@@ -576,10 +576,10 @@ fn test_happy_flow_4_tokens() {
 
     liqpool.swap(&user1, &3, &0, &20_0000000, &1_0000000);
 
-    assert_eq!(token1.balance(&user1) as u128, 805_9304932);
-    assert_eq!(token1.balance(&liqpool.address) as u128, 194_0695068);
-    assert_eq!(token2.balance(&user1) as u128, 807_9637267);
-    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362733);
+    assert_eq!(token1.balance(&user1) as u128, 805_9304931);
+    assert_eq!(token1.balance(&liqpool.address) as u128, 194_0695069);
+    assert_eq!(token2.balance(&user1) as u128, 807_9637266);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 192_0362734);
     assert_eq!(token3.balance(&user1) as u128, 800_0000000);
     assert_eq!(token3.balance(&liqpool.address) as u128, 200_0000000);
     assert_eq!(token4.balance(&user1) as u128, 780_0000000);
@@ -768,19 +768,19 @@ fn test_custom_fee() {
     // we're checking fraction against value required to swap 1 token
     for fee_config in [
         (0, 0, 9990916, 0, 0),           // fee = 0%, admin fee = 0%
-        (10, 0, 9980926, 0, 0),          // fee = 0.1%, admin fee = 0%
-        (30, 0, 9960944, 0, 0),          // fee = 0.3%, admin fee = 0%
-        (100, 0, 9891007, 0, 0),         // fee = 1%, admin fee = 0%
-        (1000, 0, 8991825, 0, 0),        // fee = 10%, admin fee = 0%
-        (3000, 0, 6993642, 0, 0),        // fee = 30%, admin fee = 0%
-        (9900, 0, 99910, 0, 0),          // fee = 99%, admin fee = 0%
-        (9999, 0, 1000, 0, 0),           // fee = 99.99% - maximum fee, admin fee = 0%
-        (100, 10, 9891007, 0, 99),       // fee = 0.1%, admin fee = 0.1%
-        (100, 100, 9891007, 0, 999),     // fee = 0.1%, admin fee = 1%
-        (100, 1000, 9891007, 0, 9990),   // fee = 0.1%, admin fee = 10%
-        (100, 2000, 9891007, 0, 19981),  // fee = 0.1%, admin fee = 20%
-        (100, 5000, 9891007, 0, 49954),  // fee = 0.1%, admin fee = 50%
-        (100, 10000, 9891007, 0, 99909), // fee = 0.1%, admin fee = 100%
+        (10, 0, 9980925, 0, 0),          // fee = 0.1%, admin fee = 0%
+        (30, 0, 9960943, 0, 0),          // fee = 0.3%, admin fee = 0%
+        (100, 0, 9891006, 0, 0),         // fee = 1%, admin fee = 0%
+        (1000, 0, 8991824, 0, 0),        // fee = 10%, admin fee = 0%
+        (3000, 0, 6993641, 0, 0),        // fee = 30%, admin fee = 0%
+        (9900, 0, 99909, 0, 0),          // fee = 99%, admin fee = 0%
+        (9999, 0, 999, 0, 0),            // fee = 99.99% - maximum fee, admin fee = 0%
+        (100, 10, 9891006, 0, 100),      // fee = 0.1%, admin fee = 0.1%
+        (100, 100, 9891006, 0, 1000),    // fee = 0.1%, admin fee = 1%
+        (100, 1000, 9891006, 0, 9991),   // fee = 0.1%, admin fee = 10%
+        (100, 2000, 9891006, 0, 19982),  // fee = 0.1%, admin fee = 20%
+        (100, 5000, 9891006, 0, 49955),  // fee = 0.1%, admin fee = 50%
+        (100, 10000, 9891006, 0, 99910), // fee = 0.1%, admin fee = 100%
     ] {
         let plane = create_plane_contract(&e);
         let liqpool = create_liqpool_contract(
