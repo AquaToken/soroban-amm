@@ -47,7 +47,6 @@ impl Manager {
         if now < config.expired_at {
             self.update_rewards_data_snapshot(now, &config, &data, total_shares)
         } else if data.last_time > config.expired_at {
-            // todo: try to avoid unneeded block increments
             self.create_new_rewards_data(
                 0,
                 total_shares,
@@ -305,7 +304,6 @@ impl Manager {
             last_time: config.expired_at,
         };
         self.create_new_rewards_data(generated_tokens, total_shares, catchup_data.clone());
-        // todo: don't increase block when config not enabled thus keeping invariants list small
         self.create_new_rewards_data(
             0,
             total_shares,

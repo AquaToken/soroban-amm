@@ -1,14 +1,15 @@
 use crate::events::{Events, LiquidityPoolRouterEvents};
+use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    add_pool, get_constant_product_pool_hash, get_pool_plane, get_stableswap_next_counter,
-    get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
+    add_pool, get_constant_product_pool_hash, get_pool_plane, get_pools_plain,
+    get_stableswap_next_counter, get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::{
-    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
+    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol, Val, Vec, U256,
 };
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
@@ -25,17 +26,6 @@ pub fn get_stableswap_pool_salt(e: &Env) -> BytesN<32> {
     salt.append(&symbol_short!("0x00").to_xdr(e));
     salt.append(&get_stableswap_next_counter(e).to_xdr(e));
     salt.append(&symbol_short!("0x00").to_xdr(e));
-    e.crypto().sha256(&salt)
-}
-
-pub fn get_custom_salt(e: &Env, pool_type: &Symbol, init_args: &Vec<Val>) -> BytesN<32> {
-    let mut salt = Bytes::new(e);
-    salt.append(&pool_type.to_xdr(e));
-    salt.append(&symbol_short!("0x00").to_xdr(e));
-    for arg in init_args.clone().into_iter() {
-        salt.append(&arg.to_xdr(e));
-        salt.append(&symbol_short!("0x00").to_xdr(e));
-    }
     e.crypto().sha256(&salt)
 }
 
@@ -195,4 +185,31 @@ pub fn pool_salt(e: &Env, tokens: Vec<Address>) -> BytesN<32> {
         salt.append(&token.to_xdr(e));
     }
     e.crypto().sha256(&salt)
+}
+
+pub fn get_total_liquidity(
+    e: &Env,
+    tokens: Vec<Address>,
+    calculator: Address,
+) -> (Map<BytesN<32>, U256>, U256) {
+    let salt = pool_salt(&e, tokens);
+    let pools = get_pools_plain(&e, &salt);
+    let pools_count = pools.len();
+    let mut pools_map: Map<BytesN<32>, U256> = Map::new(&e);
+
+    let mut pools_vec: Vec<Address> = Vec::new(&e);
+    let mut hashes_vec: Vec<BytesN<32>> = Vec::new(&e);
+    for (key, value) in pools {
+        pools_vec.push_back(value.clone());
+        hashes_vec.push_back(key.clone());
+    }
+
+    let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
+    let mut result = U256::from_u32(&e, 0);
+    for i in 0..pools_count {
+        let value = pools_liquidity.get(i).unwrap();
+        pools_map.set(hashes_vec.get(i).unwrap(), value.clone());
+        result = result.add(&value);
+    }
+    (pools_map, result)
 }

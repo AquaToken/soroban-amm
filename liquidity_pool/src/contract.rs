@@ -131,7 +131,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
     }
 
-    fn deposit(e: Env, user: Address, desired_amounts: Vec<u128>) -> (Vec<u128>, u128) {
+    fn deposit(
+        e: Env,
+        user: Address,
+        desired_amounts: Vec<u128>,
+        min_shares: u128,
+    ) -> (Vec<u128>, u128) {
         // Depositor needs to authorize the deposit
         user.require_auth();
 
@@ -194,6 +199,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         };
 
         let shares_to_mint = new_total_shares - total_shares;
+        if shares_to_mint < min_shares {
+            panic!("minted less than minimum")
+        }
         mint_shares(&e, user, shares_to_mint as i128);
         put_reserve_a(&e, balance_a);
         put_reserve_b(&e, balance_b);
@@ -223,7 +231,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         if out_idx > 1 {
-            panic!("in_idx out of bounds");
+            panic!("out_idx out of bounds");
         }
 
         let reserve_a = get_reserve_a(&e);
@@ -310,7 +318,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         if out_idx > 1 {
-            panic!("in_idx out of bounds");
+            panic!("out_idx out of bounds");
         }
 
         let reserve_a = get_reserve_a(&e);

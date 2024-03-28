@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec, U256};
 
 pub trait LiquidityPoolInterfaceTrait {
     // Get symbolic explanation of pool type.
@@ -31,6 +31,7 @@ pub trait LiquidityPoolInterfaceTrait {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
+        min_shares: u128,
     ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
@@ -72,20 +73,36 @@ pub trait LiquidityPoolInterfaceTrait {
         share_amount: u128,
         min_amounts: Vec<u128>,
     ) -> Vec<u128>;
+
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
+
+    // Set liquidity calculator address. it's separate contract optimized to estimate liquidity for multiple pools
+    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
+
+    // Get liquidity calculator address
+    fn get_liquidity_calculator(e: Env) -> Address;
 }
 
 pub trait RewardsInterfaceTrait {
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers
     // after expired_at timestamp distribution ends
-    fn set_rewards_config(
+    fn get_rewards_config(e: Env) -> Map<Symbol, Val>;
+    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256;
+    fn config_global_rewards(
+        e: Env,
+        admin: Address,
+        reward_tps: u128,
+        expired_at: u64,
+        tokens: Vec<(Vec<Address>, u32)>,
+    );
+    fn fill_liquidity(e: Env, admin: Address, tokens: Vec<Address>);
+    fn config_pool_rewards(
         e: Env,
         admin: Address,
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
-        expired_at: u64,
-        tps: u128,
-    );
+    ) -> u128;
 
     // Get rewards status for the pool,
     // including amount available for the user
@@ -134,16 +151,6 @@ pub trait PoolsManagementTrait {
 
     // Get pools for given pair
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address>;
-
-    // Add initialized custom pool to the list for given pair
-    fn add_custom_pool(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        pool_address: Address,
-        pool_type: Symbol,
-        init_args: Vec<Val>,
-    ) -> BytesN<32>;
 
     // Remove pool from the list
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>);
