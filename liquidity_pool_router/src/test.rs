@@ -181,7 +181,7 @@ fn test_total_liquidity() {
     e.budget().reset_default();
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 3294)
+        U256::from_u32(&e, 3276)
     );
     e.budget().print();
     e.budget().reset_unlimited();
@@ -202,7 +202,7 @@ fn test_total_liquidity() {
     e.budget().reset_default();
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 28512)
+        U256::from_u32(&e, 28494)
     );
     e.budget().print();
     assert!(
@@ -633,7 +633,7 @@ fn test_stableswap_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 177168630)
+        U256::from_u32(&e, 177169768)
     );
 
     assert_eq!(token_share.balance(&user1), 200_0000000);
@@ -798,7 +798,7 @@ fn test_stableswap_3_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 531505890)
+        U256::from_u32(&e, 531509304)
     );
 
     assert_eq!(token_share.balance(&user1), 300_0000000);

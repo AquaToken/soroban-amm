@@ -443,7 +443,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
         let rewards_config = get_rewards_config(&e);
         let tokens_salt = get_tokens_salt(&e, tokens.clone());
-        let tokens_detailed = get_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt);
+        let tokens_detailed =
+            get_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt);
         let tokens_reward = get_reward_tokens(&e, rewards_config.current_block);
         let tokens_reward_info = tokens_reward.get(tokens.clone());
 

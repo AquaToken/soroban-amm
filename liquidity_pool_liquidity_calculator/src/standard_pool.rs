@@ -1,9 +1,10 @@
 use crate::calculator::{get_max_reserve, get_next_in_amt, normalize_reserves, price_weight};
 use crate::constants::{FEE_MULTIPLIER, PRICE_PRECISION};
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Env, Vec};
 
 fn estimate_swap(
-    _e: &Env,
+    e: &Env,
     fee_fraction: u128,
     reserves: &Vec<u128>,
     in_idx: u32,
@@ -13,12 +14,9 @@ fn estimate_swap(
     let reserve_sell = reserves.get(in_idx).unwrap();
     let reserve_buy = reserves.get(out_idx).unwrap();
 
-    // First calculate how much needs to be sold to buy amount out from the pool
-    let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction;
-    let n = in_amount * reserve_buy * multiplier_with_fee;
-    let d = reserve_sell * FEE_MULTIPLIER + in_amount * multiplier_with_fee;
-
-    n / d
+    let result = in_amount.fixed_mul_floor(e, reserve_buy, reserve_sell + in_amount);
+    let fee = result.fixed_mul_ceil(e, fee_fraction as u128, FEE_MULTIPLIER);
+    result - fee
 }
 
 fn get_min_price(

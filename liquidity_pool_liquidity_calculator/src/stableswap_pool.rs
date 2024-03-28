@@ -1,5 +1,6 @@
 use crate::calculator::{get_max_reserve, get_next_in_amt, normalize_reserves, price_weight};
 use crate::constants::{FEE_MULTIPLIER, PRECISION, PRICE_PRECISION};
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Env, Vec};
 
 const RATE: u128 = 1_0000000;
@@ -122,6 +123,7 @@ fn get_y(
 }
 
 fn get_dy(
+    e: &Env,
     d: u128,
     reserves: &Vec<u128>,
     fee_fraction: u128,
@@ -142,12 +144,12 @@ fn get_dy(
     }
 
     let dy = (xp.get(j).unwrap() - y - 1) * PRECISION / RATE;
-    let fee = fee_fraction * dy / FEE_MULTIPLIER;
+    let fee = (fee_fraction).fixed_mul_ceil(&e, dy, FEE_MULTIPLIER);
     dy - fee
 }
 
 fn estimate_swap(
-    _e: &Env,
+    e: &Env,
     fee_fraction: u128,
     d: u128,
     amp: u128,
@@ -156,7 +158,16 @@ fn estimate_swap(
     out_idx: u32,
     in_amount: u128,
 ) -> u128 {
-    get_dy(d, reserves, fee_fraction, amp, in_idx, out_idx, in_amount)
+    get_dy(
+        e,
+        d,
+        reserves,
+        fee_fraction,
+        amp,
+        in_idx,
+        out_idx,
+        in_amount,
+    )
 }
 
 pub(crate) fn get_liquidity(

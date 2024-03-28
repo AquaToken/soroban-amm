@@ -2,7 +2,9 @@ use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
 use crate::errors::LiquidityPoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
-use soroban_sdk::{contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Vec, U256};
+use soroban_sdk::{
+    contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Vec, U256,
+};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
 use utils::{

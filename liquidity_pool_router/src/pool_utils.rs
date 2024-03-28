@@ -4,14 +4,14 @@ use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
     add_pool, get_constant_product_pool_hash, get_pool_next_counter, get_pool_plane,
-    get_stableswap_pool_hash, get_token_hash, LiquidityPoolType, get_pools_plain,
+    get_pools_plain, get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::{
-    panic_with_error, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol, Val,
-    Vec, U256,
+    panic_with_error, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol,
+    Val, Vec, U256,
 };
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
@@ -207,8 +207,8 @@ pub fn get_total_liquidity(
     tokens: Vec<Address>,
     calculator: Address,
 ) -> (Map<BytesN<32>, U256>, U256) {
-    let salt = pool_salt(&e, tokens);
-    let pools = get_pools_plain(&e, &salt);
+    let tokens_salt = get_tokens_salt(e, tokens.clone());
+    let pools = get_pools_plain(&e, &tokens_salt);
     let pools_count = pools.len();
     let mut pools_map: Map<BytesN<32>, U256> = Map::new(&e);
 
