@@ -19,9 +19,3 @@ soroban-fixed-point-math = { workspace = true }
 
 [dev_dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-
-[features]
-default = ["tokens_2"]
-tokens_2 = []
-tokens_3 = []
-tokens_4 = []

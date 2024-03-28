@@ -39,7 +39,7 @@ enum DataKey {
     InitPoolPaymentAmount,
     InitPoolPaymentAddress,
     ConstantPoolHash,
-    StableSwapPoolHash(u32),
+    StableSwapPoolHash,
     PoolCounter,
     PoolPlane,
     SwapRouter,
@@ -101,29 +101,19 @@ generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Add
 generate_instance_storage_getter_and_setter!(swap_router, DataKey::SwapRouter, Address);
 
 // pool hash
-pub fn get_stableswap_pool_hash(e: &Env, num_tokens: u32) -> BytesN<32> {
-    if num_tokens == 1 || num_tokens > 3 {
-        panic_with_error!(
-            &e,
-            LiquidityPoolRouterError::StableswapUnsupportedTokensCount
-        );
-    }
+pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
     bump_instance(e);
-    match e
-        .storage()
-        .instance()
-        .get(&DataKey::StableSwapPoolHash(num_tokens))
-    {
+    match e.storage().instance().get(&DataKey::StableSwapPoolHash) {
         Some(v) => v,
         None => panic_with_error!(&e, LiquidityPoolRouterError::StableswapHashMissing),
     }
 }
 
-pub fn set_stableswap_pool_hash(e: &Env, num_tokens: u32, pool_hash: &BytesN<32>) {
+pub fn set_stableswap_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
     bump_instance(e);
     e.storage()
         .instance()
-        .set(&DataKey::StableSwapPoolHash(num_tokens), pool_hash)
+        .set(&DataKey::StableSwapPoolHash, pool_hash)
 }
 
 pub fn get_pools_plain(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, Address> {
