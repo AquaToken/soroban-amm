@@ -134,7 +134,6 @@ fn test_total_liquidity() {
     let user1 = Address::generate(&e);
 
     let pool_wasm_hash = install_liq_pool_hash(&e);
-    let stableswap_pool_hash_2 = install_stableswap_two_tokens_liq_pool_hash(&e);
     let token_hash = install_token_wasm(&e);
     let plane = create_plane_contract(&e);
     let swap_router = create_swap_router_contract(&e);
@@ -146,7 +145,7 @@ fn test_total_liquidity() {
     let router = create_liqpool_router_contract(&e);
     router.init_admin(&admin);
     router.set_pool_hash(&pool_wasm_hash);
-    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash_2);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
     router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);

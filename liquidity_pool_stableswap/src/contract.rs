@@ -186,10 +186,10 @@ impl LiquidityPoolTrait for LiquidityPool {
             };
             let fee = difference.fixed_mul_ceil(
                 &e,
-                get_fee(&e) as u128 * N_COINS as u128,
-                4 * (N_COINS as u128 - 1) * FEE_DENOMINATOR as u128,
+                get_fee(&e) as u128 * n_coins as u128,
+                4 * (n_coins as u128 - 1) * FEE_DENOMINATOR as u128,
             );
-            fees.push_back(i, fee);
+            fees.push_back(fee);
             reserves.set(
                 i,
                 new_balances.get(i).unwrap()
@@ -886,10 +886,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             .update_user_reward(&pool_data, &user, user_shares);
         rewards.storage().bump_user_reward_data(&user);
 
-        let mut fees: alloc::vec::Vec<u128> = alloc::vec::Vec::new(&e);
-        for _i in 0..n_coins {
-            fees.push_back(0);
-        }
+        let mut fees: Vec<u128> = Vec::new(&e);
         let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
 
@@ -942,10 +939,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
                 let fee = difference.fixed_mul_ceil(
                     &e,
-                    get_fee(&e) as u128 * N_COINS as u128,
-                    FEE_DENOMINATOR as u128 * 4 * (N_COINS as u128 - 1),
+                    get_fee(&e) as u128 * n_coins as u128,
+                    FEE_DENOMINATOR as u128 * 4 * (n_coins as u128 - 1),
                 );
-                fees.push_back(i, fee);
+                fees.push_back(fee);
 
                 result.set(
                     i,
