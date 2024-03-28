@@ -95,7 +95,7 @@ pub fn deploy_stableswap_pool(
 ) -> (BytesN<32>, Address) {
     let tokens_salt = get_tokens_salt(e, tokens.clone());
 
-    let liquidity_pool_wasm_hash = get_stableswap_pool_hash(e, tokens.len());
+    let liquidity_pool_wasm_hash = get_stableswap_pool_hash(e);
     let subpool_salt = get_stableswap_pool_salt(e);
 
     // pools counter already incorporated into subpool_salt - no need to add it again

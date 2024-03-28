@@ -1,5 +1,3 @@
-use crate::pool_constants::N_COINS;
-use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::utils::bump::bump_instance;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
 use utils::storage_errors::StorageError;
@@ -41,17 +39,11 @@ pub fn get_reserves(e: &Env) -> Vec<u128> {
 }
 
 pub fn put_tokens(e: &Env, contracts: &Vec<Address>) {
-    if contracts.len() != N_COINS as u32 {
-        panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
-    }
     bump_instance(e);
     e.storage().instance().set(&DataKey::Tokens, contracts);
 }
 
 pub fn put_reserves(e: &Env, amounts: &Vec<u128>) {
-    if amounts.len() != N_COINS as u32 {
-        panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
-    }
     bump_instance(e);
     e.storage().instance().set(&DataKey::Reserves, amounts);
 }

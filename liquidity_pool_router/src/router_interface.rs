@@ -18,8 +18,8 @@ pub trait AdminInterface {
     // Set standard pool wasm hash
     fn set_pool_hash(e: Env, new_hash: BytesN<32>);
 
-    // Set stableswap pool wasm hash for desired amount of tokens
-    fn set_stableswap_pool_hash(e: Env, num_tokens: u32, new_hash: BytesN<32>);
+    // Set stableswap pool wasm hash
+    fn set_stableswap_pool_hash(e: Env, new_hash: BytesN<32>);
 
     // Configure stableswap init payment: token address, amount and destination address
     fn configure_init_pool_payment(e: Env, token: Address, amount: u128, to: Address);

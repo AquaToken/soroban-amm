@@ -69,7 +69,6 @@ fn jump(e: &Env, time: u64) {
     });
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 #[should_panic(expected = "Error(Contract, #2010)")]
 fn test_swap_empty_pool() {
@@ -104,7 +103,6 @@ fn test_swap_empty_pool() {
     assert_eq!(liqpool.swap(&user1, &0, &1, &10_0000000, &0), 0);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_happy_flow() {
     let e = Env::default();
@@ -199,7 +197,6 @@ fn test_happy_flow() {
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 #[should_panic(expected = "Error(Contract, #2901)")]
 fn test_kill() {
@@ -239,7 +236,6 @@ fn test_kill() {
     );
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 #[should_panic(expected = "Error(Contract, #2003)")]
 fn test_bad_fee() {
@@ -268,7 +264,6 @@ fn test_bad_fee() {
     );
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 #[should_panic(expected = "Error(Contract, #2004)")]
 fn test_zero_initial_deposit() {
@@ -303,7 +298,6 @@ fn test_zero_initial_deposit() {
     liqpool.deposit(&user1, &Vec::from_array(&e, [1000_0000000, 0]), &0);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_zero_deposit_ok() {
     let e = Env::default();
@@ -338,7 +332,6 @@ fn test_zero_deposit_ok() {
     liqpool.deposit(&user1, &Vec::from_array(&e, [500_0000000, 0]), &0);
 }
 
-#[cfg(feature = "tokens_3")]
 #[test]
 fn test_happy_flow_3_tokens() {
     let e = Env::default();
@@ -472,7 +465,6 @@ fn test_happy_flow_3_tokens() {
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
 }
 
-#[cfg(feature = "tokens_4")]
 #[test]
 fn test_happy_flow_4_tokens() {
     let e = Env::default();
@@ -603,7 +595,6 @@ fn test_happy_flow_4_tokens() {
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_withdraw_partial() {
     let e = Env::default();
@@ -680,7 +671,6 @@ fn test_withdraw_partial() {
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_withdraw_one_token() {
     let e = Env::default();
@@ -741,7 +731,6 @@ fn test_withdraw_one_token() {
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_custom_fee() {
     let e = Env::default();
@@ -802,7 +791,6 @@ fn test_custom_fee() {
     }
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_deposit_inequal() {
     let e = Env::default();
@@ -845,7 +833,6 @@ fn test_deposit_inequal() {
     assert_eq!(token2.balance(&user1) as u128, 890_0000000);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_remove_liquidity_imbalance() {
     let e = Env::default();
@@ -893,7 +880,6 @@ fn test_remove_liquidity_imbalance() {
     assert_eq!(token_share.balance(&user1) as u128, 62_1428988);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_simple_ongoing_reward() {
     let e = Env::default();
@@ -950,7 +936,6 @@ fn test_simple_ongoing_reward() {
     assert_eq!(token_reward.balance(&user1) as u128, total_reward_1 / 2);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_simple_reward() {
     let e = Env::default();
@@ -1015,7 +1000,6 @@ fn test_simple_reward() {
     assert_eq!(token_reward.balance(&user1) as u128, total_reward_1);
 }
 
-#[cfg(feature = "tokens_2")]
 #[test]
 fn test_two_users_rewards() {
     let e = Env::default();
@@ -1079,7 +1063,6 @@ fn test_two_users_rewards() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 fn test_lazy_user_rewards() {
     // first user comes as initial liquidity provider and expects to get maximum reward
     //  second user comes at the end makes huge deposit
@@ -1150,7 +1133,6 @@ fn test_lazy_user_rewards() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 #[should_panic(expected = "Error(Contract, #2908)")]
 fn test_update_fee_too_early() {
     let e = Env::default();
@@ -1187,7 +1169,6 @@ fn test_update_fee_too_early() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 fn test_update_fee() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1226,7 +1207,6 @@ fn test_update_fee() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 #[should_panic(expected = "Error(Contract, #2908)")]
 fn test_transfer_ownership_too_early() {
     let e = Env::default();
@@ -1264,7 +1244,6 @@ fn test_transfer_ownership_too_early() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 #[should_panic(expected = "Error(Contract, #2906)")]
 fn test_transfer_ownership_twice() {
     let e = Env::default();
@@ -1299,7 +1278,6 @@ fn test_transfer_ownership_twice() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 #[should_panic(expected = "Error(Contract, #2907)")]
 fn test_transfer_ownership_not_committed() {
     let e = Env::default();
@@ -1333,7 +1311,6 @@ fn test_transfer_ownership_not_committed() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 #[should_panic(expected = "Error(Contract, #2907)")]
 fn test_transfer_ownership_reverted() {
     let e = Env::default();
@@ -1372,7 +1349,6 @@ fn test_transfer_ownership_reverted() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 fn test_transfer_ownership() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1410,7 +1386,6 @@ fn test_transfer_ownership() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 #[should_panic(expected = "Error(Contract, #2902)")]
 fn test_ramp_a_too_early() {
     let e = Env::default();
@@ -1449,7 +1424,6 @@ fn test_ramp_a_too_early() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 #[should_panic(expected = "Error(Contract, #2903)")]
 fn test_ramp_a_too_short() {
     let e = Env::default();
@@ -1488,7 +1462,6 @@ fn test_ramp_a_too_short() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 #[should_panic(expected = "Error(Contract, #2905)")]
 fn test_ramp_a_too_fast() {
     let e = Env::default();
@@ -1527,7 +1500,6 @@ fn test_ramp_a_too_fast() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 fn test_ramp_a() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1569,7 +1541,6 @@ fn test_ramp_a() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 #[should_panic(expected = "Error(Contract, #2006)")]
 fn test_deposit_min_mint() {
     let e = Env::default();
@@ -1613,7 +1584,6 @@ fn test_deposit_min_mint() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 fn test_deposit_inequal_ok() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1660,7 +1630,6 @@ fn test_deposit_inequal_ok() {
 }
 
 #[test]
-#[cfg(feature = "tokens_2")]
 fn test_large_numbers() {
     let e = Env::default();
     e.mock_all_auths();
