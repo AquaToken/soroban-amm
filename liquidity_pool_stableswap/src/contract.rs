@@ -939,8 +939,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
                 let fee = difference.fixed_mul_ceil(
                     &e,
-                    get_fee(&e) as u128 * N_COINS as u128,
-                    FEE_DENOMINATOR as u128 * 4 * (N_COINS as u128 - 1),
+                    get_fee(&e) as u128 * n_coins as u128,
+                    FEE_DENOMINATOR as u128 * 4 * (n_coins as u128 - 1),
                 );
                 fees.push_back(fee);
 
