@@ -2,7 +2,9 @@ use crate::interface::{RouterInterface, UpgradeableContract};
 use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
-use access_control::access::{AccessControl, AccessControlError, AccessControlTrait};
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::errors::AccessControlError;
+use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, Symbol, Vec,
 };
@@ -42,28 +44,41 @@ impl RouterInterface for LiquidityPoolSwapRouter {
         in_amount: u128,
     ) -> (Address, u128) {
         if in_idx == out_idx {
-            panic!("cannot swap token to same one")
+            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
         }
 
-        if in_idx > 1 {
-            panic!("in_idx out of bounds");
-        }
-
-        if out_idx > 1 {
-            panic!("out_idx out of bounds");
+        if pools.len() == 0 {
+            panic_with_error!(&e, LiquidityPoolValidationError::CannotComparePools);
         }
 
         let plane_client = PoolPlaneClient::new(&e, &get_plane(&e));
         let data = plane_client.get(&pools);
-        let mut best_result = 0;
+        let mut best_result = None;
         let mut best_pool = pools.get(0).unwrap();
+        let mut n_tokens: u32 = 0;
         for i in 0..pools.len() {
             let (pool_type, init_args, reserves) = data.get(i).unwrap();
 
-            let out;
+            if i == 0 {
+                n_tokens = reserves.len();
+
+                if in_idx >= n_tokens {
+                    panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
+                }
+
+                if out_idx >= n_tokens {
+                    panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
+                }
+            } else {
+                if reserves.len() != n_tokens {
+                    panic_with_error!(&e, LiquidityPoolValidationError::CannotComparePools);
+                }
+            }
+
+            let out_result;
             if pool_type == POOL_TYPE_STANDARD {
                 let data = parse_standard_data(init_args, reserves);
-                out = standard_pool::estimate_swap(
+                out_result = standard_pool::estimate_swap(
                     &e,
                     data.fee,
                     data.reserves,
@@ -73,7 +88,7 @@ impl RouterInterface for LiquidityPoolSwapRouter {
                 );
             } else if pool_type == POOL_TYPE_STABLESWAP {
                 let data = parse_stableswap_data(init_args, reserves);
-                out = stableswap_pool::estimate_swap(
+                out_result = stableswap_pool::estimate_swap(
                     &e,
                     data.fee,
                     data.initial_a,
@@ -86,17 +101,29 @@ impl RouterInterface for LiquidityPoolSwapRouter {
                     in_amount,
                 );
             } else {
-                panic!("unknown pool type");
+                panic_with_error!(&e, LiquidityPoolValidationError::UnknownPoolType);
             };
 
-            if best_result == 0 {
-                best_result = out;
-            } else if out > best_result {
-                best_pool = pools.get(i).unwrap();
-                best_result = out;
+            match out_result {
+                Some(out) => {
+                    if best_result.is_none() {
+                        best_result = Some(out);
+                        best_pool = pools.get(i).unwrap();
+                    } else {
+                        if out > best_result.unwrap() {
+                            best_pool = pools.get(i).unwrap();
+                            best_result = Some(out);
+                        }
+                    }
+                }
+                None => continue,
             }
         }
-        (best_pool, best_result)
+
+        match best_result {
+            Some(value) => (best_pool, value),
+            None => (best_pool, 0),
+        }
     }
 }
 

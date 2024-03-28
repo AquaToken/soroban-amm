@@ -20,31 +20,28 @@ use token_share::{
     put_token_share, Client as LPToken,
 };
 
+use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
+use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contractmeta, panic_with_error, symbol_short, Address,
-    BytesN, Env, IntoVal, Map, Symbol, Val, Vec,
+    contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
+    IntoVal, Map, Symbol, Val, Vec, U256,
 };
 use utils::bump::bump_instance;
+use utils::math_errors::MathError;
+use utils::storage_errors::StorageError;
 
 contractmeta!(
     key = "Description",
     val = "Stable Swap AMM for set of tokens"
 );
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum LiquidityPoolError {
-    AlreadyInitialized = 201,
-    PlaneAlreadyInitialized = 202,
-}
 
 #[contract]
 pub struct LiquidityPool;
@@ -62,9 +59,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             let t0 = get_initial_a_time(&e) as u128;
             // Expressions in u128 cannot have negative numbers, thus "if"
             if a1 > a0 {
-                a0 + (a1 - a0) * (now - t0) / (t1 - t0)
+                a0 + (a1 - a0).fixed_mul_floor(&e, now - t0, t1 - t0)
             } else {
-                a0 - (a0 - a1) * (now - t0) / (t1 - t0)
+                a0 - (a0 - a1).fixed_mul_floor(&e, now - t0, t1 - t0)
             }
         } else {
             // when t1 == 0 or block.timestamp >= t1
@@ -77,12 +74,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         // D is in the units similar to DAI (e.g. converted to precision 1e7)
         // When balanced, D = n * x_u - total virtual value of the portfolio
         let token_supply = get_total_shares(&e);
-        d * PRECISION / token_supply
+        d.fixed_mul_floor(&e, PRECISION, token_supply)
     }
 
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128 {
         if amounts.len() != N_COINS as u32 {
-            panic!("wrong amounts vector size");
+            panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         let mut balances = get_reserves(&e);
@@ -98,7 +95,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let d1 = Self::get_d_mem(e.clone(), balances, amp);
         let token_amount = get_total_shares(&e);
         let diff = if deposit { d1 - d0 } else { d0 - d1 };
-        diff * token_amount / d0
+        diff.fixed_mul_floor(&e, token_amount, d0)
     }
 
     fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128 {
@@ -106,7 +103,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let rates = RATES;
         let xp = Self::xp(e.clone());
 
-        let x = xp.get(i).unwrap() + (dx * rates[i as usize] / PRECISION);
+        let x = xp.get(i).unwrap() + (dx.fixed_mul_floor(&e, rates[i as usize], PRECISION));
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
 
         if y == 0 {
@@ -114,8 +111,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             return 0;
         }
 
-        let dy = (xp.get(j).unwrap() - y - 1) * PRECISION / rates[j as usize];
-        let fee = get_fee(&e) as u128 * dy / FEE_DENOMINATOR as u128;
+        let dy = (xp.get(j).unwrap() - y - 1).fixed_mul_floor(&e, PRECISION, rates[j as usize]);
+        let fee = (get_fee(&e) as u128).fixed_mul_floor(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
 
@@ -127,7 +124,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let x = xp.get(i).unwrap() + dx * precisions[i as usize];
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
         let dy = (xp.get(j).unwrap() - y - 1) / precisions[j as usize];
-        let fee = get_fee(&e) as u128 * dy / FEE_DENOMINATOR as u128;
+        let fee = (get_fee(&e) as u128).fixed_mul_floor(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
 
@@ -140,7 +137,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         if amounts.len() != N_COINS as u32 {
-            panic!("wrong amounts vector size");
+            panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
@@ -154,14 +151,15 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards.storage().bump_user_reward_data(&user);
 
         if get_is_killed(&e) {
-            panic!("is killed")
+            panic_with_error!(e, LiquidityPoolError::PoolKilled);
         }
 
         let token_supply = get_total_shares(&e);
         if token_supply == 0 {
-            panic!("zero total supply")
+            panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
-        let fee = get_fee(&e) as u128 * N_COINS as u128 / (4 * (N_COINS as u128 - 1));
+        let fee =
+            (get_fee(&e) as u128).fixed_mul_floor(&e, N_COINS as u128, 4 * (N_COINS as u128 - 1));
         let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
         let mut reserves = get_reserves(&e);
@@ -178,17 +176,24 @@ impl LiquidityPoolTrait for LiquidityPool {
         let mut fees = Vec::from_array(&e, [0; N_COINS]);
 
         for i in 0..N_COINS as u32 {
-            let ideal_balance = d1 * old_balances.get(i).unwrap() / d0;
+            let ideal_balance = d1.fixed_mul_floor(&e, old_balances.get(i).unwrap(), d0);
             let difference = if ideal_balance > new_balances.get(i).unwrap() {
                 ideal_balance - new_balances.get(i).unwrap()
             } else {
                 new_balances.get(i).unwrap() - ideal_balance
             };
-            fees.set(i, fee * difference / FEE_DENOMINATOR as u128);
+            fees.set(
+                i,
+                fee.fixed_mul_floor(&e, difference, FEE_DENOMINATOR as u128),
+            );
             reserves.set(
                 i,
                 new_balances.get(i).unwrap()
-                    - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR as u128),
+                    - (fees.get(i).unwrap().fixed_mul_floor(
+                        &e,
+                        admin_fee,
+                        FEE_DENOMINATOR as u128,
+                    )),
             );
             new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
         }
@@ -196,13 +201,13 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let d2 = Self::get_d_mem(e.clone(), new_balances, amp);
 
-        let mut token_amount = (d0 - d2) * token_supply / d0;
+        let mut token_amount = (d0 - d2).fixed_mul_floor(&e, token_supply, d0);
         if token_amount == 0 {
-            panic!("zero tokens burned")
+            panic_with_error!(&e, LiquidityPoolValidationError::ZeroSharesBurned);
         }
         token_amount += 1; // In case of rounding errors - make it unfavorable for the "attacker"
         if token_amount > max_burn_amount {
-            panic!("Slippage screwed you")
+            panic_with_error!(&e, LiquidityPoolValidationError::TooManySharesBurned);
         }
 
         // First transfer the pool shares that need to be redeemed
@@ -258,19 +263,24 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards.storage().bump_user_reward_data(&user);
 
         if get_is_killed(&e) {
-            panic!("is killed")
+            panic_with_error!(e, LiquidityPoolError::PoolKilled);
         }
 
         let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), token_amount, i);
         if dy < min_amount {
-            panic!("Not enough coins removed")
+            panic_with_error!(&e, LiquidityPoolValidationError::InMinNotSatisfied);
         }
 
         let mut reserves = get_reserves(&e);
         reserves.set(
             i,
             reserves.get(i).unwrap()
-                - (dy + dy_fee * get_admin_fee(&e) as u128 / FEE_DENOMINATOR as u128),
+                - (dy
+                    + dy_fee.fixed_mul_floor(
+                        &e,
+                        get_admin_fee(&e) as u128,
+                        FEE_DENOMINATOR as u128,
+                    )),
         );
         put_reserves(&e, &reserves);
 
@@ -299,7 +309,11 @@ impl InternalInterfaceTrait for LiquidityPool {
         for i in 0..N_COINS as u32 {
             result.set(
                 i,
-                result.get(i).unwrap() * reserves.get(i).unwrap() / LENDING_PRECISION,
+                result.get(i).unwrap().fixed_mul_floor(
+                    &e,
+                    reserves.get(i).unwrap(),
+                    LENDING_PRECISION,
+                ),
             );
         }
         result
@@ -311,14 +325,17 @@ impl InternalInterfaceTrait for LiquidityPool {
         for i in 0..N_COINS as u32 {
             result.set(
                 i,
-                result.get(i).unwrap() * reserves.get(i).unwrap() / PRECISION,
+                result
+                    .get(i)
+                    .unwrap()
+                    .fixed_mul_floor(&e, reserves.get(i).unwrap(), PRECISION),
             );
         }
         result
     }
 
     // xp size = N_COINS
-    fn get_d(_e: Env, xp: Vec<u128>, amp: u128) -> u128 {
+    fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128 {
         let mut s = 0;
         for x in xp.clone() {
             s += x;
@@ -331,13 +348,17 @@ impl InternalInterfaceTrait for LiquidityPool {
         let mut d = s;
         let ann = amp * N_COINS as u128;
         for _i in 0..255 {
-            let mut d_p = d;
+            let mut d_p = d.clone();
             for x1 in xp.clone() {
-                d_p = d_p * d / (x1 * N_COINS as u128) // If division by 0, this will be borked: only withdrawal will work. And that is good
+                d_p = d_p.fixed_mul_floor(&e, d, x1 * N_COINS as u128);
             }
-            d_prev = d;
-            d = (ann * s + d_p * N_COINS as u128) * d
-                / ((ann - 1) * d + (N_COINS as u128 + 1) * d_p);
+            d_prev = d.clone();
+            d = (ann * s + d_p * N_COINS as u128).fixed_mul_floor(
+                &e,
+                d,
+                (ann - 1) * d + (N_COINS as u128 + 1) * d_p,
+            );
+
             // // Equality with the precision of 1
             if d > d_prev {
                 if d - d_prev <= 1 {
@@ -358,14 +379,14 @@ impl InternalInterfaceTrait for LiquidityPool {
         // x in the input is converted to the same price/precision
 
         if in_idx == out_idx {
-            panic!("same coin")
+            panic_with_error!(e, LiquidityPoolValidationError::CannotSwapSameToken);
         }
         if out_idx >= N_COINS as u32 {
-            panic!("j above N_COINS")
+            panic_with_error!(e, LiquidityPoolValidationError::OutTokenOutOfBounds);
         }
 
         if in_idx >= N_COINS as u32 {
-            panic!("bad arguments")
+            panic_with_error!(e, LiquidityPoolValidationError::InTokenOutOfBounds);
         }
 
         let amp = Self::a(e.clone());
@@ -384,15 +405,27 @@ impl InternalInterfaceTrait for LiquidityPool {
                 continue;
             }
             s += x1;
-            c = c * d / (x1 * N_COINS as u128);
+            c = c.fixed_mul_floor(&e, d, x1 * N_COINS as u128);
         }
-        c = c * d / (ann * N_COINS as u128);
+        let c_256 = U256::from_u128(&e, c)
+            .mul(&U256::from_u128(&e, d))
+            .div(&U256::from_u128(&e, ann * N_COINS as u128));
         let b = s + d / ann; // - D
         let mut y_prev;
         let mut y = d;
         for _i in 0..255 {
             y_prev = y;
-            y = (y * y + c) / (2 * y + b - d);
+            let y_256 = U256::from_u128(&e, y);
+            y = match y_256
+                .mul(&y_256)
+                .add(&c_256)
+                .div(&U256::from_u128(&e, 2 * y + b - d))
+                .to_u128()
+            {
+                Some(v) => v,
+                None => panic_with_error!(&e, MathError::NumberOverflow),
+            };
+
             // Equality with the precision of 1
             if y > y_prev {
                 if y - y_prev <= 1 {
@@ -405,7 +438,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         y
     }
 
-    fn get_y_d(_e: Env, a: u128, in_idx: u32, xp: Vec<u128>, d: u128) -> u128 {
+    fn get_y_d(e: Env, a: u128, in_idx: u32, xp: Vec<u128>, d: u128) -> u128 {
         // Calculate x[i] if one reduces D from being calculated for xp to D
         //
         // Done by solving quadratic equation iteratively.
@@ -417,7 +450,7 @@ impl InternalInterfaceTrait for LiquidityPool {
         // x in the input is converted to the same price/precision
 
         if in_idx >= N_COINS as u32 {
-            panic!("i above N_COINS")
+            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
         }
 
         let mut c = d;
@@ -432,9 +465,11 @@ impl InternalInterfaceTrait for LiquidityPool {
                 continue;
             }
             s += x;
-            c = c * d / (x * N_COINS as u128);
+            c = c.fixed_mul_floor(&e, d, x * N_COINS as u128);
         }
-        c = c * d / (ann * N_COINS as u128);
+        let c_256 = U256::from_u128(&e, c)
+            .mul(&U256::from_u128(&e, d))
+            .div(&U256::from_u128(&e, ann * N_COINS as u128));
 
         let b = s + d / ann;
         let mut y_prev;
@@ -442,7 +477,16 @@ impl InternalInterfaceTrait for LiquidityPool {
 
         for _i in 0..255 {
             y_prev = y;
-            y = (y * y + c) / (2 * y + b - d);
+            let y_256 = U256::from_u128(&e, y);
+            y = match y_256
+                .mul(&y_256)
+                .add(&c_256)
+                .div(&U256::from_u128(&e, 2 * y + b - d))
+                .to_u128()
+            {
+                Some(v) => v,
+                None => panic_with_error!(&e, MathError::NumberOverflow),
+            };
 
             // Equality with the precision of 1
             if y > y_prev {
@@ -502,20 +546,20 @@ impl AdminInterfaceTrait for LiquidityPool {
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
         if e.ledger().timestamp() < get_initial_a_time(&e) + MIN_RAMP_TIME {
-            panic!("ramp time is less than minimal")
+            panic_with_error!(&e, LiquidityPoolError::RampTooEarly);
         };
         if future_time < e.ledger().timestamp() + MIN_RAMP_TIME {
-            panic!("insufficient time")
+            panic_with_error!(&e, LiquidityPoolError::RampTimeLessThanMinimum);
         };
 
         let initial_a = Self::a(e.clone());
         if !((future_a > 0) && (future_a < MAX_A)) {
-            panic!("future_a should not exceed maximum")
+            panic_with_error!(&e, LiquidityPoolError::RampOverMax);
         }
         if !(((future_a >= initial_a) && (future_a <= initial_a * MAX_A_CHANGE))
             || ((future_a < initial_a) && (future_a * MAX_A_CHANGE >= initial_a)))
         {
-            panic!("too rapid change")
+            panic_with_error!(&e, LiquidityPoolError::RampTooFast);
         }
         put_initial_a(&e, &initial_a);
         put_future_a(&e, &future_a);
@@ -549,13 +593,13 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         if get_admin_actions_deadline(&e) != 0 {
-            panic!("active action")
+            panic_with_error!(&e, LiquidityPoolError::AnotherActionActive);
         }
         if new_fee > MAX_FEE {
-            panic!("fee exceeds maximum")
+            panic_with_error!(e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
         if new_admin_fee > MAX_ADMIN_FEE {
-            panic!("admin fee exceeds maximum")
+            panic_with_error!(e, LiquidityPoolValidationError::AdminFeeOutOfBounds);
         }
 
         let deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
@@ -570,10 +614,10 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         if e.ledger().timestamp() < get_admin_actions_deadline(&e) {
-            panic!("insufficient time")
+            panic_with_error!(&e, LiquidityPoolError::ActionNotReadyYet);
         }
         if get_admin_actions_deadline(&e) == 0 {
-            panic!("no active action")
+            panic_with_error!(&e, LiquidityPoolError::NoActionActive);
         }
 
         put_admin_actions_deadline(&e, &0);
@@ -600,7 +644,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         if get_transfer_ownership_deadline(&e) != 0 {
-            panic!("active transfer");
+            panic_with_error!(&e, LiquidityPoolError::AnotherActionActive);
         }
 
         let deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
@@ -614,16 +658,17 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         if e.ledger().timestamp() < get_transfer_ownership_deadline(&e) {
-            panic!("insufficient time")
+            panic_with_error!(&e, LiquidityPoolError::ActionNotReadyYet);
         }
         if get_transfer_ownership_deadline(&e) == 0 {
-            panic!("no active transfer")
+            panic_with_error!(&e, LiquidityPoolError::NoActionActive);
         }
 
         put_transfer_ownership_deadline(&e, &0);
-        let future_admin = access_control
-            .get_future_admin()
-            .expect("Try get future admin");
+        let future_admin = match access_control.get_future_admin() {
+            Some(v) => v,
+            None => panic_with_error!(&e, StorageError::ValueNotInitialized),
+        };
         access_control.set_admin(&future_admin);
     }
 
@@ -688,7 +733,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         if get_kill_deadline(&e) <= e.ledger().timestamp() {
-            panic!("deadline has passed")
+            panic_with_error!(&e, LiquidityPoolError::ActionNotReadyYet);
         }
         put_is_killed(&e, &true);
     }
@@ -744,10 +789,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
 
         access_control.set_admin(&admin);
+
+        // 0.01% = 1; 1% = 100; 0.3% = 30
+        if fee > 9999 || admin_fee > 10000 {
+            panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
+        }
+
+        put_fee(&e, &fee);
         put_admin_fee(&e, &admin_fee);
 
         if coins.len() != N_COINS as u32 {
-            panic!("unexpected tokens vector size");
+            panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         put_tokens(&e, &coins);
@@ -769,7 +821,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_initial_a_time(&e, &e.ledger().timestamp());
         put_future_a(&e, &a);
         put_future_a_time(&e, &e.ledger().timestamp());
-        put_fee(&e, &fee);
         put_kill_deadline(&e, &(e.ledger().timestamp() + KILL_DEADLINE_DT));
         put_admin_actions_deadline(&e, &0);
         put_transfer_ownership_deadline(&e, &0);
@@ -809,11 +860,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     fn deposit(e: Env, user: Address, amounts: Vec<u128>, min_shares: u128) -> (Vec<u128>, u128) {
         user.require_auth();
         if get_is_killed(&e) {
-            panic!("is killed")
+            panic_with_error!(e, LiquidityPoolError::PoolKilled);
         }
 
         if amounts.len() != N_COINS as u32 {
-            panic!("wrong amounts vector size");
+            panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
@@ -844,7 +895,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         for i in 0..N_COINS as u32 {
             let in_amount = amounts.get(i).unwrap();
             if token_supply == 0 && in_amount == 0 {
-                panic!("initial deposit requires all coins");
+                panic_with_error!(e, LiquidityPoolValidationError::AllCoinsRequired);
             }
             let in_coin = coins.get(i).unwrap();
 
@@ -860,7 +911,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // Invariant after change
         let d1 = Self::get_d_mem(e.clone(), new_balances.clone(), amp);
         if d1 <= d0 {
-            panic!("D1 not greater than D0");
+            panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
         }
 
         // We need to recalculate the invariant accounting for fees
@@ -900,7 +951,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         };
 
         if mint_amount < min_shares {
-            panic!("minted less than minimum")
+            panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
         // Mint pool tokens
         mint_shares(&e, user, mint_amount as i128);
@@ -921,7 +972,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     ) -> u128 {
         user.require_auth();
         if get_is_killed(&e) {
-            panic!("is killed")
+            panic_with_error!(e, LiquidityPoolError::PoolKilled);
         }
         let rates = RATES;
 
@@ -939,23 +990,24 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let reserve_sell = xp.get(in_idx).unwrap();
         let reserve_buy = xp.get(out_idx).unwrap();
         if reserve_sell == 0 || reserve_buy == 0 {
-            panic!("pool is empty. make deposit first.")
+            panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let x = reserve_sell + dx_w_fee * rates[in_idx as usize] / PRECISION;
+        let x = reserve_sell + dx_w_fee.fixed_mul_floor(&e, rates[in_idx as usize], PRECISION);
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = reserve_buy - y - 1; // -1 just in case there were some rounding errors
-        let dy_fee = dy * get_fee(&e) as u128 / FEE_DENOMINATOR as u128;
+        let dy_fee = dy.fixed_mul_floor(&e, get_fee(&e) as u128, FEE_DENOMINATOR as u128);
 
         // Convert all to real units
-        let dy = (dy - dy_fee) * PRECISION / rates[out_idx as usize];
+        let dy = (dy - dy_fee).fixed_mul_floor(&e, PRECISION, rates[out_idx as usize]);
         if dy < out_min {
-            panic!("Exchange resulted in fewer coins than expected")
+            panic_with_error!(e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
-        let mut dy_admin_fee = dy_fee * get_admin_fee(&e) as u128 / FEE_DENOMINATOR as u128;
-        dy_admin_fee = dy_admin_fee * PRECISION / rates[out_idx as usize];
+        let mut dy_admin_fee =
+            dy_fee.fixed_mul_floor(&e, get_admin_fee(&e) as u128, FEE_DENOMINATOR as u128);
+        dy_admin_fee = dy_admin_fee.fixed_mul_floor(&e, PRECISION, rates[out_idx as usize]);
 
         // Change balances exactly in same way as we change actual ERC20 coin amounts
         let mut reserves = get_reserves(&e);
@@ -984,7 +1036,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         user.require_auth();
 
         if min_amounts.len() != N_COINS as u32 {
-            panic!("wrong min_amounts vector size")
+            panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
@@ -1003,9 +1055,12 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let coins = get_tokens(&e);
 
         for i in 0..N_COINS as u32 {
-            let value = reserves.get(i).unwrap() * share_amount / total_supply;
+            let value = reserves
+                .get(i)
+                .unwrap()
+                .fixed_mul_floor(&e, share_amount, total_supply);
             if value < min_amounts.get(i).unwrap() {
-                panic!("Withdrawal resulted in fewer coins than expected")
+                panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
             }
             reserves.set(i, reserves.get(i).unwrap() - value);
             amounts.set(i, value);
@@ -1061,7 +1116,7 @@ impl RewardsTrait for LiquidityPool {
     fn initialize_rewards_config(e: Env, reward_token: Address) {
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
-            panic!("rewards config already initialized")
+            panic_with_error!(e, LiquidityPoolError::RewardsAlreadyInitialized);
         }
         rewards.storage().put_reward_token(reward_token);
     }
@@ -1073,11 +1128,10 @@ impl RewardsTrait for LiquidityPool {
         tps: u128,       // value with 7 decimal places. example: 600_0000000
     ) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        AccessControl::new(&e).check_admin(&admin);
 
         if expired_at < e.ledger().timestamp() {
-            panic!("cannot set expiration time to the past");
+            panic_with_error!(&e, LiquidityPoolValidationError::PastTimeNotAllowed);
         }
 
         let rewards = get_rewards_manager(&e);

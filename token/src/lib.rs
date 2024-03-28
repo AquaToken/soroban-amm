@@ -4,6 +4,7 @@
 mod allowance;
 mod balance;
 mod contract;
+pub mod errors;
 mod metadata;
 mod test;
 

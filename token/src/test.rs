@@ -207,7 +207,7 @@ fn test_burn() {
 }
 
 #[test]
-#[should_panic(expected = "insufficient balance")]
+#[should_panic(expected = "Error(Contract, #602)")]
 fn transfer_insufficient_balance() {
     let e = Env::default();
     e.mock_all_auths();
@@ -224,7 +224,7 @@ fn transfer_insufficient_balance() {
 }
 
 #[test]
-#[should_panic(expected = "insufficient allowance")]
+#[should_panic(expected = "Error(Contract, #603)")]
 fn transfer_from_insufficient_allowance() {
     let e = Env::default();
     e.mock_all_auths();
@@ -245,7 +245,7 @@ fn transfer_from_insufficient_allowance() {
 }
 
 #[test]
-#[should_panic(expected = "already initialized")]
+#[should_panic(expected = "Error(Contract, #601)")]
 fn initialize_already_initialized() {
     let e = Env::default();
     let admin = Address::generate(&e);
@@ -255,7 +255,7 @@ fn initialize_already_initialized() {
 }
 
 #[test]
-#[should_panic(expected = "Decimal must fit in a u8")]
+#[should_panic(expected = "Error(Contract, #605)")]
 fn decimal_is_over_max() {
     let e = Env::default();
     let admin = Address::generate(&e);

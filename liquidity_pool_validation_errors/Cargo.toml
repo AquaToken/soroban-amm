@@ -1,8 +1,9 @@
 [package]
-name = "access_control"
+name = "liquidity-pool-validation-errors"
 version.workspace = true
 edition = "2021"
 publish = false
+
 
 [lib]
 crate-type = ["rlib"]
@@ -10,5 +11,6 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-utils = { workspace = true }
-liquidity-pool-validation-errors = { workspace = true }
+
+[dev_dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

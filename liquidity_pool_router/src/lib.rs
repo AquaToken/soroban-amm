@@ -2,6 +2,7 @@
 
 mod constants;
 mod contract;
+pub mod errors;
 mod events;
 mod liquidity_calculator;
 mod pool_contract;
