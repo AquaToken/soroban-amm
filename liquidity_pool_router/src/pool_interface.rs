@@ -19,9 +19,6 @@ pub trait LiquidityPoolInterfaceTrait {
     // Getter for the pool balances array.
     fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128>;
 
-    // Getter for the array of swappable coins within the pool.
-    fn get_tokens(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<Address>;
-
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
@@ -138,6 +135,24 @@ pub trait PoolsManagementTrait {
 
     // Remove pool from the list
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>);
+
+    // Calculates the number of unique token sets.
+    fn get_tokens_sets_count(e: Env) -> u128;
+
+    // Retrieves tokens at a specified index
+    fn get_tokens(e: Env, index: u128) -> Vec<Address>;
+
+    // Retrieves a lists of pools in batch based on half-open `[..)` range of tokens indexes.
+    //
+    // # Returns
+    //
+    // A list containing tuples containing a vector of addresses of the corresponding tokens
+    // and a mapping of pool hashes to pool addresses.
+    fn get_pools_for_tokens_range(
+        e: Env,
+        start: u128,
+        end: u128,
+    ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
 }
 
 pub trait PoolPlaneInterface {

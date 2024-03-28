@@ -2,8 +2,8 @@ use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    add_pool, get_constant_product_pool_hash, get_pool_next_counter, get_pool_plane,
-    get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
+    add_pool, add_tokens_set, get_constant_product_pool_hash, get_pool_next_counter,
+    get_pool_plane, get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -66,6 +66,7 @@ pub fn deploy_standard_pool(
         .deploy(liquidity_pool_wasm_hash);
     init_standard_pool(e, &tokens, &pool_contract_id, fee_fraction);
 
+    add_tokens_set(e, &tokens);
     add_pool(
         e,
         &tokens_salt,
@@ -104,7 +105,7 @@ pub fn deploy_stableswap_pool(
         .deploy(liquidity_pool_wasm_hash);
     init_stableswap_pool(e, &tokens, &pool_contract_id, a, fee_fraction, admin_fee);
 
-    // if STABLESWAP_MAX_POOLS
+    add_tokens_set(e, &tokens);
     add_pool(
         e,
         &tokens_salt,
