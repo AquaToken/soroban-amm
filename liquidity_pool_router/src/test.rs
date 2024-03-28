@@ -300,11 +300,11 @@ fn test_constant_product_pool() {
 
     assert_eq!(
         router.estimate_swap(&tokens, &token1.address, &token2.address, &pool_hash, &97),
-        49
+        48
     );
     assert_eq!(
         router.estimate_swap_routed(&tokens, &token1.address, &token2.address, &97),
-        (pool_hash.clone(), pool_address.clone(), 49),
+        (pool_hash.clone(), pool_address.clone(), 48),
     );
     assert_eq!(
         router.swap(
@@ -314,18 +314,18 @@ fn test_constant_product_pool() {
             &token2.address,
             &pool_hash,
             &97_u128,
-            &49_u128,
+            &48_u128,
         ),
-        49
+        48
     );
 
     assert_eq!(token1.balance(&user1), 803);
     assert_eq!(token1.balance(&pool_address), 197);
-    assert_eq!(token2.balance(&user1), 949);
-    assert_eq!(token2.balance(&pool_address), 51);
+    assert_eq!(token2.balance(&user1), 948);
+    assert_eq!(token2.balance(&pool_address), 52);
     assert_eq!(
         router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [197, 51])
+        Vec::from_array(&e, [197, 52])
     );
 
     router.withdraw(
@@ -333,7 +333,7 @@ fn test_constant_product_pool() {
         &tokens,
         &pool_hash,
         &100_u128,
-        &Vec::from_array(&e, [197_u128, 51_u128]),
+        &Vec::from_array(&e, [197_u128, 52_u128]),
     );
 
     assert_eq!(token1.balance(&user1), 1000);
@@ -657,7 +657,7 @@ fn test_stableswap_pool() {
             &pool_hash,
             &97_0000000,
         ),
-        80_4573706
+        80_4573705
     );
     assert_eq!(
         router.swap(
@@ -824,7 +824,7 @@ fn test_stableswap_3_pool() {
             &pool_hash,
             &97_0000000,
         ),
-        80_4573706
+        80_4573705
     );
     assert_eq!(
         router.estimate_swap_routed(&tokens, &token1.address, &token2.address, &97_0000000,),
@@ -1267,7 +1267,7 @@ fn test_event_correct() {
         &token2.address,
         &pool_hash,
         &97_u128,
-        &49_u128,
+        &48_u128,
     );
     let swap_event = e.events().all().last().unwrap();
 
