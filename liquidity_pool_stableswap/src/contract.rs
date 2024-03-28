@@ -112,7 +112,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let dy = (xp.get(j).unwrap() - y - 1).fixed_mul_floor(&e, PRECISION, rates[j as usize]);
-        let fee = (get_fee(&e) as u128).fixed_mul_floor(&e, dy, FEE_DENOMINATOR as u128);
+        let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
 
@@ -124,7 +124,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let x = xp.get(i).unwrap() + dx * precisions[i as usize];
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
         let dy = (xp.get(j).unwrap() - y - 1) / precisions[j as usize];
-        let fee = (get_fee(&e) as u128).fixed_mul_floor(&e, dy, FEE_DENOMINATOR as u128);
+        let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
 
@@ -159,7 +159,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
         let fee =
-            (get_fee(&e) as u128).fixed_mul_floor(&e, N_COINS as u128, 4 * (N_COINS as u128 - 1));
+            (get_fee(&e) as u128).fixed_mul_ceil(&e, N_COINS as u128, 4 * (N_COINS as u128 - 1));
         let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
         let mut reserves = get_reserves(&e);
