@@ -1,6 +1,6 @@
 use crate::constants::FEE_MULTIPLIER;
-use soroban_sdk::{panic_with_error, Env, Vec, U256};
-use utils::math_errors::MathError;
+use soroban_fixed_point_math::SorobanFixedPoint;
+use soroban_sdk::{Env, Vec};
 
 pub(crate) fn estimate_swap(
     e: &Env,
@@ -19,16 +19,7 @@ pub(crate) fn estimate_swap(
     let reserve_sell = reserves.get(in_idx).unwrap();
     let reserve_buy = reserves.get(out_idx).unwrap();
 
-    // First calculate how much needs to be sold to buy amount out from the pool
-    let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
-    let n = U256::from_u128(&e, in_amount)
-        .mul(&U256::from_u128(&e, reserve_buy))
-        .mul(&U256::from_u128(&e, multiplier_with_fee));
-    let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
-        .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
-
-    match n.div(&d).to_u128() {
-        Some(v) => Some(v),
-        None => panic_with_error!(&e, MathError::NumberOverflow),
-    }
+    let result = in_amount.fixed_mul_floor(&e, reserve_buy, reserve_sell + in_amount);
+    let fee = result.fixed_mul_ceil(&e, fee_fraction, FEE_MULTIPLIER);
+    Some(result - fee)
 }

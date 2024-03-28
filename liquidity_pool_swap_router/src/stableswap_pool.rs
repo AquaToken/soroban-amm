@@ -156,7 +156,7 @@ fn get_dy(
     }
 
     let dy = (xp.get(j).unwrap() - y - 1).fixed_mul_floor(e, PRECISION, RATE);
-    let fee = fee_fraction.fixed_mul_floor(e, dy, FEE_DENOMINATOR as u128);
+    let fee = fee_fraction.fixed_mul_ceil(e, dy, FEE_DENOMINATOR as u128);
     dy - fee
 }
 

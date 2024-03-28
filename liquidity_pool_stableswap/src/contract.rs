@@ -114,7 +114,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let dy = (xp.get(j).unwrap() - y - 1).fixed_mul_floor(&e, PRECISION, RATE);
-        let fee = (get_fee(&e) as u128).fixed_mul_floor(&e, dy, FEE_DENOMINATOR as u128);
+        let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
 
@@ -125,7 +125,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let x = xp.get(i).unwrap() + dx * PRECISION_MUL;
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
         let dy = (xp.get(j).unwrap() - y - 1) / PRECISION_MUL;
-        let fee = (get_fee(&e) as u128).fixed_mul_floor(&e, dy, FEE_DENOMINATOR as u128);
+        let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
 
@@ -162,8 +162,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         if token_supply == 0 {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
-        let fee =
-            (get_fee(&e) as u128).fixed_mul_floor(&e, n_coins as u128, 4 * (n_coins as u128 - 1));
         let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
         let mut reserves = get_reserves(&e);
@@ -186,15 +184,16 @@ impl LiquidityPoolTrait for LiquidityPool {
             } else {
                 new_balances.get(i).unwrap() - ideal_balance
             };
-            fees.push_back(fee.fixed_mul_floor(&e, difference, FEE_DENOMINATOR as u128));
+            let fee = difference.fixed_mul_ceil(
+                &e,
+                get_fee(&e) as u128 * n_coins as u128,
+                4 * (n_coins as u128 - 1) * FEE_DENOMINATOR as u128,
+            );
+            fees.push_back(fee);
             reserves.set(
                 i,
                 new_balances.get(i).unwrap()
-                    - (fees.get(i).unwrap().fixed_mul_floor(
-                        &e,
-                        admin_fee,
-                        FEE_DENOMINATOR as u128,
-                    )),
+                    - (fee.fixed_mul_ceil(&e, admin_fee, FEE_DENOMINATOR as u128)),
             );
             new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
         }
@@ -514,7 +513,6 @@ impl InternalInterfaceTrait for LiquidityPool {
         let n_coins = tokens.len();
 
         let amp = Self::a(e.clone());
-        let fee = get_fee(&e) as u128 * n_coins as u128 / (4 * (n_coins as u128 - 1));
         let total_supply = get_total_shares(&e);
 
         let xp = Self::xp(e.clone());
@@ -532,10 +530,12 @@ impl InternalInterfaceTrait for LiquidityPool {
             } else {
                 xp.get(j).unwrap() - xp.get(j).unwrap() * d1 / d0
             };
-            xp_reduced.set(
-                j,
-                xp_reduced.get(j).unwrap() - fee * dx_expected / FEE_DENOMINATOR as u128,
+            let fee = dx_expected.fixed_mul_ceil(
+                &e,
+                (get_fee(&e) * n_coins as u32) as u128,
+                (FEE_DENOMINATOR * 4 * (n_coins as u32 - 1)) as u128,
             );
+            xp_reduced.set(j, xp_reduced.get(j).unwrap() - fee);
         }
 
         let mut dy = xp_reduced.get(token_idx).unwrap()
@@ -887,10 +887,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         rewards.storage().bump_user_reward_data(&user);
 
         let mut fees: Vec<u128> = Vec::new(&e);
-        for _i in 0..n_coins {
-            fees.push_back(0);
-        }
-        let fee = get_fee(&e) as u128 * n_coins as u128 / (4 * (n_coins as u128 - 1));
         let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
 
@@ -933,18 +929,24 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             let mut result = new_balances.clone();
             // Only account for fees if we are not the first to deposit
             for i in 0..n_coins {
+                let new_balance = new_balances.get(i).unwrap();
                 let ideal_balance = d1 * old_balances.get(i).unwrap() / d0;
-                let difference = if ideal_balance > new_balances.get(i).unwrap() {
-                    ideal_balance - new_balances.get(i).unwrap()
+                let difference = if ideal_balance > new_balance {
+                    ideal_balance - new_balance
                 } else {
-                    new_balances.get(i).unwrap() - ideal_balance
+                    new_balance - ideal_balance
                 };
-                fees.set(i, fee as u128 * difference / FEE_DENOMINATOR as u128);
+
+                let fee = difference.fixed_mul_ceil(
+                    &e,
+                    get_fee(&e) as u128 * n_coins as u128,
+                    FEE_DENOMINATOR as u128 * 4 * (n_coins as u128 - 1),
+                );
+                fees.push_back(fee);
 
                 result.set(
                     i,
-                    new_balances.get(i).unwrap()
-                        - (fees.get(i).unwrap() * admin_fee / FEE_DENOMINATOR as u128),
+                    new_balance - (fee.fixed_mul_ceil(&e, admin_fee, FEE_DENOMINATOR as u128)),
                 );
                 new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
             }
@@ -1008,7 +1010,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = reserve_buy - y - 1; // -1 just in case there were some rounding errors
-        let dy_fee = dy.fixed_mul_floor(&e, get_fee(&e) as u128, FEE_DENOMINATOR as u128);
+        let dy_fee = dy.fixed_mul_ceil(&e, get_fee(&e) as u128, FEE_DENOMINATOR as u128);
 
         // Convert all to real units
         let dy = (dy - dy_fee).fixed_mul_floor(&e, PRECISION, RATE);
@@ -1017,7 +1019,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
 
         let mut dy_admin_fee =
-            dy_fee.fixed_mul_floor(&e, get_admin_fee(&e) as u128, FEE_DENOMINATOR as u128);
+            dy_fee.fixed_mul_ceil(&e, get_admin_fee(&e) as u128, FEE_DENOMINATOR as u128);
         dy_admin_fee = dy_admin_fee.fixed_mul_floor(&e, PRECISION, RATE);
 
         // Change balances exactly in same way as we change actual ERC20 coin amounts

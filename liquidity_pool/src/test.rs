@@ -28,10 +28,7 @@ fn test() {
     let reward_2_tps = 20_0000000_u128;
     let reward_3_tps = 6_0000000_u128;
     let total_reward_1 = reward_1_tps * 60;
-    let amount_to_deposit = 100;
-    // let amount_to_deposit = 1_000_0000000;
-    // let amount_to_deposit = 1_000_000_000_000_000_000_000_0000000;
-    // let amount_to_deposit = u128::MAX / 1_000_000;
+    let amount_to_deposit = 100_0000000;
     let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
 
     liq_pool.deposit(&user1, &desired_amounts, &0);
@@ -135,10 +132,15 @@ fn test() {
     );
     assert_eq!(token2.balance(&liq_pool.address), amount_to_deposit as i128);
 
-    let expected_swap_result = 49;
-    assert_eq!(liq_pool.estimate_swap(&0, &1, &97), expected_swap_result);
+    let swap_in_amount = 1_0000000_u128;
+    let expected_swap_result = 9871287_u128;
+
     assert_eq!(
-        liq_pool.swap(&user1, &0, &1, &97_u128, &expected_swap_result),
+        liq_pool.estimate_swap(&0, &1, &swap_in_amount),
+        expected_swap_result
+    );
+    assert_eq!(
+        liq_pool.swap(&user1, &0, &1, &swap_in_amount, &expected_swap_result),
         expected_swap_result
     );
     assert_eq!(
@@ -149,7 +151,7 @@ fn test() {
                 function: AuthorizedFunction::Contract((
                     liq_pool.address.clone(),
                     Symbol::new(&e, "swap"),
-                    (&user1, 0_u32, 1_u32, 97_u128, expected_swap_result).into_val(&e)
+                    (&user1, 0_u32, 1_u32, swap_in_amount, expected_swap_result).into_val(&e)
                 )),
                 sub_invocations: std::vec![AuthorizedInvocation {
                     function: AuthorizedFunction::Contract((
@@ -160,7 +162,7 @@ fn test() {
                             [
                                 user1.to_val(),
                                 liq_pool.address.to_val(),
-                                97_i128.into_val(&e),
+                                (swap_in_amount as i128).into_val(&e),
                             ]
                         ),
                     )),
@@ -172,11 +174,11 @@ fn test() {
 
     assert_eq!(
         token1.balance(&user1),
-        i128::MAX - amount_to_deposit as i128 - 97
+        i128::MAX - amount_to_deposit as i128 - swap_in_amount as i128
     );
     assert_eq!(
         token1.balance(&liq_pool.address),
-        amount_to_deposit as i128 + 97
+        amount_to_deposit as i128 + swap_in_amount as i128
     );
     assert_eq!(
         token2.balance(&user1),
@@ -188,7 +190,7 @@ fn test() {
     );
 
     let withdraw_amounts = [
-        amount_to_deposit + 97,
+        amount_to_deposit + swap_in_amount,
         amount_to_deposit - expected_swap_result,
     ];
     liq_pool.withdraw(
@@ -222,7 +224,7 @@ fn test() {
                             [
                                 user1.to_val(),
                                 liq_pool.address.to_val(),
-                                100_i128.into_val(&e),
+                                (amount_to_deposit as i128).into_val(&e),
                             ]
                         ),
                     )),
@@ -351,16 +353,16 @@ fn test_custom_fee() {
     };
     let setup = Setup::new_with_config(&config);
 
-    // we're checking fraction against value required to swap 1 token
+    // we're checking fraction against output for 1 token
     for fee_config in [
-        (0, 1_0101011_u128),        // 0%
-        (10, 1_0111122_u128),       // 0.1%
-        (30, 1_0131405_u128),       // 0.3%
-        (100, 1_0203041_u128),      // 1%
-        (1000, 1_1223345_u128),     // 10%
-        (3000, 1_4430015_u128),     // 30%
-        (9900, 101_0101011_u128),   // 99%
-        (9999, 10101_0101011_u128), // 99.99% - maximum fee
+        (0, 9900990_u128),    // 0%
+        (10, 9891089_u128),   // 0.1%
+        (30, 9871287_u128),   // 0.3%
+        (100, 9801980_u128),  // 1%
+        (1000, 8910891_u128), // 10%
+        (3000, 6930693_u128), // 30%
+        (9900, 99009_u128),   // 99%
+        (9999, 990_u128),     // 99.99% - maximum fee
     ] {
         let liqpool = create_liqpool_contract(
             &setup.env,
@@ -379,10 +381,10 @@ fn test_custom_fee() {
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
             &0,
         );
-        assert_eq!(liqpool.estimate_swap(&1, &0, &fee_config.1), 1_0000000);
+        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), fee_config.1);
         assert_eq!(
-            liqpool.swap(&setup.users[0], &1, &0, &fee_config.1, &0),
-            1_0000000
+            liqpool.swap(&setup.users[0], &1, &0, &1_0000000, &0),
+            fee_config.1
         );
     }
 }

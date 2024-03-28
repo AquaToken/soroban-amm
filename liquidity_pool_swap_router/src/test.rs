@@ -113,7 +113,7 @@ fn test() {
     e.budget().print();
     e.budget().reset_unlimited();
     assert_eq!(best_pool, address5);
-    assert_eq!(best_result, 41_8273777);
+    assert_eq!(best_result, 41_8273776);
 }
 
 #[test]
@@ -302,7 +302,7 @@ fn test_3_tokens() {
         &1_0000000,
     );
     assert_eq!(best_pool, address4);
-    assert_eq!(best_result, 9982278);
+    assert_eq!(best_result, 9982277);
 }
 
 #[test]

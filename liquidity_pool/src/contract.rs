@@ -26,7 +26,6 @@ use token_share::{
     mint_shares, put_token_share, Client as LPTokenClient,
 };
 use utils::bump::bump_instance;
-use utils::math_errors::MathError;
 use utils::u256_math::ExtraMath;
 
 // Metadata that is added on to the WASM custom section
@@ -251,19 +250,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let fee_fraction = get_fee_fraction(&e);
-
-        // First calculate how much we can get with in_amount from the pool
-        let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
-        let n = U256::from_u128(&e, in_amount)
-            .mul(&U256::from_u128(&e, reserve_buy))
-            .mul(&U256::from_u128(&e, multiplier_with_fee));
-        let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
-            .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
-
-        let out = match n.div(&d).to_u128() {
-            Some(v) => v,
-            None => panic_with_error!(&e, MathError::NumberOverflow),
-        };
+        let result = in_amount.fixed_mul_floor(&e, reserve_buy, reserve_sell + in_amount);
+        let fee = result.fixed_mul_ceil(&e, fee_fraction as u128, FEE_MULTIPLIER);
+        let out = result - fee;
 
         if out < out_min {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
@@ -341,19 +330,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         let fee_fraction = get_fee_fraction(&e);
-
-        // First calculate how much needs to be sold to buy amount out from the pool
-        let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
-        let n = U256::from_u128(&e, in_amount)
-            .mul(&U256::from_u128(&e, reserve_buy))
-            .mul(&U256::from_u128(&e, multiplier_with_fee));
-        let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
-            .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
-
-        match n.div(&d).to_u128() {
-            Some(v) => v,
-            None => panic_with_error!(&e, MathError::NumberOverflow),
-        }
+        let result = in_amount.fixed_mul_floor(&e, reserve_buy, reserve_sell + in_amount);
+        let fee = result.fixed_mul_ceil(&e, fee_fraction as u128, FEE_MULTIPLIER);
+        result - fee
     }
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
