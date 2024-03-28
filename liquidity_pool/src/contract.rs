@@ -26,7 +26,6 @@ use token_share::{
     mint_shares, put_token_share, Client as LPTokenClient,
 };
 use utils::bump::bump_instance;
-use utils::math_errors::MathError;
 use utils::u256_math::ExtraMath;
 
 // Metadata that is added on to the WASM custom section
