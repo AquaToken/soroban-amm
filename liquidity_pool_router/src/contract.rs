@@ -271,10 +271,10 @@ impl AdminInterface for LiquidityPoolRouter {
         set_constant_product_pool_hash(&e, &new_hash);
     }
 
-    fn set_stableswap_pool_hash(e: Env, num_tokens: u32, new_hash: BytesN<32>) {
+    fn set_stableswap_pool_hash(e: Env, new_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
-        set_stableswap_pool_hash(&e, num_tokens, &new_hash);
+        set_stableswap_pool_hash(&e, &new_hash);
     }
 
     fn configure_init_pool_payment(e: Env, token: Address, amount: u128, to: Address) {

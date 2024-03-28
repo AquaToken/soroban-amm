@@ -7,7 +7,6 @@ pub enum LiquidityPoolRouterError {
     PoolNotFound = 301,
     BadFee = 302,
     StableswapHashMissing = 303,
-    StableswapUnsupportedTokensCount = 304,
     PoolsOverMax = 305,
     StableswapPoolsOverMax = 306,
     PathIsEmpty = 307,

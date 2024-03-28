@@ -1050,6 +1050,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "soroban-fixed-point-math"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "230e5902daf9de6e7591aa7864dcf763ff96914a4460a0294a5dfd62b3181e0f"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "soroban-ledger-snapshot"
 version = "20.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1071,6 +1080,7 @@ dependencies = [
  "liquidity-pool-validation-errors",
  "num-integer",
  "rewards",
+ "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
  "utils",
@@ -1105,6 +1115,7 @@ dependencies = [
  "cast",
  "liquidity-pool-validation-errors",
  "rewards",
+ "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
  "utils",
@@ -1116,6 +1127,7 @@ version = "0.1.0"
 dependencies = [
  "access_control",
  "liquidity-pool-validation-errors",
+ "soroban-fixed-point-math",
  "soroban-sdk",
  "utils",
 ]
