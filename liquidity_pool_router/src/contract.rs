@@ -8,7 +8,7 @@ use crate::pool_interface::{
 };
 use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt, get_standard_pool_salt,
-    get_tokens_salt, get_total_liquidity, pool_salt,
+    get_tokens_salt, get_total_liquidity,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
@@ -338,8 +338,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         if !check_vec_ordered(&tokens) {
             panic!("tokens are not sorted")
         }
-        let salt = pool_salt(&e, tokens.clone());
-        let pools = get_pools_plain(&e, &salt);
+        let tokens_salt = get_tokens_salt(&e, tokens.clone());
+        let pools = get_pools_plain(&e, &tokens_salt);
 
         let calculator = get_liquidity_calculator(&e);
         let mut pools_vec: Vec<Address> = Vec::new(&e);
@@ -412,7 +412,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         access_control.require_admin();
 
         let rewards_config = get_rewards_config(&e);
-        let salt = pool_salt(&e, tokens.clone());
+        let tokens_salt = get_tokens_salt(&e, tokens.clone());
         let calculator = get_liquidity_calculator(&e);
         let (pools, total_liquidity) = get_total_liquidity(&e, tokens.clone(), calculator);
         let mut tokens_with_liquidity = get_reward_tokens(&e, rewards_config.current_block);
@@ -423,7 +423,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         token_data.total_liquidity = total_liquidity;
         tokens_with_liquidity.set(tokens, token_data);
         set_reward_tokens(&e, rewards_config.current_block, &tokens_with_liquidity);
-        set_reward_tokens_detailed(&e, rewards_config.current_block, salt, &pools);
+        set_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt, &pools);
     }
 
     fn config_pool_rewards(
@@ -442,8 +442,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         };
 
         let rewards_config = get_rewards_config(&e);
-        let salt = pool_salt(&e, tokens.clone());
-        let tokens_detailed = get_reward_tokens_detailed(&e, rewards_config.current_block, salt);
+        let tokens_salt = get_tokens_salt(&e, tokens.clone());
+        let tokens_detailed = get_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt);
         let tokens_reward = get_reward_tokens(&e, rewards_config.current_block);
         let tokens_reward_info = tokens_reward.get(tokens.clone());
 

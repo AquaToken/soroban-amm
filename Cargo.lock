@@ -1087,6 +1087,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "soroban-liquidity-pool-liquidity-calculator-contract"
+version = "0.1.0"
+dependencies = [
+ "access_control",
+ "soroban-fixed-point-math",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "soroban-liquidity-pool-plane-contract"
 version = "0.1.0"
 dependencies = [
