@@ -1328,7 +1328,21 @@ fn test_tokens_storage() {
     }
     let counter = router.get_tokens_sets_count();
     assert_eq!(counter, 4);
+    let mut pools_full_list = Vec::new(&e);
     for i in 0..counter {
         assert_eq!(router.get_tokens(&i), pairs[i as usize]);
+        let pools = (
+            pairs[i as usize].clone(),
+            router.get_pools(&pairs[i as usize]),
+        );
+        assert_eq!(
+            router.get_pools_for_tokens_range(&i, &(i + 1)),
+            Vec::from_array(&e, [pools.clone()])
+        );
+        pools_full_list.push_back(pools);
     }
+    assert_eq!(
+        router.get_pools_for_tokens_range(&0, &counter),
+        pools_full_list,
+    );
 }

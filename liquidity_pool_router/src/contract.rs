@@ -453,6 +453,20 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     fn get_tokens(e: Env, index: u128) -> Vec<Address> {
         get_tokens_set(&e, index)
     }
+
+    fn get_pools_for_tokens_range(
+        e: Env,
+        start: u128,
+        end: u128,
+    ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)> {
+        // chained operation for better efficiency
+        let mut result = Vec::new(&e);
+        for index in start..end {
+            let tokens = Self::get_tokens(e.clone(), index);
+            result.push_back((tokens.clone(), Self::get_pools(e.clone(), tokens)))
+        }
+        result
+    }
 }
 
 #[contractimpl]
