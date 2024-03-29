@@ -1254,3 +1254,78 @@ fn test_underlying_validation_fee_out_of_bounds() {
         &0,
     );
 }
+
+#[test]
+fn test_tokens_storage() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+    ];
+    tokens.sort();
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&2, &install_stableswap_two_tokens_liq_pool_hash(&e));
+    router.set_stableswap_pool_hash(&3, &install_stableswap_three_tokens_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+
+    reward_token.mint(&user1, &10_0000000);
+
+    let pairs = [
+        Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone()]),
+        Vec::from_array(&e, [tokens[1].clone(), tokens[2].clone()]),
+        Vec::from_array(&e, [tokens[0].clone(), tokens[2].clone()]),
+        Vec::from_array(
+            &e,
+            [tokens[0].clone(), tokens[1].clone(), tokens[2].clone()],
+        ),
+    ];
+    for pair in pairs.clone() {
+        router.init_stableswap_pool(&user1, &pair, &100, &0, &0);
+        router.init_stableswap_pool(&user1, &pair, &100, &0, &0);
+        if pair.len() == 2 {
+            router.init_standard_pool(&user1, &pair, &30);
+        }
+    }
+    let counter = router.get_tokens_sets_count();
+    assert_eq!(counter, 4);
+    let mut pools_full_list = Vec::new(&e);
+    for i in 0..counter {
+        assert_eq!(router.get_tokens(&i), pairs[i as usize]);
+        let pools = (
+            pairs[i as usize].clone(),
+            router.get_pools(&pairs[i as usize]),
+        );
+        assert_eq!(
+            router.get_pools_for_tokens_range(&i, &(i + 1)),
+            Vec::from_array(&e, [pools.clone()])
+        );
+        pools_full_list.push_back(pools);
+    }
+    assert_eq!(
+        router.get_pools_for_tokens_range(&0, &counter),
+        pools_full_list,
+    );
+}
