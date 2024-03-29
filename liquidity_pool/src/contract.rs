@@ -3,6 +3,7 @@ use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool;
+use crate::pool::get_amount_out;
 use crate::pool_interface::{
     LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait,
 };
@@ -249,10 +250,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let fee_fraction = get_fee_fraction(&e);
-        let result = in_amount.fixed_mul_floor(&e, reserve_buy, reserve_sell + in_amount);
-        let fee = result.fixed_mul_ceil(&e, fee_fraction as u128, FEE_MULTIPLIER);
-        let out = result - fee;
+        let out = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
@@ -329,10 +327,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        let fee_fraction = get_fee_fraction(&e);
-        let result = in_amount.fixed_mul_floor(&e, reserve_buy, reserve_sell + in_amount);
-        let fee = result.fixed_mul_ceil(&e, fee_fraction as u128, FEE_MULTIPLIER);
-        result - fee
+        get_amount_out(&e, in_amount, reserve_sell, reserve_buy)
     }
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
