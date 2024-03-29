@@ -1285,8 +1285,7 @@ fn test_tokens_storage() {
     swap_router.set_pools_plane(&admin, &plane.address);
     router.init_admin(&admin);
     router.set_pool_hash(&pool_hash);
-    router.set_stableswap_pool_hash(&2, &install_stableswap_two_tokens_liq_pool_hash(&e));
-    router.set_stableswap_pool_hash(&3, &install_stableswap_three_tokens_liq_pool_hash(&e));
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
@@ -1356,7 +1355,6 @@ fn test_chained_swap() {
     let swapper = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
-    let stableswap_pool_hash_2 = install_stableswap_two_tokens_liq_pool_hash(&e);
     let token_hash = install_token_wasm(&e);
     let plane = create_plane_contract(&e);
     let swap_router = create_swap_router_contract(&e);
@@ -1365,7 +1363,7 @@ fn test_chained_swap() {
     let router = create_liqpool_router_contract(&e);
     router.init_admin(&admin);
     router.set_pool_hash(&pool_hash);
-    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash_2);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&token1.address);
     router.set_pools_plane(&admin, &plane.address);
@@ -1488,7 +1486,6 @@ fn test_chained_swap_min_not_met() {
     let swapper = Address::generate(&e);
 
     let pool_hash = install_liq_pool_hash(&e);
-    let stableswap_pool_hash_2 = install_stableswap_two_tokens_liq_pool_hash(&e);
     let token_hash = install_token_wasm(&e);
     let plane = create_plane_contract(&e);
     let swap_router = create_swap_router_contract(&e);
@@ -1497,7 +1494,7 @@ fn test_chained_swap_min_not_met() {
     let router = create_liqpool_router_contract(&e);
     router.init_admin(&admin);
     router.set_pool_hash(&pool_hash);
-    router.set_stableswap_pool_hash(&2, &stableswap_pool_hash_2);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&token1.address);
     router.set_pools_plane(&admin, &plane.address);
