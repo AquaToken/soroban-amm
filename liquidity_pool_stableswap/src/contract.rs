@@ -114,6 +114,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let dy = (xp.get(j).unwrap() - y - 1).fixed_mul_floor(&e, PRECISION, RATE);
+        // The `fixed_mul_ceil` function is used to perform the multiplication
+        //  to ensure user cannot exploit rounding errors.
         let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
@@ -125,6 +127,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let x = xp.get(i).unwrap() + dx * PRECISION_MUL;
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
         let dy = (xp.get(j).unwrap() - y - 1) / PRECISION_MUL;
+        // The `fixed_mul_ceil` function is used to perform the multiplication
+        //  to ensure user cannot exploit rounding errors.
         let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
@@ -178,24 +182,29 @@ impl LiquidityPoolTrait for LiquidityPool {
         let mut fees = Vec::new(&e);
 
         for i in 0..n_coins {
+            let new_balance = new_balances.get(i).unwrap();
             let ideal_balance = d1.fixed_mul_floor(&e, old_balances.get(i).unwrap(), d0);
-            let difference = if ideal_balance > new_balances.get(i).unwrap() {
-                ideal_balance - new_balances.get(i).unwrap()
+            let difference = if ideal_balance > new_balance {
+                ideal_balance - new_balance
             } else {
-                new_balances.get(i).unwrap() - ideal_balance
+                new_balance - ideal_balance
             };
+            // This formula ensures that the fee is proportionally distributed
+            //  among the different coins in the pool. The denominator (4 * (N_COINS - 1)) is used
+            //  to adjust the fee based on the number of coins. As the number of coins increases,
+            //  the fee for each individual coin decreases.
             let fee = difference.fixed_mul_ceil(
                 &e,
                 get_fee(&e) as u128 * n_coins as u128,
                 4 * (n_coins as u128 - 1) * FEE_DENOMINATOR as u128,
             );
             fees.push_back(fee);
+            // Admin fee is deducted from pool available reserves
             reserves.set(
                 i,
-                new_balances.get(i).unwrap()
-                    - (fee.fixed_mul_ceil(&e, admin_fee, FEE_DENOMINATOR as u128)),
+                new_balance - (fee.fixed_mul_ceil(&e, admin_fee, FEE_DENOMINATOR as u128)),
             );
-            new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
+            new_balances.set(i, new_balance - fee);
         }
         put_reserves(&e, &reserves);
 
@@ -937,6 +946,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
                     new_balance - ideal_balance
                 };
 
+                // This formula ensures that the fee is proportionally distributed
+                //  among the different coins in the pool. The denominator (4 * (N_COINS - 1)) is used
+                //  to adjust the fee based on the number of coins. As the number of coins increases,
+                //  the fee for each individual coin decreases.
                 let fee = difference.fixed_mul_ceil(
                     &e,
                     get_fee(&e) as u128 * n_coins as u128,
@@ -944,11 +957,12 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
                 );
                 fees.push_back(fee);
 
+                // Admin fee is deducted from pool available reserves
                 result.set(
                     i,
                     new_balance - (fee.fixed_mul_ceil(&e, admin_fee, FEE_DENOMINATOR as u128)),
                 );
-                new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
+                new_balances.set(i, new_balances.get(i).unwrap() - fee);
             }
             d2 = Self::get_d_mem(e.clone(), new_balances, amp);
             result
