@@ -265,7 +265,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
-        let residue_numerator = FEE_MULTIPLIER - fee_fraction as u128;
+        let residue_numerator = FEE_MULTIPLIER - (get_fee_fraction(&e) as u128);
         let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
 
         let new_invariant_factor = |balance: u128, reserve: u128, out: u128| {
