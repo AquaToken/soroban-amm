@@ -13,10 +13,10 @@ use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
     get_init_pool_payment_address, get_init_pool_payment_amount, get_init_pool_payment_token,
-    get_pool, get_pool_plane, get_pools_plain, get_swap_router, has_pool, remove_pool,
-    set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount,
-    set_init_pool_payment_token, set_pool_plane, set_stableswap_pool_hash, set_swap_router,
-    set_token_hash,
+    get_pool, get_pool_plane, get_pools_plain, get_swap_router, get_tokens_set,
+    get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
+    set_init_pool_payment_address, set_init_pool_payment_amount, set_init_pool_payment_token,
+    set_pool_plane, set_stableswap_pool_hash, set_swap_router, set_token_hash,
 };
 use crate::swap_router::SwapRouterClient;
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -83,14 +83,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
     }
 
-    fn get_tokens(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<Address> {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_tokens"), Vec::new(&e))
-    }
-
     fn deposit(
         e: Env,
         user: Address,
@@ -140,7 +132,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-        let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         let out_amt = e.invoke_contract(
             &pool_id,
@@ -181,7 +172,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-        let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         e.invoke_contract(
             &pool_id,
@@ -455,6 +445,28 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         if has_pool(&e, &salt, pool_hash.clone()) {
             remove_pool(&e, &salt, pool_hash)
         }
+    }
+
+    fn get_tokens_sets_count(e: Env) -> u128 {
+        get_tokens_set_count(&e)
+    }
+
+    fn get_tokens(e: Env, index: u128) -> Vec<Address> {
+        get_tokens_set(&e, index)
+    }
+
+    fn get_pools_for_tokens_range(
+        e: Env,
+        start: u128,
+        end: u128,
+    ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)> {
+        // chained operation for better efficiency
+        let mut result = Vec::new(&e);
+        for index in start..end {
+            let tokens = Self::get_tokens(e.clone(), index);
+            result.push_back((tokens.clone(), Self::get_pools(e.clone(), tokens)))
+        }
+        result
     }
 }
 

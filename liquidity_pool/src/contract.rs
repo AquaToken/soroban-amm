@@ -3,6 +3,7 @@ use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool;
+use crate::pool::get_amount_out;
 use crate::pool_interface::{
     LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait,
 };
@@ -26,7 +27,6 @@ use token_share::{
     mint_shares, put_token_share, Client as LPTokenClient,
 };
 use utils::bump::bump_instance;
-use utils::math_errors::MathError;
 use utils::u256_math::ExtraMath;
 
 // Metadata that is added on to the WASM custom section
@@ -250,20 +250,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let fee_fraction = get_fee_fraction(&e);
-
-        // First calculate how much we can get with in_amount from the pool
-        let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
-        let n = U256::from_u128(&e, in_amount)
-            .mul(&U256::from_u128(&e, reserve_buy))
-            .mul(&U256::from_u128(&e, multiplier_with_fee));
-        let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
-            .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
-
-        let out = match n.div(&d).to_u128() {
-            Some(v) => v,
-            None => panic_with_error!(&e, MathError::NumberOverflow),
-        };
+        let out = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
@@ -278,7 +265,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
-        let residue_numerator = FEE_MULTIPLIER - fee_fraction as u128;
+        let residue_numerator = FEE_MULTIPLIER - (get_fee_fraction(&e) as u128);
         let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
 
         let new_invariant_factor = |balance: u128, reserve: u128, out: u128| {
@@ -340,20 +327,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        let fee_fraction = get_fee_fraction(&e);
-
-        // First calculate how much needs to be sold to buy amount out from the pool
-        let multiplier_with_fee = FEE_MULTIPLIER - fee_fraction as u128;
-        let n = U256::from_u128(&e, in_amount)
-            .mul(&U256::from_u128(&e, reserve_buy))
-            .mul(&U256::from_u128(&e, multiplier_with_fee));
-        let d = (U256::from_u128(&e, reserve_sell).mul(&U256::from_u128(&e, FEE_MULTIPLIER)))
-            .add(&(U256::from_u128(&e, in_amount).mul(&U256::from_u128(&e, multiplier_with_fee))));
-
-        match n.div(&d).to_u128() {
-            Some(v) => v,
-            None => panic_with_error!(&e, MathError::NumberOverflow),
-        }
+        get_amount_out(&e, in_amount, reserve_sell, reserve_buy)
     }
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {

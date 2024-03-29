@@ -31,7 +31,9 @@ pub struct LiquidityPoolData {
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    TokensPairPools(BytesN<32>),
+    TokensSet(u128),
+    TokensSetCounter,
+    TokensSetPools(BytesN<32>),
     TokenHash,
     InitPoolPaymentToken,
     InitPoolPaymentAmount,
@@ -52,7 +54,7 @@ pub enum PoolError {
 }
 
 fn get_pools(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
-    let key = DataKey::TokensPairPools(salt.clone());
+    let key = DataKey::TokensSetPools(salt.clone());
     match e.storage().persistent().get(&key) {
         Some(value) => {
             bump_persistent(e, &key);
@@ -89,6 +91,12 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
+generate_instance_storage_getter_and_setter_with_default!(
+    tokens_set_count,
+    DataKey::TokensSetCounter,
+    u128,
+    0
+);
 generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
 generate_instance_storage_getter_and_setter!(swap_router, DataKey::SwapRouter, Address);
 
@@ -118,7 +126,7 @@ pub fn get_pools_plain(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, Address> {
 }
 
 pub fn put_pools(e: &Env, salt: &BytesN<32>, pools: &Map<BytesN<32>, LiquidityPoolData>) {
-    let key = DataKey::TokensPairPools(salt.clone());
+    let key = DataKey::TokensSetPools(salt.clone());
     e.storage().persistent().set(&key, pools);
     bump_persistent(e, &key);
 }
@@ -174,6 +182,19 @@ pub fn add_pool(
     put_pools(e, salt, &pools);
 }
 
+// remember unique tokens set
+pub fn add_tokens_set(e: &Env, tokens: &Vec<Address>) {
+    let salt = get_tokens_salt(e, tokens.clone());
+    let pools = get_pools(e, &salt);
+    if pools.len() > 0 {
+        return;
+    }
+
+    let tokens_set_count = get_tokens_set_count(e);
+    put_tokens_set(e, tokens_set_count, &tokens);
+    set_tokens_set_count(e, &(tokens_set_count + 1));
+}
+
 pub fn remove_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) {
     let mut pools = get_pools(e, salt);
     pools.remove(pool_index);
@@ -184,4 +205,21 @@ pub fn get_pool_next_counter(e: &Env) -> u128 {
     let value = get_pool_counter(e);
     set_pool_counter(e, &(value + 1));
     value
+}
+
+pub fn get_tokens_set(e: &Env, index: u128) -> Vec<Address> {
+    let key = DataKey::TokensSet(index);
+    match e.storage().persistent().get(&key) {
+        Some(v) => {
+            bump_persistent(e, &key);
+            v
+        }
+        None => panic_with_error!(&e, StorageError::ValueNotInitialized),
+    }
+}
+
+pub fn put_tokens_set(e: &Env, index: u128, tokens: &Vec<Address>) {
+    let key = DataKey::TokensSet(index);
+    e.storage().persistent().set(&key, tokens);
+    bump_persistent(e, &key);
 }
