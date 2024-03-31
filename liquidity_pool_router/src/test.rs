@@ -3,7 +3,9 @@ extern crate std;
 
 use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_POOLS};
 use crate::LiquidityPoolRouterClient;
-use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
+use soroban_sdk::testutils::{
+    AuthorizedFunction, AuthorizedInvocation, Events, Ledger, LedgerInfo,
+};
 use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, BytesN, Env, FromVal, IntoVal, Symbol,
     Val, Vec,
@@ -1283,8 +1285,7 @@ fn test_tokens_storage() {
     swap_router.set_pools_plane(&admin, &plane.address);
     router.init_admin(&admin);
     router.set_pool_hash(&pool_hash);
-    router.set_stableswap_pool_hash(&2, &install_stableswap_two_tokens_liq_pool_hash(&e));
-    router.set_stableswap_pool_hash(&3, &install_stableswap_three_tokens_liq_pool_hash(&e));
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
@@ -1327,5 +1328,209 @@ fn test_tokens_storage() {
     assert_eq!(
         router.get_pools_for_tokens_range(&0, &counter),
         pools_full_list,
+    );
+}
+
+#[test]
+fn test_chained_swap() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address
+    ];
+    tokens.sort();
+    let token1 = test_token::Client::new(&e, &tokens[0]);
+    let token2 = test_token::Client::new(&e, &tokens[1]);
+    let token3 = test_token::Client::new(&e, &tokens[2]);
+
+    let tokens1 = Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone()]);
+    let tokens2 = Vec::from_array(&e, [tokens[1].clone(), tokens[2].clone()]);
+
+    let swapper = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&token1.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+
+    let (pool_index1, _pool_address1) = router.init_standard_pool(&swapper, &tokens1, &30);
+    let (pool_index2, _pool_address2) = router.init_standard_pool(&swapper, &tokens2, &30);
+    token1.mint(&admin, &10000);
+    token2.mint(&admin, &20000);
+    token3.mint(&admin, &10000);
+    router.deposit(
+        &admin,
+        &tokens1,
+        &pool_index1,
+        &Vec::from_array(&e, [10000, 10000]),
+        &0,
+    );
+    router.deposit(
+        &admin,
+        &tokens2,
+        &pool_index2,
+        &Vec::from_array(&e, [10000, 10000]),
+        &0,
+    );
+
+    // swapping token 1 to 3 through combination of 2 pools as we don't have pool (1, 3)
+    token1.mint(&swapper, &1000);
+
+    assert_eq!(token1.balance(&swapper), 1000);
+    assert_eq!(token2.balance(&swapper), 0);
+    assert_eq!(token3.balance(&swapper), 0);
+    assert_eq!(token1.balance(&router.address), 0);
+    assert_eq!(token2.balance(&router.address), 0);
+    assert_eq!(token3.balance(&router.address), 0);
+    assert_eq!(
+        router.swap_chained(
+            &swapper,
+            &vec![
+                &e,
+                (tokens1.clone(), pool_index1.clone(), tokens[1].clone()),
+                (tokens2.clone(), pool_index2.clone(), tokens[2].clone()),
+            ],
+            &tokens[0],
+            &100,
+            &95,
+        ),
+        96
+    );
+    assert_eq!(
+        e.auths()[0],
+        (
+            swapper.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    router.address.clone(),
+                    Symbol::new(&e, "swap_chained"),
+                    vec!(
+                        &e,
+                        swapper.clone().to_val(),
+                        vec![
+                            &e,
+                            (tokens1.clone(), pool_index1.clone(), tokens[1].clone()),
+                            (tokens2.clone(), pool_index2.clone(), tokens[2].clone()),
+                        ]
+                        .into_val(&e),
+                        tokens[0].clone().to_val(),
+                        100_u128.into_val(&e),
+                        95_u128.into_val(&e),
+                    )
+                    .into_val(&e)
+                )),
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token1.address.clone(),
+                        Symbol::new(&e, "transfer"),
+                        Vec::from_array(
+                            &e,
+                            [
+                                swapper.to_val(),
+                                router.address.to_val(),
+                                100_i128.into_val(&e),
+                            ]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                },],
+            }
+        )
+    );
+    assert_eq!(token1.balance(&swapper), 900);
+    assert_eq!(token2.balance(&swapper), 0);
+    assert_eq!(token3.balance(&swapper), 96);
+    assert_eq!(token1.balance(&router.address), 0);
+    assert_eq!(token2.balance(&router.address), 0);
+    assert_eq!(token3.balance(&router.address), 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2006)")]
+fn test_chained_swap_min_not_met() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+    ];
+    tokens.sort();
+    let token1 = test_token::Client::new(&e, &tokens[0]);
+    let token2 = test_token::Client::new(&e, &tokens[1]);
+    let token3 = test_token::Client::new(&e, &tokens[2]);
+
+    let tokens1 = Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone()]);
+    let tokens2 = Vec::from_array(&e, [tokens[1].clone(), tokens[2].clone()]);
+
+    let swapper = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&token1.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+
+    let (pool_index1, _pool_address1) = router.init_standard_pool(&swapper, &tokens1, &30);
+    let (pool_index2, _pool_address2) = router.init_standard_pool(&swapper, &tokens2, &30);
+    token1.mint(&admin, &10000);
+    token2.mint(&admin, &20000);
+    token3.mint(&admin, &10000);
+    router.deposit(
+        &admin,
+        &tokens1,
+        &pool_index1,
+        &Vec::from_array(&e, [10000, 10000]),
+        &0,
+    );
+    router.deposit(
+        &admin,
+        &tokens2,
+        &pool_index2,
+        &Vec::from_array(&e, [10000, 10000]),
+        &0,
+    );
+
+    token1.mint(&swapper, &20000);
+
+    router.swap_chained(
+        &swapper,
+        &vec![
+            &e,
+            (tokens1.clone(), pool_index1.clone(), tokens[1].clone()),
+            (tokens2.clone(), pool_index2.clone(), tokens[2].clone()),
+        ],
+        &tokens[0],
+        &20,
+        &95,
     );
 }

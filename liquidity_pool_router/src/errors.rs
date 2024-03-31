@@ -9,4 +9,5 @@ pub enum LiquidityPoolRouterError {
     StableswapHashMissing = 303,
     PoolsOverMax = 305,
     StableswapPoolsOverMax = 306,
+    PathIsEmpty = 307,
 }
