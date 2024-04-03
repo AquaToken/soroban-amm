@@ -1,4 +1,4 @@
-use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
+use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS, USER_POOLS_PAGE_SIZE};
 use crate::errors::LiquidityPoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
@@ -43,6 +43,7 @@ enum DataKey {
     PoolCounter,
     PoolPlane,
     SwapRouter,
+    UserPools(Address, u32),
 }
 
 #[contracterror]
@@ -222,4 +223,69 @@ pub fn put_tokens_set(e: &Env, index: u128, tokens: &Vec<Address>) {
     let key = DataKey::TokensSet(index);
     e.storage().persistent().set(&key, tokens);
     bump_persistent(e, &key);
+}
+
+pub fn get_user_pools(
+    e: &Env,
+    user: &Address,
+    page: u32,
+) -> Vec<(Vec<Address>, BytesN<32>, Address)> {
+    let key = DataKey::UserPools(user.clone(), page);
+    match e.storage().persistent().get(&key) {
+        Some(v) => {
+            bump_persistent(e, &key);
+            v
+        }
+        None => Vec::new(e),
+    }
+}
+
+pub fn set_user_pools(
+    e: &Env,
+    user: &Address,
+    page: u32,
+    user_pools: &Vec<(Vec<Address>, BytesN<32>, Address)>,
+) {
+    let key = DataKey::UserPools(user.clone(), page);
+    e.storage().persistent().set(&key, user_pools);
+    bump_persistent(e, &key);
+}
+
+pub fn add_user_pool(
+    e: &Env,
+    user: &Address,
+    page: u32,
+    tokens: &Vec<Address>,
+    pool_index: &BytesN<32>,
+    pool_address: &Address,
+) {
+    let mut user_pools = get_user_pools(e, user, page.clone());
+    let pool_data = (tokens.clone(), pool_index.clone(), pool_address.clone());
+
+    user_pools.push_back(pool_data);
+    if user_pools.len() > USER_POOLS_PAGE_SIZE {
+        panic_with_error!(&e, LiquidityPoolRouterError::UserPoolsPageFull);
+    }
+    set_user_pools(e, user, page, &user_pools);
+}
+
+pub fn remove_user_pool(
+    e: &Env,
+    user: &Address,
+    page: u32,
+    tokens: &Vec<Address>,
+    pool_index: &BytesN<32>,
+    pool_address: &Address,
+) {
+    let mut user_pools = get_user_pools(e, user, page.clone());
+    let pool_data = (tokens.clone(), pool_index.clone(), pool_address.clone());
+    let pool_index = user_pools.first_index_of(&pool_data);
+
+    match pool_index {
+        Some(i) => {
+            user_pools.remove(i);
+            set_user_pools(e, user, page, &user_pools);
+        }
+        None => panic_with_error!(&e, LiquidityPoolRouterError::UserPoolsNothingToLeave),
+    }
 }

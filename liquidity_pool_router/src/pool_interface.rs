@@ -22,6 +22,7 @@ pub trait LiquidityPoolInterfaceTrait {
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
+    // pools_page: number of page to put user pool into. page should have space for new element
     fn deposit(
         e: Env,
         user: Address,
@@ -29,6 +30,7 @@ pub trait LiquidityPoolInterfaceTrait {
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
         min_shares: u128,
+        pools_page: u32,
     ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
@@ -62,6 +64,8 @@ pub trait LiquidityPoolInterfaceTrait {
     // share_amount: Quantity of LP tokens to burn in the withdrawal
     // min_amounts: Minimum amounts of underlying coins to receive
     // Returns a list of the amounts for each coin that was withdrawn.
+    // pools_page: number of page to remove user pool from.
+    //  page should contain pool we are withdrawing from
     fn withdraw(
         e: Env,
         user: Address,
@@ -69,6 +73,7 @@ pub trait LiquidityPoolInterfaceTrait {
         pool_index: BytesN<32>,
         share_amount: u128,
         min_amounts: Vec<u128>,
+        pools_page: u32,
     ) -> Vec<u128>;
 }
 
@@ -153,6 +158,21 @@ pub trait PoolsManagementTrait {
         start: u128,
         end: u128,
     ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
+
+    // Retrieves a list of user joined pools in batch based
+    fn get_user_pools(e: Env, user: Address, page: u32)
+        -> Vec<(Vec<Address>, BytesN<32>, Address)>;
+
+    // Remove user pool from list manually. To be used in case of emergency like pool removal
+    // User has to withdraw all funds from the pool before leaving it
+    fn remove_user_pool(
+        e: Env,
+        user: Address,
+        page: u32,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+        pool_address: Address,
+    );
 }
 
 pub trait PoolPlaneInterface {

@@ -33,11 +33,14 @@ fn install_token_wasm(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(WASM)
 }
 
-fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
+mod liq_pool {
     soroban_sdk::contractimport!(
         file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm"
     );
-    e.deployer().upload_contract_wasm(WASM)
+}
+
+fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
+    e.deployer().upload_contract_wasm(liq_pool::WASM)
 }
 
 fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
@@ -160,7 +163,7 @@ fn test_constant_product_pool() {
     assert_eq!(token_share.balance(&user1), 0);
 
     let desired_amounts = Vec::from_array(&e, [100, 100]);
-    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
+    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0, &0);
 
     assert_eq!(token_share.balance(&user1), 100);
     assert_eq!(router.get_total_shares(&tokens, &pool_hash), 100);
@@ -211,6 +214,7 @@ fn test_constant_product_pool() {
         &pool_hash,
         &100_u128,
         &Vec::from_array(&e, [197_u128, 52_u128]),
+        &0,
     );
 
     assert_eq!(token1.balance(&user1), 1000);
@@ -498,7 +502,7 @@ fn test_stableswap_pool() {
     assert_eq!(token_share.balance(&user1), 0);
 
     let desired_amounts = Vec::from_array(&e, [100_0000000, 100_0000000]);
-    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
+    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0, &0);
 
     assert_eq!(token_share.balance(&user1), 200_0000000);
     assert_eq!(router.get_total_shares(&tokens, &pool_hash), 200_0000000);
@@ -551,6 +555,7 @@ fn test_stableswap_pool() {
         &pool_hash,
         &200_0000000_u128,
         &Vec::from_array(&e, [197_0000000_u128, 19_5426294_u128]),
+        &0,
     );
 
     assert_eq!(token1.balance(&user1), 1000_0000000);
@@ -652,7 +657,7 @@ fn test_stableswap_3_pool() {
     assert_eq!(token_share.balance(&user1), 0);
 
     let desired_amounts = Vec::from_array(&e, [100_0000000, 100_0000000, 100_0000000]);
-    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
+    router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0, &0);
 
     assert_eq!(token_share.balance(&user1), 300_0000000);
     assert_eq!(token_share.balance(&pool_address), 0);
@@ -729,6 +734,7 @@ fn test_stableswap_3_pool() {
         &pool_hash,
         &300_0000000_u128,
         &Vec::from_array(&e, [197_0000000_u128, 39_5426295, 71_9304881]),
+        &0,
     );
 
     assert_eq!(token1.balance(&user1), 1000_0000000);
@@ -851,6 +857,7 @@ fn test_simple_ongoing_reward() {
         &tokens,
         &pool_hash,
         &Vec::from_array(&e, [100, 100]),
+        &0,
         &0,
     );
 
@@ -1027,7 +1034,8 @@ fn test_event_correct() {
 
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
-    let (amounts, share_amount) = router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
+    let (amounts, share_amount) =
+        router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0, &0);
 
     let pool_id = router.get_pool(&tokens, &pool_hash);
 
@@ -1081,6 +1089,7 @@ fn test_event_correct() {
         &pool_hash,
         &100_u128,
         &Vec::from_array(&e, [197_u128, 51_u128]),
+        &0,
     );
     let withdraw_event = e.events().all().last().unwrap();
 
@@ -1149,6 +1158,7 @@ fn test_swap_routed() {
         &standard1_pool_hash,
         &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
         &0,
+        &0,
     );
 
     let (standard2_pool_hash, _standard2_pool_address) =
@@ -1158,6 +1168,7 @@ fn test_swap_routed() {
         &tokens,
         &standard2_pool_hash,
         &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+        &0,
         &0,
     );
 
@@ -1169,6 +1180,7 @@ fn test_swap_routed() {
         &standard3_pool_hash,
         &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
         &0,
+        &0,
     );
 
     let (stable1_pool_hash, stable1_pool_address) =
@@ -1178,6 +1190,7 @@ fn test_swap_routed() {
         &tokens,
         &stable1_pool_hash,
         &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
+        &0,
         &0,
     );
 
@@ -1189,6 +1202,7 @@ fn test_swap_routed() {
         &stable2_pool_hash,
         &Vec::from_array(&e, [100_0000000_u128, 100_0000000_u128]),
         &0,
+        &0,
     );
 
     let (stable3_pool_hash, _stable3_pool_address) =
@@ -1198,6 +1212,7 @@ fn test_swap_routed() {
         &tokens,
         &stable3_pool_hash,
         &Vec::from_array(&e, [100_0000000_u128, 100_0000000_u128]),
+        &0,
         &0,
     );
 
@@ -1283,8 +1298,7 @@ fn test_tokens_storage() {
     swap_router.set_pools_plane(&admin, &plane.address);
     router.init_admin(&admin);
     router.set_pool_hash(&pool_hash);
-    router.set_stableswap_pool_hash(&2, &install_stableswap_two_tokens_liq_pool_hash(&e));
-    router.set_stableswap_pool_hash(&3, &install_stableswap_three_tokens_liq_pool_hash(&e));
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
@@ -1328,4 +1342,330 @@ fn test_tokens_storage() {
         router.get_pools_for_tokens_range(&0, &counter),
         pools_full_list,
     );
+}
+
+#[test]
+fn test_user_pools_list() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+    ];
+    tokens.sort();
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+
+    let tokens1 = Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone()]);
+    let tokens2 = Vec::from_array(&e, [tokens[0].clone(), tokens[2].clone()]);
+    let tokens3 = Vec::from_array(&e, [tokens[0].clone(), tokens[3].clone()]);
+    let tokens4 = Vec::from_array(&e, [tokens[0].clone(), tokens[4].clone()]);
+    for token in tokens {
+        test_token::Client::new(&e, &token).mint(&user1, &1000_0000000);
+    }
+
+    let mut expected_list = Vec::new(&e);
+    for tokens in [tokens1, tokens2, tokens3] {
+        for fee in [10, 30, 100] {
+            let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &fee);
+            router.deposit(
+                &user1,
+                &tokens,
+                &pool_hash,
+                &Vec::from_array(&e, [1, 1]),
+                &0,
+                &0,
+            );
+            expected_list.push_back((tokens.clone(), pool_hash.clone(), pool_address.clone()));
+        }
+    }
+
+    let (pool10_hash, pool10_address) = router.init_standard_pool(&user1, &tokens4, &10);
+    router.deposit(
+        &user1,
+        &tokens4,
+        &pool10_hash,
+        &Vec::from_array(&e, [1, 1]),
+        &0,
+        &0,
+    );
+    expected_list.push_back((tokens4.clone(), pool10_hash.clone(), pool10_address.clone()));
+    let (pool11_hash, pool11_address) = router.init_standard_pool(&user1, &tokens4, &30);
+    router.deposit(
+        &user1,
+        &tokens4,
+        &pool11_hash,
+        &Vec::from_array(&e, [1, 1]),
+        &0,
+        &1,
+    );
+    let expected_list1 = Vec::from_array(
+        &e,
+        [(tokens4.clone(), pool11_hash.clone(), pool11_address.clone())],
+    );
+
+    let user_pools = router.get_user_pools(&user1, &0);
+    for i in 0..user_pools.len() {
+        assert_eq!(
+            user_pools.get(i).unwrap(),
+            expected_list.pop_front().unwrap()
+        );
+    }
+    assert_eq!(router.get_user_pools(&user1, &1), expected_list1);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #308)")]
+fn test_user_pools_overflow() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+    ];
+    tokens.sort();
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+
+    let tokens1 = Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone()]);
+    let tokens2 = Vec::from_array(&e, [tokens[0].clone(), tokens[2].clone()]);
+    let tokens3 = Vec::from_array(&e, [tokens[0].clone(), tokens[3].clone()]);
+    let tokens4 = Vec::from_array(&e, [tokens[0].clone(), tokens[4].clone()]);
+    for token in tokens {
+        test_token::Client::new(&e, &token).mint(&user1, &1000_0000000);
+    }
+
+    for tokens in [tokens1, tokens2, tokens3, tokens4] {
+        for fee in [10, 30, 100] {
+            let (pool_hash, _pool_address) = router.init_standard_pool(&user1, &tokens, &fee);
+            router.deposit(
+                &user1,
+                &tokens,
+                &pool_hash,
+                &Vec::from_array(&e, [1, 1]),
+                &0,
+                &0,
+            );
+        }
+    }
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #309)")]
+fn test_user_remove_pool_after_admin_not_empty() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin);
+    let token2 = create_token_contract(&e, &admin);
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    for token in tokens.clone() {
+        test_token::Client::new(&e, &token).mint(&user1, &1000_0000000);
+    }
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+
+    // Initialize and deposit to the pool
+    let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
+    router.deposit(
+        &user1,
+        &tokens,
+        &pool_hash,
+        &Vec::from_array(&e, [100, 100]),
+        &0,
+        &0,
+    );
+
+    // Admin removes the pool
+    router.remove_pool(&admin, &tokens, &pool_hash);
+
+    // User has shares - cannot remove
+    router.remove_user_pool(&user1, &0, &tokens, &pool_hash, &pool_address);
+}
+
+#[test]
+fn test_user_remove_pool_after_admin_pool_ok() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin);
+    let token2 = create_token_contract(&e, &admin);
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    for token in tokens.clone() {
+        test_token::Client::new(&e, &token).mint(&user1, &1000_0000000);
+    }
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+
+    // Initialize and deposit to the pool
+    let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
+    router.deposit(
+        &user1,
+        &tokens,
+        &pool_hash,
+        &Vec::from_array(&e, [100, 100]),
+        &0,
+        &0,
+    );
+
+    // Admin removes the pool
+    router.remove_pool(&admin, &tokens, &pool_hash);
+
+    // User can remove the pool manually after withdrawal from the pool
+    liq_pool::Client::new(&e, &pool_address).withdraw(
+        &user1,
+        &100,
+        &Vec::from_array(&e, [100, 100]),
+    );
+    router.remove_user_pool(&user1, &0, &tokens, &pool_hash, &pool_address);
+}
+
+#[test]
+fn test_user_pool_removal_on_partial_withdraw() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin);
+    let token2 = create_token_contract(&e, &admin);
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    for token in tokens.clone() {
+        test_token::Client::new(&e, &token).mint(&user1, &1000_0000000);
+    }
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let router = create_liqpool_router_contract(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+
+    // Initialize and deposit to the pool
+    let (pool_hash, _pool_address) = router.init_standard_pool(&user1, &tokens, &30);
+
+    assert!(router.get_user_pools(&user1, &0).len() == 0);
+    router.deposit(
+        &user1,
+        &tokens,
+        &pool_hash,
+        &Vec::from_array(&e, [100, 100]),
+        &0,
+        &0,
+    );
+
+    assert!(router.get_user_pools(&user1, &0).len() == 1);
+    router.withdraw(
+        &user1,
+        &tokens,
+        &pool_hash,
+        &50,
+        &Vec::from_array(&e, [0, 0]),
+        &0,
+    );
+    assert!(router.get_user_pools(&user1, &0).len() == 1);
+    router.withdraw(
+        &user1,
+        &tokens,
+        &pool_hash,
+        &50,
+        &Vec::from_array(&e, [0, 0]),
+        &0,
+    );
+    assert!(router.get_user_pools(&user1, &0).len() == 0);
 }

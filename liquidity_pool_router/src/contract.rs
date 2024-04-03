@@ -12,11 +12,12 @@ use crate::pool_utils::{
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
-    get_init_pool_payment_address, get_init_pool_payment_amount, get_init_pool_payment_token,
-    get_pool, get_pool_plane, get_pools_plain, get_swap_router, get_tokens_set,
-    get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_init_pool_payment_address, set_init_pool_payment_amount, set_init_pool_payment_token,
-    set_pool_plane, set_stableswap_pool_hash, set_swap_router, set_token_hash,
+    add_user_pool, get_init_pool_payment_address, get_init_pool_payment_amount,
+    get_init_pool_payment_token, get_pool, get_pool_plane, get_pools_plain, get_swap_router,
+    get_tokens_set, get_tokens_set_count, get_user_pools, has_pool, remove_pool, remove_user_pool,
+    set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount,
+    set_init_pool_payment_token, set_pool_plane, set_stableswap_pool_hash, set_swap_router,
+    set_token_hash,
 };
 use crate::swap_router::SwapRouterClient;
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -89,6 +90,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
         min_shares: u128,
+        pools_page: u32,
     ) -> (Vec<u128>, u128) {
         user.require_auth();
 
@@ -109,6 +111,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
                 ],
             ),
         );
+        add_user_pool(&e, &user, pools_page, &tokens, &pool_index, &pool_id);
         Events::new(&e).deposit(tokens, user, pool_id, amounts.clone(), share_amount);
         (amounts, share_amount)
     }
@@ -199,6 +202,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         pool_index: BytesN<32>,
         share_amount: u128,
         min_amounts: Vec<u128>,
+        pools_page: u32,
     ) -> Vec<u128> {
         user.require_auth();
 
@@ -219,6 +223,13 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
                 ],
             ),
         );
+
+        // remove pool from user list if no shares left
+        let share_id = Self::share_id(e.clone(), tokens.clone(), pool_index.clone());
+        let share_balance = SorobanTokenClient::new(&e, &share_id).balance(&user);
+        if share_balance == 0 {
+            remove_user_pool(&e, &user, pools_page, &tokens, &pool_index, &pool_id);
+        }
 
         Events::new(&e).withdraw(tokens, user, pool_id, amounts.clone(), share_amount);
         amounts
@@ -466,6 +477,31 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             result.push_back((tokens.clone(), Self::get_pools(e.clone(), tokens)))
         }
         result
+    }
+
+    fn get_user_pools(
+        e: Env,
+        user: Address,
+        page: u32,
+    ) -> Vec<(Vec<Address>, BytesN<32>, Address)> {
+        get_user_pools(&e, &user, page)
+    }
+
+    fn remove_user_pool(
+        e: Env,
+        user: Address,
+        page: u32,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+        pool_address: Address,
+    ) {
+        user.require_auth();
+        let share_id = e.invoke_contract(&pool_address, &Symbol::new(&e, "share_id"), Vec::new(&e));
+        let share_balance = SorobanTokenClient::new(&e, &share_id).balance(&user);
+        if share_balance > 0 {
+            panic_with_error!(&e, LiquidityPoolRouterError::UserHasShares);
+        }
+        remove_user_pool(&e, &user, page, &tokens, &pool_index, &pool_address);
     }
 }
 
