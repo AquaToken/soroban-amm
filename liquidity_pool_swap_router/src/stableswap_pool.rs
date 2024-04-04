@@ -3,8 +3,6 @@ use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{panic_with_error, Env, Vec, U256};
 use utils::math_errors::MathError;
 
-const RATE: u128 = 1_0000000;
-const PRECISION: u128 = 1_0000000;
 const FEE_DENOMINATOR: u32 = 10000; // 0.01% = 0.0001 = 1 / 10000
 
 fn a(e: &Env, initial_a: u128, initial_a_time: u128, future_a: u128, future_a_time: u128) -> u128 {
@@ -147,7 +145,7 @@ fn get_dy(
     // dx and dy in c-units
     let xp = reserves.clone();
 
-    let x = xp.get(i).unwrap() + (dx.fixed_mul_floor(e, RATE, PRECISION));
+    let x = xp.get(i).unwrap() + dx;
     let y = get_y(e, reserves.len(), i, j, x, xp.clone(), a);
 
     if y == 0 {
@@ -155,7 +153,7 @@ fn get_dy(
         return 0;
     }
 
-    let dy = (xp.get(j).unwrap() - y - 1).fixed_mul_floor(e, PRECISION, RATE);
+    let dy = xp.get(j).unwrap() - y - 1;
     let fee = fee_fraction.fixed_mul_ceil(e, dy, FEE_DENOMINATOR as u128);
     dy - fee
 }
