@@ -2,7 +2,9 @@ use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
 use crate::errors::LiquidityPoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
-use soroban_sdk::{contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Vec};
+use soroban_sdk::{
+    contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Vec, U256,
+};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
 use utils::{
@@ -28,6 +30,22 @@ pub struct LiquidityPoolData {
     pub address: Address,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GlobalRewardsConfig {
+    pub tps: u128,
+    pub expired_at: u64,
+    pub current_block: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LiquidityPoolRewardInfo {
+    pub voting_share: u32,
+    pub processed: bool,
+    pub total_liquidity: U256,
+}
+
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
@@ -43,6 +61,10 @@ enum DataKey {
     PoolCounter,
     PoolPlane,
     SwapRouter,
+    LiquidityCalculator,
+    RewardsConfig,
+    RewardTokensList(u64),
+    RewardTokensPoolsLiquidity(u64, BytesN<32>),
 }
 
 #[contracterror]
@@ -99,6 +121,58 @@ generate_instance_storage_getter_and_setter_with_default!(
 );
 generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
 generate_instance_storage_getter_and_setter!(swap_router, DataKey::SwapRouter, Address);
+generate_instance_storage_getter_and_setter!(
+    liquidity_calculator,
+    DataKey::LiquidityCalculator,
+    Address
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    rewards_config,
+    DataKey::RewardsConfig,
+    GlobalRewardsConfig,
+    GlobalRewardsConfig {
+        tps: 0,
+        expired_at: 0,
+        current_block: 0,
+    }
+);
+
+pub fn get_reward_tokens(e: &Env, block: u64) -> Map<Vec<Address>, LiquidityPoolRewardInfo> {
+    let key = DataKey::RewardTokensList(block);
+    bump_persistent(e, &key);
+    e.storage()
+        .persistent()
+        .get(&key)
+        .expect("unable to find rewards tokens. please run `config_rewards` first")
+}
+
+pub fn set_reward_tokens(e: &Env, block: u64, value: &Map<Vec<Address>, LiquidityPoolRewardInfo>) {
+    let key = DataKey::RewardTokensList(block);
+    let result = e.storage().persistent().set(&key, value);
+    bump_persistent(e, &key);
+    result
+}
+
+pub fn get_reward_tokens_detailed(e: &Env, block: u64, salt: BytesN<32>) -> Map<BytesN<32>, U256> {
+    let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
+    bump_persistent(e, &key);
+    e.storage()
+        .persistent()
+        .get(&key)
+        .expect("unable to find rewards config. please run `fill_liquidity` first")
+}
+
+pub fn set_reward_tokens_detailed(
+    e: &Env,
+    block: u64,
+    salt: BytesN<32>,
+    value: &Map<BytesN<32>, U256>,
+) {
+    let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
+    let result = e.storage().persistent().set(&key, value);
+    bump_persistent(e, &key);
+    result
+}
 
 // pool hash
 pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
