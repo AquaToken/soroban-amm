@@ -1,5 +1,5 @@
 use crate::calculator::{get_max_reserve, get_next_in_amt, normalize_reserves, price_weight};
-use crate::constants::{FEE_MULTIPLIER, PRICE_PRECISION};
+use crate::constants::{FEE_MULTIPLIER, PRECISION};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Env, Vec};
 
@@ -15,7 +15,7 @@ fn estimate_swap(
     let reserve_buy = reserves.get(out_idx).unwrap();
 
     let result = in_amount.fixed_mul_floor(e, reserve_buy, reserve_sell + in_amount);
-    let fee = result.fixed_mul_ceil(e, fee_fraction as u128, FEE_MULTIPLIER);
+    let fee = result.fixed_mul_ceil(e, fee_fraction, FEE_MULTIPLIER);
     result - fee
 }
 
@@ -26,15 +26,14 @@ fn get_min_price(
     in_idx: u32,
     out_idx: u32,
 ) -> u128 {
-    let min_amount = PRICE_PRECISION;
+    let min_amount = PRECISION;
     let mut reserves_adj = Vec::new(e);
     for i in 0..reserves.len() {
         let value = reserves.get(i).unwrap();
-        reserves_adj.push_back(value * PRICE_PRECISION);
+        reserves_adj.push_back(value * PRECISION);
     }
 
-    &min_amount * PRICE_PRECISION
-        / estimate_swap(e, fee_fraction, &reserves_adj, in_idx, out_idx, min_amount)
+    min_amount.fixed_mul_floor(e, PRECISION, estimate_swap(e, fee_fraction, &reserves_adj, in_idx, out_idx, min_amount))
 }
 
 pub(crate) fn get_liquidity(
@@ -61,11 +60,13 @@ pub(crate) fn get_liquidity(
 
     let mut first_iteration = true;
     let mut last_iteration = false;
+
+    // euristic. 2x is because of weight function - after 1.6 it affects less than 1%
     let mut in_amt = get_max_reserve(&reserves_norm) * 2;
 
     while !last_iteration {
         let mut depth = estimate_swap(e, fee_fraction, &reserves_norm, in_idx, out_idx, in_amt);
-        let mut price = in_amt * PRICE_PRECISION / depth;
+        let mut price = in_amt * PRECISION / depth;
         let mut weight = price_weight(price, min_price);
 
         if first_iteration {
@@ -79,7 +80,7 @@ pub(crate) fn get_liquidity(
         // stop if rounding affects price
         // stop if steps are too small
         //  then integrate up to min price
-        if (price > prev_price) || (in_amt < 50_000) {
+        if price > prev_price {
             // don't go into last iteration since we've already jumped below min price
             if prev_price < min_price {
                 break;
@@ -95,7 +96,7 @@ pub(crate) fn get_liquidity(
         let weight_avg = (&weight + &prev_weight) / 2;
         let d_price = &prev_price - &price;
         let integration_result =
-            depth_avg * PRICE_PRECISION * weight_avg / PRICE_PRECISION * d_price / PRICE_PRECISION;
+            depth_avg * PRECISION * weight_avg / PRECISION * d_price / PRECISION;
 
         result_big += integration_result;
 
@@ -104,5 +105,5 @@ pub(crate) fn get_liquidity(
         prev_depth = depth;
         in_amt = get_next_in_amt(in_amt);
     }
-    result_big / PRICE_PRECISION * nominator / denominator
+    result_big / PRECISION * nominator / denominator
 }
