@@ -1086,7 +1086,10 @@ fn test_withdraw_one_token() {
     assert_eq!(token2.balance(&user1) as u128, 900_0000000);
     assert_eq!(token2.balance(&liqpool.address) as u128, 100_0000000);
 
-    liqpool.withdraw_one_coin(&user1, &100_0000000, &0, &10_0000000);
+    assert_eq!(
+        liqpool.withdraw_one_coin(&user1, &100_0000000, &0, &10_0000000),
+        Vec::from_array(&e, [91_0435607_u128, 0_u128]),
+    );
 
     assert_eq!(token1.balance(&user1) as u128, 991_0435607);
     assert_eq!(token1.balance(&liqpool.address) as u128, 8_9564393);
