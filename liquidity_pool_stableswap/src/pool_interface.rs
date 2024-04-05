@@ -157,8 +157,6 @@ pub trait AdminInterfaceTrait {
 }
 
 pub trait InternalInterfaceTrait {
-    fn xp(e: Env) -> Vec<u128>;
-    fn xp_mem(e: Env, balances: Vec<u128>) -> Vec<u128>;
     fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128;
     fn get_d_mem(e: Env, balances: Vec<u128>, amp: u128) -> u128;
     fn get_y(e: Env, i: u32, j: u32, x: u128, xp_: Vec<u128>) -> u128;
@@ -187,8 +185,6 @@ pub trait LiquidityPoolTrait:
 
     // Get the amount of coin j one would receive for swapping dx of coin i.
     fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128;
-
-    fn get_dy_underlying(e: Env, i: u32, j: u32, dx: u128) -> u128;
 
     // Withdraw coins from the pool in an imbalanced amount.
     // amounts: List of amounts of underlying coins to withdraw
