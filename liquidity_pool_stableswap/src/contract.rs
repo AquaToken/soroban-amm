@@ -1,6 +1,6 @@
 use crate::pool_constants::{
-    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, KILL_DEADLINE_DT, LENDING_PRECISION, MAX_A,
-    MAX_ADMIN_FEE, MAX_A_CHANGE, MAX_FEE, MIN_RAMP_TIME, PRECISION, PRECISION_MUL, RATE,
+    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, KILL_DEADLINE_DT, MAX_A, MAX_ADMIN_FEE, MAX_A_CHANGE,
+    MAX_FEE, MIN_RAMP_TIME, PRICE_PRECISION,
 };
 use crate::pool_interface::{
     AdminInterfaceTrait, InternalInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait,
@@ -26,6 +26,7 @@ use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
+use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
 use soroban_fixed_point_math::SorobanFixedPoint;
@@ -70,11 +71,11 @@ impl LiquidityPoolTrait for LiquidityPool {
     }
 
     fn get_virtual_price(e: Env) -> u128 {
-        let d = Self::get_d(e.clone(), Self::xp(e.clone()), Self::a(e.clone()));
+        let d = Self::get_d(e.clone(), Self::get_reserves(e.clone()), Self::a(e.clone()));
         // D is in the units similar to DAI (e.g. converted to precision 1e7)
         // When balanced, D = n * x_u - total virtual value of the portfolio
         let token_supply = get_total_shares(&e);
-        d.fixed_mul_floor(&e, PRECISION, token_supply)
+        d.fixed_mul_floor(&e, PRICE_PRECISION, token_supply)
     }
 
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128 {
@@ -103,9 +104,9 @@ impl LiquidityPoolTrait for LiquidityPool {
 
     fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128 {
         // dx and dy in c-units
-        let xp = Self::xp(e.clone());
+        let xp = Self::get_reserves(e.clone());
 
-        let x = xp.get(i).unwrap() + (dx.fixed_mul_floor(&e, RATE, PRECISION));
+        let x = xp.get(i).unwrap() + dx;
         let y = Self::get_y(e.clone(), i, j, x, xp.clone());
 
         if y == 0 {
@@ -113,18 +114,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             return 0;
         }
 
-        let dy = (xp.get(j).unwrap() - y - 1).fixed_mul_floor(&e, PRECISION, RATE);
-        let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, dy, FEE_DENOMINATOR as u128);
-        dy - fee
-    }
-
-    fn get_dy_underlying(e: Env, i: u32, j: u32, dx: u128) -> u128 {
-        // dx and dy in underlying units
-        let xp = Self::xp(e.clone());
-
-        let x = xp.get(i).unwrap() + dx * PRECISION_MUL;
-        let y = Self::get_y(e.clone(), i, j, x, xp.clone());
-        let dy = (xp.get(j).unwrap() - y - 1) / PRECISION_MUL;
+        let dy = xp.get(j).unwrap() - y - 1;
+        // The `fixed_mul_ceil` function is used to perform the multiplication
+        //  to ensure user cannot exploit rounding errors.
         let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, dy, FEE_DENOMINATOR as u128);
         dy - fee
     }
@@ -178,24 +170,29 @@ impl LiquidityPoolTrait for LiquidityPool {
         let mut fees = Vec::new(&e);
 
         for i in 0..n_coins {
+            let new_balance = new_balances.get(i).unwrap();
             let ideal_balance = d1.fixed_mul_floor(&e, old_balances.get(i).unwrap(), d0);
-            let difference = if ideal_balance > new_balances.get(i).unwrap() {
-                ideal_balance - new_balances.get(i).unwrap()
+            let difference = if ideal_balance > new_balance {
+                ideal_balance - new_balance
             } else {
-                new_balances.get(i).unwrap() - ideal_balance
+                new_balance - ideal_balance
             };
+            // This formula ensures that the fee is proportionally distributed
+            //  among the different coins in the pool. The denominator (4 * (N_COINS - 1)) is used
+            //  to adjust the fee based on the number of coins. As the number of coins increases,
+            //  the fee for each individual coin decreases.
             let fee = difference.fixed_mul_ceil(
                 &e,
                 get_fee(&e) as u128 * n_coins as u128,
                 4 * (n_coins as u128 - 1) * FEE_DENOMINATOR as u128,
             );
             fees.push_back(fee);
+            // Admin fee is deducted from pool available reserves
             reserves.set(
                 i,
-                new_balances.get(i).unwrap()
-                    - (fee.fixed_mul_ceil(&e, admin_fee, FEE_DENOMINATOR as u128)),
+                new_balance - (fee.fixed_mul_ceil(&e, admin_fee, FEE_DENOMINATOR as u128)),
             );
-            new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
+            new_balances.set(i, new_balance - fee);
         }
         put_reserves(&e, &reserves);
 
@@ -249,7 +246,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         Self::internal_calc_withdraw_one_coin(e, token_amount, i).0
     }
 
-    fn withdraw_one_coin(e: Env, user: Address, token_amount: u128, i: u32, min_amount: u128) {
+    fn withdraw_one_coin(
+        e: Env,
+        user: Address,
+        share_amount: u128,
+        i: u32,
+        min_amount: u128,
+    ) -> Vec<u128> {
         user.require_auth();
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
@@ -266,7 +269,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolError::PoolKilled);
         }
 
-        let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), token_amount, i);
+        let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), share_amount, i);
         if dy < min_amount {
             panic_with_error!(&e, LiquidityPoolValidationError::InMinNotSatisfied);
         }
@@ -289,9 +292,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         share_token_client.transfer(
             &user,
             &e.current_contract_address(),
-            &(token_amount as i128),
+            &(share_amount as i128),
         );
-        burn_shares(&e, token_amount as i128);
+        burn_shares(&e, share_amount as i128);
 
         let coins = get_tokens(&e);
         let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
@@ -299,37 +302,21 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        let mut amounts: Vec<u128> = Vec::new(&e);
+        for token_idx in 0..coins.len() {
+            if token_idx == i {
+                amounts.push_back(dy);
+            } else {
+                amounts.push_back(0);
+            }
+        }
+        PoolEvents::new(&e).withdraw_liquidity(coins, amounts.clone(), share_amount);
+        amounts
     }
 }
 
 impl InternalInterfaceTrait for LiquidityPool {
-    fn xp(e: Env) -> Vec<u128> {
-        let reserves = get_reserves(&e);
-        let n_coins = reserves.len();
-
-        let mut result = Vec::new(&e);
-        for i in 0..n_coins {
-            result.push_back(RATE.fixed_mul_floor(&e, reserves.get(i).unwrap(), LENDING_PRECISION));
-        }
-        result
-    }
-
-    // balances size = n_coins
-    fn xp_mem(e: Env, reserves: Vec<u128>) -> Vec<u128> {
-        let tokens = Self::get_tokens(e.clone());
-        let n_coins = tokens.len();
-
-        if reserves.len() != n_coins {
-            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
-        }
-
-        let mut result = Vec::new(&e);
-        for i in 0..n_coins {
-            result.push_back(RATE.fixed_mul_floor(&e, reserves.get(i).unwrap(), PRECISION));
-        }
-        result
-    }
-
     // xp size = n_coins
     fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128 {
         let tokens = Self::get_tokens(e.clone());
@@ -371,7 +358,7 @@ impl InternalInterfaceTrait for LiquidityPool {
     }
 
     fn get_d_mem(e: Env, balances: Vec<u128>, amp: u128) -> u128 {
-        Self::get_d(e.clone(), Self::xp_mem(e.clone(), balances), amp)
+        Self::get_d(e.clone(), balances, amp)
     }
 
     fn get_y(e: Env, in_idx: u32, out_idx: u32, x: u128, xp: Vec<u128>) -> u128 {
@@ -515,14 +502,14 @@ impl InternalInterfaceTrait for LiquidityPool {
         let amp = Self::a(e.clone());
         let total_supply = get_total_shares(&e);
 
-        let xp = Self::xp(e.clone());
+        let xp = Self::get_reserves(e.clone());
 
         let d0 = Self::get_d(e.clone(), xp.clone(), amp);
         let d1 = d0 - token_amount * d0 / total_supply;
         let mut xp_reduced = xp.clone();
 
         let new_y = Self::get_y_d(e.clone(), amp, token_idx, xp.clone(), d1);
-        let dy_0 = (xp.get(token_idx).unwrap() - new_y) / PRECISION_MUL; // w/o fees;
+        let dy_0 = xp.get(token_idx).unwrap() - new_y; // w/o fees;
 
         for j in 0..n_coins {
             let dx_expected = if j == token_idx {
@@ -540,7 +527,7 @@ impl InternalInterfaceTrait for LiquidityPool {
 
         let mut dy = xp_reduced.get(token_idx).unwrap()
             - Self::get_y_d(e.clone(), amp, token_idx, xp_reduced.clone(), d1);
-        dy = (dy - 1) / PRECISION_MUL; // Withdraw less to account for rounding errors
+        dy = dy - 1; // Withdraw less to account for rounding errors
 
         (dy, dy_0 - dy)
     }
@@ -937,6 +924,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
                     new_balance - ideal_balance
                 };
 
+                // This formula ensures that the fee is proportionally distributed
+                //  among the different coins in the pool. The denominator (4 * (N_COINS - 1)) is used
+                //  to adjust the fee based on the number of coins. As the number of coins increases,
+                //  the fee for each individual coin decreases.
                 let fee = difference.fixed_mul_ceil(
                     &e,
                     get_fee(&e) as u128 * n_coins as u128,
@@ -944,11 +935,12 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
                 );
                 fees.push_back(fee);
 
+                // Admin fee is deducted from pool available reserves
                 result.set(
                     i,
                     new_balance - (fee.fixed_mul_ceil(&e, admin_fee, FEE_DENOMINATOR as u128)),
                 );
-                new_balances.set(i, new_balances.get(i).unwrap() - fees.get(i).unwrap());
+                new_balances.set(i, new_balances.get(i).unwrap() - fee);
             }
             d2 = Self::get_d_mem(e.clone(), new_balances, amp);
             result
@@ -973,6 +965,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
+        PoolEvents::new(&e).deposit_liquidity(tokens, amounts.clone(), mint_amount);
+
         (amounts, mint_amount)
     }
 
@@ -990,7 +984,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
 
         let old_balances = get_reserves(&e);
-        let xp = Self::xp_mem(e.clone(), old_balances.clone());
+        let xp = old_balances.clone();
 
         // Handling an unexpected charge of a fee on transfer (USDT, PAXG)
         let dx_w_fee = in_amount;
@@ -1006,21 +1000,21 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let x = reserve_sell + dx_w_fee.fixed_mul_floor(&e, RATE, PRECISION);
+        let x = reserve_sell + dx_w_fee;
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = reserve_buy - y - 1; // -1 just in case there were some rounding errors
         let dy_fee = dy.fixed_mul_ceil(&e, get_fee(&e) as u128, FEE_DENOMINATOR as u128);
 
         // Convert all to real units
-        let dy = (dy - dy_fee).fixed_mul_floor(&e, PRECISION, RATE);
+        let dy = dy - dy_fee;
         if dy < out_min {
             panic_with_error!(e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
         let mut dy_admin_fee =
             dy_fee.fixed_mul_ceil(&e, get_admin_fee(&e) as u128, FEE_DENOMINATOR as u128);
-        dy_admin_fee = dy_admin_fee.fixed_mul_floor(&e, PRECISION, RATE);
+        dy_admin_fee = dy_admin_fee;
 
         // Change balances exactly in same way as we change actual ERC20 coin amounts
         let mut reserves = get_reserves(&e);
@@ -1032,11 +1026,14 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         );
         put_reserves(&e, &reserves);
 
-        let token_client = SorobanTokenClient::new(&e, &coins.get(out_idx).unwrap());
+        let token_out = coins.get(out_idx).unwrap();
+        let token_client = SorobanTokenClient::new(&e, &token_out);
         token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
 
         // update plane data for every pool update
         update_plane(&e);
+
+        PoolEvents::new(&e).trade(user, input_coin, token_out, in_amount, dy, dy_fee);
 
         dy
     }
@@ -1097,6 +1094,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        PoolEvents::new(&e).withdraw_liquidity(tokens, amounts.clone(), share_amount);
 
         amounts
     }

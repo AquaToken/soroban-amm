@@ -3,8 +3,8 @@ use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_interface::{
-    LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait, RewardsInterfaceTrait,
-    SwapRouterInterface,
+    CombinedSwapInterface, LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait,
+    RewardsInterfaceTrait, SwapRouterInterface,
 };
 use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt, get_standard_pool_salt,
@@ -15,8 +15,9 @@ use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
     get_init_pool_payment_address, get_init_pool_payment_amount, get_init_pool_payment_token,
     get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_reward_tokens,
-    get_reward_tokens_detailed, get_rewards_config, get_swap_router, has_pool, remove_pool,
-    set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_amount,
+    get_reward_tokens_detailed, get_rewards_config, get_swap_router, get_tokens_set,
+    get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
+     set_init_pool_payment_address, set_init_pool_payment_amount,
     set_init_pool_payment_token, set_liquidity_calculator, set_pool_plane, set_reward_tokens,
     set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_swap_router,
     set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
@@ -31,6 +32,7 @@ use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
     Symbol, Val, Vec, U256,
 };
+use utils::storage_errors::StorageError;
 use utils::token_utils::check_vec_ordered;
 
 #[contract]
@@ -85,14 +87,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
     }
 
-    fn get_tokens(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<Address> {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_tokens"), Vec::new(&e))
-    }
-
     fn deposit(
         e: Env,
         user: Address,
@@ -142,7 +136,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-        let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         let out_amt = e.invoke_contract(
             &pool_id,
@@ -183,7 +176,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-        let tokens: Vec<Address> = Self::get_tokens(e.clone(), tokens.clone(), pool_index.clone());
 
         e.invoke_contract(
             &pool_id,
@@ -628,6 +620,28 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             remove_pool(&e, &salt, pool_hash)
         }
     }
+
+    fn get_tokens_sets_count(e: Env) -> u128 {
+        get_tokens_set_count(&e)
+    }
+
+    fn get_tokens(e: Env, index: u128) -> Vec<Address> {
+        get_tokens_set(&e, index)
+    }
+
+    fn get_pools_for_tokens_range(
+        e: Env,
+        start: u128,
+        end: u128,
+    ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)> {
+        // chained operation for better efficiency
+        let mut result = Vec::new(&e);
+        for index in start..end {
+            let tokens = Self::get_tokens(e.clone(), index);
+            result.push_back((tokens.clone(), Self::get_pools(e.clone(), tokens)))
+        }
+        result
+    }
 }
 
 #[contractimpl]
@@ -692,5 +706,76 @@ impl SwapRouterInterface for LiquidityPoolRouter {
             best_pool_address,
             swap_result,
         )
+    }
+}
+
+#[contractimpl]
+impl CombinedSwapInterface for LiquidityPoolRouter {
+    fn swap_chained(
+        e: Env,
+        user: Address,
+        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
+        token_in: Address,
+        in_amount: u128,
+        out_min: u128,
+    ) -> u128 {
+        user.require_auth();
+        let mut last_token_out: Option<Address> = None;
+        let mut last_swap_result = 0;
+
+        if swaps_chain.len() == 0 {
+            panic_with_error!(&e, LiquidityPoolRouterError::PathIsEmpty);
+        }
+
+        SorobanTokenClient::new(&e, &token_in).transfer(
+            &user,
+            &e.current_contract_address(),
+            &(in_amount as i128),
+        );
+
+        for i in 0..swaps_chain.len() {
+            let (tokens, pool_index, token_out) = swaps_chain.get(i).unwrap();
+            let mut out_min_local = 0;
+            let token_in_local;
+            let in_amount_local;
+            if i == 0 {
+                token_in_local = token_in.clone();
+                in_amount_local = in_amount;
+            } else {
+                token_in_local = match last_token_out {
+                    Some(v) => v,
+                    None => panic_with_error!(&e, StorageError::ValueNotInitialized),
+                };
+                in_amount_local = last_swap_result;
+            }
+
+            if i == swaps_chain.len() - 1 {
+                out_min_local = out_min;
+            }
+
+            last_swap_result = Self::swap(
+                e.clone(),
+                e.current_contract_address(),
+                tokens,
+                token_in_local,
+                token_out.clone(),
+                pool_index,
+                in_amount_local,
+                out_min_local,
+            );
+            last_token_out = Some(token_out);
+        }
+
+        let token_out_address = match last_token_out {
+            Some(v) => v,
+            None => panic_with_error!(&e, StorageError::ValueNotInitialized),
+        };
+        SorobanTokenClient::new(&e, &token_out_address).transfer(
+            &e.current_contract_address(),
+            &user,
+            &(last_swap_result as i128),
+        );
+
+        last_swap_result
     }
 }

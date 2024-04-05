@@ -1,3 +1,5 @@
+use crate::constants::FEE_MULTIPLIER;
+use crate::storage::get_fee_fraction;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{panic_with_error, Env};
@@ -28,4 +30,21 @@ pub fn get_deposit_amounts(
         }
         (amount_a, desired_b)
     }
+}
+
+pub fn get_amount_out(
+    e: &Env,
+    in_amount: u128,
+    reserve_sell: u128,
+    reserve_buy: u128,
+) -> (u128, u128) {
+    if in_amount == 0 {
+        return (0, 0);
+    }
+
+    // in * reserve_buy / (reserve_sell + in) - fee
+    let fee_fraction = get_fee_fraction(&e);
+    let result = in_amount.fixed_mul_floor(&e, reserve_buy, reserve_sell + in_amount);
+    let fee = result.fixed_mul_ceil(&e, fee_fraction as u128, FEE_MULTIPLIER);
+    (result - fee, fee)
 }
