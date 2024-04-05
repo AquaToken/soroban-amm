@@ -33,7 +33,11 @@ fn get_min_price(
         reserves_adj.push_back(value * PRECISION);
     }
 
-    min_amount.fixed_mul_floor(e, PRECISION, estimate_swap(e, fee_fraction, &reserves_adj, in_idx, out_idx, min_amount))
+    min_amount.fixed_mul_floor(
+        e,
+        PRECISION,
+        estimate_swap(e, fee_fraction, &reserves_adj, in_idx, out_idx, min_amount),
+    )
 }
 
 pub(crate) fn get_liquidity(

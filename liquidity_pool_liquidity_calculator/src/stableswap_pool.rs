@@ -1,6 +1,6 @@
 use crate::calculator::{get_max_reserve, get_next_in_amt, normalize_reserves, price_weight};
 use crate::constants::{FEE_MULTIPLIER, PRECISION};
-use soroban_fixed_point_math::{SorobanFixedPoint};
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Env, Vec};
 
 fn a(e: &Env, initial_a: u128, initial_a_time: u128, future_a: u128, future_a_time: u128) -> u128 {
