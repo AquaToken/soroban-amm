@@ -207,5 +207,11 @@ pub trait LiquidityPoolTrait:
     // i: Index value of the coin to withdraw
     // min_amount: Minimum amount of coin to receive
     // Returns the amount of coin i received.
-    fn withdraw_one_coin(e: Env, user: Address, token_amount: u128, i: u32, min_amount: u128);
+    fn withdraw_one_coin(
+        e: Env,
+        user: Address,
+        share_amount: u128,
+        i: u32,
+        min_amount: u128,
+    ) -> Vec<u128>;
 }

@@ -14,6 +14,8 @@ use crate::storage::{
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
+use liquidity_pool_events::Events as PoolEvents;
+use liquidity_pool_events::LiquidityPoolEvents;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::{PoolRewardConfig, RewardsStorageTrait};
 use soroban_fixed_point_math::SorobanFixedPoint;
@@ -214,7 +216,14 @@ impl LiquidityPoolTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        (Vec::from_array(&e, [amounts.0, amounts.1]), shares_to_mint)
+        let amounts_vec = Vec::from_array(&e, [amounts.0, amounts.1]);
+        PoolEvents::new(&e).deposit_liquidity(
+            Self::get_tokens(e.clone()),
+            amounts_vec.clone(),
+            shares_to_mint,
+        );
+
+        (amounts_vec, shares_to_mint)
     }
 
     fn swap(
@@ -250,7 +259,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let out = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
+        let (out, fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
@@ -294,9 +303,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         if out_idx == 0 {
-            transfer_a(&e, user, out_a);
+            transfer_a(&e, user.clone(), out_a);
         } else {
-            transfer_b(&e, user, out_b);
+            transfer_b(&e, user.clone(), out_b);
         }
 
         put_reserve_a(&e, balance_a - out_a);
@@ -304,6 +313,15 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        PoolEvents::new(&e).trade(
+            user,
+            sell_token,
+            tokens.get(out_idx).unwrap(),
+            in_amount,
+            out,
+            fee,
+        );
 
         out
     }
@@ -327,7 +345,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        get_amount_out(&e, in_amount, reserve_sell, reserve_buy)
+        get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0
     }
 
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
@@ -379,7 +397,14 @@ impl LiquidityPoolTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        Vec::from_array(&e, [out_a, out_b])
+        let withdraw_amounts = Vec::from_array(&e, [out_a, out_b]);
+        PoolEvents::new(&e).withdraw_liquidity(
+            Self::get_tokens(e.clone()),
+            withdraw_amounts.clone(),
+            share_amount,
+        );
+
+        withdraw_amounts
     }
 
     fn get_reserves(e: Env) -> Vec<u128> {

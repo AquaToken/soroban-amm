@@ -15,6 +15,7 @@ rewards = { workspace = true }
 token_share = { workspace = true }
 utils = { workspace = true }
 liquidity-pool-validation-errors = { workspace = true }
+liquidity-pool-events = { workspace = true }
 soroban-fixed-point-math = { workspace = true }
 
 [dev_dependencies]

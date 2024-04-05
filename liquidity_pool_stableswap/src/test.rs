@@ -6,11 +6,11 @@ use crate::LiquidityPoolClient;
 use crate::plane::{pool_plane, PoolPlaneClient};
 use crate::pool_constants::{ADMIN_ACTIONS_DELAY, MIN_RAMP_TIME};
 use rewards::utils::test_utils::assert_approx_eq_abs;
-use soroban_sdk::testutils::{Ledger, LedgerInfo};
+use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
+use soroban_sdk::{testutils::Address as _, vec, Address, BytesN, Env, IntoVal, Symbol, Vec};
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
     SorobanTokenClient::new(e, &e.register_stellar_asset_contract(admin.clone()))
@@ -195,6 +195,371 @@ fn test_happy_flow() {
     assert_eq!(token1.balance(&liqpool.address) as u128, 0);
     assert_eq!(token2.balance(&liqpool.address) as u128, 0);
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
+}
+
+#[test]
+fn test_events_2_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address
+    ];
+    tokens.sort();
+    let token1 = SorobanTokenClient::new(&e, &tokens[0]);
+    let token2 = SorobanTokenClient::new(&e, &tokens[1]);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin);
+    let user1 = Address::generate(&e);
+    let fee = 30_u128;
+    let admin_fee = 0_u128;
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone()]),
+        10,
+        fee as u32,
+        admin_fee as u32,
+        &token_reward.address,
+        &plane.address,
+    );
+
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+
+    let (amounts, share_amt) =
+        liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+    assert_eq!(amounts.get(0).unwrap(), 1000000000);
+    assert_eq!(amounts.get(1).unwrap(), 1000000000);
+    assert_eq!(share_amt, 2000000000);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (
+                    Symbol::new(&e, "deposit_liquidity"),
+                    token1.address.clone(),
+                    token2.address.clone(),
+                )
+                    .into_val(&e),
+                (200_0000000_i128, 100_0000000_i128, 100_0000000_i128,).into_val(&e),
+            ),
+        ]
+    );
+
+    assert_eq!(liqpool.swap(&user1, &0, &1, &100, &95), 98);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (
+                    Symbol::new(&e, "trade"),
+                    token1.address.clone(),
+                    token2.address.clone(),
+                    user1.clone()
+                )
+                    .into_val(&e),
+                (100_i128, 98_i128, 1_i128).into_val(&e),
+            )
+        ]
+    );
+
+    let amounts_out = liqpool.withdraw(&user1, &200_0000000, &Vec::from_array(&e, [0, 0]));
+    assert_eq!(amounts_out.get(0).unwrap(), 1000000100);
+    assert_eq!(amounts_out.get(1).unwrap(), 999999902);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (
+                    Symbol::new(&e, "withdraw_liquidity"),
+                    token1.address.clone(),
+                    token2.address.clone()
+                )
+                    .into_val(&e),
+                (
+                    200_0000000_i128,
+                    amounts_out.get(0).unwrap() as i128,
+                    amounts_out.get(1).unwrap() as i128
+                )
+                    .into_val(&e),
+            )
+        ]
+    );
+}
+
+#[test]
+fn test_events_3_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+    ];
+    tokens.sort();
+    let token1 = SorobanTokenClient::new(&e, &tokens[0]);
+    let token2 = SorobanTokenClient::new(&e, &tokens[1]);
+    let token3 = SorobanTokenClient::new(&e, &tokens[2]);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token3_admin_client = get_token_admin_client(&e, &token3.address);
+    let token_reward = create_token_contract(&e, &admin);
+    let user1 = Address::generate(&e);
+    let fee = 30_u128;
+    let admin_fee = 0_u128;
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(
+            &e,
+            [tokens[0].clone(), tokens[1].clone(), tokens[2].clone()],
+        ),
+        10,
+        fee as u32,
+        admin_fee as u32,
+        &token_reward.address,
+        &plane.address,
+    );
+
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+    token3_admin_client.mint(&user1, &1000_0000000);
+
+    let (amounts, share_amt) = liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [100_0000000, 100_0000000, 100_0000000]),
+        &0,
+    );
+    assert_eq!(amounts.get(0).unwrap(), 1000000000);
+    assert_eq!(amounts.get(1).unwrap(), 1000000000);
+    assert_eq!(amounts.get(2).unwrap(), 1000000000);
+    assert_eq!(share_amt, 3000000000);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (
+                    Symbol::new(&e, "deposit_liquidity"),
+                    token1.address.clone(),
+                    token2.address.clone(),
+                    token3.address.clone(),
+                )
+                    .into_val(&e),
+                (
+                    300_0000000_i128,
+                    100_0000000_i128,
+                    100_0000000_i128,
+                    100_0000000_i128,
+                )
+                    .into_val(&e),
+            ),
+        ]
+    );
+
+    assert_eq!(liqpool.swap(&user1, &0, &1, &100, &95), 98);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (
+                    Symbol::new(&e, "trade"),
+                    token1.address.clone(),
+                    token2.address.clone(),
+                    user1.clone()
+                )
+                    .into_val(&e),
+                (100_i128, 98_i128, 1_i128).into_val(&e),
+            )
+        ]
+    );
+
+    let amounts_out = liqpool.withdraw(&user1, &300_0000000, &Vec::from_array(&e, [0, 0, 0]));
+    assert_eq!(amounts_out.get(0).unwrap(), 1000000100);
+    assert_eq!(amounts_out.get(1).unwrap(), 999999902);
+    assert_eq!(amounts_out.get(2).unwrap(), 1000000000);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (
+                    Symbol::new(&e, "withdraw_liquidity"),
+                    token1.address.clone(),
+                    token2.address.clone(),
+                    token3.address.clone(),
+                )
+                    .into_val(&e),
+                (
+                    300_0000000_i128,
+                    amounts_out.get(0).unwrap() as i128,
+                    amounts_out.get(1).unwrap() as i128,
+                    amounts_out.get(2).unwrap() as i128,
+                )
+                    .into_val(&e),
+            )
+        ]
+    );
+}
+
+#[test]
+fn test_events_4_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+    ];
+    tokens.sort();
+    let token1 = SorobanTokenClient::new(&e, &tokens[0]);
+    let token2 = SorobanTokenClient::new(&e, &tokens[1]);
+    let token3 = SorobanTokenClient::new(&e, &tokens[2]);
+    let token4 = SorobanTokenClient::new(&e, &tokens[3]);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token3_admin_client = get_token_admin_client(&e, &token3.address);
+    let token4_admin_client = get_token_admin_client(&e, &token4.address);
+    let token_reward = create_token_contract(&e, &admin);
+    let user1 = Address::generate(&e);
+    let fee = 30_u128;
+    let admin_fee = 0_u128;
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &install_token_wasm(&e),
+        &Vec::from_array(
+            &e,
+            [
+                tokens[0].clone(),
+                tokens[1].clone(),
+                tokens[2].clone(),
+                tokens[3].clone(),
+            ],
+        ),
+        10,
+        fee as u32,
+        admin_fee as u32,
+        &token_reward.address,
+        &plane.address,
+    );
+
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+    token3_admin_client.mint(&user1, &1000_0000000);
+    token4_admin_client.mint(&user1, &1000_0000000);
+
+    let (amounts, share_amt) = liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [100_0000000, 100_0000000, 100_0000000, 100_0000000]),
+        &0,
+    );
+    assert_eq!(amounts.get(0).unwrap(), 1000000000);
+    assert_eq!(amounts.get(1).unwrap(), 1000000000);
+    assert_eq!(amounts.get(2).unwrap(), 1000000000);
+    assert_eq!(amounts.get(3).unwrap(), 1000000000);
+    assert_eq!(share_amt, 4000000000);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (
+                    Symbol::new(&e, "deposit_liquidity"),
+                    token1.address.clone(),
+                    token2.address.clone(),
+                    token3.address.clone(),
+                )
+                    .into_val(&e),
+                (
+                    400_0000000_i128,
+                    100_0000000_i128,
+                    100_0000000_i128,
+                    100_0000000_i128,
+                )
+                    .into_val(&e),
+            ),
+        ]
+    );
+
+    assert_eq!(liqpool.swap(&user1, &0, &1, &100, &95), 98);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (
+                    Symbol::new(&e, "trade"),
+                    token1.address.clone(),
+                    token2.address.clone(),
+                    user1.clone()
+                )
+                    .into_val(&e),
+                (100_i128, 98_i128, 1_i128).into_val(&e),
+            )
+        ]
+    );
+
+    let amounts_out = liqpool.withdraw(&user1, &400_0000000, &Vec::from_array(&e, [0, 0, 0, 0]));
+    assert_eq!(amounts_out.get(0).unwrap(), 1000000100);
+    assert_eq!(amounts_out.get(1).unwrap(), 999999902);
+    assert_eq!(amounts_out.get(2).unwrap(), 1000000000);
+    assert_eq!(amounts_out.get(3).unwrap(), 1000000000);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (
+                    Symbol::new(&e, "withdraw_liquidity"),
+                    token1.address.clone(),
+                    token2.address.clone(),
+                    token3.address.clone(),
+                )
+                    .into_val(&e),
+                (
+                    400_0000000_i128,
+                    amounts_out.get(0).unwrap() as i128,
+                    amounts_out.get(1).unwrap() as i128,
+                    amounts_out.get(2).unwrap() as i128,
+                )
+                    .into_val(&e),
+            )
+        ]
+    );
 }
 
 #[test]

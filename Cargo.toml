@@ -13,6 +13,7 @@ members = [
     "liquidity_pool_swap_router",
     "liquidity_pool_plane",
     "liquidity_pool_validation_errors",
+    "liquidity_pool_events",
 ]
 
 [workspace.package]
@@ -30,6 +31,7 @@ access_control = { path = "access_control" }
 token_share = { path = "token_share" }
 rewards = { path = "rewards" }
 liquidity-pool-validation-errors = { path = "liquidity_pool_validation_errors" }
+liquidity-pool-events = { path = "liquidity_pool_events" }
 
 [profile.release]
 opt-level = "z"
