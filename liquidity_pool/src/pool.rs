@@ -32,14 +32,19 @@ pub fn get_deposit_amounts(
     }
 }
 
-pub fn get_amount_out(e: &Env, in_amount: u128, reserve_sell: u128, reserve_buy: u128) -> u128 {
+pub fn get_amount_out(
+    e: &Env,
+    in_amount: u128,
+    reserve_sell: u128,
+    reserve_buy: u128,
+) -> (u128, u128) {
     if in_amount == 0 {
-        return 0;
+        return (0, 0);
     }
 
     // in * reserve_buy / (reserve_sell + in) - fee
     let fee_fraction = get_fee_fraction(&e);
     let result = in_amount.fixed_mul_floor(&e, reserve_buy, reserve_sell + in_amount);
     let fee = result.fixed_mul_ceil(&e, fee_fraction as u128, FEE_MULTIPLIER);
-    result - fee
+    (result - fee, fee)
 }

@@ -26,6 +26,7 @@ use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
+use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
 use soroban_fixed_point_math::SorobanFixedPoint;
@@ -245,7 +246,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         Self::internal_calc_withdraw_one_coin(e, token_amount, i).0
     }
 
-    fn withdraw_one_coin(e: Env, user: Address, token_amount: u128, i: u32, min_amount: u128) {
+    fn withdraw_one_coin(
+        e: Env,
+        user: Address,
+        share_amount: u128,
+        i: u32,
+        min_amount: u128,
+    ) -> Vec<u128> {
         user.require_auth();
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
@@ -262,7 +269,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolError::PoolKilled);
         }
 
-        let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), token_amount, i);
+        let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), share_amount, i);
         if dy < min_amount {
             panic_with_error!(&e, LiquidityPoolValidationError::InMinNotSatisfied);
         }
@@ -285,9 +292,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         share_token_client.transfer(
             &user,
             &e.current_contract_address(),
-            &(token_amount as i128),
+            &(share_amount as i128),
         );
-        burn_shares(&e, token_amount as i128);
+        burn_shares(&e, share_amount as i128);
 
         let coins = get_tokens(&e);
         let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
@@ -295,6 +302,17 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        let mut amounts: Vec<u128> = Vec::new(&e);
+        for token_idx in 0..coins.len() {
+            if token_idx == i {
+                amounts.push_back(dy);
+            } else {
+                amounts.push_back(0);
+            }
+        }
+        PoolEvents::new(&e).withdraw_liquidity(coins, amounts.clone(), share_amount);
+        amounts
     }
 }
 
@@ -947,6 +965,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
+        PoolEvents::new(&e).deposit_liquidity(tokens, amounts.clone(), mint_amount);
+
         (amounts, mint_amount)
     }
 
@@ -1006,11 +1026,14 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         );
         put_reserves(&e, &reserves);
 
-        let token_client = SorobanTokenClient::new(&e, &coins.get(out_idx).unwrap());
+        let token_out = coins.get(out_idx).unwrap();
+        let token_client = SorobanTokenClient::new(&e, &token_out);
         token_client.transfer(&e.current_contract_address(), &user, &(dy as i128));
 
         // update plane data for every pool update
         update_plane(&e);
+
+        PoolEvents::new(&e).trade(user, input_coin, token_out, in_amount, dy, dy_fee);
 
         dy
     }
@@ -1071,6 +1094,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        PoolEvents::new(&e).withdraw_liquidity(tokens, amounts.clone(), share_amount);
 
         amounts
     }

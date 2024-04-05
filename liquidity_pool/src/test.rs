@@ -4,8 +4,8 @@ extern crate std;
 use crate::testutils::{
     create_liqpool_contract, create_token_contract, install_token_wasm, jump, Setup, TestConfig,
 };
-use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation};
-use soroban_sdk::{testutils::Address as _, Address, IntoVal, Symbol, Vec};
+use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
+use soroban_sdk::{testutils::Address as _, vec, Address, IntoVal, Symbol, Vec};
 use utils::test_utils::assert_approx_eq_abs;
 
 #[test]
@@ -247,6 +247,93 @@ fn test() {
     assert_eq!(token1.balance(&liq_pool.address), 0);
     assert_eq!(token2.balance(&liq_pool.address), 0);
     assert_eq!(token_share.balance(&liq_pool.address), 0);
+}
+
+#[test]
+fn test_events() {
+    let Setup {
+        env: e,
+        users,
+        token1,
+        token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        mint_to_user: i128::MAX,
+        ..TestConfig::default()
+    });
+    let user1 = users[0].clone();
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (
+                    Symbol::new(&e, "deposit_liquidity"),
+                    token1.address.clone(),
+                    token2.address.clone()
+                )
+                    .into_val(&e),
+                (
+                    amount_to_deposit as i128,
+                    amount_to_deposit as i128,
+                    amount_to_deposit as i128
+                )
+                    .into_val(&e),
+            ),
+        ]
+    );
+
+    assert_eq!(liq_pool.swap(&user1, &0, &1, &100, &97), 98);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (
+                    Symbol::new(&e, "trade"),
+                    token1.address.clone(),
+                    token2.address.clone(),
+                    user1.clone()
+                )
+                    .into_val(&e),
+                (100_i128, 98_i128, 1_i128).into_val(&e),
+            )
+        ]
+    );
+
+    let amounts_out = liq_pool.withdraw(&user1, &amount_to_deposit, &Vec::from_array(&e, [0, 0]));
+    assert_eq!(amounts_out.get(0).unwrap(), 1000000100);
+    assert_eq!(amounts_out.get(1).unwrap(), 999999902);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (
+                    Symbol::new(&e, "withdraw_liquidity"),
+                    token1.address.clone(),
+                    token2.address.clone()
+                )
+                    .into_val(&e),
+                (
+                    amount_to_deposit as i128,
+                    amounts_out.get(0).unwrap() as i128,
+                    amounts_out.get(1).unwrap() as i128
+                )
+                    .into_val(&e),
+            )
+        ]
+    );
 }
 
 #[test]
