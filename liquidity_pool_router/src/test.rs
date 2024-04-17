@@ -6,10 +6,7 @@ use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::{
     AuthorizedFunction, AuthorizedInvocation, Events, Ledger, LedgerInfo,
 };
-use soroban_sdk::{
-    symbol_short, testutils::Address as _, vec, Address, BytesN, Env, FromVal, IntoVal, Symbol,
-    Val, Vec, U256,
-};
+use soroban_sdk::{symbol_short, testutils::Address as _, vec, Address, BytesN, Env, FromVal, IntoVal, Symbol, Val, Vec, U256, Map};
 use utils::test_utils::{assert_approx_eq_abs, assert_approx_eq_abs_u256};
 
 pub(crate) mod test_token {
@@ -1012,13 +1009,13 @@ fn test_simple_ongoing_reward() {
         &rewards,
     );
     e.budget().reset_default();
-    router.fill_liquidity(&admin, &tokens);
+    router.fill_liquidity(&tokens);
     e.budget().print();
     e.budget().reset_default();
-    let standard_pool_tps = router.config_pool_rewards(&admin, &tokens, &standard_pool_hash);
+    let standard_pool_tps = router.config_pool_rewards(&tokens, &standard_pool_hash);
     e.budget().print();
     e.budget().reset_unlimited();
-    let stable_pool_tps = router.config_pool_rewards(&admin, &tokens, &stable_pool_hash);
+    let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
 
     assert_approx_eq_abs_u256(
         U256::from_u128(&e, total_reward_1)
@@ -1055,6 +1052,112 @@ fn test_simple_ongoing_reward() {
     router.claim(&user1, &tokens, &standard_pool_hash);
     router.claim(&user1, &tokens, &stable_pool_hash);
     assert_approx_eq_abs(reward_token.balance(&user1) as u128, total_reward_1, 100);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_config_rewards_not_admin() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    reward_token.mint(&user1, &1000_0000000);
+    router.init_standard_pool(&user1, &tokens, &30);
+    router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
+        &user1,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+}
+
+#[test]
+fn test_config_rewards_no_pools_for_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+    assert_eq!(
+        router.get_tokens_for_reward(),
+        Map::from_array(
+            &e,
+            [(tokens.clone(), (1_0000000, false, U256::from_u32(&e, 0)))],
+        ),
+    );
+    router.fill_liquidity(&tokens);
+    assert_eq!(
+        router.get_tokens_for_reward(),
+        Map::from_array(
+            &e,
+            [(tokens.clone(), (1_0000000, true, U256::from_u32(&e, 0)))],
+        ),
+    );
 }
 
 #[test]
@@ -1213,8 +1316,8 @@ fn test_event_correct() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&admin, &tokens);
-    router.config_pool_rewards(&admin, &tokens, &pool_hash);
+    router.fill_liquidity(&tokens);
+    router.config_pool_rewards(&tokens, &pool_hash);
 
     token1.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1), 1000);

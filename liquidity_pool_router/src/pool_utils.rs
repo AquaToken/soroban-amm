@@ -148,6 +148,7 @@ fn init_standard_pool(
     let plane = get_pool_plane(e);
     liq_pool_client.initialize_all(
         &admin,
+        &e.current_contract_address(),
         &token_wasm_hash,
         tokens,
         &fee_fraction,
@@ -177,6 +178,7 @@ fn init_stableswap_pool(
             e,
             [
                 admin.into_val(e),
+                e.current_contract_address().to_val(),
                 token_wasm_hash.into_val(e),
                 tokens.clone().into_val(e),
                 a.into_val(e),

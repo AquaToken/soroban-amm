@@ -5,6 +5,7 @@ pub trait ManagedLiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
+        router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
         a: u128,
@@ -23,6 +24,7 @@ pub trait LiquidityPoolInterfaceTrait {
     fn initialize(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         a: u128,

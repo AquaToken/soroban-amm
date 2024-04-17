@@ -23,6 +23,7 @@ fn get_token_admin_client<'a>(e: &'a Env, address: &'a Address) -> SorobanTokenA
 fn create_liqpool_contract<'a>(
     e: &Env,
     admin: &Address,
+    router: &Address,
     token_wasm_hash: &BytesN<32>,
     coins: &Vec<Address>,
     a: u128,
@@ -34,6 +35,7 @@ fn create_liqpool_contract<'a>(
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize_all(
         admin,
+        router,
         token_wasm_hash,
         coins,
         &a,
@@ -90,6 +92,7 @@ fn test_swap_empty_pool() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -124,6 +127,7 @@ fn test_happy_flow() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -222,6 +226,7 @@ fn test_events_2_tokens() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone()]),
         10,
@@ -329,6 +334,7 @@ fn test_events_3_tokens() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(
             &e,
@@ -457,6 +463,7 @@ fn test_events_4_tokens() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(
             &e,
@@ -582,6 +589,7 @@ fn test_kill() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -619,6 +627,7 @@ fn test_bad_fee() {
     create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -649,6 +658,7 @@ fn test_zero_initial_deposit() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -682,6 +692,7 @@ fn test_zero_deposit_ok() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -721,6 +732,7 @@ fn test_happy_flow_3_tokens() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(
             &e,
@@ -858,6 +870,7 @@ fn test_happy_flow_4_tokens() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(
             &e,
@@ -985,6 +998,7 @@ fn test_withdraw_partial() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1059,6 +1073,7 @@ fn test_withdraw_one_token() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1143,6 +1158,7 @@ fn test_custom_fee() {
         let liqpool = create_liqpool_contract(
             &e,
             &user1,
+            &Address::generate(&e),
             &install_token_wasm(&e),
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
             10,
@@ -1178,6 +1194,7 @@ fn test_deposit_inequal() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1220,6 +1237,7 @@ fn test_remove_liquidity_imbalance() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1269,6 +1287,7 @@ fn test_simple_ongoing_reward() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1325,6 +1344,7 @@ fn test_simple_reward() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1391,6 +1411,7 @@ fn test_two_users_rewards() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1457,6 +1478,7 @@ fn test_lazy_user_rewards() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1501,6 +1523,72 @@ fn test_lazy_user_rewards() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_config_rewards_not_admin() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &admin,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(
+            &e,
+            [
+                create_token_contract(&e, &admin).address,
+                create_token_contract(&e, &admin).address,
+            ],
+        ),
+        10,
+        0,
+        0,
+        &(create_token_contract(&e, &admin).address),
+        &(create_plane_contract(&e).address),
+    );
+
+    liqpool.set_rewards_config(
+        &Address::generate(&e),
+        &e.ledger().timestamp().saturating_add(60),
+        &1,
+    );
+}
+
+#[test]
+fn test_config_rewards_router() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let router = Address::generate(&e);
+
+    let liqpool = create_liqpool_contract(
+        &e,
+        &admin,
+        &router,
+        &install_token_wasm(&e),
+        &Vec::from_array(
+            &e,
+            [
+                create_token_contract(&e, &admin).address,
+                create_token_contract(&e, &admin).address,
+            ],
+        ),
+        10,
+        0,
+        0,
+        &(create_token_contract(&e, &admin).address),
+        &(create_plane_contract(&e).address),
+    );
+
+    liqpool.set_rewards_config(&router, &e.ledger().timestamp().saturating_add(60), &1);
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #2908)")]
 fn test_update_fee_too_early() {
     let e = Env::default();
@@ -1520,6 +1608,7 @@ fn test_update_fee_too_early() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1555,6 +1644,7 @@ fn test_update_fee() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1595,6 +1685,7 @@ fn test_transfer_ownership_too_early() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1632,6 +1723,7 @@ fn test_transfer_ownership_twice() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1665,6 +1757,7 @@ fn test_transfer_ownership_not_committed() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1699,6 +1792,7 @@ fn test_transfer_ownership_reverted() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1736,6 +1830,7 @@ fn test_transfer_ownership() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1773,6 +1868,7 @@ fn test_ramp_a_too_early() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1811,6 +1907,7 @@ fn test_ramp_a_too_short() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1849,6 +1946,7 @@ fn test_ramp_a_too_fast() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1886,6 +1984,7 @@ fn test_ramp_a() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1930,6 +2029,7 @@ fn test_deposit_min_mint() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -1972,6 +2072,7 @@ fn test_deposit_inequal_ok() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
@@ -2018,6 +2119,7 @@ fn test_large_numbers() {
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin,
+        &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         85,

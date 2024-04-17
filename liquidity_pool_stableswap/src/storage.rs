@@ -20,6 +20,7 @@ enum DataKey {
     KillDeadline,
     IsKilled,
     Plane,
+    Router,
 }
 
 pub fn get_tokens(e: &Env) -> Vec<Address> {
@@ -241,4 +242,18 @@ pub(crate) fn get_plane(e: &Env) -> Address {
 pub(crate) fn has_plane(e: &Env) -> bool {
     let key = DataKey::Plane;
     e.storage().instance().has(&key)
+}
+
+pub(crate) fn set_router(e: &Env, plane: &Address) {
+    let key = DataKey::Router;
+    bump_instance(e);
+    e.storage().instance().set(&key, plane);
+}
+
+pub(crate) fn get_router(e: &Env) -> Address {
+    let key = DataKey::Router;
+    match e.storage().instance().get(&key) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }

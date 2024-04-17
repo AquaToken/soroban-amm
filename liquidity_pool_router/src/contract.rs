@@ -230,13 +230,19 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     }
 
     fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256 {
-        let pool_id = get_pool(&e, tokens, pool_index).expect("Pool doesn't exist");
+        let pool_id = match get_pool(&e, tokens, pool_index) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
 
         let calculator = get_liquidity_calculator(&e);
-        LiquidityCalculatorClient::new(&e, &calculator)
+        match LiquidityCalculatorClient::new(&e, &calculator)
             .get_liquidity(&Vec::from_array(&e, [pool_id]))
             .get(0)
-            .expect("unable to get liquidity for the pool")
+        {
+            Some(v) => v,
+            None => panic_with_error!(&e, LiquidityPoolRouterError::LiquidityCalculationError),
+        }
     }
 
     fn get_liquidity_calculator(e: Env) -> Address {
@@ -326,9 +332,22 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         result
     }
 
+    fn get_tokens_for_reward(e: Env) -> Map<Vec<Address>, (u32, bool, U256)> {
+        let rewards_config = get_rewards_config(&e);
+        let tokens = get_reward_tokens(&e, rewards_config.current_block);
+        let mut result = Map::new(&e);
+        for (key, value) in tokens {
+            result.set(
+                key,
+                (value.voting_share, value.processed, value.total_liquidity),
+            );
+        }
+        result
+    }
+
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256 {
         if !check_vec_ordered(&tokens) {
-            panic!("tokens are not sorted")
+            panic_with_error!(e, LiquidityPoolValidationError::TokensNotSorted);
         }
         let tokens_salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &tokens_salt);
@@ -353,36 +372,36 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         admin: Address,
         reward_tps: u128, // value with 7 decimal places. example: 600_0000000
         expired_at: u64,  // timestamp
-        tokens: Vec<(Vec<Address>, u32)>, // {[token1, token2]: voting_percentage}, voting percentage 0_0000000 .. 1_0000000
+        tokens_votes: Vec<(Vec<Address>, u32)>, // {[token1, token2]: voting_percentage}, voting percentage 0_0000000 .. 1_0000000
     ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+        access_control.check_admin(&admin);
 
         let rewards_config = get_rewards_config(&e);
         let new_rewards_block = rewards_config.current_block + 1;
 
         let mut tokens_with_liquidity = Map::new(&e);
-        for token in tokens {
-            if !check_vec_ordered(&token.0) {
-                panic!("tokens are not sorted")
+        for (tokens, voting_share) in tokens_votes {
+            if !check_vec_ordered(&tokens) {
+                panic_with_error!(e, LiquidityPoolValidationError::TokensNotSorted);
             }
 
             tokens_with_liquidity.set(
-                token.0,
+                tokens,
                 LiquidityPoolRewardInfo {
-                    voting_share: token.1,
+                    voting_share,
                     processed: false,
                     total_liquidity: U256::from_u32(&e, 0),
                 },
             );
         }
         let mut sum = 0;
-        for token in tokens_with_liquidity.iter() {
-            sum += token.1.voting_share;
+        for (_, reward_info) in tokens_with_liquidity.iter() {
+            sum += reward_info.voting_share;
         }
         if sum > 1_0000000 {
-            panic!("total voting share exceeds 100%")
+            panic_with_error!(e, LiquidityPoolRouterError::VotingShareExceedsMax);
         }
 
         set_reward_tokens(&e, new_rewards_block, &tokens_with_liquidity);
@@ -396,21 +415,19 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         )
     }
 
-    // todo: deactivate no more active tokens
-
-    fn fill_liquidity(e: Env, admin: Address, tokens: Vec<Address>) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
-
+    fn fill_liquidity(e: Env, tokens: Vec<Address>) {
         let rewards_config = get_rewards_config(&e);
         let tokens_salt = get_tokens_salt(&e, tokens.clone());
         let calculator = get_liquidity_calculator(&e);
         let (pools, total_liquidity) = get_total_liquidity(&e, tokens.clone(), calculator);
         let mut tokens_with_liquidity = get_reward_tokens(&e, rewards_config.current_block);
-        let mut token_data = tokens_with_liquidity
-            .get(tokens.clone())
-            .expect("unable to find tokens in reward map");
+        let mut token_data = match tokens_with_liquidity.get(tokens.clone()) {
+            Some(v) => v,
+            None => panic_with_error!(e, LiquidityPoolRouterError::TokensAreNotForReward),
+        };
+        if token_data.processed {
+            panic_with_error!(e, LiquidityPoolRouterError::LiquidityAlreadyFilled);
+        }
         token_data.processed = true;
         token_data.total_liquidity = total_liquidity;
         tokens_with_liquidity.set(tokens, token_data);
@@ -418,16 +435,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         set_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt, &pools);
     }
 
-    fn config_pool_rewards(
-        e: Env,
-        admin: Address,
-        tokens: Vec<Address>,
-        pool_index: BytesN<32>,
-    ) -> u128 {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
-
+    fn config_pool_rewards(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
@@ -459,7 +467,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         };
 
         if !reward_info.processed {
-            panic!("liquidity info not available yet. run `fill_liquidity` first")
+            panic_with_error!(&e, LiquidityPoolRouterError::LiquidityNotFilled);
         }
         // it's safe to convert tps to u128 since it cannot be bigger than total tps which is u128
         let pool_tps = if pool_liquidity > U256::from_u32(&e, 0) {
@@ -480,7 +488,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             Vec::from_array(
                 &e,
                 [
-                    admin.into_val(&e),
+                    e.current_contract_address().to_val(),
                     rewards_config.expired_at.into_val(&e),
                     pool_tps.into_val(&e),
                 ],

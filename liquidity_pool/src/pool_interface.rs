@@ -5,6 +5,7 @@ pub trait LiquidityPoolCrunch {
     fn initialize_all(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
@@ -21,6 +22,7 @@ pub trait LiquidityPoolTrait {
     fn initialize(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,

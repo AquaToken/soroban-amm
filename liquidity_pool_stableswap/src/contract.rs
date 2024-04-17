@@ -9,10 +9,11 @@ use crate::pool_interface::{
 use crate::storage::{
     get_admin_actions_deadline, get_admin_fee, get_fee, get_future_a, get_future_a_time,
     get_future_admin_fee, get_future_fee, get_initial_a, get_initial_a_time, get_is_killed,
-    get_kill_deadline, get_plane, get_reserves, get_tokens, get_transfer_ownership_deadline,
-    has_plane, put_admin_actions_deadline, put_admin_fee, put_fee, put_future_a, put_future_a_time,
-    put_future_admin_fee, put_future_fee, put_initial_a, put_initial_a_time, put_is_killed,
-    put_kill_deadline, put_reserves, put_tokens, put_transfer_ownership_deadline, set_plane,
+    get_kill_deadline, get_plane, get_reserves, get_router, get_tokens,
+    get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline, put_admin_fee, put_fee,
+    put_future_a, put_future_a_time, put_future_admin_fee, put_future_fee, put_initial_a,
+    put_initial_a_time, put_is_killed, put_kill_deadline, put_reserves, put_tokens,
+    put_transfer_ownership_deadline, set_plane, set_router,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -746,6 +747,7 @@ impl ManagedLiquidityPool for LiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
+        router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
         a: u128,
@@ -757,7 +759,16 @@ impl ManagedLiquidityPool for LiquidityPool {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::set_pools_plane(e.clone(), plane);
-        Self::initialize(e.clone(), admin, token_wasm_hash, coins, a, fee, admin_fee);
+        Self::initialize(
+            e.clone(),
+            admin,
+            router,
+            token_wasm_hash,
+            coins,
+            a,
+            fee,
+            admin_fee,
+        );
         Self::initialize_rewards_config(e.clone(), reward_token);
     }
 }
@@ -771,6 +782,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     fn initialize(
         e: Env,
         admin: Address,
+        router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
         a: u128,
@@ -783,6 +795,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
 
         access_control.set_admin(&admin);
+        set_router(&e, &router);
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
         if fee > 9999 || admin_fee > 10000 {
@@ -1145,7 +1158,11 @@ impl RewardsTrait for LiquidityPool {
         tps: u128,       // value with 7 decimal places. example: 600_0000000
     ) {
         admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
+
+        // either admin or router can set the rewards config
+        if admin != get_router(&e) {
+            AccessControl::new(&e).check_admin(&admin);
+        }
 
         if expired_at < e.ledger().timestamp() {
             panic_with_error!(&e, LiquidityPoolValidationError::PastTimeNotAllowed);
