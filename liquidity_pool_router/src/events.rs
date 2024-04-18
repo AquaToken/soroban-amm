@@ -53,6 +53,14 @@ pub(crate) trait LiquidityPoolRouterEvents {
         subpool_salt: BytesN<32>,
         init_args: Vec<Val>,
     );
+
+    fn config_rewards(
+        &self,
+        tokens: Vec<Address>,
+        pool_address: Address,
+        pool_tps: u128,
+        expired_at: u64,
+    );
 }
 
 impl LiquidityPoolRouterEvents for Events {
@@ -111,6 +119,19 @@ impl LiquidityPoolRouterEvents for Events {
         self.env().events().publish(
             (Symbol::new(self.env(), "add_pool"), tokens),
             (pool_address, pool_type, subpool_salt, init_args),
+        );
+    }
+
+    fn config_rewards(
+        &self,
+        tokens: Vec<Address>,
+        pool_address: Address,
+        pool_tps: u128,
+        expired_at: u64,
+    ) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "config_rewards"), tokens),
+            (pool_address, pool_tps, expired_at),
         );
     }
 }

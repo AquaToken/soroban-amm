@@ -27,6 +27,7 @@ impl Manager {
         self.storage.set_pool_reward_data(&PoolRewardData {
             block: 0,
             accumulated: 0,
+            claimed: 0,
             last_time: 0,
         });
         self.storage.set_pool_reward_config(&PoolRewardConfig {
@@ -54,6 +55,7 @@ impl Manager {
                 PoolRewardData {
                     block: data.block + 1,
                     accumulated: data.accumulated,
+                    claimed: data.claimed,
                     last_time: now,
                 },
             )
@@ -124,6 +126,11 @@ impl Manager {
             pool_accumulated,
             to_claim: reward_amount,
         } = self.user_reward_data(user, total_shares, user_balance_shares);
+
+        // increase total claimed amount
+        let mut pool_data = self.storage.get_pool_reward_data();
+        pool_data.claimed += reward_amount;
+        self.storage.set_pool_reward_data(&pool_data);
 
         // transfer reward
         let reward_token = self.storage.get_reward_token();
@@ -272,6 +279,7 @@ impl Manager {
             PoolRewardData {
                 block: data.block + 1,
                 accumulated: data.accumulated + generated_tokens,
+                claimed: data.claimed,
                 last_time: now,
             },
         )
@@ -301,6 +309,7 @@ impl Manager {
         let catchup_data = PoolRewardData {
             block: data.block + 1,
             accumulated: data.accumulated + generated_tokens,
+            claimed: data.claimed,
             last_time: config.expired_at,
         };
         self.create_new_rewards_data(generated_tokens, total_shares, catchup_data.clone());
@@ -310,6 +319,7 @@ impl Manager {
             PoolRewardData {
                 block: catchup_data.block + 1,
                 accumulated: catchup_data.accumulated,
+                claimed: data.claimed,
                 last_time: now,
             },
         )
@@ -338,5 +348,33 @@ impl Manager {
     ) -> UserRewardData {
         let rewards_data = self.update_rewards_data(total_shares);
         self.update_user_reward(&rewards_data, user, user_balance_shares)
+    }
+
+    pub fn get_total_accumulated_reward(&mut self, total_shares: u128) -> u128 {
+        let data = self.update_rewards_data(total_shares);
+        data.accumulated
+    }
+
+    pub fn get_total_claimed_reward(&mut self, total_shares: u128) -> u128 {
+        let data = self.update_rewards_data(total_shares);
+        data.claimed
+    }
+
+    pub fn get_total_configured_reward(&mut self, total_shares: u128) -> u128 {
+        let config = self.storage.get_pool_reward_config();
+        let data = self.update_rewards_data(total_shares);
+        let rewarded_amount = data.accumulated;
+
+        let now = self.env.ledger().timestamp();
+        match config.expired_at <= now {
+            true => {
+                // no rewards configured in future
+                rewarded_amount
+            }
+            false => {
+                let outstanding_reward = (config.expired_at - now) as u128 * config.tps;
+                rewarded_amount + outstanding_reward
+            }
+        }
     }
 }

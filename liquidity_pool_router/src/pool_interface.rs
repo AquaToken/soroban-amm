@@ -173,6 +173,15 @@ pub trait RewardsInterfaceTrait {
     fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>)
         -> u128;
 
+    // Get total amount of accumulated reward for the pool
+    fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+
+    // Get total amount of generated plus configured reward for the pool
+    fn get_total_configured_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+
+    // Get total amount of claimed reward for the pool
+    fn get_total_claimed_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+
     // Claim reward as a user.
     // returns amount of tokens rewarded to the user
     fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;

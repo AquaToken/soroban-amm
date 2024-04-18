@@ -519,6 +519,24 @@ impl RewardsTrait for LiquidityPool {
             .get_amount_to_claim(&user, total_shares, user_shares)
     }
 
+    fn get_total_accumulated_reward(e: Env) -> u128 {
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().get_total_accumulated_reward(total_shares)
+    }
+
+    fn get_total_configured_reward(e: Env) -> u128 {
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().get_total_configured_reward(total_shares)
+    }
+
+    fn get_total_claimed_reward(e: Env) -> u128 {
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().get_total_claimed_reward(total_shares)
+    }
+
     fn claim(e: Env, user: Address) -> u128 {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);

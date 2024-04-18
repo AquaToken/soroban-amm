@@ -495,6 +495,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             ),
         );
 
+        Events::new(&e).config_rewards(tokens, pool_id, pool_tps, rewards_config.expired_at);
+
         pool_tps
     }
 
@@ -531,6 +533,45 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             &pool_id,
             &Symbol::new(&e, "get_user_reward"),
             Vec::from_array(&e, [user.clone().into_val(&e)]),
+        )
+    }
+
+    fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_total_accumulated_reward"),
+            Vec::new(&e),
+        )
+    }
+
+    fn get_total_configured_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_total_configured_reward"),
+            Vec::new(&e),
+        )
+    }
+
+    fn get_total_claimed_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_total_claimed_reward"),
+            Vec::new(&e),
         )
     }
 

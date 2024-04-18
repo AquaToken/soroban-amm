@@ -15,6 +15,7 @@ pub struct PoolRewardConfig {
 pub struct PoolRewardData {
     pub block: u64,
     pub accumulated: u128,
+    pub claimed: u128,
     pub last_time: u64,
 }
 

@@ -980,6 +980,31 @@ fn test_simple_ongoing_reward() {
     token2.mint(&user1, &2000);
     assert_eq!(token2.balance(&user1), 2000);
 
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &stable_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &stable_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &stable_pool_hash),
+        0
+    );
+
     // 10 seconds passed since config, user depositing
     jump(&e, 10);
     router.deposit(
@@ -1002,6 +1027,31 @@ fn test_simple_ongoing_reward() {
     assert_eq!(
         standard_liquidity.add(&stable_liquidity),
         U256::from_u32(&e, 212)
+    );
+
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &stable_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &stable_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &stable_pool_hash),
+        0
     );
 
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
@@ -1038,6 +1088,32 @@ fn test_simple_ongoing_reward() {
     assert_eq!(reward_token.balance(&user1), 0);
     // 30 seconds passed, half of the reward is available for the user
     jump(&e, 30);
+
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
+        standard_pool_tps * 30
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &standard_pool_hash),
+        standard_pool_tps * 60
+    );
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 30
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &stable_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 60
+    );
+
     assert_eq!(
         router.claim(&user1, &tokens, &standard_pool_hash),
         standard_pool_tps * 30
@@ -1046,6 +1122,32 @@ fn test_simple_ongoing_reward() {
         router.claim(&user1, &tokens, &stable_pool_hash),
         stable_pool_tps * 30
     );
+
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
+        standard_pool_tps * 30
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &standard_pool_hash),
+        standard_pool_tps * 30
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &standard_pool_hash),
+        standard_pool_tps * 60
+    );
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 30
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 30
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 60
+    );
+
     assert_approx_eq_abs(
         reward_token.balance(&user1) as u128,
         total_reward_1 / 2,
@@ -1055,6 +1157,31 @@ fn test_simple_ongoing_reward() {
     router.claim(&user1, &tokens, &standard_pool_hash);
     router.claim(&user1, &tokens, &stable_pool_hash);
     assert_approx_eq_abs(reward_token.balance(&user1) as u128, total_reward_1, 100);
+
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
+        standard_pool_tps * 60
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &standard_pool_hash),
+        standard_pool_tps * 60
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &standard_pool_hash),
+        standard_pool_tps * 60
+    );
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 60
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 60
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 60
+    );
 }
 
 #[test]
