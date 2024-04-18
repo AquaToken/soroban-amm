@@ -1,7 +1,6 @@
 use rewards::Rewards;
 use soroban_sdk::Env;
 
-
 // page size of 100 is optimal since 8 bytes key + 16 bytes value * 100 = 2400 bytes per page
 // it gives us up to 26 aggregation layers
 #[cfg(not(test))]
