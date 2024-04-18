@@ -139,9 +139,11 @@ generate_instance_storage_getter_and_setter_with_default!(
 
 pub fn get_reward_tokens(e: &Env, block: u64) -> Map<Vec<Address>, LiquidityPoolRewardInfo> {
     let key = DataKey::RewardTokensList(block);
-    bump_persistent(e, &key);
     match e.storage().persistent().get(&key) {
-        Some(v) => v,
+        Some(v) => {
+            bump_persistent(e, &key);
+            v
+        }
         None => panic_with_error!(&e, LiquidityPoolRouterError::RewardsNotConfigured),
     }
 }
@@ -153,11 +155,17 @@ pub fn set_reward_tokens(e: &Env, block: u64, value: &Map<Vec<Address>, Liquidit
     result
 }
 
-pub fn get_reward_tokens_detailed(e: &Env, block: u64, salt: BytesN<32>) -> Map<BytesN<32>, U256> {
+pub fn get_reward_tokens_detailed(
+    e: &Env,
+    block: u64,
+    salt: BytesN<32>,
+) -> Map<BytesN<32>, (U256, bool)> {
     let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
-    bump_persistent(e, &key);
     match e.storage().persistent().get(&key) {
-        Some(v) => v,
+        Some(v) => {
+            bump_persistent(e, &key);
+            v
+        }
         None => panic_with_error!(&e, LiquidityPoolRouterError::LiquidityNotFilled),
     }
 }
@@ -166,7 +174,7 @@ pub fn set_reward_tokens_detailed(
     e: &Env,
     block: u64,
     salt: BytesN<32>,
-    value: &Map<BytesN<32>, U256>,
+    value: &Map<BytesN<32>, (U256, bool)>,
 ) {
     let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
     let result = e.storage().persistent().set(&key, value);

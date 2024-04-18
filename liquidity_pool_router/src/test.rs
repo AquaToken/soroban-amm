@@ -1185,6 +1185,410 @@ fn test_simple_ongoing_reward() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #309)")]
+fn test_liqidity_not_filled() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
+
+    token1.mint(&user1, &2000);
+    token2.mint(&user1, &2000);
+
+    router.deposit(
+        &user1,
+        &tokens,
+        &standard_pool_hash,
+        &Vec::from_array(&e, [1000, 1000]),
+        &0,
+    );
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+    router.config_pool_rewards(&tokens, &standard_pool_hash);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #310)")]
+fn test_fill_liqidity_reentrancy() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
+    token1.mint(&user1, &2000);
+    token2.mint(&user1, &2000);
+
+    router.deposit(
+        &user1,
+        &tokens,
+        &standard_pool_hash,
+        &Vec::from_array(&e, [1000, 1000]),
+        &0,
+    );
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+    router.fill_liquidity(&tokens);
+    router.fill_liquidity(&tokens);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #314)")]
+fn test_config_pool_rewards_reentrancy() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
+    token1.mint(&user1, &2000);
+    token2.mint(&user1, &2000);
+
+    router.deposit(
+        &user1,
+        &tokens,
+        &standard_pool_hash,
+        &Vec::from_array(&e, [1000, 1000]),
+        &0,
+    );
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+    router.fill_liquidity(&tokens);
+    router.config_pool_rewards(&tokens, &standard_pool_hash);
+    router.config_pool_rewards(&tokens, &standard_pool_hash);
+}
+
+#[test]
+fn test_config_pool_rewards_after_new_global_config() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
+    token1.mint(&user1, &2000);
+    token2.mint(&user1, &2000);
+
+    router.deposit(
+        &user1,
+        &tokens,
+        &standard_pool_hash,
+        &Vec::from_array(&e, [1000, 1000]),
+        &0,
+    );
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+    router.fill_liquidity(&tokens);
+    assert_eq!(router.config_pool_rewards(&tokens, &standard_pool_hash), 1);
+
+    jump(&e, 300);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+    router.fill_liquidity(&tokens);
+    assert_eq!(router.config_pool_rewards(&tokens, &standard_pool_hash), 1);
+}
+
+#[test]
+fn test_config_pool_after_liquidity_fill() {
+    // if pool is created after liquidity filled for tokens, it may be configured, but should receive no rewards
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    token1.mint(&user1, &2000);
+    token2.mint(&user1, &2000);
+
+    let (standard_pool_1_hash, _standard_pool_1_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
+    router.deposit(
+        &user1,
+        &tokens,
+        &standard_pool_1_hash,
+        &Vec::from_array(&e, [1000, 1000]),
+        &0,
+    );
+
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
+        &admin,
+        &1_0000000,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+    router.fill_liquidity(&tokens);
+    assert_eq!(
+        router.config_pool_rewards(&tokens, &standard_pool_1_hash),
+        1_0000000
+    );
+
+    let (standard_pool_2_hash, _standard_pool_2_address) =
+        router.init_standard_pool(&user1, &tokens, &10);
+    router.deposit(
+        &user1,
+        &tokens,
+        &standard_pool_2_hash,
+        &Vec::from_array(&e, [1000, 1000]),
+        &0,
+    );
+    assert_eq!(
+        router.config_pool_rewards(&tokens, &standard_pool_2_hash),
+        0
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #313)")]
+fn test_fill_liquidity_no_config() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let mut admin1 = Address::generate(&e);
+    let mut admin2 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin1);
+    let mut token2 = create_token_contract(&e, &admin2);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+        std::mem::swap(&mut admin1, &mut admin2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_admin = Address::generate(&e);
+    let admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
+    token1.mint(&user1, &2000);
+    token2.mint(&user1, &2000);
+
+    router.deposit(
+        &user1,
+        &tokens,
+        &standard_pool_hash,
+        &Vec::from_array(&e, [1000, 1000]),
+        &0,
+    );
+    router.fill_liquidity(&tokens);
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #102)")]
 fn test_config_rewards_not_admin() {
     let e = Env::default();

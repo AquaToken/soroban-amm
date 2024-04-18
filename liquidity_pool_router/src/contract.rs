@@ -420,6 +420,12 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         let tokens_salt = get_tokens_salt(&e, tokens.clone());
         let calculator = get_liquidity_calculator(&e);
         let (pools, total_liquidity) = get_total_liquidity(&e, tokens.clone(), calculator);
+
+        let mut pools_with_processed_info = Map::new(&e);
+        for (key, value) in pools {
+            pools_with_processed_info.set(key, (value, false));
+        }
+
         let mut tokens_with_liquidity = get_reward_tokens(&e, rewards_config.current_block);
         let mut token_data = match tokens_with_liquidity.get(tokens.clone()) {
             Some(v) => v,
@@ -432,7 +438,12 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         token_data.total_liquidity = total_liquidity;
         tokens_with_liquidity.set(tokens, token_data);
         set_reward_tokens(&e, rewards_config.current_block, &tokens_with_liquidity);
-        set_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt, &pools);
+        set_reward_tokens_detailed(
+            &e,
+            rewards_config.current_block,
+            tokens_salt,
+            &pools_with_processed_info,
+        );
     }
 
     fn config_pool_rewards(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
@@ -443,18 +454,22 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
         let rewards_config = get_rewards_config(&e);
         let tokens_salt = get_tokens_salt(&e, tokens.clone());
-        let tokens_detailed =
-            get_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt);
+        let mut tokens_detailed =
+            get_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt.clone());
         let tokens_reward = get_reward_tokens(&e, rewards_config.current_block);
         let tokens_reward_info = tokens_reward.get(tokens.clone());
 
-        let pool_liquidity = if tokens_reward_info.is_some() {
+        let (pool_liquidity, pool_configured) = if tokens_reward_info.is_some() {
             tokens_detailed
-                .get(pool_index)
-                .unwrap_or(U256::from_u32(&e, 0))
+                .get(pool_index.clone())
+                .unwrap_or((U256::from_u32(&e, 0), false))
         } else {
-            U256::from_u32(&e, 0)
+            (U256::from_u32(&e, 0), false)
         };
+
+        if pool_configured {
+            panic_with_error!(&e, LiquidityPoolRouterError::RewardsAlreadyConfigured);
+        }
 
         let reward_info = match tokens_reward_info {
             Some(v) => v,
@@ -494,6 +509,17 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
                 ],
             ),
         );
+
+        if pool_tps > 0 {
+            // mark pool as configured to avoid reentrancy
+            tokens_detailed.set(pool_index, (pool_liquidity, true));
+            set_reward_tokens_detailed(
+                &e,
+                rewards_config.current_block,
+                tokens_salt,
+                &tokens_detailed,
+            );
+        }
 
         Events::new(&e).config_rewards(tokens, pool_id, pool_tps, rewards_config.expired_at);
 

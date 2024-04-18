@@ -16,4 +16,5 @@ pub enum LiquidityPoolRouterError {
     VotingShareExceedsMax = 311, // total voting share exceeds 100%
     LiquidityCalculationError = 312,
     RewardsNotConfigured = 313, // unable to find rewards tokens. please run `config_rewards` first
+    RewardsAlreadyConfigured = 314,
 }
