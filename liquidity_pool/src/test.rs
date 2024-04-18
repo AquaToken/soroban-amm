@@ -12,6 +12,7 @@ use utils::test_utils::assert_approx_eq_abs;
 fn test() {
     let Setup {
         env: e,
+        router: _router,
         users,
         token1,
         token2,
@@ -253,6 +254,7 @@ fn test() {
 fn test_events() {
     let Setup {
         env: e,
+        router: _router,
         users,
         token1,
         token2,
@@ -341,6 +343,7 @@ fn test_events() {
 fn test_deposit_min_mint() {
     let Setup {
         env: e,
+        router: _router,
         users,
         token1: _token1,
         token2: _token2,
@@ -367,6 +370,7 @@ fn test_deposit_min_mint() {
 fn test_zero_initial_deposit() {
     let Setup {
         env: e,
+        router: _router,
         users,
         token1: _token1,
         token2: _token2,
@@ -383,6 +387,7 @@ fn test_zero_initial_deposit() {
 fn test_zero_deposit_ok() {
     let Setup {
         env: e,
+        router: _router,
         users,
         token1: _token1,
         token2: _token2,
@@ -407,6 +412,7 @@ fn initialize_already_initialized() {
 
     setup.liq_pool.initialize(
         &users[0],
+        &users[0],
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         &10_u32,
@@ -423,6 +429,7 @@ fn initialize_already_initialized_plane() {
     let token2 = create_token_contract(&setup.env, &users[2]);
 
     setup.liq_pool.initialize_all(
+        &users[0],
         &users[0],
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
@@ -453,6 +460,7 @@ fn test_custom_fee() {
     ] {
         let liqpool = create_liqpool_contract(
             &setup.env,
+            &Address::generate(&setup.env),
             &setup.users[0],
             &install_token_wasm(&setup.env),
             &Vec::from_array(
@@ -480,6 +488,7 @@ fn test_custom_fee() {
 fn test_simple_ongoing_reward() {
     let Setup {
         env,
+        router: _router,
         users,
         token1: _token1,
         token2: _token2,
@@ -489,22 +498,76 @@ fn test_simple_ongoing_reward() {
         plane: _plane,
     } = Setup::default();
     let total_reward_1 = TestConfig::default().reward_tps * 60;
+    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(liq_pool.get_total_accumulated_reward(), 0);
+    assert_eq!(liq_pool.get_total_claimed_reward(), 0);
 
     // 10 seconds passed since config, user depositing
     jump(&env, 10);
+
+    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        TestConfig::default().reward_tps * 10
+    );
+    assert_eq!(liq_pool.get_total_claimed_reward(), 0);
+
     liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
 
     assert_eq!(token_reward.balance(&users[0]), 0);
     // 30 seconds passed, half of the reward is available for the user
     jump(&env, 30);
+
+    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        TestConfig::default().reward_tps * 40
+    );
+    assert_eq!(liq_pool.get_total_claimed_reward(), 0);
+
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
     assert_eq!(token_reward.balance(&users[0]) as u128, total_reward_1 / 2);
+
+    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        TestConfig::default().reward_tps * 40
+    );
+    assert_eq!(
+        liq_pool.get_total_claimed_reward(),
+        TestConfig::default().reward_tps * 30
+    );
+
+    // 40 seconds passed, reward config ended
+    //  5/6 of the reward is available for the user since he has missed first 10 seconds
+    jump(&env, 40);
+
+    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(liq_pool.get_total_accumulated_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_claimed_reward(),
+        TestConfig::default().reward_tps * 30
+    );
+
+    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 * 2 / 6);
+    assert_eq!(
+        token_reward.balance(&users[0]) as u128,
+        total_reward_1 * 5 / 6
+    );
+
+    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(liq_pool.get_total_accumulated_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_claimed_reward(),
+        TestConfig::default().reward_tps * 50
+    );
 }
 
 #[test]
 fn test_estimate_ongoing_reward() {
     let Setup {
         env,
+        router: _router,
         users,
         token1: _token1,
         token2: _token2,
@@ -532,6 +595,7 @@ fn test_simple_reward() {
     setup.mint_tokens_for_users(&TestConfig::default().mint_to_user);
     let Setup {
         env,
+        router: _router,
         users,
         token1: _token1,
         token2: _token2,
@@ -576,6 +640,7 @@ fn test_simple_reward() {
 fn test_two_users_rewards() {
     let Setup {
         env,
+        router: _router,
         users,
         token1: _token1,
         token2: _token2,
@@ -607,6 +672,7 @@ fn test_two_users_rewards() {
 fn test_lazy_user_rewards() {
     let Setup {
         env,
+        router: _router,
         users,
         token1: _token1,
         token2: _token2,
@@ -642,6 +708,7 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
 
     let Setup {
         env,
+        router: _router,
         users,
         token1,
         token2,
@@ -713,6 +780,7 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
 fn test_deposit_inequal_return_change() {
     let Setup {
         env: e,
+        router: _router,
         users,
         token1,
         token2,
@@ -742,9 +810,57 @@ fn test_rewards_50k() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_config_rewards_not_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    setup.mint_tokens_for_users(&TestConfig::default().mint_to_user);
+    let Setup {
+        env,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = setup;
+
+    liq_pool.set_rewards_config(
+        &users[1],
+        &env.ledger().timestamp().saturating_add(60),
+        &10_5000000_u128,
+    );
+}
+
+#[test]
+fn test_config_rewards_router() {
+    let setup = Setup::setup(&TestConfig::default());
+    setup.mint_tokens_for_users(&TestConfig::default().mint_to_user);
+    let Setup {
+        env,
+        router,
+        users: _users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = setup;
+
+    liq_pool.set_rewards_config(
+        &router,
+        &env.ledger().timestamp().saturating_add(60),
+        &10_5000000_u128,
+    );
+}
+
+#[test]
 fn test_large_numbers() {
     let Setup {
         env: e,
+        router: _router,
         users,
         token1,
         token2,

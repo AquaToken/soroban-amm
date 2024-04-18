@@ -9,8 +9,9 @@ use crate::pool_interface::{
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_fee_fraction, get_plane, get_reserve_a, get_reserve_b, get_token_a, get_token_b, has_plane,
-    put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a, put_token_b, set_plane,
+    get_fee_fraction, get_plane, get_reserve_a, get_reserve_b, get_router, get_token_a,
+    get_token_b, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a,
+    put_token_b, set_plane, set_router,
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -45,6 +46,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
@@ -54,7 +56,14 @@ impl LiquidityPoolCrunch for LiquidityPool {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::set_pools_plane(e.clone(), plane);
-        Self::initialize(e.clone(), admin, lp_token_wasm_hash, tokens, fee_fraction);
+        Self::initialize(
+            e.clone(),
+            admin,
+            router,
+            lp_token_wasm_hash,
+            tokens,
+            fee_fraction,
+        );
         Self::initialize_rewards_config(e.clone(), reward_token);
     }
 }
@@ -68,6 +77,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn initialize(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
@@ -77,6 +87,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
         }
         access_control.set_admin(&admin);
+        set_router(&e, &router);
 
         if tokens.len() != 2 {
             panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
@@ -456,7 +467,11 @@ impl RewardsTrait for LiquidityPool {
         tps: u128,       // value with 7 decimal places. example: 600_0000000
     ) {
         admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
+
+        // either admin or router can set the rewards config
+        if admin != get_router(&e) {
+            AccessControl::new(&e).check_admin(&admin);
+        }
 
         if expired_at < e.ledger().timestamp() {
             panic_with_error!(&e, LiquidityPoolValidationError::PastTimeNotAllowed);
@@ -502,6 +517,24 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .get_amount_to_claim(&user, total_shares, user_shares)
+    }
+
+    fn get_total_accumulated_reward(e: Env) -> u128 {
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().get_total_accumulated_reward(total_shares)
+    }
+
+    fn get_total_configured_reward(e: Env) -> u128 {
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().get_total_configured_reward(total_shares)
+    }
+
+    fn get_total_claimed_reward(e: Env) -> u128 {
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().get_total_claimed_reward(total_shares)
     }
 
     fn claim(e: Env, user: Address) -> u128 {

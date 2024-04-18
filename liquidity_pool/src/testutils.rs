@@ -31,6 +31,7 @@ impl Default for TestConfig {
 
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
+    pub(crate) router: Address,
     pub(crate) users: vec::Vec<Address>,
     pub(crate) token1: Client<'a>,
     pub(crate) token2: Client<'a>,
@@ -81,9 +82,12 @@ impl Setup<'_> {
             std::mem::swap(&mut token_admin1, &mut token_admin2);
         }
 
+        let router = Address::generate(&e);
+
         let liq_pool = create_liqpool_contract(
             &e,
             &users[0],
+            &router,
             &install_token_wasm(&e),
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
             &token_reward.address,
@@ -96,6 +100,7 @@ impl Setup<'_> {
 
         Self {
             env: e,
+            router,
             users,
             token1,
             token2,
@@ -144,6 +149,7 @@ fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 pub fn create_liqpool_contract<'a>(
     e: &Env,
     admin: &Address,
+    router: &Address,
     token_wasm_hash: &BytesN<32>,
     tokens: &Vec<Address>,
     token_reward: &Address,
@@ -153,6 +159,7 @@ pub fn create_liqpool_contract<'a>(
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize_all(
         admin,
+        router,
         token_wasm_hash,
         tokens,
         &fee_fraction,

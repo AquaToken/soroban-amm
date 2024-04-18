@@ -1,22 +1,26 @@
 use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
+use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_interface::{
     CombinedSwapInterface, LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait,
     RewardsInterfaceTrait, SwapRouterInterface,
 };
 use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt, get_standard_pool_salt,
-    get_tokens_salt,
+    get_tokens_salt, get_total_liquidity,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
     get_init_pool_payment_address, get_init_pool_payment_amount, get_init_pool_payment_token,
-    get_pool, get_pool_plane, get_pools_plain, get_swap_router, get_tokens_set,
+    get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_reward_tokens,
+    get_reward_tokens_detailed, get_rewards_config, get_swap_router, get_tokens_set,
     get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
     set_init_pool_payment_address, set_init_pool_payment_amount, set_init_pool_payment_token,
-    set_pool_plane, set_stableswap_pool_hash, set_swap_router, set_token_hash,
+    set_liquidity_calculator, set_pool_plane, set_reward_tokens, set_reward_tokens_detailed,
+    set_rewards_config, set_stableswap_pool_hash, set_swap_router, set_token_hash,
+    GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
 use crate::swap_router::SwapRouterClient;
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -26,7 +30,7 @@ use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
-    Symbol, Val, Vec,
+    Symbol, Val, Vec, U256,
 };
 use utils::storage_errors::StorageError;
 use utils::token_utils::check_vec_ordered;
@@ -224,6 +228,34 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         Events::new(&e).withdraw(tokens, user, pool_id, amounts.clone(), share_amount);
         amounts
     }
+
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256 {
+        let pool_id = match get_pool(&e, tokens, pool_index) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
+
+        let calculator = get_liquidity_calculator(&e);
+        match LiquidityCalculatorClient::new(&e, &calculator)
+            .get_liquidity(&Vec::from_array(&e, [pool_id]))
+            .get(0)
+        {
+            Some(v) => v,
+            None => panic_with_error!(&e, LiquidityPoolRouterError::LiquidityCalculationError),
+        }
+    }
+
+    fn get_liquidity_calculator(e: Env) -> Address {
+        get_liquidity_calculator(&e)
+    }
+
+    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
+        let access_control = AccessControl::new(&e);
+        admin.require_auth();
+        access_control.check_admin(&admin);
+
+        set_liquidity_calculator(&e, &calculator);
+    }
 }
 
 #[contractimpl]
@@ -285,21 +317,185 @@ impl AdminInterface for LiquidityPoolRouter {
 
 #[contractimpl]
 impl RewardsInterfaceTrait for LiquidityPoolRouter {
-    fn set_rewards_config(
+    fn get_rewards_config(e: Env) -> Map<Symbol, i128> {
+        let rewards_config = get_rewards_config(&e);
+        let mut result = Map::new(&e);
+        result.set(symbol_short!("tps"), rewards_config.tps as i128);
+        result.set(symbol_short!("exp_at"), rewards_config.expired_at as i128);
+        result.set(symbol_short!("block"), rewards_config.current_block as i128);
+        result
+    }
+
+    fn get_tokens_for_reward(e: Env) -> Map<Vec<Address>, (u32, bool, U256)> {
+        let rewards_config = get_rewards_config(&e);
+        let tokens = get_reward_tokens(&e, rewards_config.current_block);
+        let mut result = Map::new(&e);
+        for (key, value) in tokens {
+            result.set(
+                key,
+                (value.voting_share, value.processed, value.total_liquidity),
+            );
+        }
+        result
+    }
+
+    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256 {
+        if !check_vec_ordered(&tokens) {
+            panic_with_error!(e, LiquidityPoolValidationError::TokensNotSorted);
+        }
+        let tokens_salt = get_tokens_salt(&e, tokens.clone());
+        let pools = get_pools_plain(&e, &tokens_salt);
+
+        let calculator = get_liquidity_calculator(&e);
+        let mut pools_vec: Vec<Address> = Vec::new(&e);
+        for (_key, value) in pools {
+            pools_vec.push_back(value.clone());
+        }
+
+        let pools_liquidity =
+            LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
+        let mut result = U256::from_u32(&e, 0);
+        for liquidity in pools_liquidity {
+            result = result.add(&liquidity);
+        }
+        result
+    }
+
+    fn config_global_rewards(
         e: Env,
         admin: Address,
-        tokens: Vec<Address>,
-        pool_index: BytesN<32>,
-        expired_at: u64,
-        tps: u128,
+        reward_tps: u128, // value with 7 decimal places. example: 600_0000000
+        expired_at: u64,  // timestamp
+        tokens_votes: Vec<(Vec<Address>, u32)>, // {[token1, token2]: voting_percentage}, voting percentage 0_0000000 .. 1_0000000
     ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+        access_control.check_admin(&admin);
 
+        let rewards_config = get_rewards_config(&e);
+        let new_rewards_block = rewards_config.current_block + 1;
+
+        let mut tokens_with_liquidity = Map::new(&e);
+        for (tokens, voting_share) in tokens_votes {
+            // since we expect tokens to be sorted, we can safely compare neighbors
+            for i in 0..tokens.len() - 1 {
+                if tokens.get_unchecked(i) == tokens.get_unchecked(i + 1) {
+                    panic_with_error!(&e, LiquidityPoolRouterError::DuplicatesNotAllowed);
+                }
+            }
+
+            if !check_vec_ordered(&tokens) {
+                panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
+            }
+
+            tokens_with_liquidity.set(
+                tokens,
+                LiquidityPoolRewardInfo {
+                    voting_share,
+                    processed: false,
+                    total_liquidity: U256::from_u32(&e, 0),
+                },
+            );
+        }
+        let mut sum = 0;
+        for (_, reward_info) in tokens_with_liquidity.iter() {
+            sum += reward_info.voting_share;
+        }
+        if sum > 1_0000000 {
+            panic_with_error!(e, LiquidityPoolRouterError::VotingShareExceedsMax);
+        }
+
+        set_reward_tokens(&e, new_rewards_block, &tokens_with_liquidity);
+        set_rewards_config(
+            &e,
+            &GlobalRewardsConfig {
+                tps: reward_tps,
+                expired_at,
+                current_block: new_rewards_block,
+            },
+        )
+    }
+
+    fn fill_liquidity(e: Env, tokens: Vec<Address>) {
+        let rewards_config = get_rewards_config(&e);
+        let tokens_salt = get_tokens_salt(&e, tokens.clone());
+        let calculator = get_liquidity_calculator(&e);
+        let (pools, total_liquidity) = get_total_liquidity(&e, tokens.clone(), calculator);
+
+        let mut pools_with_processed_info = Map::new(&e);
+        for (key, value) in pools {
+            pools_with_processed_info.set(key, (value, false));
+        }
+
+        let mut tokens_with_liquidity = get_reward_tokens(&e, rewards_config.current_block);
+        let mut token_data = match tokens_with_liquidity.get(tokens.clone()) {
+            Some(v) => v,
+            None => panic_with_error!(e, LiquidityPoolRouterError::TokensAreNotForReward),
+        };
+        if token_data.processed {
+            panic_with_error!(e, LiquidityPoolRouterError::LiquidityAlreadyFilled);
+        }
+        token_data.processed = true;
+        token_data.total_liquidity = total_liquidity;
+        tokens_with_liquidity.set(tokens, token_data);
+        set_reward_tokens(&e, rewards_config.current_block, &tokens_with_liquidity);
+        set_reward_tokens_detailed(
+            &e,
+            rewards_config.current_block,
+            tokens_salt,
+            &pools_with_processed_info,
+        );
+    }
+
+    fn config_pool_rewards(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
+        };
+
+        let rewards_config = get_rewards_config(&e);
+        let tokens_salt = get_tokens_salt(&e, tokens.clone());
+        let mut tokens_detailed =
+            get_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt.clone());
+        let tokens_reward = get_reward_tokens(&e, rewards_config.current_block);
+        let tokens_reward_info = tokens_reward.get(tokens.clone());
+
+        let (pool_liquidity, pool_configured) = if tokens_reward_info.is_some() {
+            tokens_detailed
+                .get(pool_index.clone())
+                .unwrap_or((U256::from_u32(&e, 0), false))
+        } else {
+            (U256::from_u32(&e, 0), false)
+        };
+
+        if pool_configured {
+            panic_with_error!(&e, LiquidityPoolRouterError::RewardsAlreadyConfigured);
+        }
+
+        let reward_info = match tokens_reward_info {
+            Some(v) => v,
+            // if tokens not found in current config, deactivate them
+            None => LiquidityPoolRewardInfo {
+                voting_share: 0,
+                processed: true,
+                total_liquidity: U256::from_u32(&e, 0),
+            },
+        };
+
+        if !reward_info.processed {
+            panic_with_error!(&e, LiquidityPoolRouterError::LiquidityNotFilled);
+        }
+        // it's safe to convert tps to u128 since it cannot be bigger than total tps which is u128
+        let pool_tps = if pool_liquidity > U256::from_u32(&e, 0) {
+            U256::from_u128(&e, rewards_config.tps)
+                .mul(&U256::from_u32(&e, reward_info.voting_share))
+                .mul(&pool_liquidity)
+                .div(&reward_info.total_liquidity)
+                .div(&U256::from_u32(&e, 1_0000000))
+                .to_u128()
+                .unwrap()
+        } else {
+            0
         };
 
         e.invoke_contract::<Val>(
@@ -308,12 +504,27 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             Vec::from_array(
                 &e,
                 [
-                    admin.into_val(&e),
-                    expired_at.into_val(&e),
-                    tps.into_val(&e),
+                    e.current_contract_address().to_val(),
+                    rewards_config.expired_at.into_val(&e),
+                    pool_tps.into_val(&e),
                 ],
             ),
         );
+
+        if pool_tps > 0 {
+            // mark pool as configured to avoid reentrancy
+            tokens_detailed.set(pool_index, (pool_liquidity, true));
+            set_reward_tokens_detailed(
+                &e,
+                rewards_config.current_block,
+                tokens_salt,
+                &tokens_detailed,
+            );
+        }
+
+        Events::new(&e).config_rewards(tokens, pool_id, pool_tps, rewards_config.expired_at);
+
+        pool_tps
     }
 
     fn get_rewards_info(
@@ -349,6 +560,45 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             &pool_id,
             &Symbol::new(&e, "get_user_reward"),
             Vec::from_array(&e, [user.clone().into_val(&e)]),
+        )
+    }
+
+    fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_total_accumulated_reward"),
+            Vec::new(&e),
+        )
+    }
+
+    fn get_total_configured_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_total_configured_reward"),
+            Vec::new(&e),
+        )
+    }
+
+    fn get_total_claimed_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_total_claimed_reward"),
+            Vec::new(&e),
         )
     }
 

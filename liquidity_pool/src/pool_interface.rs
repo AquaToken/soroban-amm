@@ -5,6 +5,7 @@ pub trait LiquidityPoolCrunch {
     fn initialize_all(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
@@ -21,6 +22,7 @@ pub trait LiquidityPoolTrait {
     fn initialize(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
@@ -101,6 +103,15 @@ pub trait RewardsTrait {
 
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
+
+    // Get total amount of accumulated reward for the pool
+    fn get_total_accumulated_reward(e: Env) -> u128;
+
+    // Get total amount of generated plus configured reward for the pool
+    fn get_total_configured_reward(e: Env) -> u128;
+
+    // Get total amount of claimed reward for the pool
+    fn get_total_claimed_reward(e: Env) -> u128;
 
     // Claim reward as a user.
     // returns amount of tokens rewarded to the user

@@ -1,0 +1,38 @@
+version: '3'
+tasks:
+  clean:
+    cmd: cargo clean
+
+  fmt:
+    cmd: cargo fmt --all
+
+  check:
+    cmd: cargo check
+
+  build:
+    cmds:
+      - task -d ../liquidity_pool_plane build || exit 1
+      - soroban contract build --package soroban-liquidity-pool-liquidity-calculator-contract
+      - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_liquidity_calculator_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_liquidity_calculator_contract.wasm
+      - ls -l ../target/wasm32-unknown-unknown/release/*.wasm
+
+  test:
+    deps:
+      - build
+    cmd: cargo test
+
+  test_slow:
+    cmds:
+      - task: test
+
+  default:
+    cmds:
+      - task: build
+
+  all:
+    cmds:
+      - task: clean
+      - task: fmt
+      - task: build
+      - task: check
+      - task: test
