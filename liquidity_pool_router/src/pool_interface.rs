@@ -91,7 +91,7 @@ pub trait RewardsInterfaceTrait {
     ///
     /// A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
     /// The keys are "tps", "expired_at", and "current_block".
-    fn get_rewards_config(e: Env) -> Map<Symbol, Val>;
+    fn get_rewards_config(e: Env) -> Map<Symbol, i128>;
 
     /// Returns a mapping of token addresses to their respective reward information.
     ///

@@ -317,18 +317,12 @@ impl AdminInterface for LiquidityPoolRouter {
 
 #[contractimpl]
 impl RewardsInterfaceTrait for LiquidityPoolRouter {
-    fn get_rewards_config(e: Env) -> Map<Symbol, Val> {
+    fn get_rewards_config(e: Env) -> Map<Symbol, i128> {
         let rewards_config = get_rewards_config(&e);
         let mut result = Map::new(&e);
-        result.set(Symbol::new(&e, "tps"), rewards_config.tps.into_val(&e));
-        result.set(
-            Symbol::new(&e, "expired_at"),
-            rewards_config.expired_at.into_val(&e),
-        );
-        result.set(
-            Symbol::new(&e, "current_block"),
-            rewards_config.current_block.into_val(&e),
-        );
+        result.set(symbol_short!("tps"), rewards_config.tps as i128);
+        result.set(symbol_short!("exp_at"), rewards_config.expired_at as i128);
+        result.set(symbol_short!("block"), rewards_config.current_block as i128);
         result
     }
 
