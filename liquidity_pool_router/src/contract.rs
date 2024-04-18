@@ -383,8 +383,15 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
         let mut tokens_with_liquidity = Map::new(&e);
         for (tokens, voting_share) in tokens_votes {
+            // since we expect tokens to be sorted, we can safely compare neighbors
+            for i in 0..tokens.len() - 1 {
+                if tokens.get_unchecked(i) == tokens.get_unchecked(i + 1) {
+                    panic_with_error!(&e, LiquidityPoolRouterError::DuplicatesNotAllowed);
+                }
+            }
+
             if !check_vec_ordered(&tokens) {
-                panic_with_error!(e, LiquidityPoolValidationError::TokensNotSorted);
+                panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
             }
 
             tokens_with_liquidity.set(

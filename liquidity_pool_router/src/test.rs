@@ -1638,6 +1638,116 @@ fn test_config_rewards_not_admin() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #315)")]
+fn test_config_rewards_duplicated_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    reward_token.mint(&user1, &1000_0000000);
+    router.init_standard_pool(&user1, &tokens, &30);
+    router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+
+    let rewards = Vec::from_array(
+        &e,
+        [(
+            Vec::from_array(&e, [token1.address.clone(), token1.address.clone()]),
+            1_0000000,
+        )],
+    );
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2002)")]
+fn test_config_rewards_tokens_not_sorted() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    reward_token.mint(&user1, &1000_0000000);
+    router.init_standard_pool(&user1, &tokens, &30);
+    router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+
+    let rewards = Vec::from_array(
+        &e,
+        [(
+            Vec::from_array(&e, [token2.address, token1.address]),
+            1_0000000,
+        )],
+    );
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+}
+
+#[test]
 fn test_config_rewards_no_pools_for_tokens() {
     let e = Env::default();
     e.mock_all_auths();
