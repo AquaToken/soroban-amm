@@ -202,6 +202,64 @@ fn test_happy_flow() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #2904)")]
+fn test_a_over_max_on_create() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    create_liqpool_contract(
+        &e,
+        &user1,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        1000_0000000,
+        6_u32,
+        0_u32,
+        &token_reward.address,
+        &plane.address,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2003)")]
+fn test_fee_over_max_on_create() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    create_liqpool_contract(
+        &e,
+        &user1,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        100,
+        6000_u32,
+        0_u32,
+        &token_reward.address,
+        &plane.address,
+    );
+}
+
+#[test]
 fn test_events_2_tokens() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1145,8 +1203,6 @@ fn test_custom_fee() {
         (100, 0, 9891006, 0, 0),         // fee = 1%, admin fee = 0%
         (1000, 0, 8991824, 0, 0),        // fee = 10%, admin fee = 0%
         (3000, 0, 6993641, 0, 0),        // fee = 30%, admin fee = 0%
-        (9900, 0, 99909, 0, 0),          // fee = 99%, admin fee = 0%
-        (9999, 0, 999, 0, 0),            // fee = 99.99% - maximum fee, admin fee = 0%
         (100, 10, 9891006, 0, 100),      // fee = 0.1%, admin fee = 0.1%
         (100, 100, 9891006, 0, 1000),    // fee = 0.1%, admin fee = 1%
         (100, 1000, 9891006, 0, 9991),   // fee = 0.1%, admin fee = 10%

@@ -798,8 +798,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         set_router(&e, &router);
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
-        if fee > 9999 || admin_fee > 10000 {
+        if fee > MAX_FEE {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
+        }
+        if admin_fee > MAX_ADMIN_FEE {
+            panic_with_error!(&e, LiquidityPoolValidationError::AdminFeeOutOfBounds);
         }
 
         put_fee(&e, &fee);
@@ -823,6 +826,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_reserves(&e, &initial_reserves);
 
         // pool config
+        if a > MAX_A {
+            panic_with_error!(&e, LiquidityPoolError::RampOverMax);
+        }
         put_initial_a(&e, &a);
         put_initial_a_time(&e, &e.ledger().timestamp());
         put_future_a(&e, &a);
