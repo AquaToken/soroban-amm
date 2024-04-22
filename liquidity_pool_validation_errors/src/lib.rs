@@ -3,7 +3,7 @@
 use soroban_sdk::contracterror;
 
 #[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum LiquidityPoolValidationError {
     WrongInputVecSize = 2001,
@@ -21,6 +21,5 @@ pub enum LiquidityPoolValidationError {
     UnknownPoolType = 2013,
     ZeroSharesBurned = 2014,
     TooManySharesBurned = 2015,
-    PastTimeNotAllowed = 2016,
     CannotComparePools = 2017,
 }

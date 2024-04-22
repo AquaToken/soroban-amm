@@ -68,7 +68,7 @@ enum DataKey {
 }
 
 #[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum PoolError {
     PoolAlreadyExists = 401,
