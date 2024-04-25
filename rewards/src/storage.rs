@@ -81,7 +81,10 @@ impl RewardsStorageTrait for Storage {
             .get(&DataKey::PoolRewardConfig)
         {
             Some(v) => v,
-            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+            None => PoolRewardConfig {
+                tps: 0,
+                expired_at: 0,
+            },
         }
     }
 
@@ -95,7 +98,12 @@ impl RewardsStorageTrait for Storage {
     fn get_pool_reward_data(&self) -> PoolRewardData {
         match self.env.storage().instance().get(&DataKey::PoolRewardData) {
             Some(v) => v,
-            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+            None => PoolRewardData {
+                block: 0,
+                accumulated: 0,
+                claimed: 0,
+                last_time: 0,
+            },
         }
     }
 
@@ -137,7 +145,7 @@ impl RewardsStorageTrait for Storage {
             None => {
                 let value: Map<u64, u128> = match self.env.storage().persistent().get(&key) {
                     Some(v) => v,
-                    None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+                    None => return Map::new(&self.env),
                 };
                 self.inv_cache.set(key, value.clone());
                 value

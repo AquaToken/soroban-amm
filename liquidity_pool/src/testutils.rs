@@ -53,8 +53,8 @@ impl Setup<'_> {
     /// Create setup from config and mint tokens for all users
     pub(crate) fn new_with_config(config: &TestConfig) -> Self {
         let setup = Self::setup(config);
-        setup.mint_tokens_for_users(&config.mint_to_user);
-        setup.set_rewards_config(&config.reward_tps);
+        setup.mint_tokens_for_users(config.mint_to_user);
+        setup.set_rewards_config(config.reward_tps);
         setup
     }
 
@@ -119,22 +119,24 @@ impl Setup<'_> {
         users
     }
 
-    pub(crate) fn mint_tokens_for_users(&self, amount: &i128) {
+    pub(crate) fn mint_tokens_for_users(&self, amount: i128) {
         for user in self.users.iter() {
-            self.token1.mint(user, amount);
+            self.token1.mint(user, &amount);
             assert_eq!(self.token1.balance(user), amount.clone());
 
-            self.token2.mint(user, amount);
+            self.token2.mint(user, &amount);
             assert_eq!(self.token2.balance(user), amount.clone());
         }
     }
 
-    pub(crate) fn set_rewards_config(&self, reward_tps: &u128) {
-        self.liq_pool.set_rewards_config(
-            &self.users[0],
-            &self.env.ledger().timestamp().saturating_add(60),
-            reward_tps,
-        );
+    pub(crate) fn set_rewards_config(&self, reward_tps: u128) {
+        if reward_tps > 0 {
+            self.liq_pool.set_rewards_config(
+                &self.users[0],
+                &self.env.ledger().timestamp().saturating_add(60),
+                &reward_tps,
+            );
+        }
     }
 }
 

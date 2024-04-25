@@ -29,14 +29,13 @@ use access_control::access::{AccessControl, AccessControlTrait};
 use cast::i128 as to_i128;
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
-use rewards::{storage::PoolRewardConfig, storage::RewardsStorageTrait};
+use rewards::storage::RewardsStorageTrait;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
     IntoVal, Map, Symbol, Val, Vec, U256,
 };
-use utils::bump::bump_instance;
 use utils::math_errors::MathError;
 use utils::storage_errors::StorageError;
 
@@ -832,9 +831,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_transfer_ownership_deadline(&e, &0);
         put_is_killed(&e, &false);
 
-        let rewards = get_rewards_manager(&e);
-        rewards.manager().initialize();
-
         // update plane data for every pool update
         update_plane(&e);
     }
@@ -1164,17 +1160,11 @@ impl RewardsTrait for LiquidityPool {
             AccessControl::new(&e).check_admin(&admin);
         }
 
-        if expired_at < e.ledger().timestamp() {
-            panic_with_error!(&e, LiquidityPoolValidationError::PastTimeNotAllowed);
-        }
-
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
-        rewards.manager().update_rewards_data(total_shares);
-
-        let config = PoolRewardConfig { tps, expired_at };
-        bump_instance(&e);
-        rewards.storage().set_pool_reward_config(&config);
+        rewards
+            .manager()
+            .set_reward_config(total_shares, expired_at, tps);
     }
 
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {

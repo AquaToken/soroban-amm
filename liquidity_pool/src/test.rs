@@ -592,7 +592,7 @@ fn test_estimate_ongoing_reward() {
 #[test]
 fn test_simple_reward() {
     let setup = Setup::setup(&TestConfig::default());
-    setup.mint_tokens_for_users(&TestConfig::default().mint_to_user);
+    setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
     let Setup {
         env,
         router: _router,
@@ -701,6 +701,177 @@ fn test_lazy_user_rewards() {
     assert_approx_eq_abs(user1_claim + user2_claim, total_reward_1, 1000);
 }
 
+#[test]
+fn test_rewards_disable_before_expiration() {
+    let Setup {
+        env,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        users_count: 3,
+        reward_tps: 0,
+        ..TestConfig::default()
+    });
+
+    // user 1 has 10% of total reward
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [900, 900]), &0);
+    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
+
+    jump(&env, 10);
+    let admin = users[0].clone();
+    let tps = 1_0000000;
+    // admin sets rewards distribution a bit in the future from the expected point
+    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps);
+
+    // user 2 enters. now user 1 gets 5% of total reward, user 2 receives 50%
+    jump(&env, 20);
+    liq_pool.deposit(&users[2], &Vec::from_array(&env, [1000, 1000]), &0);
+
+    jump(&env, 10);
+    liq_pool.withdraw(&users[2], &1000, &Vec::from_array(&env, [1000, 1000]));
+
+    // before config expiration, admin decides to stop as it's time to reward other pools
+    jump(&env, 50);
+    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(10), &0);
+
+    // user decides to claim in far future
+    jump(&env, 1000);
+    assert_eq!(
+        liq_pool.claim(&users[1]),
+        tps * 20 / 10 + tps * 10 / 20 + tps * 50 / 10
+    );
+    assert_eq!(liq_pool.claim(&users[2]), tps * 10 / 2);
+}
+
+#[test]
+fn test_rewards_disable_after_expiration() {
+    let Setup {
+        env,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        reward_tps: 0,
+        ..TestConfig::default()
+    });
+
+    // user 1 has 10% of total reward
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [900, 900]), &0);
+    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
+
+    jump(&env, 10);
+    let admin = users[0].clone();
+    let tps = 1_0000000;
+    // admin sets rewards distribution, then decides to stop rewards after expiration
+    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps);
+    jump(&env, 150);
+    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &0);
+
+    // user decides to claim in far future
+    jump(&env, 1000);
+    assert_eq!(liq_pool.claim(&users[1]), tps * 100 / 10);
+}
+
+#[test]
+fn test_rewards_set_new_after_expiration() {
+    let Setup {
+        env,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        reward_tps: 0,
+        ..TestConfig::default()
+    });
+
+    // user 1 has 10% of total reward
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [900, 900]), &0);
+    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
+
+    jump(&env, 10);
+    let admin = users[0].clone();
+    let tps_1 = 1_0000000;
+    let tps_2 = 10000;
+    // admin configures first rewards distribution, then it ends and admin sets new one which also expires
+    liq_pool.set_rewards_config(
+        &admin,
+        &env.ledger().timestamp().saturating_add(100),
+        &tps_1,
+    );
+    jump(&env, 150);
+    liq_pool.set_rewards_config(
+        &admin,
+        &env.ledger().timestamp().saturating_add(100),
+        &tps_2,
+    );
+
+    // user decides to claim in far future
+    jump(&env, 1000);
+    assert_eq!(
+        liq_pool.claim(&users[1]),
+        tps_1 * 100 / 10 + tps_2 * 100 / 10
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #702)")]
+fn test_rewards_same_expiration_time() {
+    let Setup {
+        env,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::default();
+
+    jump(&env, 10);
+    liq_pool.set_rewards_config(&users[0], &env.ledger().timestamp().saturating_add(100), &1);
+    jump(&env, 10);
+    liq_pool.set_rewards_config(&users[0], &env.ledger().timestamp().saturating_add(90), &2);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #701)")]
+fn test_rewards_past() {
+    let Setup {
+        env,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::default();
+
+    jump(&env, 10);
+    let original_expiration_time = env.ledger().timestamp().saturating_add(100);
+    liq_pool.set_rewards_config(&users[0], &original_expiration_time, &1);
+    jump(&env, 1000);
+    liq_pool.set_rewards_config(&users[0], &original_expiration_time.saturating_add(90), &2);
+}
+
 fn test_rewards_many_users(iterations_to_simulate: u32) {
     // first user comes as initial liquidity provider
     //  many users come
@@ -770,7 +941,6 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
 
     jump(&env, 100);
     env.budget().reset_default();
-    env.budget().reset_tracker();
     let user1_claim = liq_pool.claim(&first_user);
     env.budget().print();
     assert_approx_eq_abs(user1_claim, expected_reward, 10000); // small loss because of rounding is fine
@@ -813,7 +983,7 @@ fn test_rewards_50k() {
 #[should_panic(expected = "Error(Contract, #102)")]
 fn test_config_rewards_not_admin() {
     let setup = Setup::setup(&TestConfig::default());
-    setup.mint_tokens_for_users(&TestConfig::default().mint_to_user);
+    setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
     let Setup {
         env,
         router: _router,
@@ -836,7 +1006,7 @@ fn test_config_rewards_not_admin() {
 #[test]
 fn test_config_rewards_router() {
     let setup = Setup::setup(&TestConfig::default());
-    setup.mint_tokens_for_users(&TestConfig::default().mint_to_user);
+    setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
     let Setup {
         env,
         router,
