@@ -11,3 +11,4 @@ doctest = false
 [dependencies]
 soroban-sdk = { workspace = true }
 utils = { workspace = true }
+liquidity-pool-validation-errors = { workspace = true }

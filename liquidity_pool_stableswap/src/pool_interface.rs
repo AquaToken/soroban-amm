@@ -5,13 +5,13 @@ pub trait ManagedLiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
+        router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
         a: u128,
         fee: u32,
         admin_fee: u32,
         reward_token: Address,
-        reward_storage: Address,
         plane: Address,
     );
 }
@@ -24,6 +24,7 @@ pub trait LiquidityPoolInterfaceTrait {
     fn initialize(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         a: u128,
@@ -40,6 +41,9 @@ pub trait LiquidityPoolInterfaceTrait {
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
 
+    // Returns the total amount of shares
+    fn get_total_shares(e: Env) -> u128;
+
     // Getter for the pool balances array.
     fn get_reserves(e: Env) -> Vec<u128>;
 
@@ -49,7 +53,12 @@ pub trait LiquidityPoolInterfaceTrait {
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
-    fn deposit(e: Env, user: Address, desired_amounts: Vec<u128>) -> (Vec<u128>, u128);
+    fn deposit(
+        e: Env,
+        user: Address,
+        desired_amounts: Vec<u128>,
+        min_shares: u128,
+    ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
     // in_idx: Index value for the coin to send
@@ -88,11 +97,8 @@ pub trait UpgradeableContractTrait {
 }
 
 pub trait RewardsTrait {
-    // todo: move rewards configuration to gauge
-
-    // Initialize rewards settings: token address and storage address
-    // from which transfer will be made on claim
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
+    // Initialize rewards token address
+    fn initialize_rewards_config(e: Env, reward_token: Address);
 
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers
@@ -105,6 +111,15 @@ pub trait RewardsTrait {
 
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
+
+    // Get total amount of accumulated reward for the pool
+    fn get_total_accumulated_reward(e: Env) -> u128;
+
+    // Get total amount of generated plus configured reward for the pool
+    fn get_total_configured_reward(e: Env) -> u128;
+
+    // Get total amount of claimed reward for the pool
+    fn get_total_claimed_reward(e: Env) -> u128;
 
     // Claim reward as a user.
     // returns amount of tokens rewarded to the user
@@ -153,8 +168,6 @@ pub trait AdminInterfaceTrait {
 }
 
 pub trait InternalInterfaceTrait {
-    fn xp(e: Env) -> Vec<u128>;
-    fn xp_mem(e: Env, balances: Vec<u128>) -> Vec<u128>;
     fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128;
     fn get_d_mem(e: Env, balances: Vec<u128>, amp: u128) -> u128;
     fn get_y(e: Env, i: u32, j: u32, x: u128, xp_: Vec<u128>) -> u128;
@@ -184,8 +197,6 @@ pub trait LiquidityPoolTrait:
     // Get the amount of coin j one would receive for swapping dx of coin i.
     fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128;
 
-    fn get_dy_underlying(e: Env, i: u32, j: u32, dx: u128) -> u128;
-
     // Withdraw coins from the pool in an imbalanced amount.
     // amounts: List of amounts of underlying coins to withdraw
     // max_burn_amount: Maximum amount of LP token to burn in the withdrawal
@@ -207,5 +218,11 @@ pub trait LiquidityPoolTrait:
     // i: Index value of the coin to withdraw
     // min_amount: Minimum amount of coin to receive
     // Returns the amount of coin i received.
-    fn withdraw_one_coin(e: Env, user: Address, token_amount: u128, i: u32, min_amount: u128);
+    fn withdraw_one_coin(
+        e: Env,
+        user: Address,
+        share_amount: u128,
+        i: u32,
+        min_amount: u128,
+    ) -> Vec<u128>;
 }

@@ -1,0 +1,16 @@
+[package]
+name = "soroban-liquidity-pool-liquidity-calculator-contract"
+version.workspace = true
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+access_control = { workspace = true }
+soroban-sdk = { workspace = true }
+soroban-fixed-point-math = { workspace = true }
+
+[dev_dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

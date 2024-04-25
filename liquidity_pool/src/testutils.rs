@@ -31,6 +31,7 @@ impl Default for TestConfig {
 
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
+    pub(crate) router: Address,
     pub(crate) users: vec::Vec<Address>,
     pub(crate) token1: Client<'a>,
     pub(crate) token2: Client<'a>,
@@ -52,8 +53,8 @@ impl Setup<'_> {
     /// Create setup from config and mint tokens for all users
     pub(crate) fn new_with_config(config: &TestConfig) -> Self {
         let setup = Self::setup(config);
-        setup.mint_tokens_for_users(&config.mint_to_user);
-        setup.set_rewards_config(&config.reward_tps);
+        setup.mint_tokens_for_users(config.mint_to_user);
+        setup.set_rewards_config(config.reward_tps);
         setup
     }
 
@@ -81,9 +82,12 @@ impl Setup<'_> {
             std::mem::swap(&mut token_admin1, &mut token_admin2);
         }
 
+        let router = Address::generate(&e);
+
         let liq_pool = create_liqpool_contract(
             &e,
             &users[0],
+            &router,
             &install_token_wasm(&e),
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
             &token_reward.address,
@@ -92,17 +96,11 @@ impl Setup<'_> {
         );
         token_reward.mint(&liq_pool.address, &config.rewards_count);
 
-        token_reward.approve(
-            &liq_pool.address,
-            &liq_pool.address,
-            &config.rewards_count,
-            &99999,
-        );
-
         let token_share = Client::new(&e, &liq_pool.share_id());
 
         Self {
             env: e,
+            router,
             users,
             token1,
             token2,
@@ -121,27 +119,24 @@ impl Setup<'_> {
         users
     }
 
-    pub(crate) fn mint_tokens_for_users(&self, amount: &i128) {
+    pub(crate) fn mint_tokens_for_users(&self, amount: i128) {
         for user in self.users.iter() {
-            self.token1.mint(user, amount);
+            self.token1.mint(user, &amount);
             assert_eq!(self.token1.balance(user), amount.clone());
 
-            self.token2.mint(user, amount);
+            self.token2.mint(user, &amount);
             assert_eq!(self.token2.balance(user), amount.clone());
-
-            self.token1
-                .approve(user, &self.liq_pool.address, amount, &99999);
-            self.token2
-                .approve(user, &self.liq_pool.address, amount, &99999);
         }
     }
 
-    pub(crate) fn set_rewards_config(&self, reward_tps: &u128) {
-        self.liq_pool.set_rewards_config(
-            &self.users[0],
-            &self.env.ledger().timestamp().saturating_add(60),
-            reward_tps,
-        );
+    pub(crate) fn set_rewards_config(&self, reward_tps: u128) {
+        if reward_tps > 0 {
+            self.liq_pool.set_rewards_config(
+                &self.users[0],
+                &self.env.ledger().timestamp().saturating_add(60),
+                &reward_tps,
+            );
+        }
     }
 }
 
@@ -156,6 +151,7 @@ fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 pub fn create_liqpool_contract<'a>(
     e: &Env,
     admin: &Address,
+    router: &Address,
     token_wasm_hash: &BytesN<32>,
     tokens: &Vec<Address>,
     token_reward: &Address,
@@ -165,11 +161,11 @@ pub fn create_liqpool_contract<'a>(
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize_all(
         admin,
+        router,
         token_wasm_hash,
         tokens,
         &fee_fraction,
         token_reward,
-        &liqpool.address,
         plane,
     );
     liqpool

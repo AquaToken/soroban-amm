@@ -1,6 +1,6 @@
-use crate::pool_constants::N_COINS;
 use rewards::utils::bump::bump_instance;
-use soroban_sdk::{contracttype, Address, Env, Vec};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
+use utils::storage_errors::StorageError;
 
 #[derive(Clone)]
 #[contracttype]
@@ -20,36 +20,31 @@ enum DataKey {
     KillDeadline,
     IsKilled,
     Plane,
+    Router,
 }
 
 pub fn get_tokens(e: &Env) -> Vec<Address> {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::Tokens)
-        .expect("Please initialize Tokens")
+    match e.storage().instance().get(&DataKey::Tokens) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn get_reserves(e: &Env) -> Vec<u128> {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::Reserves)
-        .expect("Please initialize Reserves")
+    match e.storage().instance().get(&DataKey::Reserves) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_tokens(e: &Env, contracts: &Vec<Address>) {
-    if contracts.len() != N_COINS as u32 {
-        panic!("wrong vector size")
-    }
     bump_instance(e);
     e.storage().instance().set(&DataKey::Tokens, contracts);
 }
 
 pub fn put_reserves(e: &Env, amounts: &Vec<u128>) {
-    if amounts.len() != N_COINS as u32 {
-        panic!("wrong vector size")
-    }
     bump_instance(e);
     e.storage().instance().set(&DataKey::Reserves, amounts);
 }
@@ -57,10 +52,10 @@ pub fn put_reserves(e: &Env, amounts: &Vec<u128>) {
 // initial_A
 pub fn get_initial_a(e: &Env) -> u128 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::InitialA)
-        .expect("Please initialize initial_A")
+    match e.storage().instance().get(&DataKey::InitialA) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_initial_a(e: &Env, value: &u128) {
@@ -71,10 +66,10 @@ pub fn put_initial_a(e: &Env, value: &u128) {
 // initial A time
 pub fn get_initial_a_time(e: &Env) -> u64 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::InitialATime)
-        .expect("Please initialize Initial A Time")
+    match e.storage().instance().get(&DataKey::InitialATime) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_initial_a_time(e: &Env, value: &u64) {
@@ -85,10 +80,10 @@ pub fn put_initial_a_time(e: &Env, value: &u64) {
 // future_a
 pub fn get_future_a(e: &Env) -> u128 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::FutureA)
-        .expect("Please initialize future_A")
+    match e.storage().instance().get(&DataKey::FutureA) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_future_a(e: &Env, value: &u128) {
@@ -96,13 +91,13 @@ pub fn put_future_a(e: &Env, value: &u128) {
     e.storage().instance().set(&DataKey::FutureA, value);
 }
 
-// fitire A time
+// future A time
 pub fn get_future_a_time(e: &Env) -> u64 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::FutureATime)
-        .expect("Please initialize FutureATime")
+    match e.storage().instance().get(&DataKey::FutureATime) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_future_a_time(e: &Env, value: &u64) {
@@ -113,10 +108,10 @@ pub fn put_future_a_time(e: &Env, value: &u64) {
 // fee
 pub fn get_fee(e: &Env) -> u32 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::Fee)
-        .expect("Please initialize fee")
+    match e.storage().instance().get(&DataKey::Fee) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_fee(e: &Env, value: &u32) {
@@ -127,10 +122,10 @@ pub fn put_fee(e: &Env, value: &u32) {
 // admin_fee
 pub fn get_admin_fee(e: &Env) -> u32 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::AdminFee)
-        .expect("Please initialize admin_fee")
+    match e.storage().instance().get(&DataKey::AdminFee) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_admin_fee(e: &Env, value: &u32) {
@@ -141,10 +136,10 @@ pub fn put_admin_fee(e: &Env, value: &u32) {
 // future_fee
 pub fn get_future_fee(e: &Env) -> u32 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::FutureFee)
-        .expect("Please initialize future_fee")
+    match e.storage().instance().get(&DataKey::FutureFee) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_future_fee(e: &Env, value: &u32) {
@@ -155,10 +150,10 @@ pub fn put_future_fee(e: &Env, value: &u32) {
 // future_admin_fee
 pub fn get_future_admin_fee(e: &Env) -> u32 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::FutureAdminFee)
-        .expect("Please initialize future_admin_fee")
+    match e.storage().instance().get(&DataKey::FutureAdminFee) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_future_admin_fee(e: &Env, value: &u32) {
@@ -169,10 +164,10 @@ pub fn put_future_admin_fee(e: &Env, value: &u32) {
 // admin_actions_deadline
 pub fn get_admin_actions_deadline(e: &Env) -> u64 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::AdminActionsDeadline)
-        .expect("Please initialize admin_actions_deadline")
+    match e.storage().instance().get(&DataKey::AdminActionsDeadline) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_admin_actions_deadline(e: &Env, value: &u64) {
@@ -185,10 +180,14 @@ pub fn put_admin_actions_deadline(e: &Env, value: &u64) {
 // transfer_ownership_deadline
 pub fn get_transfer_ownership_deadline(e: &Env) -> u64 {
     bump_instance(e);
-    e.storage()
+    match e
+        .storage()
         .instance()
         .get(&DataKey::TransferOwnershipDeadline)
-        .expect("Please initialize transfer_ownership_deadline")
+    {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_transfer_ownership_deadline(e: &Env, value: &u64) {
@@ -201,10 +200,10 @@ pub fn put_transfer_ownership_deadline(e: &Env, value: &u64) {
 // kill_deadline
 pub fn get_kill_deadline(e: &Env) -> u64 {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::KillDeadline)
-        .expect("Please initialize kill_deadline")
+    match e.storage().instance().get(&DataKey::KillDeadline) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_kill_deadline(e: &Env, value: &u64) {
@@ -215,10 +214,10 @@ pub fn put_kill_deadline(e: &Env, value: &u64) {
 // is_killed
 pub fn get_is_killed(e: &Env) -> bool {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::IsKilled)
-        .expect("Please initialize is_killed")
+    match e.storage().instance().get(&DataKey::IsKilled) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub fn put_is_killed(e: &Env, value: &bool) {
@@ -234,13 +233,27 @@ pub(crate) fn set_plane(e: &Env, plane: &Address) {
 
 pub(crate) fn get_plane(e: &Env) -> Address {
     let key = DataKey::Plane;
-    e.storage()
-        .instance()
-        .get(&key)
-        .expect("unable to get plane")
+    match e.storage().instance().get(&key) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }
 
 pub(crate) fn has_plane(e: &Env) -> bool {
     let key = DataKey::Plane;
     e.storage().instance().has(&key)
+}
+
+pub(crate) fn set_router(e: &Env, plane: &Address) {
+    let key = DataKey::Router;
+    bump_instance(e);
+    e.storage().instance().set(&key, plane);
+}
+
+pub(crate) fn get_router(e: &Env) -> Address {
+    let key = DataKey::Router;
+    match e.storage().instance().get(&key) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
 }

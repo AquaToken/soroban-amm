@@ -5,11 +5,11 @@ pub trait LiquidityPoolCrunch {
     fn initialize_all(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
         reward_token: Address,
-        reward_storage: Address,
         plane: Address,
     );
 }
@@ -22,6 +22,7 @@ pub trait LiquidityPoolTrait {
     fn initialize(
         e: Env,
         admin: Address,
+        router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
@@ -30,12 +31,20 @@ pub trait LiquidityPoolTrait {
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
 
+    // Returns the total amount of shares
+    fn get_total_shares(e: Env) -> u128;
+
     fn get_tokens(e: Env) -> Vec<Address>;
 
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
     // the actual balance of token_a and token_b for this contract.
-    fn deposit(e: Env, user: Address, desired_amounts: Vec<u128>) -> (Vec<u128>, u128);
+    fn deposit(
+        e: Env,
+        user: Address,
+        desired_amounts: Vec<u128>,
+        min_shares: u128,
+    ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
     // in_idx: index of token to send
@@ -80,11 +89,8 @@ pub trait UpgradeableContractTrait {
 }
 
 pub trait RewardsTrait {
-    // todo: move rewards configuration to gauge
-
-    // Initialize rewards settings: token address and storage address
-    // from which transfer will be made on claim
-    fn initialize_rewards_config(e: Env, reward_token: Address, reward_storage: Address);
+    // Initialize rewards token address
+    fn initialize_rewards_config(e: Env, reward_token: Address);
 
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers
@@ -97,6 +103,15 @@ pub trait RewardsTrait {
 
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
+
+    // Get total amount of accumulated reward for the pool
+    fn get_total_accumulated_reward(e: Env) -> u128;
+
+    // Get total amount of generated plus configured reward for the pool
+    fn get_total_configured_reward(e: Env) -> u128;
+
+    // Get total amount of claimed reward for the pool
+    fn get_total_claimed_reward(e: Env) -> u128;
 
     // Claim reward as a user.
     // returns amount of tokens rewarded to the user

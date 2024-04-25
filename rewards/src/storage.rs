@@ -1,5 +1,6 @@
-use soroban_sdk::{contracttype, Address, Env, Map};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map};
 use utils::bump::bump_persistent;
+use utils::storage_errors::StorageError;
 
 // Rewards configuration for specific pool
 #[derive(Clone)]
@@ -14,6 +15,7 @@ pub struct PoolRewardConfig {
 pub struct PoolRewardData {
     pub block: u64,
     pub accumulated: u128,
+    pub claimed: u128,
     pub last_time: u64,
 }
 
@@ -65,9 +67,6 @@ pub trait RewardsStorageTrait {
     fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Map<u64, u128>);
     fn bump_reward_inv_data(&self, pow: u32, page_number: u64);
 
-    fn get_reward_storage(&self) -> Address;
-    fn put_reward_storage(&self, contract: Address);
-
     fn get_reward_token(&self) -> Address;
     fn put_reward_token(&self, contract: Address);
     fn has_reward_token(&self) -> bool;
@@ -75,11 +74,18 @@ pub trait RewardsStorageTrait {
 
 impl RewardsStorageTrait for Storage {
     fn get_pool_reward_config(&self) -> PoolRewardConfig {
-        self.env
+        match self
+            .env
             .storage()
             .instance()
             .get(&DataKey::PoolRewardConfig)
-            .expect("Please, initialize pool reward config")
+        {
+            Some(v) => v,
+            None => PoolRewardConfig {
+                tps: 0,
+                expired_at: 0,
+            },
+        }
     }
 
     fn set_pool_reward_config(&self, config: &PoolRewardConfig) {
@@ -90,11 +96,15 @@ impl RewardsStorageTrait for Storage {
     }
 
     fn get_pool_reward_data(&self) -> PoolRewardData {
-        self.env
-            .storage()
-            .instance()
-            .get(&DataKey::PoolRewardData)
-            .expect("Please, initialize pool reward data")
+        match self.env.storage().instance().get(&DataKey::PoolRewardData) {
+            Some(v) => v,
+            None => PoolRewardData {
+                block: 0,
+                accumulated: 0,
+                claimed: 0,
+                last_time: 0,
+            },
+        }
     }
 
     fn set_pool_reward_data(&self, data: &PoolRewardData) {
@@ -133,12 +143,10 @@ impl RewardsStorageTrait for Storage {
         match cached_value_result {
             Some(value) => value,
             None => {
-                let value: Map<u64, u128> = self
-                    .env
-                    .storage()
-                    .persistent()
-                    .get(&key)
-                    .expect("Please, initialize reward inv data");
+                let value: Map<u64, u128> = match self.env.storage().persistent().get(&key) {
+                    Some(v) => v,
+                    None => return Map::new(&self.env),
+                };
                 self.inv_cache.set(key, value.clone());
                 value
             }
@@ -156,20 +164,11 @@ impl RewardsStorageTrait for Storage {
         bump_persistent(&self.env, &DataKey::RewardInvData(pow, page_number))
     }
 
-    fn get_reward_storage(&self) -> Address {
-        self.env
-            .storage()
-            .instance()
-            .get(&DataKey::RewardStorage)
-            .expect("Trying to get reward storage")
-    }
-
     fn get_reward_token(&self) -> Address {
-        self.env
-            .storage()
-            .instance()
-            .get(&DataKey::RewardToken)
-            .expect("Trying to get reward token")
+        match self.env.storage().instance().get(&DataKey::RewardToken) {
+            Some(v) => v,
+            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+        }
     }
 
     fn put_reward_token(&self, contract: Address) {
@@ -181,12 +180,5 @@ impl RewardsStorageTrait for Storage {
 
     fn has_reward_token(&self) -> bool {
         self.env.storage().instance().has(&DataKey::RewardToken)
-    }
-
-    fn put_reward_storage(&self, contract: Address) {
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::RewardStorage, &contract)
     }
 }

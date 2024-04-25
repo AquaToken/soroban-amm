@@ -14,12 +14,9 @@ access_control = { workspace = true }
 rewards = { workspace = true }
 token_share = { workspace = true }
 utils = { workspace = true }
+liquidity-pool-validation-errors = { workspace = true }
+liquidity-pool-events = { workspace = true }
+soroban-fixed-point-math = { workspace = true }
 
 [dev_dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-
-[features]
-default = ["tokens_2"]
-tokens_2 = []
-tokens_3 = []
-tokens_4 = []

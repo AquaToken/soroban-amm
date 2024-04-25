@@ -15,6 +15,7 @@ access_control = { workspace = true }
 utils = { workspace = true }
 rewards = { workspace = true }
 token_share = { workspace = true }
+liquidity-pool-validation-errors = { workspace = true }
 
 [dev_dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

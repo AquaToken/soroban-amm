@@ -1,8 +1,12 @@
 use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
-use crate::pool_utils::pool_salt;
+use crate::errors::LiquidityPoolRouterError;
+use crate::pool_utils::get_tokens_salt;
 use paste::paste;
-use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, Map, Vec};
+use soroban_sdk::{
+    contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Vec, U256,
+};
 use utils::bump::{bump_instance, bump_persistent};
+use utils::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
@@ -26,23 +30,45 @@ pub struct LiquidityPoolData {
     pub address: Address,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GlobalRewardsConfig {
+    pub tps: u128,
+    pub expired_at: u64,
+    pub current_block: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LiquidityPoolRewardInfo {
+    pub voting_share: u32,
+    pub processed: bool,
+    pub total_liquidity: U256,
+}
+
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    TokensPairPools(BytesN<32>),
+    TokensSet(u128),
+    TokensSetCounter,
+    TokensSetPools(BytesN<32>),
     TokenHash,
     InitPoolPaymentToken,
     InitPoolPaymentAmount,
     InitPoolPaymentAddress,
     ConstantPoolHash,
-    StableSwapPoolHash(u32),
-    StableSwapCounter,
+    StableSwapPoolHash,
+    PoolCounter,
     PoolPlane,
     SwapRouter,
+    LiquidityCalculator,
+    RewardsConfig,
+    RewardTokensList(u64),
+    RewardTokensPoolsLiquidity(u64, BytesN<32>),
 }
 
 #[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum PoolError {
     PoolAlreadyExists = 401,
@@ -50,7 +76,7 @@ pub enum PoolError {
 }
 
 fn get_pools(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
-    let key = DataKey::TokensPairPools(salt.clone());
+    let key = DataKey::TokensSetPools(salt.clone());
     match e.storage().persistent().get(&key) {
         Some(value) => {
             bump_persistent(e, &key);
@@ -82,31 +108,94 @@ generate_instance_storage_getter_and_setter!(
     Address
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    stableswap_counter,
-    DataKey::StableSwapCounter,
+    pool_counter,
+    DataKey::PoolCounter,
+    u128,
+    0
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    tokens_set_count,
+    DataKey::TokensSetCounter,
     u128,
     0
 );
 generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
 generate_instance_storage_getter_and_setter!(swap_router, DataKey::SwapRouter, Address);
-
-// pool hash
-pub fn get_stableswap_pool_hash(e: &Env, num_tokens: u32) -> BytesN<32> {
-    if num_tokens == 1 || num_tokens > 3 {
-        panic!("unable to find hash for this amount of tokens")
+generate_instance_storage_getter_and_setter!(
+    liquidity_calculator,
+    DataKey::LiquidityCalculator,
+    Address
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    rewards_config,
+    DataKey::RewardsConfig,
+    GlobalRewardsConfig,
+    GlobalRewardsConfig {
+        tps: 0,
+        expired_at: 0,
+        current_block: 0,
     }
-    bump_instance(e);
-    e.storage()
-        .instance()
-        .get(&DataKey::StableSwapPoolHash(num_tokens))
-        .expect("StableSwapPoolHash hash not initialized")
+);
+
+pub fn get_reward_tokens(e: &Env, block: u64) -> Map<Vec<Address>, LiquidityPoolRewardInfo> {
+    let key = DataKey::RewardTokensList(block);
+    match e.storage().persistent().get(&key) {
+        Some(v) => {
+            bump_persistent(e, &key);
+            v
+        }
+        None => panic_with_error!(&e, LiquidityPoolRouterError::RewardsNotConfigured),
+    }
 }
 
-pub fn set_stableswap_pool_hash(e: &Env, num_tokens: u32, pool_hash: &BytesN<32>) {
+pub fn set_reward_tokens(e: &Env, block: u64, value: &Map<Vec<Address>, LiquidityPoolRewardInfo>) {
+    let key = DataKey::RewardTokensList(block);
+    let result = e.storage().persistent().set(&key, value);
+    bump_persistent(e, &key);
+    result
+}
+
+pub fn get_reward_tokens_detailed(
+    e: &Env,
+    block: u64,
+    salt: BytesN<32>,
+) -> Map<BytesN<32>, (U256, bool)> {
+    let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
+    match e.storage().persistent().get(&key) {
+        Some(v) => {
+            bump_persistent(e, &key);
+            v
+        }
+        None => panic_with_error!(&e, LiquidityPoolRouterError::LiquidityNotFilled),
+    }
+}
+
+pub fn set_reward_tokens_detailed(
+    e: &Env,
+    block: u64,
+    salt: BytesN<32>,
+    value: &Map<BytesN<32>, (U256, bool)>,
+) {
+    let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
+    let result = e.storage().persistent().set(&key, value);
+    bump_persistent(e, &key);
+    result
+}
+
+// pool hash
+pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::StableSwapPoolHash) {
+        Some(v) => v,
+        None => panic_with_error!(&e, LiquidityPoolRouterError::StableswapHashMissing),
+    }
+}
+
+pub fn set_stableswap_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
     bump_instance(e);
     e.storage()
         .instance()
-        .set(&DataKey::StableSwapPoolHash(num_tokens), pool_hash)
+        .set(&DataKey::StableSwapPoolHash, pool_hash)
 }
 
 pub fn get_pools_plain(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, Address> {
@@ -119,7 +208,7 @@ pub fn get_pools_plain(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, Address> {
 }
 
 pub fn put_pools(e: &Env, salt: &BytesN<32>, pools: &Map<BytesN<32>, LiquidityPoolData>) {
-    let key = DataKey::TokensPairPools(salt.clone());
+    let key = DataKey::TokensSetPools(salt.clone());
     e.storage().persistent().set(&key, pools);
     bump_persistent(e, &key);
 }
@@ -133,7 +222,7 @@ pub fn get_pool(
     tokens: Vec<Address>,
     pool_index: BytesN<32>,
 ) -> Result<Address, PoolError> {
-    let salt = pool_salt(e, tokens);
+    let salt = get_tokens_salt(e, tokens);
     let pools = get_pools(e, &salt);
     match pools.contains_key(pool_index.clone()) {
         true => Ok(pools.get(pool_index).unwrap().address),
@@ -165,14 +254,27 @@ pub fn add_pool(
             }
         }
         if stableswap_pools_amt > STABLESWAP_MAX_POOLS {
-            panic!("stableswap pools amount is over max")
+            panic_with_error!(&e, LiquidityPoolRouterError::StableswapPoolsOverMax);
         }
     }
 
     if pools.len() > MAX_POOLS_FOR_PAIR {
-        panic!("pools amount is over max")
+        panic_with_error!(&e, LiquidityPoolRouterError::PoolsOverMax);
     }
     put_pools(e, salt, &pools);
+}
+
+// remember unique tokens set
+pub fn add_tokens_set(e: &Env, tokens: &Vec<Address>) {
+    let salt = get_tokens_salt(e, tokens.clone());
+    let pools = get_pools(e, &salt);
+    if pools.len() > 0 {
+        return;
+    }
+
+    let tokens_set_count = get_tokens_set_count(e);
+    put_tokens_set(e, tokens_set_count, &tokens);
+    set_tokens_set_count(e, &(tokens_set_count + 1));
 }
 
 pub fn remove_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) {
@@ -181,8 +283,25 @@ pub fn remove_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) {
     put_pools(e, salt, &pools);
 }
 
-pub fn get_stableswap_next_counter(e: &Env) -> u128 {
-    let value = get_stableswap_counter(e);
-    set_stableswap_counter(e, &(value + 1));
+pub fn get_pool_next_counter(e: &Env) -> u128 {
+    let value = get_pool_counter(e);
+    set_pool_counter(e, &(value + 1));
     value
+}
+
+pub fn get_tokens_set(e: &Env, index: u128) -> Vec<Address> {
+    let key = DataKey::TokensSet(index);
+    match e.storage().persistent().get(&key) {
+        Some(v) => {
+            bump_persistent(e, &key);
+            v
+        }
+        None => panic_with_error!(&e, StorageError::ValueNotInitialized),
+    }
+}
+
+pub fn put_tokens_set(e: &Env, index: u128, tokens: &Vec<Address>) {
+    let key = DataKey::TokensSet(index);
+    e.storage().persistent().set(&key, tokens);
+    bump_persistent(e, &key);
 }

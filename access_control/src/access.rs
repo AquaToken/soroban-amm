@@ -1,13 +1,7 @@
-use soroban_sdk::{contracterror, contracttype, panic_with_error, Address, Env};
+use crate::errors::AccessControlError;
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_instance;
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum AccessControlError {
-    AdminNotFound = 101,
-    UserNotAdmin = 102,
-}
+use utils::storage_errors::StorageError;
 
 #[derive(Clone)]
 #[contracttype]
@@ -53,24 +47,29 @@ impl AccessControlTrait for AccessControl {
     }
 
     fn check_admin(&self, user: &Address) {
-        let admin = self.perform_admin_check().expect("Cant check admin");
+        let admin = match self.perform_admin_check() {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(self.0, err),
+        };
         if admin != user.clone() {
             panic_with_error!(&self.0, AccessControlError::UserNotAdmin);
         }
     }
 
     fn require_admin(&self) {
-        let admin = self.perform_admin_check().expect("Cant find admin");
+        let admin = match self.perform_admin_check() {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(self.0, err),
+        };
         admin.require_auth();
     }
 
     fn get_future_admin(&self) -> Option<Address> {
         bump_instance(&self.0);
-        self.0
-            .storage()
-            .instance()
-            .get(&DataKey::FutureAdmin)
-            .expect("Cant find future admin")
+        match self.0.storage().instance().get(&DataKey::FutureAdmin) {
+            Some(v) => v,
+            None => panic_with_error!(&self.0, StorageError::ValueNotInitialized),
+        }
     }
 
     fn set_future_admin(&self, admin: &Address) {

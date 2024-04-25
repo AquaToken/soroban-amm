@@ -1,10 +1,13 @@
 use crate::constants::REWARD_PRECISION;
+use crate::errors::RewardsError;
 use crate::storage::{
     PoolRewardConfig, PoolRewardData, RewardsStorageTrait, Storage, UserRewardData,
 };
 use crate::RewardsConfig;
 use cast::u128 as to_u128;
-use soroban_sdk::{token::TokenClient as Client, Address, Env, Map};
+use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env};
+use utils::bump::bump_instance;
+use utils::storage_errors::StorageError;
 
 pub struct Manager {
     env: Env,
@@ -21,44 +24,98 @@ impl Manager {
         }
     }
 
-    pub fn initialize(&mut self) {
-        self.add_reward_inv(0, 0);
-        self.storage.set_pool_reward_data(&PoolRewardData {
-            block: 0,
-            accumulated: 0,
-            last_time: 0,
-        });
-        self.storage.set_pool_reward_config(&PoolRewardConfig {
-            tps: 0,
-            expired_at: 0,
-        });
+    pub fn set_reward_config(&mut self, total_shares: u128, expired_at: u64, tps: u128) {
+        let mut expired_at = expired_at;
+
+        let now = self.env.ledger().timestamp();
+        let old_config = self.storage.get_pool_reward_config();
+        // if we stop rewards manually by setting tps to zero,
+        //  set expiration to the lowest possible value to avoid extra blocks
+        if tps == 0 {
+            expired_at = now;
+        } else if old_config.expired_at == expired_at {
+            // expiration time should differ as we rely on it inside the rewards manager
+            panic_with_error!(&self.env, RewardsError::SameRewardsConfig);
+        }
+
+        if expired_at < now {
+            panic_with_error!(&self.env, RewardsError::PastTimeNotAllowed);
+        }
+        if old_config.expired_at < now && tps == 0 {
+            // config already expired, no need to override it with zero tps
+            return;
+        }
+
+        self.update_rewards_data(total_shares);
+        self.snapshot_rewards_data(total_shares);
+        let config = PoolRewardConfig { tps, expired_at };
+
+        bump_instance(&self.env);
+        self.storage.set_pool_reward_config(&config);
     }
 
+    // make sure pool rewards data represents the current state of the rewards. update if necessary
     pub fn update_rewards_data(&mut self, total_shares: u128) -> PoolRewardData {
         let config = self.storage.get_pool_reward_config();
+        let mut data = self.storage.get_pool_reward_data();
+        let now = self.env.ledger().timestamp();
+
+        if now <= config.expired_at {
+            // config not expired yet, yield rewards
+            let generated_tokens = to_u128(now - data.last_time) * to_u128(config.tps);
+            self.create_new_rewards_data(
+                generated_tokens,
+                total_shares,
+                PoolRewardData {
+                    block: data.block + 1,
+                    accumulated: data.accumulated + generated_tokens,
+                    claimed: data.claimed,
+                    last_time: now,
+                },
+            )
+        } else {
+            // config already expired
+            if data.last_time < config.expired_at {
+                // last snapshot was before config expiration - yield up to expiration
+                let generated_tokens =
+                    to_u128(config.expired_at - data.last_time) * to_u128(config.tps);
+                data = self.create_new_rewards_data(
+                    generated_tokens,
+                    total_shares,
+                    PoolRewardData {
+                        block: data.block + 1,
+                        accumulated: data.accumulated + generated_tokens,
+                        claimed: data.claimed,
+                        last_time: config.expired_at,
+                    },
+                );
+            }
+
+            // snapshot is on expiration time. no reward should be generated,
+            data
+        }
+    }
+
+    // make sure pool rewards data is actual and ready for new configuration
+    // to be used only after
+    pub fn snapshot_rewards_data(&mut self, total_shares: u128) -> PoolRewardData {
         let data = self.storage.get_pool_reward_data();
         let now = self.env.ledger().timestamp();
 
-        // 1. config not expired - snapshot reward
-        // 2. config expired
-        //  2.a data before config expiration - snapshot reward for now, increase block and generate inv
-        //  2.b data after config expiration - snapshot reward for config end, increase block, snapshot reward for now, don't increase block
-
-        if now < config.expired_at {
-            self.update_rewards_data_snapshot(now, &config, &data, total_shares)
-        } else if data.last_time > config.expired_at {
-            // todo: try to avoid unneeded block increments
+        if data.last_time == now {
+            // already snapshoted
+            data
+        } else {
             self.create_new_rewards_data(
                 0,
                 total_shares,
                 PoolRewardData {
                     block: data.block + 1,
                     accumulated: data.accumulated,
+                    claimed: data.claimed,
                     last_time: now,
                 },
             )
-        } else {
-            self.update_rewards_data_catchup(now, &config, &data, total_shares)
         }
     }
 
@@ -68,7 +125,7 @@ impl Manager {
         end_block: u64,
         user_share: u128,
     ) -> u128 {
-        let result = self.calculate_reward(start_block, end_block, true);
+        let result = self.calculate_reward(start_block, end_block);
         (result) * user_share / REWARD_PRECISION
     }
 
@@ -95,8 +152,6 @@ impl Manager {
                     pool_data.block,
                     user_balance_shares,
                 );
-                // let new_reward =
-                //     (pool_data.accumulated - user_data.pool_accumulated) * user_shares / total_shares;
                 self.create_new_user_data(user, pool_data, user_data.to_claim + reward)
             }
             None => self.create_new_user_data(user, pool_data, 0),
@@ -127,23 +182,18 @@ impl Manager {
             to_claim: reward_amount,
         } = self.user_reward_data(user, total_shares, user_balance_shares);
 
+        // increase total claimed amount
+        let mut pool_data = self.storage.get_pool_reward_data();
+        pool_data.claimed += reward_amount;
+        self.storage.set_pool_reward_data(&pool_data);
+
         // transfer reward
         let reward_token = self.storage.get_reward_token();
-        let rewards_storage = self.storage.get_reward_storage();
-        if rewards_storage == self.env.current_contract_address() {
-            Client::new(&self.env, &reward_token).transfer(
-                &rewards_storage,
-                user,
-                &(reward_amount as i128),
-            );
-        } else {
-            Client::new(&self.env, &reward_token).transfer_from(
-                &self.env.current_contract_address(),
-                &rewards_storage,
-                user,
-                &(reward_amount as i128),
-            );
-        };
+        Client::new(&self.env, &reward_token).transfer(
+            &self.env.current_contract_address(),
+            user,
+            &(reward_amount as i128),
+        );
 
         // set available reward to zero
         let new_data = UserRewardData {
@@ -156,96 +206,63 @@ impl Manager {
     }
 
     // private functions
-
-    fn write_reward_inv_to_page(&mut self, pow: u32, start_block: u64, value: u128) {
-        let page_number = start_block / self.config.page_size.pow(pow + 1);
-        let mut page = match start_block % self.config.page_size.pow(pow + 1) {
-            0 => Map::new(&self.env),
-            _ => self.storage.get_reward_inv_data(pow, page_number),
-        };
-        page.set(start_block, value);
-        self.storage.set_reward_inv_data(pow, page_number, page);
-    }
-
-    fn calculate_reward(&mut self, start_block: u64, end_block: u64, use_max_pow: bool) -> u128 {
+    fn calculate_reward(&mut self, start_block: u64, end_block: u64) -> u128 {
         // calculate result from start_block to end_block [...]
-        // use_max_pow disabled during aggregation process
         //  since we don't have such information and can be enabled after
         let mut result = 0;
         let mut block = start_block;
 
         let mut max_pow = 0;
         for pow in 1..255 {
+            max_pow = pow;
             if start_block + self.config.page_size.pow(pow) - 1 > end_block {
                 break;
             }
-            max_pow = pow;
         }
 
         while block <= end_block {
-            if block % self.config.page_size == 0 {
-                // check possibilities to skip
-                let mut block_increased = false;
-                let mut max_block_pow = 0;
-                for i in (1..max_pow + 1).rev() {
-                    if block % self.config.page_size.pow(i) == 0 {
-                        max_block_pow = i;
-                        break;
-                    }
-                }
-                if !use_max_pow {
-                    // value not precalculated yet
-                    max_block_pow -= 1;
-                }
-
-                for l_pow in (1..max_block_pow + 1).rev() {
-                    let next_block = block + self.config.page_size.pow(l_pow);
-                    if next_block > end_block {
-                        continue;
-                    }
-
-                    let page_number = block / self.config.page_size.pow(l_pow + 1);
-                    let page = self.storage.get_reward_inv_data(l_pow, page_number);
-                    result += page.get(block).expect("unknown block");
-                    block = next_block;
-                    block_increased = true;
+            let mut pow = 0;
+            for i in (0..=max_pow).rev() {
+                if block % self.config.page_size.pow(i) == 0 {
+                    pow = i;
                     break;
                 }
-                if !block_increased {
-                    // couldn't find shortcut, looks like we're close to the tail. go one by one
-                    let page = self
-                        .storage
-                        .get_reward_inv_data(0, block / self.config.page_size);
-                    result += page.get(block).expect("unknown block");
-                    block += 1;
-                }
+            }
+
+            let next_block = block + self.config.page_size.pow(pow);
+            let page_number = block / self.config.page_size.pow(pow + 1);
+            let page = self.storage.get_reward_inv_data(pow, page_number);
+            result += match page.get(block) {
+                Some(v) => v,
+                None => panic_with_error!(self.env, StorageError::ValueMissing),
+            };
+            if next_block > end_block {
+                block = end_block + 1;
             } else {
-                let page = self
-                    .storage
-                    .get_reward_inv_data(0, block / self.config.page_size);
-                result += page.get(block).expect("unknown block");
-                block += 1;
+                block = next_block;
             }
         }
         result
     }
 
     fn add_reward_inv(&mut self, block: u64, value: u128) {
-        // write zero level page first
-        self.write_reward_inv_to_page(0, block, value);
-
-        if (block + 1) % self.config.page_size == 0 {
-            // page end, at least one aggregation should be applicable
-            for pow in 1..255 {
-                let aggregation_size = self.config.page_size.pow(pow);
-                if (block + 1) % aggregation_size != 0 {
-                    // aggregation level not applicable
-                    break;
-                }
-                let agg_page_start = block - block % aggregation_size;
-                let aggregation = self.calculate_reward(agg_page_start, block, false);
-                self.write_reward_inv_to_page(pow, agg_page_start, aggregation);
+        for pow in 0..255 {
+            if pow > 0 && block + 1 < self.config.page_size.pow(pow - 1) {
+                break;
             }
+
+            let cell_size = self.config.page_size.pow(pow);
+            let page_size = self.config.page_size.pow(pow + 1);
+            let cell_start = block - block % cell_size;
+            let page_start = block - block % page_size;
+            let page_number = page_start / page_size;
+
+            let mut aggregated_page = self.storage.get_reward_inv_data(pow, page_number);
+            let current_value = aggregated_page.get(cell_start).unwrap_or(0);
+            let increased_value = current_value + value;
+            aggregated_page.set(cell_start, increased_value);
+            self.storage
+                .set_reward_inv_data(pow, page_number, aggregated_page);
         }
     }
 
@@ -260,26 +277,6 @@ impl Manager {
         self.add_reward_inv(data.block, reward_per_share);
     }
 
-    fn update_rewards_data_snapshot(
-        &mut self,
-        now: u64,
-        config: &PoolRewardConfig,
-        data: &PoolRewardData,
-        total_shares: u128,
-    ) -> PoolRewardData {
-        let reward_timestamp = now;
-        let generated_tokens = to_u128(reward_timestamp - data.last_time) * to_u128(config.tps);
-        self.create_new_rewards_data(
-            generated_tokens,
-            total_shares,
-            PoolRewardData {
-                block: data.block + 1,
-                accumulated: data.accumulated + generated_tokens,
-                last_time: now,
-            },
-        )
-    }
-
     fn create_new_rewards_data(
         &mut self,
         generated_tokens: u128,
@@ -289,34 +286,6 @@ impl Manager {
         self.storage.set_pool_reward_data(&new_data);
         self.update_reward_inv(generated_tokens, total_shares);
         new_data
-    }
-
-    fn update_rewards_data_catchup(
-        &mut self,
-        now: u64,
-        config: &PoolRewardConfig,
-        data: &PoolRewardData,
-        total_shares: u128,
-    ) -> PoolRewardData {
-        let reward_timestamp = config.expired_at;
-
-        let generated_tokens = to_u128(reward_timestamp - data.last_time) * to_u128(config.tps);
-        let catchup_data = PoolRewardData {
-            block: data.block + 1,
-            accumulated: data.accumulated + generated_tokens,
-            last_time: config.expired_at,
-        };
-        self.create_new_rewards_data(generated_tokens, total_shares, catchup_data.clone());
-        // todo: don't increase block when config not enabled thus keeping invariants list small
-        self.create_new_rewards_data(
-            0,
-            total_shares,
-            PoolRewardData {
-                block: catchup_data.block + 1,
-                accumulated: catchup_data.accumulated,
-                last_time: now,
-            },
-        )
     }
 
     fn create_new_user_data(
@@ -342,5 +311,33 @@ impl Manager {
     ) -> UserRewardData {
         let rewards_data = self.update_rewards_data(total_shares);
         self.update_user_reward(&rewards_data, user, user_balance_shares)
+    }
+
+    pub fn get_total_accumulated_reward(&mut self, total_shares: u128) -> u128 {
+        let data = self.update_rewards_data(total_shares);
+        data.accumulated
+    }
+
+    pub fn get_total_claimed_reward(&mut self, total_shares: u128) -> u128 {
+        let data = self.update_rewards_data(total_shares);
+        data.claimed
+    }
+
+    pub fn get_total_configured_reward(&mut self, total_shares: u128) -> u128 {
+        let config = self.storage.get_pool_reward_config();
+        let data = self.update_rewards_data(total_shares);
+        let rewarded_amount = data.accumulated;
+
+        let now = self.env.ledger().timestamp();
+        match config.expired_at <= now {
+            true => {
+                // no rewards configured in future
+                rewarded_amount
+            }
+            false => {
+                let outstanding_reward = (config.expired_at - now) as u128 * config.tps;
+                rewarded_amount + outstanding_reward
+            }
+        }
     }
 }

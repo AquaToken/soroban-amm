@@ -1,0 +1,16 @@
+[package]
+name = "liquidity-pool-validation-errors"
+version.workspace = true
+edition = "2021"
+publish = false
+
+
+[lib]
+crate-type = ["rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev_dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

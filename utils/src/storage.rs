@@ -22,7 +22,7 @@ macro_rules! generate_instance_storage_getter {
                 match value_result {
                     Some(value) => value,
                     None => {
-                        panic!("{} not initialized", stringify!($attr_name))
+                        panic_with_error!(e, StorageError::ValueNotInitialized)
                     }
                 }
             }
