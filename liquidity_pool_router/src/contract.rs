@@ -261,7 +261,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
 #[contractimpl]
 impl UpgradeableContract for LiquidityPoolRouter {
     fn version() -> u32 {
-        100
+        101
     }
 
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
@@ -610,11 +610,21 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             Err(err) => panic_with_error!(&e, err),
         };
 
-        e.invoke_contract(
+        let amount = e.invoke_contract(
             &pool_id,
             &symbol_short!("claim"),
             Vec::from_array(&e, [user.clone().into_val(&e)]),
-        )
+        );
+
+        Events::new(&e).claim(
+            tokens,
+            user,
+            pool_id,
+            get_rewards_manager(&e).storage().get_reward_token(),
+            amount,
+        );
+
+        amount
     }
 }
 
