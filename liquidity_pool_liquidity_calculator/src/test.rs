@@ -2,7 +2,7 @@
 extern crate std;
 
 use crate::{contract::LiquidityPoolLiquidityCalculator, LiquidityPoolLiquidityCalculatorClient};
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::{symbol_short, Address, Bytes, Env, Vec, U256};
 
 fn create_contract<'a>(e: &Env) -> LiquidityPoolLiquidityCalculatorClient<'a> {
@@ -22,6 +22,19 @@ mod pool_plane {
 
 fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
     pool_plane::Client::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
+}
+
+fn jump(e: &Env, time: u64) {
+    e.ledger().set(LedgerInfo {
+        timestamp: e.ledger().timestamp().saturating_add(time),
+        protocol_version: 20,
+        sequence_number: e.ledger().sequence(),
+        network_id: Default::default(),
+        base_reserve: 10,
+        min_temp_entry_ttl: 999999,
+        min_persistent_entry_ttl: 999999,
+        max_entry_ttl: u32::MAX,
+    });
 }
 
 #[test]
@@ -106,6 +119,95 @@ fn test() {
                 U256::from_u128(&e, 2802265656),
                 U256::from_u128(&e, 2802262932),
                 U256::from_u128(&e, 2802267364),
+            ]
+        )
+    );
+}
+
+#[test]
+fn test_bad_math() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let address1 = Address::generate(&e);
+    let address2 = Address::generate(&e);
+    let address3 = Address::generate(&e);
+    let address4 = Address::generate(&e);
+    let address5 = Address::generate(&e);
+    let address6 = Address::generate(&e);
+
+    jump(&e, 1813808460);
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &address1,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [100]),
+        &Vec::from_array(&e, [0, 0]),
+    );
+    plane.update(
+        &address2,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [100, 2500, 1713807096, 2500, 1713807096]),
+        &Vec::from_array(&e, [101804393, 160000000000000]),
+    );
+    plane.update(
+        &address3,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [5, 5000, 1713808459, 5000, 1713808459]),
+        &Vec::from_array(&e, [219219286, 16538316775072]),
+    );
+    plane.update(
+        &address4,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30]),
+        &Vec::from_array(&e, [0, 0]),
+    );
+    plane.update(
+        &address5,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [10]),
+        &Vec::from_array(&e, [485714287, 210000000000000]),
+    );
+    plane.update(
+        &address6,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [100, 5000, 1713806916, 5000, 1713806916]),
+        &Vec::from_array(&e, [102098314, 110000000000000]),
+    );
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    e.budget().reset_default();
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [
+            address1.clone(),
+            address2.clone(),
+            address3.clone(),
+            address4.clone(),
+            address5.clone(),
+            address6.clone(),
+        ],
+    ));
+    e.budget().print();
+    e.budget().reset_unlimited();
+    assert_eq!(
+        results,
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 0),
+                U256::from_u128(&e, 12208000),
+                U256::from_u128(&e, 131221069311),
+                U256::from_u128(&e, 0),
+                U256::from_u128(&e, 3075607613295000),
+                U256::from_u128(&e, 630244655854000),
             ]
         )
     );

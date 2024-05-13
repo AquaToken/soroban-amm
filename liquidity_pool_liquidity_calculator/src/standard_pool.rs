@@ -25,7 +25,7 @@ fn get_min_price(
     reserves: Vec<u128>,
     in_idx: u32,
     out_idx: u32,
-) -> u128 {
+) -> Option<u128> {
     let min_amount = PRECISION;
     let mut reserves_adj = Vec::new(e);
     for i in 0..reserves.len() {
@@ -33,11 +33,12 @@ fn get_min_price(
         reserves_adj.push_back(value * PRECISION);
     }
 
-    min_amount.fixed_mul_floor(
-        e,
-        PRECISION,
-        estimate_swap(e, fee_fraction, &reserves_adj, in_idx, out_idx, min_amount),
-    )
+    let estimate = estimate_swap(e, fee_fraction, &reserves_adj, in_idx, out_idx, min_amount);
+    if estimate == 0 {
+        return None;
+    }
+
+    Some(min_amount.fixed_mul_floor(e, PRECISION, estimate))
 }
 
 pub(crate) fn get_liquidity(
@@ -55,7 +56,13 @@ pub(crate) fn get_liquidity(
     }
 
     let (reserves_norm, nominator, denominator) = normalize_reserves(reserves);
-    let min_price = get_min_price(e, fee_fraction, reserves_norm.clone(), in_idx, out_idx);
+    let min_price_result = get_min_price(e, fee_fraction, reserves_norm.clone(), in_idx, out_idx);
+    let min_price;
+    if min_price_result.is_none() {
+        return 0;
+    } else {
+        min_price = min_price_result.unwrap();
+    }
 
     let mut result_big = 0;
     let mut prev_price = 0;
@@ -70,6 +77,10 @@ pub(crate) fn get_liquidity(
 
     while !last_iteration {
         let mut depth = estimate_swap(e, fee_fraction, &reserves_norm, in_idx, out_idx, in_amt);
+        if in_amt == 0 || depth == 0 {
+            // on zero depth price is infinite, on zero in_amt price is zero. both are invalid
+            break;
+        }
         let mut price = in_amt * PRECISION / depth;
         let mut weight = price_weight(price, min_price);
 
