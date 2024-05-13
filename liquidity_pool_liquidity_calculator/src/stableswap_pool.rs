@@ -210,17 +210,22 @@ pub(crate) fn get_liquidity(
     let n_tokens = reserves_adj.len();
     let d_adj = get_d(e, n_tokens, &reserves_adj, amp);
     let d = get_d(e, n_tokens, &reserves_big, amp);
-    let min_price = min_amount * PRECISION
-        / estimate_swap(
-            e,
-            fee_fraction,
-            d_adj,
-            amp,
-            &reserves_adj,
-            in_idx,
-            out_idx,
-            min_amount,
-        );
+    let min_estimate = estimate_swap(
+        e,
+        fee_fraction,
+        d_adj,
+        amp,
+        &reserves_adj,
+        in_idx,
+        out_idx,
+        min_amount,
+    );
+    if min_estimate == 0 {
+        // if we're unable to estimate swap, we can't estimate liquidity
+        return 0;
+    }
+
+    let min_price = min_amount * PRECISION / min_estimate;
 
     let mut prev_price = 0;
     let mut prev_weight = 1;
@@ -243,6 +248,10 @@ pub(crate) fn get_liquidity(
             out_idx,
             in_amt,
         );
+        if in_amt == 0 || depth == 0 {
+            // on zero depth price is infinite, on zero in_amt price is zero. both are invalid
+            break;
+        }
         let mut price = in_amt * PRECISION / depth;
         let mut weight = price_weight(price, min_price);
 
