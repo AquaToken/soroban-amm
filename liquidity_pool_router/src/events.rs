@@ -61,6 +61,15 @@ pub(crate) trait LiquidityPoolRouterEvents {
         pool_tps: u128,
         expired_at: u64,
     );
+
+    fn claim(
+        &self,
+        tokens: Vec<Address>,
+        user: Address,
+        pool_address: Address,
+        reward_token: Address,
+        reward_amount: u128,
+    );
 }
 
 impl LiquidityPoolRouterEvents for Events {
@@ -132,6 +141,20 @@ impl LiquidityPoolRouterEvents for Events {
         self.env().events().publish(
             (Symbol::new(self.env(), "config_rewards"), tokens),
             (pool_address, pool_tps, expired_at),
+        );
+    }
+
+    fn claim(
+        &self,
+        tokens: Vec<Address>,
+        user: Address,
+        pool_address: Address,
+        reward_token: Address,
+        reward_amount: u128,
+    ) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "claim"), tokens, user),
+            (pool_address, reward_token, reward_amount),
         );
     }
 }
