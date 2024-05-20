@@ -4,7 +4,7 @@ extern crate std;
 use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_POOLS};
 use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::{
-    AuthorizedFunction, AuthorizedInvocation, Events, Ledger, LedgerInfo,
+    AuthorizedFunction, AuthorizedInvocation, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke,
 };
 use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, BytesN, Env, FromVal, IntoVal, Map,
@@ -2280,7 +2280,6 @@ fn test_tokens_storage() {
 #[test]
 fn test_chained_swap() {
     let e = Env::default();
-    e.mock_all_auths();
     e.budget().reset_unlimited();
 
     let admin = Address::generate(&e);
@@ -2305,29 +2304,41 @@ fn test_chained_swap() {
     let plane = create_plane_contract(&e);
     let swap_router = create_swap_router_contract(&e);
     swap_router.init_admin(&admin);
-    swap_router.set_pools_plane(&admin, &plane.address);
+    swap_router
+        .mock_all_auths()
+        .set_pools_plane(&admin, &plane.address);
     let router = create_liqpool_router_contract(&e);
-    router.init_admin(&admin);
-    router.set_pool_hash(&pool_hash);
-    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
-    router.set_token_hash(&token_hash);
-    router.set_reward_token(&token1.address);
-    router.set_pools_plane(&admin, &plane.address);
-    router.set_swap_router(&admin, &swap_router.address);
+    router.mock_all_auths().init_admin(&admin);
+    router.mock_all_auths().set_pool_hash(&pool_hash);
+    router
+        .mock_all_auths()
+        .set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.mock_all_auths().set_token_hash(&token_hash);
+    router.mock_all_auths().set_reward_token(&token1.address);
+    router
+        .mock_all_auths()
+        .set_pools_plane(&admin, &plane.address);
+    router
+        .mock_all_auths()
+        .set_swap_router(&admin, &swap_router.address);
 
-    let (pool_index1, _pool_address1) = router.init_standard_pool(&swapper, &tokens1, &30);
-    let (pool_index2, _pool_address2) = router.init_standard_pool(&swapper, &tokens2, &30);
-    token1.mint(&admin, &10000);
-    token2.mint(&admin, &20000);
-    token3.mint(&admin, &10000);
-    router.deposit(
+    let (pool_index1, pool_address1) = router
+        .mock_all_auths()
+        .init_standard_pool(&swapper, &tokens1, &30);
+    let (pool_index2, pool_address2) = router
+        .mock_all_auths()
+        .init_standard_pool(&swapper, &tokens2, &30);
+    token1.mock_all_auths().mint(&admin, &10000);
+    token2.mock_all_auths().mint(&admin, &20000);
+    token3.mock_all_auths().mint(&admin, &10000);
+    router.mock_all_auths().deposit(
         &admin,
         &tokens1,
         &pool_index1,
         &Vec::from_array(&e, [10000, 10000]),
         &0,
     );
-    router.deposit(
+    router.mock_all_auths().deposit(
         &admin,
         &tokens2,
         &pool_index2,
@@ -2336,7 +2347,21 @@ fn test_chained_swap() {
     );
 
     // swapping token 1 to 3 through combination of 2 pools as we don't have pool (1, 3)
-    token1.mint(&swapper, &1000);
+    token1.mock_all_auths().mint(&swapper, &1000);
+
+    let swap_root_args = vec![
+        &e,
+        swapper.clone().to_val(),
+        vec![
+            &e,
+            (tokens1.clone(), pool_index1.clone(), tokens[1].clone()),
+            (tokens2.clone(), pool_index2.clone(), tokens[2].clone()),
+        ]
+        .into_val(&e),
+        tokens[0].clone().to_val(),
+        100_u128.into_val(&e),
+        95_u128.into_val(&e),
+    ];
 
     assert_eq!(token1.balance(&swapper), 1000);
     assert_eq!(token2.balance(&swapper), 0);
@@ -2345,41 +2370,51 @@ fn test_chained_swap() {
     assert_eq!(token2.balance(&router.address), 0);
     assert_eq!(token3.balance(&router.address), 0);
     assert_eq!(
-        router.swap_chained(
-            &swapper,
-            &vec![
-                &e,
-                (tokens1.clone(), pool_index1.clone(), tokens[1].clone()),
-                (tokens2.clone(), pool_index2.clone(), tokens[2].clone()),
-            ],
-            &tokens[0],
-            &100,
-            &95,
-        ),
+        router
+            .mock_auths(&[MockAuth {
+                address: &swapper,
+                invoke: &MockAuthInvoke {
+                    contract: &router.address,
+                    fn_name: "swap_chained",
+                    args: swap_root_args.into_val(&e),
+                    sub_invokes: &[MockAuthInvoke {
+                        contract: &token1.address.clone(),
+                        fn_name: "transfer",
+                        args: Vec::from_array(
+                            &e,
+                            [
+                                swapper.to_val(),
+                                router.address.to_val(),
+                                100_i128.into_val(&e),
+                            ]
+                        )
+                        .into_val(&e),
+                        sub_invokes: &[],
+                    }],
+                },
+            }])
+            .swap_chained(
+                &swapper,
+                &vec![
+                    &e,
+                    (tokens1.clone(), pool_index1.clone(), tokens[1].clone()),
+                    (tokens2.clone(), pool_index2.clone(), tokens[2].clone()),
+                ],
+                &tokens[0],
+                &100,
+                &95,
+            ),
         96
     );
     assert_eq!(
-        e.auths()[0],
-        (
+        e.auths(),
+        std::vec![(
             swapper.clone(),
             AuthorizedInvocation {
                 function: AuthorizedFunction::Contract((
                     router.address.clone(),
                     Symbol::new(&e, "swap_chained"),
-                    vec!(
-                        &e,
-                        swapper.clone().to_val(),
-                        vec![
-                            &e,
-                            (tokens1.clone(), pool_index1.clone(), tokens[1].clone()),
-                            (tokens2.clone(), pool_index2.clone(), tokens[2].clone()),
-                        ]
-                        .into_val(&e),
-                        tokens[0].clone().to_val(),
-                        100_u128.into_val(&e),
-                        95_u128.into_val(&e),
-                    )
-                    .into_val(&e)
+                    swap_root_args.into_val(&e)
                 )),
                 sub_invocations: std::vec![AuthorizedInvocation {
                     function: AuthorizedFunction::Contract((
@@ -2397,7 +2432,7 @@ fn test_chained_swap() {
                     sub_invocations: std::vec![],
                 },],
             }
-        )
+        ),]
     );
     assert_eq!(token1.balance(&swapper), 900);
     assert_eq!(token2.balance(&swapper), 0);
