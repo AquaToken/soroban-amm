@@ -27,10 +27,11 @@ use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::errors::AccessControlError;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
+use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
-    Symbol, Val, Vec, U256,
+    contract, contractimpl, panic_with_error, symbol_short, vec, Address, BytesN, Env, IntoVal,
+    Map, Symbol, Val, Vec, U256,
 };
 use utils::storage_errors::StorageError;
 use utils::token_utils::check_vec_ordered;
@@ -261,7 +262,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
 #[contractimpl]
 impl UpgradeableContract for LiquidityPoolRouter {
     fn version() -> u32 {
-        101
+        103
     }
 
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
@@ -821,6 +822,15 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
 
         for i in 0..swaps_chain.len() {
             let (tokens, pool_index, token_out) = swaps_chain.get(i).unwrap();
+            if !check_vec_ordered(&tokens) {
+                panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
+            }
+
+            let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+                Ok(v) => v,
+                Err(err) => panic_with_error!(&e, err),
+            };
+
             let mut out_min_local = 0;
             let token_in_local;
             let in_amount_local;
@@ -839,16 +849,54 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
                 out_min_local = out_min;
             }
 
-            last_swap_result = Self::swap(
-                e.clone(),
-                e.current_contract_address(),
-                tokens,
-                token_in_local,
-                token_out.clone(),
-                pool_index,
-                in_amount_local,
-                out_min_local,
+            e.authorize_as_current_contract(vec![
+                &e,
+                InvokerContractAuthEntry::Contract(SubContractInvocation {
+                    context: ContractContext {
+                        contract: token_in_local.clone(),
+                        fn_name: Symbol::new(&e, "transfer"),
+                        args: (
+                            e.current_contract_address(),
+                            pool_id.clone(),
+                            in_amount_local as i128,
+                        )
+                            .into_val(&e),
+                    },
+                    sub_invocations: vec![&e],
+                }),
+            ]);
+
+            last_swap_result = e.invoke_contract(
+                &pool_id,
+                &symbol_short!("swap"),
+                Vec::from_array(
+                    &e,
+                    [
+                        e.current_contract_address().into_val(&e),
+                        tokens
+                            .first_index_of(token_in_local.clone())
+                            .unwrap()
+                            .into_val(&e),
+                        tokens
+                            .first_index_of(token_out.clone())
+                            .unwrap()
+                            .into_val(&e),
+                        in_amount_local.into_val(&e),
+                        out_min_local.into_val(&e),
+                    ],
+                ),
             );
+
+            Events::new(&e).swap(
+                tokens,
+                user.clone(),
+                pool_id,
+                token_in_local.clone(),
+                token_out.clone(),
+                in_amount,
+                last_swap_result,
+            );
+
             last_token_out = Some(token_out);
         }
 
