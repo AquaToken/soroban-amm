@@ -797,7 +797,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         set_router(&e, &router);
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
-        if fee > 9999 || admin_fee > 10000 {
+        if fee > MAX_FEE || admin_fee > MAX_ADMIN_FEE {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
 

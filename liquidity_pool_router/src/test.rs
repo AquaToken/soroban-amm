@@ -2159,8 +2159,8 @@ fn test_swap_routed() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2003)")]
-fn test_underlying_validation_fee_out_of_bounds() {
+#[should_panic(expected = "Error(Contract, #302)")]
+fn test_stableswap_validation_fee_out_of_bounds() {
     let e = Env::default();
     e.mock_all_auths();
     e.budget().reset_unlimited();
@@ -2198,7 +2198,7 @@ fn test_underlying_validation_fee_out_of_bounds() {
         &user1,
         &Vec::from_array(&e, [token1.address, token2.address]),
         &85,
-        &10000,
+        &101,
         &0,
     );
 }
@@ -2322,10 +2322,10 @@ fn test_chained_swap() {
         .mock_all_auths()
         .set_swap_router(&admin, &swap_router.address);
 
-    let (pool_index1, pool_address1) = router
+    let (pool_index1, _pool_address1) = router
         .mock_all_auths()
         .init_standard_pool(&swapper, &tokens1, &30);
-    let (pool_index2, pool_address2) = router
+    let (pool_index2, _pool_address2) = router
         .mock_all_auths()
         .init_standard_pool(&swapper, &tokens2, &30);
     token1.mock_all_auths().mint(&admin, &10000);

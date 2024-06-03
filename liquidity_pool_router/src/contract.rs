@@ -1,4 +1,4 @@
-use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
+use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_FEE};
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::liquidity_calculator::LiquidityCalculatorClient;
@@ -672,6 +672,9 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         admin_fee: u32,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
+        if fee_fraction > STABLESWAP_MAX_FEE {
+            panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
+        }
 
         // pay for pool creation
         let init_pool_token = get_init_pool_payment_token(&e);
