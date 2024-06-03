@@ -1,6 +1,5 @@
 #![allow(unused)]
 use crate::storage;
-use rewards::utils::constant::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
 use soroban_sdk::{Address, Bytes, BytesN, Env};
 
 pub fn create_contract(e: &Env, token_wasm_hash: BytesN<32>) -> Address {
