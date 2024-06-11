@@ -896,7 +896,7 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
                 pool_id,
                 token_in_local.clone(),
                 token_out.clone(),
-                in_amount,
+                in_amount_local,
                 last_swap_result,
             );
 
