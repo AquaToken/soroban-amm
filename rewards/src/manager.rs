@@ -24,6 +24,17 @@ impl Manager {
         }
     }
 
+    // Sets the reward configuration for the pool.
+    //
+    // # Arguments
+    //
+    // * `total_shares` - The total shares in the pool.
+    // * `expired_at` - The expiration time for the reward configuration.
+    // * `tps` - The number of tokens per second for the reward configuration.
+    //
+    // # Panics
+    //
+    // This method will panic if the expiration time is in the past or if the tokens per second is zero and the configuration has already expired.
     pub fn set_reward_config(&mut self, total_shares: u128, expired_at: u64, tps: u128) {
         let mut expired_at = expired_at;
 
@@ -54,7 +65,15 @@ impl Manager {
         self.storage.set_pool_reward_config(&config);
     }
 
-    // make sure pool rewards data represents the current state of the rewards. update if necessary
+    // Updates the pool rewards data to represent the current state of the rewards.
+    //
+    // # Arguments
+    //
+    // * `total_shares` - The total shares in the pool.
+    //
+    // # Returns
+    //
+    // * The updated `PoolRewardData` instance.
     pub fn update_rewards_data(&mut self, total_shares: u128) -> PoolRewardData {
         let config = self.storage.get_pool_reward_config();
         let mut data = self.storage.get_pool_reward_data();
@@ -96,8 +115,18 @@ impl Manager {
         }
     }
 
-    // make sure pool rewards data is actual and ready for new configuration
-    // to be used only after
+    // Ensures that the pool rewards data represents the current state of the rewards and is ready for a new configuration.
+    //
+    // This method checks if the last snapshot was taken at the current time. If not, it creates a new snapshot with the current time.
+    // No new reward is generated in this process.
+    //
+    // # Arguments
+    //
+    // * `total_shares` - The total shares in the pool.
+    //
+    // # Returns
+    //
+    // * The updated `PoolRewardData` instance.
     pub fn snapshot_rewards_data(&mut self, total_shares: u128) -> PoolRewardData {
         let data = self.storage.get_pool_reward_data();
         let now = self.env.ledger().timestamp();
@@ -119,6 +148,17 @@ impl Manager {
         }
     }
 
+    // Calculates the reward for a user based on their share of the total shares.
+    //
+    // # Arguments
+    //
+    // * `start_block` - The block number from which the reward calculation starts.
+    // * `end_block` - The block number at which the reward calculation ends.
+    // * `user_share` - The share of the user in the total shares.
+    //
+    // # Returns
+    //
+    // * The calculated reward for the user.
     fn calculate_user_reward(
         &mut self,
         start_block: u64,
@@ -129,6 +169,17 @@ impl Manager {
         (result) * user_share / REWARD_PRECISION
     }
 
+    // Updates the reward data for a specific user.
+    //
+    // # Arguments
+    //
+    // * `pool_data` - The current pool reward data.
+    // * `user` - The address of the user for whom the reward data is being updated.
+    // * `user_balance_shares` - The number of shares the user has in the pool.
+    //
+    // # Returns
+    //
+    // * The updated `UserRewardData` instance for the user.
     pub fn update_user_reward(
         &mut self,
         pool_data: &PoolRewardData,
@@ -158,6 +209,17 @@ impl Manager {
         }
     }
 
+    // Retrieves the amount of reward a user is eligible to claim.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user for whom the reward is being calculated.
+    // * `total_shares` - The total shares in the pool.
+    // * `user_balance_shares` - The number of shares the user has in the pool.
+    //
+    // # Returns
+    //
+    // * The amount of reward the user is eligible to claim.
     pub fn get_amount_to_claim(
         &mut self,
         user: &Address,
@@ -206,6 +268,15 @@ impl Manager {
     }
 
     // private functions
+
+    // Calculates the total reward between two blocks.
+    //
+    // This method calculates the total reward from the start block to the end block inclusively
+    //
+    // # Arguments
+    //
+    // * `start_block` - The block number from which the reward calculation starts.
+    // * `end_block` - The block number at which the reward calculation ends.
     fn calculate_reward(&mut self, start_block: u64, end_block: u64) -> u128 {
         // calculate result from start_block to end_block [...]
         //  since we don't have such information and can be enabled after
@@ -245,6 +316,15 @@ impl Manager {
         result
     }
 
+    // Updates the invariant storage with the reward per share for each block.
+    //
+    // The reward per share for a block is calculated by dividing the total accumulated reward by the total shares.
+    // This value is then added to the cumulative reward per share for the current block in the invariant storage.
+    //
+    // # Arguments
+    //
+    // * `block` - The block number for which the reward per share is being calculated.
+    // * `value` - The total accumulated reward.
     fn add_reward_inv(&mut self, block: u64, value: u128) {
         for pow in 0..255 {
             if pow > 0 && block + 1 < self.config.page_size.pow(pow - 1) {
@@ -266,6 +346,12 @@ impl Manager {
         }
     }
 
+    // Updates the invariant storage with the reward per share for the current block.
+    //
+    // # Arguments
+    //
+    // * `accumulated` - The total accumulated reward.
+    // * `total_shares` - The total shares in the pool.
     fn update_reward_inv(&mut self, accumulated: u128, total_shares: u128) {
         let reward_per_share = if total_shares > 0 {
             REWARD_PRECISION * accumulated / total_shares

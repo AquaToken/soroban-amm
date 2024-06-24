@@ -42,7 +42,7 @@ pub(crate) struct Setup<'a> {
 }
 
 impl Default for Setup<'_> {
-    /// Create setup from default config and mint tokens for all users & set rewards config
+    // Create setup from default config and mint tokens for all users & set rewards config
     fn default() -> Self {
         let default_config = TestConfig::default();
         Self::new_with_config(&default_config)
@@ -50,7 +50,7 @@ impl Default for Setup<'_> {
 }
 
 impl Setup<'_> {
-    /// Create setup from config and mint tokens for all users
+    // Create setup from config and mint tokens for all users
     pub(crate) fn new_with_config(config: &TestConfig) -> Self {
         let setup = Self::setup(config);
         setup.mint_tokens_for_users(config.mint_to_user);
@@ -58,9 +58,9 @@ impl Setup<'_> {
         setup
     }
 
-    /// Create users, token1, token2, reward token, lp token
-    ///
-    /// Mint reward token (1_000_000_0000000) & approve for liquidity_pool token
+    // Create users, token1, token2, reward token, lp token
+    //
+    // Mint reward token (1_000_000_0000000) & approve for liquidity_pool token
     pub(crate) fn setup(config: &TestConfig) -> Self {
         let e: Env = Env::default();
         e.mock_all_auths();

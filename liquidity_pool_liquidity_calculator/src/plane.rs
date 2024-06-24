@@ -22,8 +22,8 @@ pub struct StableSwapPoolData {
     pub(crate) reserves: Vec<u128>,
 }
 
-/// * `init_args`: [fee, initial_a, initial_a_time, future_a, future_a_time]
-/// * `reserves`: pool balances list
+// * `init_args`: [fee, initial_a, initial_a_time, future_a, future_a_time]
+// * `reserves`: pool balances list
 pub(crate) fn parse_stableswap_data(
     init_args: Vec<u128>,
     reserves: Vec<u128>,

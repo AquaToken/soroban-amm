@@ -42,6 +42,17 @@ pub struct LiquidityPool;
 
 #[contractimpl]
 impl LiquidityPoolCrunch for LiquidityPool {
+    // Initializes all the components of the liquidity pool.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin user.
+    // * `router` - The address of the router.
+    // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
+    // * `tokens` - A vector of token addresses.
+    // * `fee_fraction` - The fee fraction for the pool.
+    // * `reward_token` - The address of the reward token.
+    // * `plane` - The address of the plane.
     fn initialize_all(
         e: Env,
         admin: Address,
@@ -69,10 +80,24 @@ impl LiquidityPoolCrunch for LiquidityPool {
 
 #[contractimpl]
 impl LiquidityPoolTrait for LiquidityPool {
+    // Returns the type of the pool.
+    //
+    // # Returns
+    //
+    // The type of the pool as a Symbol.
     fn pool_type(e: Env) -> Symbol {
         Symbol::new(&e, "constant_product")
     }
 
+    // Initializes the liquidity pool.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin user.
+    // * `router` - The address of the router.
+    // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
+    // * `tokens` - A vector of token addresses.
+    // * `fee_fraction` - The fee fraction for the pool.
     fn initialize(
         e: Env,
         admin: Address,
@@ -123,18 +148,44 @@ impl LiquidityPoolTrait for LiquidityPool {
         update_plane(&e);
     }
 
+    // Returns the pool's share token address.
+    //
+    // # Returns
+    //
+    // The pool's share token as an Address.
     fn share_id(e: Env) -> Address {
         get_token_share(&e)
     }
 
+    // Returns the total shares of the pool.
+    //
+    // # Returns
+    //
+    // The total shares of the pool as a u128.
     fn get_total_shares(e: Env) -> u128 {
         get_total_shares(&e)
     }
 
+    // Returns the pool's tokens.
+    //
+    // # Returns
+    //
+    // A vector of token addresses.
     fn get_tokens(e: Env) -> Vec<Address> {
         Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
     }
 
+    // Deposits tokens into the pool.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user depositing the tokens.
+    // * `desired_amounts` - A vector of desired amounts of each token to deposit.
+    // * `min_shares` - The minimum amount of pool tokens to mint.
+    //
+    // # Returns
+    //
+    // A tuple containing a vector of actual amounts of each token deposited and a u128 representing the amount of pool tokens minted.
     fn deposit(
         e: Env,
         user: Address,
@@ -233,6 +284,19 @@ impl LiquidityPoolTrait for LiquidityPool {
         (amounts_vec, shares_to_mint)
     }
 
+    // Swaps tokens in the pool.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user swapping the tokens.
+    // * `in_idx` - The index of the input token to be swapped.
+    // * `out_idx` - The index of the output token to be received.
+    // * `in_amount` - The amount of the input token to be swapped.
+    // * `out_min` - The minimum amount of the output token to be received.
+    //
+    // # Returns
+    //
+    // The amount of the output token received.
     fn swap(
         e: Env,
         user: Address,
@@ -333,6 +397,17 @@ impl LiquidityPoolTrait for LiquidityPool {
         out
     }
 
+    // Estimates the result of a swap operation.
+    //
+    // # Arguments
+    //
+    // * `in_idx` - The index of the input token to be swapped.
+    // * `out_idx` - The index of the output token to be received.
+    // * `in_amount` - The amount of the input token to be swapped.
+    //
+    // # Returns
+    //
+    // The estimated amount of the output token that would be received.
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
         if in_idx == out_idx {
             panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
@@ -355,6 +430,17 @@ impl LiquidityPoolTrait for LiquidityPool {
         get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0
     }
 
+    // Withdraws tokens from the pool.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user withdrawing the tokens.
+    // * `share_amount` - The amount of pool tokens to burn.
+    // * `min_amounts` - A vector of minimum amounts of each token to be received.
+    //
+    // # Returns
+    //
+    // A vector of actual amounts of each token withdrawn.
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
         user.require_auth();
 
@@ -414,15 +500,30 @@ impl LiquidityPoolTrait for LiquidityPool {
         withdraw_amounts
     }
 
+    // Returns the pool's reserves.
+    //
+    // # Returns
+    //
+    // A vector of the pool's reserves.
     fn get_reserves(e: Env) -> Vec<u128> {
         Vec::from_array(&e, [get_reserve_a(&e), get_reserve_b(&e)])
     }
 
+    // Returns the pool's fee fraction.
+    //
+    // # Returns
+    //
+    // The pool's fee fraction as a u32.
     fn get_fee_fraction(e: Env) -> u32 {
         // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
         get_fee_fraction(&e)
     }
 
+    // Returns information about the pool.
+    //
+    // # Returns
+    //
+    // A map of Symbols to Vals representing the pool's information.
     fn get_info(e: Env) -> Map<Symbol, Val> {
         let fee = get_fee_fraction(&e);
         let pool_type = Self::pool_type(e.clone());
@@ -433,11 +534,23 @@ impl LiquidityPoolTrait for LiquidityPool {
     }
 }
 
+#[contractimpl]
 impl UpgradeableContractTrait for LiquidityPool {
+    // Returns the version of the contract.
+    //
+    // # Returns
+    //
+    // The version of the contract as a u32.
     fn version() -> u32 {
-        100
+        104
     }
 
+    // Upgrades the contract to a new version.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `new_wasm_hash` - The hash of the new contract version.
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
@@ -447,6 +560,12 @@ impl UpgradeableContractTrait for LiquidityPool {
 
 #[contractimpl]
 impl RewardsTrait for LiquidityPool {
+    // Initializes the rewards configuration.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `reward_token` - The address of the reward token.
     fn initialize_rewards_config(e: Env, reward_token: Address) {
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
@@ -456,6 +575,14 @@ impl RewardsTrait for LiquidityPool {
         rewards.storage().put_reward_token(reward_token);
     }
 
+    // Sets the rewards configuration.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `admin` - The address of the admin user.
+    // * `expired_at` - The timestamp when the rewards expire.
+    // * `tps` - The value with 7 decimal places. Example: 600_0000000
     fn set_rewards_config(
         e: Env,
         admin: Address,
@@ -476,6 +603,17 @@ impl RewardsTrait for LiquidityPool {
             .set_reward_config(total_shares, expired_at, tps);
     }
 
+    // Returns the rewards information:
+    //     tps, total accumulated amount for user, expiration, amount available to claim, debug info.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user.
+    //
+    // # Returns
+    //
+    // A map of Symbols to i128 representing the rewards information.
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
         let rewards = get_rewards_manager(&e);
         let config = rewards.storage().get_pool_reward_config();
@@ -500,6 +638,16 @@ impl RewardsTrait for LiquidityPool {
         result
     }
 
+    // Returns the amount of reward tokens available for the user to claim.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user.
+    //
+    // # Returns
+    //
+    // The amount of reward tokens available for the user to claim as a u128.
     fn get_user_reward(e: Env, user: Address) -> u128 {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
@@ -509,24 +657,61 @@ impl RewardsTrait for LiquidityPool {
             .get_amount_to_claim(&user, total_shares, user_shares)
     }
 
+    // Returns the total amount of accumulated reward for the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    //
+    // # Returns
+    //
+    // The total amount of accumulated reward for the pool as a u128.
     fn get_total_accumulated_reward(e: Env) -> u128 {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         rewards.manager().get_total_accumulated_reward(total_shares)
     }
 
+    // Returns the total amount of configured reward for the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    //
+    // # Returns
+    //
+    // The total amount of configured reward for the pool as a u128.
     fn get_total_configured_reward(e: Env) -> u128 {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         rewards.manager().get_total_configured_reward(total_shares)
     }
 
+    // Returns the total amount of claimed reward for the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    //
+    // # Returns
+    //
+    // The total amount of claimed reward for the pool as a u128.
     fn get_total_claimed_reward(e: Env) -> u128 {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         rewards.manager().get_total_claimed_reward(total_shares)
     }
 
+    // Claims the reward as a user.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user.
+    //
+    // # Returns
+    //
+    // The amount of tokens rewarded to the user as a u128.
     fn claim(e: Env, user: Address) -> u128 {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
@@ -541,6 +726,16 @@ impl RewardsTrait for LiquidityPool {
 
 #[contractimpl]
 impl Plane for LiquidityPool {
+    // Sets the plane for the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `plane` - The address of the plane.
+    //
+    // # Panics
+    //
+    // If the plane has already been initialized.
     fn set_pools_plane(e: Env, plane: Address) {
         if has_plane(&e) {
             panic_with_error!(&e, LiquidityPoolError::PlaneAlreadyInitialized);
@@ -548,6 +743,16 @@ impl Plane for LiquidityPool {
 
         set_plane(&e, &plane);
     }
+
+    // Returns the plane of the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    //
+    // # Returns
+    //
+    // The address of the plane.
     fn get_pools_plane(e: Env) -> Address {
         get_plane(&e)
     }
