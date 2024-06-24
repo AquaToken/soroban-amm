@@ -13,6 +13,12 @@ const POOL_TYPE_STABLESWAP: Symbol = symbol_short!("stable");
 
 #[contractimpl]
 impl Calculator for LiquidityPoolLiquidityCalculator {
+    // Initializes the admin for the contract.
+    // If an admin does not exist, it sets the provided account as the admin.
+    //
+    // # Arguments
+    //
+    // * `account` - The account to be set as the admin.
     fn init_admin(e: Env, account: Address) {
         let access_control = AccessControl::new(&e);
         if !access_control.has_admin() {
@@ -20,6 +26,13 @@ impl Calculator for LiquidityPoolLiquidityCalculator {
         }
     }
 
+    // Sets the plane for the pools.
+    // It requires the caller to be an admin and checks if the caller is an admin before setting the plane.
+    //
+    // # Arguments
+    //
+    // * `admin` - The admin account.
+    // * `plane` - The plane to be set for the pools.
     fn set_pools_plane(e: Env, admin: Address, plane: Address) {
         let access_control = AccessControl::new(&e);
         admin.require_auth();
@@ -28,10 +41,26 @@ impl Calculator for LiquidityPoolLiquidityCalculator {
         set_plane(&e, &plane);
     }
 
+    // Returns the plane of the pools.
+    //
+    // # Returns
+    //
+    // * The address of the plane of the pools.
     fn get_pools_plane(e: Env) -> Address {
         get_plane(&e)
     }
 
+    // Calculates and returns the liquidity of the provided pools.
+    // It interacts with the `PoolPlaneClient` to get the data for the pools
+    // and then calculates the liquidity based on the pool type (standard or stableswap).
+    //
+    // # Arguments
+    //
+    // * `pools` - A vector of addresses representing the pools.
+    //
+    // # Returns
+    //
+    // * A vector of U256 values representing the liquidity of the provided pools.
     fn get_liquidity(e: Env, pools: Vec<Address>) -> Vec<U256> {
         let plane_client = PoolPlaneClient::new(&e, &get_plane(&e));
         let data = plane_client.get(&pools);

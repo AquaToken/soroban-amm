@@ -1256,12 +1256,14 @@ fn test_remove_liquidity_imbalance() {
     assert_eq!(token_share.balance(&user1) as u128, 101_8767615);
     liqpool.remove_liquidity_imbalance(
         &user1,
-        &Vec::from_array(&e, [9_0000000, 9_0000000]),
-        &90_0000000,
+        &Vec::from_array(&e, [0_5000000, 99_0000000]),
+        &101_8767615,
     );
-    assert_eq!(token1.balance(&user1) as u128, 999_0000000);
-    assert_eq!(token2.balance(&user1) as u128, 909_0000000);
-    assert_eq!(token_share.balance(&user1) as u128, 62_1428988);
+    assert_eq!(token1.balance(&user1) as u128, 990_5000000);
+    assert_eq!(token2.balance(&user1) as u128, 999_0000000);
+    assert_eq!(token1.balance(&liqpool.address) as u128, 9_5000000);
+    assert_eq!(token2.balance(&liqpool.address) as u128, 1_0000000);
+    assert_eq!(token_share.balance(&user1) as u128, 9_7635378);
 }
 
 #[test]

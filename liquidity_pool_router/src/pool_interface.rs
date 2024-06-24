@@ -81,47 +81,47 @@ pub trait LiquidityPoolInterfaceTrait {
 }
 
 pub trait RewardsInterfaceTrait {
-    /// Retrieves the global rewards configuration and returns it as a `Map`.
-    ///
-    /// This function fetches the global rewards configuration from the contract's state.
-    /// The configuration includes the rewards per second (`tps`), the expiration timestamp (`expired_at`),
-    /// and the current block number (`current_block`).
-    ///
-    /// # Returns
-    ///
-    /// A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
-    /// The keys are "tps", "expired_at", and "current_block".
+    // Retrieves the global rewards configuration and returns it as a `Map`.
+    //
+    // This function fetches the global rewards configuration from the contract's state.
+    // The configuration includes the rewards per second (`tps`), the expiration timestamp (`expired_at`),
+    // and the current block number (`current_block`).
+    //
+    // # Returns
+    //
+    // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
+    // The keys are "tps", "expired_at", and "current_block".
     fn get_rewards_config(e: Env) -> Map<Symbol, i128>;
 
-    /// Returns a mapping of token addresses to their respective reward information.
-    ///
-    /// # Returns
-    ///
-    /// A `Map` where each key is a `Vec<Address>` representing a set of token addresses, and the value is a tuple
-    /// `(u32, bool, U256)`. The tuple elements represent the voting share, processed status, and total liquidity
-    /// of the tokens respectively.
+    // Returns a mapping of token addresses to their respective reward information.
+    //
+    // # Returns
+    //
+    // A `Map` where each key is a `Vec<Address>` representing a set of token addresses, and the value is a tuple
+    // `(u32, bool, U256)`. The tuple elements represent the voting share, processed status, and total liquidity
+    // of the tokens respectively.
     fn get_tokens_for_reward(e: Env) -> Map<Vec<Address>, (u32, bool, U256)>;
 
-    /// Sums up the liquidity of all pools for given tokens set and returns the total liquidity
-    ///
-    /// # Arguments
-    ///
-    /// * `tokens` - A vector of token addresses for which to calculate the total liquidity.
-    ///
-    /// # Returns
-    ///
-    /// A `U256` value representing the total liquidity for the given set of tokens.
+    // Sums up the liquidity of all pools for given tokens set and returns the total liquidity
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses for which to calculate the total liquidity.
+    //
+    // # Returns
+    //
+    // A `U256` value representing the total liquidity for the given set of tokens.
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256;
 
-    /// Configures the global rewards for the liquidity pool.
-    ///
-    /// # Arguments
-    ///
-    /// * `admin` - The address of the admin user. This user must be authenticated and have admin privileges.
-    /// * `reward_tps` - The rewards per second. This value is scaled by 1e7 for precision.
-    /// * `expired_at` - The timestamp at which the rewards configuration will expire.
-    /// * `tokens_votes` - A vector of tuples, where each tuple contains a vector of token addresses and a voting share.
-    ///   The voting share is a value between 0 and 1, scaled by 1e7 for precision.
+    // Configures the global rewards for the liquidity pool.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin user. This user must be authenticated and have admin privileges.
+    // * `reward_tps` - The rewards per second. This value is scaled by 1e7 for precision.
+    // * `expired_at` - The timestamp at which the rewards configuration will expire.
+    // * `tokens_votes` - A vector of tuples, where each tuple contains a vector of token addresses and a voting share.
+    //   The voting share is a value between 0 and 1, scaled by 1e7 for precision.
     fn config_global_rewards(
         e: Env,
         admin: Address,
@@ -130,34 +130,34 @@ pub trait RewardsInterfaceTrait {
         tokens_votes: Vec<(Vec<Address>, u32)>,
     );
 
-    /// Fills the aggregated liquidity information for a given set of tokens.
-    ///
-    /// # Arguments
-    ///
-    /// * `tokens` - A vector of token addresses for which to fill the liquidity.
+    // Fills the aggregated liquidity information for a given set of tokens.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses for which to fill the liquidity.
     fn fill_liquidity(e: Env, tokens: Vec<Address>);
 
-    /// Configures the rewards for a specific pool.
-    ///
-    /// This function is used to set up the rewards configuration for a specific pool.
-    /// It calculates the pool's share of the total rewards based on its liquidity and sets the pool's rewards configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `tokens` - A vector of token addresses that the pool consists of.
-    /// * `pool_index` - The index of the pool.
-    ///
-    /// # Returns
-    ///
-    /// * `pool_tps` - The total reward tokens per second (TPS) to be distributed to the pool.
-    ///
-    /// # Errors
-    ///
-    /// This function will panic if:
-    ///
-    /// * The pool does not exist.
-    /// * The tokens are not found in the current rewards configuration.
-    /// * The liquidity for the tokens has not been filled.
+    // Configures the rewards for a specific pool.
+    //
+    // This function is used to set up the rewards configuration for a specific pool.
+    // It calculates the pool's share of the total rewards based on its liquidity and sets the pool's rewards configuration.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `pool_index` - The index of the pool.
+    //
+    // # Returns
+    //
+    // * `pool_tps` - The total reward tokens per second (TPS) to be distributed to the pool.
+    //
+    // # Errors
+    //
+    // This function will panic if:
+    //
+    // * The pool does not exist.
+    // * The tokens are not found in the current rewards configuration.
+    // * The liquidity for the tokens has not been filled.
     fn config_pool_rewards(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Get rewards status for the pool,
@@ -266,22 +266,22 @@ pub trait SwapRouterInterface {
 }
 
 pub trait CombinedSwapInterface {
-    /// Executes a chain of token swaps to exchange an input token for an output token.
-    ///
-    /// # Arguments
-    ///
-    /// * `user` - The address of the user executing the swaps.
-    /// * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
-    ///   - A vector of token addresses liquidity pool belongs to
-    ///   - Pool index hash
-    ///   - The token to obtain
-    /// * `token_in` - The address of the input token to be swapped.
-    /// * `in_amount` - The amount of the input token to be swapped.
-    /// * `out_min` - The minimum amount of the output token to be received.
-    ///
-    /// # Returns
-    ///
-    /// The amount of the output token received after all swaps have been executed.
+    // Executes a chain of token swaps to exchange an input token for an output token.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user executing the swaps.
+    // * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
+    //   - A vector of token addresses liquidity pool belongs to
+    //   - Pool index hash
+    //   - The token to obtain
+    // * `token_in` - The address of the input token to be swapped.
+    // * `in_amount` - The amount of the input token to be swapped.
+    // * `out_min` - The minimum amount of the output token to be received.
+    //
+    // # Returns
+    //
+    // The amount of the output token received after all swaps have been executed.
     fn swap_chained(
         e: Env,
         user: Address,

@@ -39,8 +39,20 @@ use utils::token_utils::check_vec_ordered;
 #[contract]
 pub struct LiquidityPoolRouter;
 
+// The `LiquidityPoolInterfaceTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
+    // Returns the type of the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The type of the pool as a Symbol.
     fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -49,6 +61,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "pool_type"), Vec::new(&e))
     }
 
+    // Returns information about the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // A map of Symbols to Vals representing the pool's information.
     fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val> {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -57,6 +80,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_info"), Vec::new(&e))
     }
 
+    // Returns the pool's address.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The address of the pool.
     fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
         match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -64,6 +98,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         }
     }
 
+    // Returns the pool's share token address.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The pool's share token as an Address.
     fn share_id(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -72,6 +117,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "share_id"), Vec::new(&e))
     }
 
+    // Returns the total shares of the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The total shares of the pool as a u128.
     fn get_total_shares(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -80,6 +136,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_total_shares"), Vec::new(&e))
     }
 
+    // Returns the pool's reserves.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // A vector of u128s representing the pool's reserves.
     fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128> {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -88,6 +155,20 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
     }
 
+    // Deposits tokens into the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user depositing the tokens.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    // * `amounts` - A vector of u128s representing the amounts of each token to deposit.
+    // * `min_mint_amount` - The minimum amount of pool tokens to mint.
+    //
+    // # Returns
+    //
+    // A tuple containing a vector of u128s representing the amounts of each token deposited and a u128 representing the amount of pool tokens minted.
     fn deposit(
         e: Env,
         user: Address,
@@ -119,6 +200,22 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         (amounts, share_amount)
     }
 
+    // Swaps tokens in the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user swapping the tokens.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    // * `token_in` - The address of the input token to be swapped.
+    // * `token_out` - The address of the output token to be received.
+    // * `in_amount` - The amount of the input token to be swapped.
+    // * `min_out_amount` - The minimum amount of the output token to be received.
+    //
+    // # Returns
+    //
+    // The amount of the output token received.
     fn swap(
         e: Env,
         user: Address,
@@ -165,6 +262,20 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         out_amt
     }
 
+    // Estimates the result of a swap operation.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    // * `token_in` - The address of the input token to be swapped.
+    // * `token_out` - The address of the output token to be received.
+    // * `in_amount` - The amount of the input token to be swapped.
+    //
+    // # Returns
+    //
+    // The estimated amount of the output token that would be received.
     fn estimate_swap(
         e: Env,
         tokens: Vec<Address>,
@@ -198,6 +309,20 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         )
     }
 
+    // Withdraws tokens from the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user withdrawing the tokens.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    // * `burn_amount` - The amount of pool tokens to burn.
+    // * `min_amounts` - A vector of u128s representing the minimum amounts of each token to be received.
+    //
+    // # Returns
+    //
+    // A vector of u128s representing the amounts of each token withdrawn.
     fn withdraw(
         e: Env,
         user: Address,
@@ -230,6 +355,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         amounts
     }
 
+    // Returns the total liquidity of the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The total liquidity of the pool as a U256.
     fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256 {
         let pool_id = match get_pool(&e, tokens, pool_index) {
             Ok(v) => v,
@@ -246,10 +382,26 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         }
     }
 
+    // Returns the address of the liquidity calculator.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    //
+    // # Returns
+    //
+    // The address of the liquidity calculator.
     fn get_liquidity_calculator(e: Env) -> Address {
         get_liquidity_calculator(&e)
     }
 
+    // Sets the liquidity calculator.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `admin` - The address of the admin user.
+    // * `calculator` - The address of the liquidity calculator.
     fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
         let access_control = AccessControl::new(&e);
         admin.require_auth();
@@ -259,12 +411,24 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     }
 }
 
+// The `UpgradeableContract` trait provides the interface for upgrading the contract.
 #[contractimpl]
 impl UpgradeableContract for LiquidityPoolRouter {
+    // Returns the version of the contract.
+    //
+    // # Returns
+    //
+    // The version of the contract as a u32.
     fn version() -> u32 {
-        103
+        104
     }
 
+    // Upgrades the contract to a new version.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `new_wasm_hash` - The hash of the new contract version.
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
@@ -272,8 +436,14 @@ impl UpgradeableContract for LiquidityPoolRouter {
     }
 }
 
+// The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for LiquidityPoolRouter {
+    // Initializes the admin user.
+    //
+    // # Arguments
+    //
+    // * `account` - The address of the admin user.
     fn init_admin(e: Env, account: Address) {
         let access_control = AccessControl::new(&e);
         if access_control.has_admin() {
@@ -282,24 +452,46 @@ impl AdminInterface for LiquidityPoolRouter {
         access_control.set_admin(&account);
     }
 
+    // Sets the liquidity pool share token wasm hash.
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The token wasm hash.
     fn set_token_hash(e: Env, new_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         set_token_hash(&e, &new_hash);
     }
 
+    // Sets the standard pool wasm hash.
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The standard pool wasm hash.
     fn set_pool_hash(e: Env, new_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         set_constant_product_pool_hash(&e, &new_hash);
     }
 
+    // Sets the stableswap pool wasm hash.
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The new stableswap pool wasm hash.
     fn set_stableswap_pool_hash(e: Env, new_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         set_stableswap_pool_hash(&e, &new_hash);
     }
 
+    // Configures the stableswap pool deployment payment.
+    //
+    // # Arguments
+    //
+    // * `token` - The address of the token.
+    // * `amount` - The amount of the token.
+    // * `to` - The address to send the payment to.
     fn configure_init_pool_payment(e: Env, token: Address, amount: u128, to: Address) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
@@ -308,6 +500,11 @@ impl AdminInterface for LiquidityPoolRouter {
         set_init_pool_payment_address(&e, &to);
     }
 
+    // Sets the reward token.
+    //
+    // # Arguments
+    //
+    // * `reward_token` - The address of the reward token.
     fn set_reward_token(e: Env, reward_token: Address) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
@@ -316,8 +513,19 @@ impl AdminInterface for LiquidityPoolRouter {
     }
 }
 
+// The `RewardsInterfaceTrait` trait provides the interface for interacting with rewards.
 #[contractimpl]
 impl RewardsInterfaceTrait for LiquidityPoolRouter {
+    // Retrieves the global rewards configuration and returns it as a `Map`.
+    //
+    // This function fetches the global rewards configuration from the contract's state.
+    // The configuration includes the rewards per second (`tps`), the expiration timestamp (`expired_at`),
+    // and the current block number (`current_block`).
+    //
+    // # Returns
+    //
+    // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
+    // The keys are "tps", "expired_at", and "current_block".
     fn get_rewards_config(e: Env) -> Map<Symbol, i128> {
         let rewards_config = get_rewards_config(&e);
         let mut result = Map::new(&e);
@@ -327,6 +535,13 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         result
     }
 
+    // Returns a mapping of token addresses to their respective reward information.
+    //
+    // # Returns
+    //
+    // A `Map` where each key is a `Vec<Address>` representing a set of token addresses, and the value is a tuple
+    // `(u32, bool, U256)`. The tuple elements represent the voting share, processed status, and total liquidity
+    // of the tokens respectively.
     fn get_tokens_for_reward(e: Env) -> Map<Vec<Address>, (u32, bool, U256)> {
         let rewards_config = get_rewards_config(&e);
         let tokens = get_reward_tokens(&e, rewards_config.current_block);
@@ -340,6 +555,15 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         result
     }
 
+    // Sums up the liquidity of all pools for given tokens set and returns the total liquidity
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses for which to calculate the total liquidity.
+    //
+    // # Returns
+    //
+    // A `U256` value representing the total liquidity for the given set of tokens.
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256 {
         if !check_vec_ordered(&tokens) {
             panic_with_error!(e, LiquidityPoolValidationError::TokensNotSorted);
@@ -362,6 +586,15 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         result
     }
 
+    // Configures the global rewards for the liquidity pool.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin user. This user must be authenticated and have admin privileges.
+    // * `reward_tps` - The rewards per second. This value is scaled by 1e7 for precision.
+    // * `expired_at` - The timestamp at which the rewards configuration will expire.
+    // * `tokens_votes` - A vector of tuples, where each tuple contains a vector of token addresses and a voting share.
+    //   The voting share is a value between 0 and 1, scaled by 1e7 for precision.
     fn config_global_rewards(
         e: Env,
         admin: Address,
@@ -417,6 +650,11 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         )
     }
 
+    // Fills the aggregated liquidity information for a given set of tokens.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses for which to fill the liquidity.
     fn fill_liquidity(e: Env, tokens: Vec<Address>) {
         let rewards_config = get_rewards_config(&e);
         let tokens_salt = get_tokens_salt(&e, tokens.clone());
@@ -448,6 +686,27 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         );
     }
 
+    // Configures the rewards for a specific pool.
+    //
+    // This function is used to set up the rewards configuration for a specific pool.
+    // It calculates the pool's share of the total rewards based on its liquidity and sets the pool's rewards configuration.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `pool_index` - The index of the pool.
+    //
+    // # Returns
+    //
+    // * `pool_tps` - The total reward tokens per second (TPS) to be distributed to the pool.
+    //
+    // # Errors
+    //
+    // This function will panic if:
+    //
+    // * The pool does not exist.
+    // * The tokens are not found in the current rewards configuration.
+    // * The liquidity for the tokens has not been filled.
     fn config_pool_rewards(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -528,6 +787,18 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         pool_tps
     }
 
+    // Get rewards status for the pool, including amount available for the user
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // A map of symbols to integers representing the rewards info.
     fn get_rewards_info(
         e: Env,
         user: Address,
@@ -546,6 +817,18 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         )
     }
 
+    // Get amount of reward tokens available for the user to claim.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The user reward as a u128.
     fn get_user_reward(
         e: Env,
         user: Address,
@@ -564,6 +847,17 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         )
     }
 
+    // Returns the total accumulated reward.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The total accumulated reward as a u128.
     fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -577,6 +871,17 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         )
     }
 
+    // Returns the total configured reward.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The total configured reward as a u128.
     fn get_total_configured_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -590,6 +895,17 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         )
     }
 
+    // Returns the total claimed reward.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The total claimed reward as a u128.
     fn get_total_claimed_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -603,6 +919,18 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         )
     }
 
+    // Claims the reward.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The amount of tokens rewarded to the user as a u128.
     fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         user.require_auth();
 
@@ -629,8 +957,17 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     }
 }
 
+// The `PoolsManagementTrait` trait provides the interface for managing liquidity pools.
 #[contractimpl]
 impl PoolsManagementTrait for LiquidityPoolRouter {
+    // Initializes a standard pool with default arguments.
+    // fee = 0.3%
+    //
+    // # Returns
+    //
+    // A tuple containing:
+    // * The pool index hash.
+    // * The address of the pool.
     fn init_pool(e: Env, tokens: Vec<Address>) -> (BytesN<32>, Address) {
         let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
@@ -642,6 +979,19 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
     }
 
+    // Initializes a standard pool with custom arguments.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user initializing the pool.
+    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `fee_fraction` - The fee fraction for the pool. Should match pre-defined set of values: 0.1%, 0.3%, 1%.
+    //
+    // # Returns
+    //
+    // A tuple containing:
+    // * The pool index hash.
+    // * The address of the pool.
     fn init_standard_pool(
         e: Env,
         user: Address,
@@ -663,6 +1013,21 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
     }
 
+    // Initializes a stableswap pool with custom arguments.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user initializing the pool.
+    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `a` - The amplification coefficient for the pool.
+    // * `fee_fraction` - The fee fraction for the pool. Has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%.
+    // * `admin_fee` - The percentage of fee that goes to pool admin.
+    //
+    // # Returns
+    //
+    // A tuple containing:
+    // * The pool index hash.
+    // * The address of the pool.
     fn init_stableswap_pool(
         e: Env,
         user: Address,
@@ -696,11 +1061,29 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
     }
 
+    // Returns a map of pools for given set of tokens.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses that the pair consists of.
+    //
+    // # Returns
+    //
+    // A map of pool index hashes to pool addresses.
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address> {
         let salt = get_tokens_salt(&e, tokens);
         get_pools_plain(&e, &salt)
     }
 
+    // Returns a map of pools for given set of tokens.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses that the pair consists of.
+    //
+    // # Returns
+    //
+    // A map of pool index hashes to pool addresses.
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
         user.require_auth();
@@ -711,14 +1094,39 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
     }
 
+    // Returns the number of unique token sets.
+    //
+    // # Returns
+    //
+    // The number of unique token sets.
     fn get_tokens_sets_count(e: Env) -> u128 {
         get_tokens_set_count(&e)
     }
 
+    // Retrieves tokens at a specified index.
+    //
+    // # Arguments
+    //
+    // * `index` - The index of the token set to retrieve.
+    //
+    // # Returns
+    //
+    // A vector of token addresses at the specified index.
     fn get_tokens(e: Env, index: u128) -> Vec<Address> {
         get_tokens_set(&e, index)
     }
 
+    // Retrieves a list of pools in batch based on half-open `[..)` range of tokens indexes.
+    //
+    // # Arguments
+    //
+    // * `start` - The start index of the range.
+    // * `end` - The end index of the range.
+    //
+    // # Returns
+    //
+    // A list containing tuples containing a vector of addresses of the corresponding tokens
+    // and a mapping of pool hashes to pool addresses.
     fn get_pools_for_tokens_range(
         e: Env,
         start: u128,
@@ -734,8 +1142,17 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     }
 }
 
+// The `PoolPlaneInterface` trait provides the interface for interacting with a pool plane.
 #[contractimpl]
 impl PoolPlaneInterface for LiquidityPoolRouter {
+    // Sets the pool plane.
+    // Pool plane is a contract which knows current state of every pool
+    // and can be used to estimate swaps without calling pool contracts.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin user.
+    // * `plane` - The address of the plane.
     fn set_pools_plane(e: Env, admin: Address, plane: Address) {
         let access_control = AccessControl::new(&e);
         admin.require_auth();
@@ -744,13 +1161,21 @@ impl PoolPlaneInterface for LiquidityPoolRouter {
         set_pool_plane(&e, &plane);
     }
 
+    // Returns the address of the pool plane.
     fn get_plane(e: Env) -> Address {
         get_pool_plane(&e)
     }
 }
 
+// The `SwapRouterInterface` trait provides the interface for interacting with a specialized contract used to estimate swaps.
 #[contractimpl]
 impl SwapRouterInterface for LiquidityPoolRouter {
+    // Sets the swap router.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin user.
+    // * `router` - The address of the router.
     fn set_swap_router(e: Env, admin: Address, router: Address) {
         let access_control = AccessControl::new(&e);
         admin.require_auth();
@@ -758,10 +1183,26 @@ impl SwapRouterInterface for LiquidityPoolRouter {
         set_swap_router(&e, &router);
     }
 
+    // Returns the address of the swap router.
     fn get_swap_router(e: Env) -> Address {
         get_swap_router(&e)
     }
 
+    // Estimates the result of a routed swap operation.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses that the swap route consists of.
+    // * `token_in` - The address of the input token to be swapped.
+    // * `token_out` - The address of the output token to be received.
+    // * `in_amount` - The amount of the input token to be swapped.
+    //
+    // # Returns
+    //
+    // A tuple containing:
+    // * The pool index hash of the best pool for the swap.
+    // * The address of the best pool for the swap.
+    // * The estimated amount of the output token that would be received.
     fn estimate_swap_routed(
         e: Env,
         tokens: Vec<Address>,
@@ -801,6 +1242,22 @@ impl SwapRouterInterface for LiquidityPoolRouter {
 
 #[contractimpl]
 impl CombinedSwapInterface for LiquidityPoolRouter {
+    // Executes a chain of token swaps to exchange an input token for an output token.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user executing the swaps.
+    // * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
+    //   - A vector of token addresses liquidity pool belongs to
+    //   - Pool index hash
+    //   - The token to obtain
+    // * `token_in` - The address of the input token to be swapped.
+    // * `in_amount` - The amount of the input token to be swapped.
+    // * `out_min` - The minimum amount of the output token to be received.
+    //
+    // # Returns
+    //
+    // The amount of the output token received after all swaps have been executed.
     fn swap_chained(
         e: Env,
         user: Address,
