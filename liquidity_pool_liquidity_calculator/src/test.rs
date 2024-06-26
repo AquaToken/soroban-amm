@@ -27,7 +27,7 @@ fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
 fn jump(e: &Env, time: u64) {
     e.ledger().set(LedgerInfo {
         timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: 20,
+        protocol_version: e.ledger().protocol_version(),
         sequence_number: e.ledger().sequence(),
         network_id: Default::default(),
         base_reserve: 10,
