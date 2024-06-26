@@ -19,7 +19,7 @@ pub(crate) fn estimate_swap(
     let reserve_sell = reserves.get(in_idx).unwrap();
     let reserve_buy = reserves.get(out_idx).unwrap();
 
-    let result = in_amount.fixed_mul_floor(&e, reserve_buy, reserve_sell + in_amount);
-    let fee = result.fixed_mul_ceil(&e, fee_fraction, FEE_MULTIPLIER);
+    let result = in_amount.fixed_mul_floor(&e, &reserve_buy, &(reserve_sell + in_amount));
+    let fee = result.fixed_mul_ceil(&e, &fee_fraction, &FEE_MULTIPLIER);
     Some(result - fee)
 }

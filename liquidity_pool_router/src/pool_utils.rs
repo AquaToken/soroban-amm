@@ -20,7 +20,7 @@ pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
     salt.append(&symbol_short!("0x00").to_xdr(e));
     salt.append(&fee_fraction.to_xdr(e));
     salt.append(&symbol_short!("0x00").to_xdr(e));
-    e.crypto().sha256(&salt)
+    e.crypto().sha256(&salt).to_bytes()
 }
 
 pub fn get_stableswap_pool_salt(e: &Env) -> BytesN<32> {
@@ -30,7 +30,7 @@ pub fn get_stableswap_pool_salt(e: &Env) -> BytesN<32> {
     // no constant pool parameters, though hash should be different, so we add pool counter
     salt.append(&get_pool_next_counter(e).to_xdr(e));
     salt.append(&symbol_short!("0x00").to_xdr(e));
-    e.crypto().sha256(&salt)
+    e.crypto().sha256(&salt).to_bytes()
 }
 
 pub fn get_pool_counter_salt(e: &Env) -> BytesN<32> {
@@ -38,14 +38,14 @@ pub fn get_pool_counter_salt(e: &Env) -> BytesN<32> {
     salt.append(&symbol_short!("0x00").to_xdr(e));
     salt.append(&get_pool_next_counter(e).to_xdr(e));
     salt.append(&symbol_short!("0x00").to_xdr(e));
-    e.crypto().sha256(&salt)
+    e.crypto().sha256(&salt).to_bytes()
 }
 
 pub fn merge_salt(e: &Env, left: BytesN<32>, right: BytesN<32>) -> BytesN<32> {
     let mut salt = Bytes::new(e);
     salt.append(&left.to_xdr(e));
     salt.append(&right.to_xdr(e));
-    e.crypto().sha256(&salt)
+    e.crypto().sha256(&salt).to_bytes()
 }
 
 pub fn deploy_standard_pool(
@@ -202,7 +202,7 @@ pub fn get_tokens_salt(e: &Env, tokens: Vec<Address>) -> BytesN<32> {
     for token in tokens.into_iter() {
         salt.append(&token.to_xdr(e));
     }
-    e.crypto().sha256(&salt)
+    e.crypto().sha256(&salt).to_bytes()
 }
 
 pub fn get_total_liquidity(

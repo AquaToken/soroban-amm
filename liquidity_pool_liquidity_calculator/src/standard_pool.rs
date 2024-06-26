@@ -14,8 +14,8 @@ fn estimate_swap(
     let reserve_sell = reserves.get(in_idx).unwrap();
     let reserve_buy = reserves.get(out_idx).unwrap();
 
-    let result = in_amount.fixed_mul_floor(e, reserve_buy, reserve_sell + in_amount);
-    let fee = result.fixed_mul_ceil(e, fee_fraction, FEE_MULTIPLIER);
+    let result = in_amount.fixed_mul_floor(e, &reserve_buy, &(reserve_sell + in_amount));
+    let fee = result.fixed_mul_ceil(e, &fee_fraction, &FEE_MULTIPLIER);
     result - fee
 }
 
@@ -38,7 +38,7 @@ fn get_min_price(
         return None;
     }
 
-    Some(min_amount.fixed_mul_floor(e, PRECISION, estimate))
+    Some(min_amount.fixed_mul_floor(e, &PRECISION, &estimate))
 }
 
 pub(crate) fn get_liquidity(

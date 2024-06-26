@@ -251,8 +251,8 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let zero = 0;
         let new_total_shares = if reserve_a > zero && reserve_b > zero {
-            let shares_a = balance_a.fixed_mul_floor(&e, total_shares, reserve_a);
-            let shares_b = balance_b.fixed_mul_floor(&e, total_shares, reserve_b);
+            let shares_a = balance_a.fixed_mul_floor(&e, &total_shares, &reserve_a);
+            let shares_b = balance_b.fixed_mul_floor(&e, &total_shares, &reserve_b);
             shares_a.min(shares_b)
         } else {
             // if .mul doesn't fail, sqrt also won't -> safe to unwrap
@@ -471,8 +471,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         let total_shares = get_total_shares(&e);
 
         // Now calculate the withdraw amounts
-        let out_a = balance_a.fixed_mul_floor(&e, balance_shares, total_shares);
-        let out_b = balance_b.fixed_mul_floor(&e, balance_shares, total_shares);
+        let out_a = balance_a.fixed_mul_floor(&e, &balance_shares, &total_shares);
+        let out_b = balance_b.fixed_mul_floor(&e, &balance_shares, &total_shares);
 
         let min_a = min_amounts.get(0).unwrap();
         let min_b = min_amounts.get(1).unwrap();

@@ -17,14 +17,14 @@ pub fn get_deposit_amounts(
         return (desired_a, desired_b);
     }
 
-    let amount_b = desired_a.fixed_mul_floor(e, reserve_b, reserve_a);
+    let amount_b = desired_a.fixed_mul_floor(e, &reserve_b, &reserve_a);
     if amount_b <= desired_b {
         if amount_b < min_b {
             panic_with_error!(e, LiquidityPoolValidationError::InvalidDepositAmount);
         }
         (desired_a, amount_b)
     } else {
-        let amount_a = desired_b.fixed_mul_floor(&e, reserve_a, reserve_b);
+        let amount_a = desired_b.fixed_mul_floor(&e, &reserve_a, &reserve_b);
         if amount_a > desired_a || desired_a < min_a {
             panic_with_error!(e, LiquidityPoolValidationError::InvalidDepositAmount);
         }
@@ -44,7 +44,7 @@ pub fn get_amount_out(
 
     // in * reserve_buy / (reserve_sell + in) - fee
     let fee_fraction = get_fee_fraction(&e);
-    let result = in_amount.fixed_mul_floor(&e, reserve_buy, reserve_sell + in_amount);
-    let fee = result.fixed_mul_ceil(&e, fee_fraction as u128, FEE_MULTIPLIER);
+    let result = in_amount.fixed_mul_floor(&e, &reserve_buy, &(reserve_sell + in_amount));
+    let fee = result.fixed_mul_ceil(&e, &(fee_fraction as u128), &FEE_MULTIPLIER);
     (result - fee, fee)
 }

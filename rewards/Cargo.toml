@@ -14,5 +14,5 @@ soroban-sdk = { workspace = true }
 utils = { workspace = true }
 cast = { workspace = true }
 
-[dev_dependencies]
+[dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
