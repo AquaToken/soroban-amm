@@ -6,4 +6,7 @@ pub trait Plane {
 
     // get pools plane address
     fn get_pools_plane(e: Env) -> Address;
+
+    // update plane data in case plane contract was updated
+    fn backfill_plane_data(e: Env);
 }

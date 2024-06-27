@@ -21,6 +21,7 @@ fn test() {
     let address2 = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    plane.init_admin(&Address::generate(&e));
     plane.update(
         &address1,
         &symbol_short!("standard"),
@@ -47,4 +48,17 @@ fn test() {
         Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128])
     );
     assert_eq!(data2.2, Vec::from_array(&e, [800_u128, 900_u128]));
+}
+
+#[should_panic(expected = "Error(Contract, #103)")]
+#[test]
+fn test_init_admin_twice() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    plane.init_admin(&admin);
+    plane.init_admin(&admin);
 }

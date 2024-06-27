@@ -1639,4 +1639,9 @@ impl Plane for LiquidityPool {
     fn get_pools_plane(e: Env) -> Address {
         get_plane(&e)
     }
+
+    // Updates the plane data in case the plane contract was updated.
+    fn backfill_plane_data(e: Env) {
+        update_plane(&e);
+    }
 }
