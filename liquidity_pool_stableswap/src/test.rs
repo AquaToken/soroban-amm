@@ -61,7 +61,7 @@ fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 fn jump(e: &Env, time: u64) {
     e.ledger().set(LedgerInfo {
         timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: 20,
+        protocol_version: e.ledger().protocol_version(),
         sequence_number: e.ledger().sequence(),
         network_id: Default::default(),
         base_reserve: 10,
@@ -507,10 +507,12 @@ fn test_events_4_tokens() {
                     token1.address.clone(),
                     token2.address.clone(),
                     token3.address.clone(),
+                    token4.address.clone(),
                 )
                     .into_val(&e),
                 (
                     400_0000000_i128,
+                    100_0000000_i128,
                     100_0000000_i128,
                     100_0000000_i128,
                     100_0000000_i128,
@@ -555,6 +557,7 @@ fn test_events_4_tokens() {
                     token1.address.clone(),
                     token2.address.clone(),
                     token3.address.clone(),
+                    token4.address.clone(),
                 )
                     .into_val(&e),
                 (
@@ -562,6 +565,7 @@ fn test_events_4_tokens() {
                     amounts_out.get(0).unwrap() as i128,
                     amounts_out.get(1).unwrap() as i128,
                     amounts_out.get(2).unwrap() as i128,
+                    amounts_out.get(3).unwrap() as i128,
                 )
                     .into_val(&e),
             )

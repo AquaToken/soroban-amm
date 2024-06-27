@@ -19,7 +19,7 @@ liquidity-pool-validation-errors = { workspace = true }
 liquidity-pool-events = { workspace = true }
 soroban-fixed-point-math = { workspace = true }
 
-[dev_dependencies]
+[dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [features]

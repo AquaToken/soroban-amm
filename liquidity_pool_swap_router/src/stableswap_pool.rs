@@ -16,9 +16,9 @@ fn a(e: &Env, initial_a: u128, initial_a_time: u128, future_a: u128, future_a_ti
         let t0 = initial_a_time;
         // Expressions in u128 cannot have negative numbers, thus "if"
         if a1 > a0 {
-            a0 + (a1 - a0).fixed_mul_floor(e, now - t0, t1 - t0)
+            a0 + (a1 - a0).fixed_mul_floor(e, &(now - t0), &(t1 - t0))
         } else {
-            a0 - (a0 - a1).fixed_mul_floor(e, now - t0, t1 - t0)
+            a0 - (a0 - a1).fixed_mul_floor(e, &(now - t0), &(t1 - t0))
         }
     } else {
         // when t1 == 0 or block.timestamp >= t1
@@ -42,13 +42,13 @@ fn get_d(e: &Env, n_coins: u32, xp: Vec<u128>, amp: u128) -> u128 {
     for _i in 0..255 {
         let mut d_p = d;
         for x1 in xp.clone() {
-            d_p = d_p.fixed_mul_floor(e, d, x1 * n_coins as u128); // If division by 0, this will be borked: only withdrawal will work. And that is good
+            d_p = d_p.fixed_mul_floor(e, &d, &(x1 * n_coins as u128)); // If division by 0, this will be borked: only withdrawal will work. And that is good
         }
         d_prev = d;
         d = (ann * s + d_p * n_coins as u128).fixed_mul_floor(
             e,
-            d,
-            (ann - 1) * d + (n_coins as u128 + 1) * d_p,
+            &d,
+            &((ann - 1) * d + (n_coins as u128 + 1) * d_p),
         );
         // Equality with the precision of 1
         if d > d_prev {
@@ -100,7 +100,7 @@ fn get_y(
             continue;
         }
         s += x1;
-        c = c.fixed_mul_floor(e, d, x1 * n_coins as u128);
+        c = c.fixed_mul_floor(e, &d, &(x1 * n_coins as u128));
     }
     let c_256 = U256::from_u128(&e, c)
         .mul(&U256::from_u128(&e, d))
@@ -154,7 +154,7 @@ fn get_dy(
     }
 
     let dy = xp.get(j).unwrap() - y - 1;
-    let fee = fee_fraction.fixed_mul_ceil(e, dy, FEE_DENOMINATOR as u128);
+    let fee = fee_fraction.fixed_mul_ceil(e, &dy, &(FEE_DENOMINATOR as u128));
     dy - fee
 }
 

@@ -89,7 +89,7 @@ fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator::Cl
 fn jump(e: &Env, time: u64) {
     e.ledger().set(LedgerInfo {
         timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: 20,
+        protocol_version: e.ledger().protocol_version(),
         sequence_number: e.ledger().sequence(),
         network_id: Default::default(),
         base_reserve: 10,
