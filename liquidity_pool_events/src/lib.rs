@@ -59,27 +59,13 @@ impl LiquidityPoolEvents for Events {
         // ]
         let e = self.env();
         let fn_name = Symbol::new(e, "deposit_liquidity");
+        let mut topics: Vec<Val> = Vec::from_array(e, [fn_name.to_val()]);
         let mut body: Vec<Val> = Vec::from_array(e, [(share_amount as i128).into_val(e)]);
-        for i in 0..tokens.len().min(3) {
+        for i in 0..tokens.len() {
             body.push_back((amounts.get(i).unwrap() as i128).into_val(e));
+            topics.push_back(tokens.get(i).unwrap().into_val(e));
         }
-        match tokens.len() {
-            0 => e.events().publish((fn_name,), body),
-            1 => e.events().publish((fn_name, tokens.get(0).unwrap()), body),
-            2 => e.events().publish(
-                (fn_name, tokens.get(0).unwrap(), tokens.get(1).unwrap()),
-                body,
-            ),
-            _ => e.events().publish(
-                (
-                    fn_name,
-                    tokens.get(0).unwrap(),
-                    tokens.get(1).unwrap(),
-                    tokens.get(2).unwrap(),
-                ),
-                body,
-            ),
-        };
+        e.events().publish(topics, body);
     }
 
     fn withdraw_liquidity(&self, tokens: Vec<Address>, amounts: Vec<u128>, share_amount: u128) {
@@ -100,27 +86,13 @@ impl LiquidityPoolEvents for Events {
         // ]
         let e = self.env();
         let fn_name = Symbol::new(e, "withdraw_liquidity");
+        let mut topics: Vec<Val> = Vec::from_array(e, [fn_name.to_val()]);
         let mut body: Vec<Val> = Vec::from_array(e, [(share_amount as i128).into_val(e)]);
-        for i in 0..tokens.len().min(3) {
+        for i in 0..tokens.len() {
             body.push_back((amounts.get(i).unwrap() as i128).into_val(e));
+            topics.push_back(tokens.get(i).unwrap().into_val(e));
         }
-        match tokens.len() {
-            0 => e.events().publish((fn_name,), body),
-            1 => e.events().publish((fn_name, tokens.get(0).unwrap()), body),
-            2 => e.events().publish(
-                (fn_name, tokens.get(0).unwrap(), tokens.get(1).unwrap()),
-                body,
-            ),
-            _ => e.events().publish(
-                (
-                    fn_name,
-                    tokens.get(0).unwrap(),
-                    tokens.get(1).unwrap(),
-                    tokens.get(2).unwrap(),
-                ),
-                body,
-            ),
-        };
+        e.events().publish(topics, body);
     }
 
     fn trade(
