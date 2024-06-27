@@ -18,15 +18,15 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.1.0"
 
 [workspace.dependencies]
-soroban-sdk = { version = "=21.1.1" }
-soroban-token-sdk = { version = "=21.1.1" }
-num-integer = { version = "=0.1.45", default-features = false, features = ["i128"] }
-soroban-fixed-point-math = { version = "=1.1.1"}
-paste = { version = "=1.0.15" }
-cast = { version = "=0.3.0" }
+soroban-sdk = { version = "21.1.1" }
+soroban-token-sdk = { version = "21.1.1" }
+num-integer = { version = "0.1.45", default-features = false, features = ["i128"] }
+soroban-fixed-point-math = { version = "1.1.1"}
+paste = { version = "1.0.15" }
+cast = { version = "0.3.0" }
 utils = { path = "utils" }
 access_control = { path = "access_control" }
 token_share = { path = "token_share" }
