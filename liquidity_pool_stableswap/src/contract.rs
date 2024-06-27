@@ -948,7 +948,7 @@ impl ManagedLiquidityPool for LiquidityPool {
     ) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
-        Self::set_pools_plane(e.clone(), plane);
+        Self::init_pools_plane(e.clone(), plane);
         Self::initialize(
             e.clone(),
             admin,
@@ -1619,10 +1619,18 @@ impl Plane for LiquidityPool {
     // # Panics
     //
     // If the plane has already been initialized.
-    fn set_pools_plane(e: Env, plane: Address) {
+    fn init_pools_plane(e: Env, plane: Address) {
         if has_plane(&e) {
             panic_with_error!(&e, LiquidityPoolError::PlaneAlreadyInitialized);
         }
+
+        set_plane(&e, &plane);
+    }
+
+    fn set_pools_plane(e: Env, admin: Address, plane: Address) {
+        let access_control = AccessControl::new(&e);
+        admin.require_auth();
+        access_control.check_admin(&admin);
 
         set_plane(&e, &plane);
     }
