@@ -213,6 +213,60 @@ fn test_bad_math() {
     );
 }
 
+
+#[test]
+fn test_bad_math_2() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let address1 = Address::generate(&e);
+    let address2 = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &address1,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [6, 85, 1718465537, 85, 1718465537]),
+        &Vec::from_array(&e, [96474122, 7654213018638340])
+    );
+    plane.update(
+        &address2,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30]),
+        &Vec::from_array(&e, [107478636, 222947860089606])
+    );
+
+    jump(&e, 1918465537);
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    e.budget().reset_default();
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [
+            address1.clone(),
+            address2.clone(),
+        ],
+    ));
+    e.budget().print();
+    e.budget().reset_unlimited();
+    assert_eq!(
+        results,
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 0),
+                U256::from_u128(&e, 0),
+            ]
+        )
+    );
+}
+
 #[test]
 fn test_norm() {
     let e = Env::default();

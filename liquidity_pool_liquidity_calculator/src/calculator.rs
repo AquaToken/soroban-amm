@@ -2,6 +2,10 @@ use crate::constants::{PRECISION, RESERVES_NORM};
 use soroban_sdk::Vec;
 
 pub fn price_weight(price: u128, min_price: u128) -> u128 {
+    if price == 0 {
+        return 0;
+    }
+
     // returns price weighted with exponent (p_min/p)^8
     let mut result = PRECISION * min_price / price;
     for _i in 1..8 {
