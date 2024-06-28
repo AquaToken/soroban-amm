@@ -209,7 +209,7 @@ pub fn get_tokens_salt(e: &Env, tokens: Vec<Address>) -> BytesN<32> {
 pub fn validate_tokens(e: &Env, tokens: &Vec<Address>) {
     // call token contract to check if token exists & it's alive
     for token in tokens.clone().into_iter() {
-        SorobanTokenClient::new(e, &token).decimals();
+        SorobanTokenClient::new(e, &token).balance(&e.current_contract_address());
     }
 }
 
