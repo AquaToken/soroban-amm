@@ -1,12 +1,27 @@
-use crate::interface::PlaneInterface;
+use crate::interface::{PlaneInterface, UpgradeableContract};
 use crate::storage::{get, update, PoolPlane};
-use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, Vec};
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::errors::AccessControlError;
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 
 #[contract]
 pub struct LiquidityPoolPlane;
 
 #[contractimpl]
 impl PlaneInterface for LiquidityPoolPlane {
+    // Initializes the admin user.
+    //
+    // # Arguments
+    //
+    // * `account` - The address of the admin user.
+    fn init_admin(e: Env, account: Address) {
+        let access_control = AccessControl::new(&e);
+        if access_control.has_admin() {
+            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
+        }
+        access_control.set_admin(&account);
+    }
+
     // Updates the pool stored data. Any pool can use it to store its information.
     //
     // # Arguments
@@ -45,5 +60,30 @@ impl PlaneInterface for LiquidityPoolPlane {
             result.push_back((data.pool_type, data.init_args, data.reserves));
         }
         result
+    }
+}
+
+// The `UpgradeableContract` trait provides the interface for upgrading the contract.
+#[contractimpl]
+impl UpgradeableContract for LiquidityPoolPlane {
+    // Returns the version of the contract.
+    //
+    // # Returns
+    //
+    // The version of the contract as a u32.
+    fn version() -> u32 {
+        104
+    }
+
+    // Upgrades the contract to a new version.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `new_wasm_hash` - The hash of the new contract version.
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        let access_control = AccessControl::new(&e);
+        access_control.require_admin();
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

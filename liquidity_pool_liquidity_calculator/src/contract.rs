@@ -1,9 +1,9 @@
-use crate::interface::Calculator;
+use crate::interface::{Calculator, UpgradeableContractTrait};
 use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
 use access_control::access::{AccessControl, AccessControlTrait};
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Symbol, Vec, U256};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol, Vec, U256};
 
 #[contract]
 pub struct LiquidityPoolLiquidityCalculator;
@@ -113,5 +113,30 @@ impl Calculator for LiquidityPoolLiquidityCalculator {
             result.push_back(out);
         }
         result
+    }
+}
+
+// The `UpgradeableContract` trait provides the interface for upgrading the contract.
+#[contractimpl]
+impl UpgradeableContractTrait for LiquidityPoolLiquidityCalculator {
+    // Returns the version of the contract.
+    //
+    // # Returns
+    //
+    // The version of the contract as a u32.
+    fn version() -> u32 {
+        104
+    }
+
+    // Upgrades the contract to a new version.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `new_wasm_hash` - The hash of the new contract version.
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        let access_control = AccessControl::new(&e);
+        access_control.require_admin();
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }
