@@ -8,7 +8,7 @@ use crate::pool_interface::{
 };
 use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt, get_standard_pool_salt,
-    get_tokens_salt, get_total_liquidity,
+    get_tokens_salt, get_total_liquidity, validate_tokens,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
@@ -969,6 +969,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     // * The pool index hash.
     // * The address of the pool.
     fn init_pool(e: Env, tokens: Vec<Address>) -> (BytesN<32>, Address) {
+        validate_tokens(&e, &tokens);
         let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
         if pools.is_empty() {
@@ -999,6 +1000,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         fee_fraction: u32,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
+        validate_tokens(&e, &tokens);
         if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
             panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
         }
@@ -1037,6 +1039,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         admin_fee: u32,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
+        validate_tokens(&e, &tokens);
         if fee_fraction > STABLESWAP_MAX_FEE {
             panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
         }
