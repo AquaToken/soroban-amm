@@ -9,6 +9,7 @@ use crate::storage::{
 use access_control::access::{AccessControl, AccessControlTrait};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
+use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     panic_with_error, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol,
     Val, Vec, U256,
@@ -203,6 +204,13 @@ pub fn get_tokens_salt(e: &Env, tokens: Vec<Address>) -> BytesN<32> {
         salt.append(&token.to_xdr(e));
     }
     e.crypto().sha256(&salt).to_bytes()
+}
+
+pub fn validate_tokens(e: &Env, tokens: &Vec<Address>) {
+    // call token contract to check if token exists & it's alive
+    for token in tokens.clone().into_iter() {
+        SorobanTokenClient::new(e, &token).decimals();
+    }
 }
 
 pub fn get_total_liquidity(

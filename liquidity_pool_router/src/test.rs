@@ -922,6 +922,108 @@ fn test_init_pool_twice() {
     assert_eq!(router.get_pools(&tokens).len(), 3);
 }
 
+#[should_panic(expected = "Error(WasmVm, MissingValue)")]
+#[test]
+fn test_init_pool_bad_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let tokens = Vec::from_array(
+        &e,
+        [
+            create_token_contract(&e, &admin).address.clone(),
+            create_plane_contract(&e).address.clone(),
+        ],
+    );
+
+    let reward_admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+
+    router.init_pool(&tokens);
+}
+
+#[should_panic(expected = "Error(WasmVm, MissingValue)")]
+#[test]
+fn test_init_standard_pool_bad_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let tokens = Vec::from_array(
+        &e,
+        [
+            create_token_contract(&e, &admin).address.clone(),
+            create_plane_contract(&e).address.clone(),
+        ],
+    );
+
+    let reward_admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+
+    router.init_standard_pool(&admin, &tokens, &30);
+}
+
+#[should_panic(expected = "Error(WasmVm, MissingValue)")]
+#[test]
+fn test_init_stable_pool_bad_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let tokens = Vec::from_array(
+        &e,
+        [
+            create_token_contract(&e, &admin).address.clone(),
+            create_plane_contract(&e).address.clone(),
+        ],
+    );
+
+    let reward_admin = Address::generate(&e);
+
+    let reward_token = create_token_contract(&e, &reward_admin);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+
+    router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
+}
+
 #[test]
 fn test_simple_ongoing_reward() {
     let e = Env::default();
