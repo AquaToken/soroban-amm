@@ -1026,6 +1026,31 @@ fn test_config_rewards_router() {
     );
 }
 
+#[should_panic(expected = "Error(Contract, #2018)")]
+#[test]
+fn test_zero_swap() {
+    let Setup {
+        env: e,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        mint_to_user: i128::MAX,
+        ..TestConfig::default()
+    });
+    let user1 = users[0].clone();
+    let amount_to_deposit = 1_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+    liq_pool.swap(&user1, &0, &1, &0, &0);
+}
+
 #[test]
 fn test_large_numbers() {
     let Setup {

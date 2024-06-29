@@ -574,6 +574,129 @@ fn test_events_4_tokens() {
 }
 
 #[test]
+fn test_pool_imbalance_draw_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+    ];
+    tokens.sort();
+    let token1 = SorobanTokenClient::new(&e, &tokens[0]);
+    let token2 = SorobanTokenClient::new(&e, &tokens[1]);
+    let token3 = SorobanTokenClient::new(&e, &tokens[2]);
+    let token4 = SorobanTokenClient::new(&e, &tokens[3]);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token3_admin_client = get_token_admin_client(&e, &token3.address);
+    let token4_admin_client = get_token_admin_client(&e, &token4.address);
+    let token_reward = create_token_contract(&e, &admin);
+    let user1 = Address::generate(&e);
+    let fee = 50_u128;
+    let admin_fee = 0_u128;
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(
+            &e,
+            [
+                tokens[0].clone(),
+                tokens[1].clone(),
+                tokens[2].clone(),
+                tokens[3].clone(),
+            ],
+        ),
+        85,
+        fee as u32,
+        admin_fee as u32,
+        &token_reward.address,
+        &plane.address,
+    );
+
+    token1_admin_client.mint(&user1, &8734464);
+    token2_admin_client.mint(&user1, &1000000000);
+    token3_admin_client.mint(&user1, &789021);
+    token4_admin_client.mint(&user1, &789020);
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [8734464, 1000000000, 789020, 789020]),
+        &0,
+    );
+    assert_eq!(liqpool.swap(&user1, &2, &1, &1, &0), 567);
+}
+
+#[should_panic(expected = "Error(Contract, #2018)")]
+#[test]
+fn test_pool_zero_swap() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut tokens = std::vec![
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+        create_token_contract(&e, &admin).address,
+    ];
+    tokens.sort();
+    let token1 = SorobanTokenClient::new(&e, &tokens[0]);
+    let token2 = SorobanTokenClient::new(&e, &tokens[1]);
+    let token3 = SorobanTokenClient::new(&e, &tokens[2]);
+    let token4 = SorobanTokenClient::new(&e, &tokens[3]);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token3_admin_client = get_token_admin_client(&e, &token3.address);
+    let token4_admin_client = get_token_admin_client(&e, &token4.address);
+    let token_reward = create_token_contract(&e, &admin);
+    let user1 = Address::generate(&e);
+    let fee = 50_u128;
+    let admin_fee = 0_u128;
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(
+            &e,
+            [
+                tokens[0].clone(),
+                tokens[1].clone(),
+                tokens[2].clone(),
+                tokens[3].clone(),
+            ],
+        ),
+        85,
+        fee as u32,
+        admin_fee as u32,
+        &token_reward.address,
+        &plane.address,
+    );
+
+    token1_admin_client.mint(&user1, &8734464);
+    token2_admin_client.mint(&user1, &1000000000);
+    token3_admin_client.mint(&user1, &789020);
+    token4_admin_client.mint(&user1, &789020);
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [8734464, 1000000000, 789020, 789020]),
+        &0,
+    );
+    liqpool.swap(&user1, &2, &1, &0, &0);
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #2901)")]
 fn test_kill() {
     let e = Env::default();
