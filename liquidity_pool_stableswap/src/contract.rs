@@ -1253,6 +1253,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolError::PoolKilled);
         }
 
+        if in_amount == 0 {
+            panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
+        }
+
         let old_balances = get_reserves(&e);
         let xp = old_balances.clone();
 

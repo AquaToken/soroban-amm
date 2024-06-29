@@ -22,4 +22,5 @@ pub enum LiquidityPoolValidationError {
     ZeroSharesBurned = 2014,
     TooManySharesBurned = 2015,
     CannotComparePools = 2017,
+    ZeroAmount = 2018,
 }
