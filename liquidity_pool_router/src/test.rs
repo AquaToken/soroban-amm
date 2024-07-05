@@ -150,7 +150,7 @@ fn test_total_liquidity() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_swap_router(&admin, &swap_router.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
@@ -181,8 +181,7 @@ fn test_total_liquidity() {
     e.budget().reset_unlimited();
 
     for pool_fee in [10, 30, 100] {
-        let (pool_hash, _pool_address) =
-            router.init_stableswap_pool(&user1, &tokens, &85, &pool_fee, &0);
+        let (pool_hash, _pool_address) = router.init_stableswap_pool(&user1, &tokens, &pool_fee);
         router.deposit(
             &user1,
             &tokens,
@@ -196,7 +195,7 @@ fn test_total_liquidity() {
     e.budget().reset_default();
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 28494)
+        U256::from_u32(&e, 33648)
     );
     e.budget().print();
     assert!(
@@ -247,6 +246,12 @@ fn test_constant_product_pool() {
     router.set_pools_plane(&admin, &plane.address);
     router.set_swap_router(&admin, &swap_router.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+    router.configure_init_pool_payment(
+        &create_token_contract(&e, &admin).address,
+        &0,
+        &0,
+        &router.address,
+    );
 
     let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
     assert_eq!(
@@ -375,6 +380,12 @@ fn test_add_pool_after_removal() {
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_swap_router(&admin, &swap_router.address);
+    router.configure_init_pool_payment(
+        &create_token_contract(&e, &admin).address,
+        &0,
+        &0,
+        &router.address,
+    );
 
     let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
     router.remove_pool(&admin, &tokens, &pool_hash);
@@ -418,6 +429,7 @@ fn test_stableswap_pools_amount_over_max() {
     router.set_reward_token(&reward_token.address);
     router.configure_init_pool_payment(
         &reward_token.address,
+        &0,
         &1000_0000000,
         &payment_for_creation_address,
     );
@@ -430,7 +442,7 @@ fn test_stableswap_pools_amount_over_max() {
     }
     reward_token.mint(&admin, &10000000_0000000);
     for i in 0..STABLESWAP_MAX_POOLS + 1 {
-        router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
+        router.init_stableswap_pool(&admin, &tokens, &30);
         assert_eq!(
             reward_token.balance(&payment_for_creation_address),
             1000_0000000i128 * ((i + 1) as i128)
@@ -472,6 +484,7 @@ fn test_stableswap_pools_amount_ok() {
     router.set_reward_token(&reward_token.address);
     router.configure_init_pool_payment(
         &reward_token.address,
+        &0,
         &1000_0000000,
         &payment_for_creation_address,
     );
@@ -484,7 +497,7 @@ fn test_stableswap_pools_amount_ok() {
     }
     reward_token.mint(&admin, &10000000_0000000);
     for i in 0..STABLESWAP_MAX_POOLS {
-        router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
+        router.init_stableswap_pool(&admin, &tokens, &30);
         assert_eq!(
             reward_token.balance(&payment_for_creation_address),
             1000_0000000i128 * ((i + 1) as i128)
@@ -526,11 +539,12 @@ fn test_stableswap_pool_no_balance() {
     router.set_reward_token(&reward_token.address);
     router.configure_init_pool_payment(
         &reward_token.address,
+        &0,
         &1000_0000000,
         &payment_for_creation_address,
     );
 
-    router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
+    router.init_stableswap_pool(&admin, &tokens, &30);
     assert_eq!(
         reward_token.balance(&payment_for_creation_address),
         1000_0000000
@@ -579,6 +593,7 @@ fn test_stableswap_pool() {
     router.set_reward_token(&reward_token.address);
     router.configure_init_pool_payment(
         &reward_token.address,
+        &0,
         &1000_0000000,
         &payment_for_creation_address,
     );
@@ -589,7 +604,7 @@ fn test_stableswap_pool() {
 
     reward_token.mint(&user1, &10000000_0000000);
     e.budget().reset_default();
-    let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+    let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &30);
     e.budget().print();
     assert!(e.budget().cpu_instruction_cost() < 100_000_000);
     e.budget().reset_unlimited();
@@ -621,7 +636,7 @@ fn test_stableswap_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 177169768)
+        U256::from_u32(&e, 337515788)
     );
 
     assert_eq!(token_share.balance(&user1), 200_0000000);
@@ -645,7 +660,7 @@ fn test_stableswap_pool() {
             &pool_hash,
             &97_0000000,
         ),
-        80_4573705
+        95_8920895
     );
     assert_eq!(
         router.swap(
@@ -657,16 +672,16 @@ fn test_stableswap_pool() {
             &97_0000000_u128,
             &80_4573705_u128,
         ),
-        80_4573705
+        95_8920895
     );
 
     assert_eq!(token1.balance(&user1), 803_0000000);
     assert_eq!(token1.balance(&pool_address), 197_0000000);
-    assert_eq!(token2.balance(&user1), 980_4573705);
-    assert_eq!(token2.balance(&pool_address), 19_5426295);
+    assert_eq!(token2.balance(&user1), 995_8920895);
+    assert_eq!(token2.balance(&pool_address), 4_1079105);
     assert_eq!(
         router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [197_0000000, 19_5426295])
+        Vec::from_array(&e, [197_0000000, 4_1079105])
     );
 
     router.withdraw(
@@ -674,7 +689,7 @@ fn test_stableswap_pool() {
         &tokens,
         &pool_hash,
         &200_0000000_u128,
-        &Vec::from_array(&e, [197_0000000_u128, 19_5426294_u128]),
+        &Vec::from_array(&e, [197_0000000_u128, 4_1079105_u128]),
     );
 
     assert_eq!(token1.balance(&user1), 1000_0000000);
@@ -744,6 +759,7 @@ fn test_stableswap_3_pool() {
     router.set_reward_token(&reward_token.address);
     router.configure_init_pool_payment(
         &reward_token.address,
+        &0,
         &1000_0000000,
         &payment_for_creation_address,
     );
@@ -753,7 +769,7 @@ fn test_stableswap_3_pool() {
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     reward_token.mint(&user1, &10000000_0000000);
-    let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+    let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &30);
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable")
@@ -783,7 +799,7 @@ fn test_stableswap_3_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 531509304)
+        U256::from_u32(&e, 1012547364)
     );
 
     assert_eq!(token_share.balance(&user1), 300_0000000);
@@ -809,11 +825,11 @@ fn test_stableswap_3_pool() {
             &pool_hash,
             &97_0000000,
         ),
-        80_4573705
+        95_8920895
     );
     assert_eq!(
         router.estimate_swap_routed(&tokens, &token1.address, &token2.address, &97_0000000,),
-        (pool_hash.clone(), pool_address.clone(), 80_4573705),
+        (pool_hash.clone(), pool_address.clone(), 95_8920895),
     );
     assert_eq!(
         router.swap(
@@ -825,11 +841,11 @@ fn test_stableswap_3_pool() {
             &97_0000000_u128,
             &80_4573705_u128,
         ),
-        80_4573705
+        95_8920895
     );
     assert_eq!(
         router.estimate_swap_routed(&tokens, &token2.address, &token3.address, &20_0000000,),
-        (pool_hash.clone(), pool_address.clone(), 28_0695119),
+        (pool_hash.clone(), pool_address.clone(), 20_5879452),
     );
     assert_eq!(
         router.swap(
@@ -839,20 +855,20 @@ fn test_stableswap_3_pool() {
             &token3.address,
             &pool_hash,
             &20_0000000_u128,
-            &28_0695119_u128,
+            &20_5879452,
         ),
-        28_0695119
+        20_5879452
     );
 
     assert_eq!(token1.balance(&user1), 803_0000000);
     assert_eq!(token1.balance(&pool_address), 197_0000000);
-    assert_eq!(token2.balance(&user1), 960_4573705);
-    assert_eq!(token2.balance(&pool_address), 39_5426295);
-    assert_eq!(token3.balance(&user1), 928_0695119);
-    assert_eq!(token3.balance(&pool_address), 71_9304881);
+    assert_eq!(token2.balance(&user1), 9758920895);
+    assert_eq!(token2.balance(&pool_address), 24_1079105);
+    assert_eq!(token3.balance(&user1), 920_5879452);
+    assert_eq!(token3.balance(&pool_address), 79_4120548);
     assert_eq!(
         router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [197_0000000, 39_5426295, 71_9304881])
+        Vec::from_array(&e, [197_0000000, 24_1079105, 79_4120548])
     );
 
     router.withdraw(
@@ -860,7 +876,7 @@ fn test_stableswap_3_pool() {
         &tokens,
         &pool_hash,
         &300_0000000_u128,
-        &Vec::from_array(&e, [197_0000000_u128, 39_5426295, 71_9304881]),
+        &Vec::from_array(&e, [197_0000000, 24_1079105, 79_4120548]),
     );
 
     assert_eq!(token1.balance(&user1), 1000_0000000);
@@ -903,8 +919,14 @@ fn test_init_pool_twice() {
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
+    router.configure_init_pool_payment(
+        &create_token_contract(&e, &admin).address,
+        &0,
+        &0,
+        &router.address,
+    );
 
-    let (pool_hash1, pool_address1) = router.init_pool(&tokens);
+    let (pool_hash1, pool_address1) = router.init_standard_pool(&admin, &tokens, &30);
     let (pool_hash2, pool_address2) = router.init_standard_pool(&admin, &tokens, &30);
     assert_eq!(pool_hash1, pool_hash2);
     assert_eq!(pool_address1, pool_address2);
@@ -1060,7 +1082,7 @@ fn test_simple_ongoing_reward() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
@@ -1068,8 +1090,7 @@ fn test_simple_ongoing_reward() {
 
     let (standard_pool_hash, standard_pool_address) =
         router.init_standard_pool(&user1, &tokens, &30);
-    let (stable_pool_hash, stable_pool_address) =
-        router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+    let (stable_pool_hash, stable_pool_address) = router.init_stableswap_pool(&user1, &tokens, &10);
 
     reward_token.mint(&standard_pool_address, &1_000_000_0000000);
     reward_token.mint(&stable_pool_address, &1_000_000_0000000);
@@ -1128,7 +1149,7 @@ fn test_simple_ongoing_reward() {
     let stable_liquidity = router.get_total_liquidity(&tokens).sub(&standard_liquidity);
     assert_eq!(
         standard_liquidity.add(&stable_liquidity),
-        U256::from_u32(&e, 212)
+        U256::from_u32(&e, 372)
     );
 
     assert_eq!(
@@ -1323,7 +1344,7 @@ fn test_liqidity_not_filled() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
@@ -1387,7 +1408,7 @@ fn test_fill_liqidity_reentrancy() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
@@ -1451,7 +1472,7 @@ fn test_config_pool_rewards_reentrancy() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
@@ -1515,7 +1536,7 @@ fn test_config_pool_rewards_after_new_global_config() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
@@ -1589,7 +1610,7 @@ fn test_config_pool_after_liquidity_fill() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
@@ -1671,7 +1692,7 @@ fn test_fill_liquidity_no_config() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
@@ -1722,13 +1743,13 @@ fn test_config_rewards_not_admin() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
     reward_token.mint(&user1, &1000_0000000);
     router.init_standard_pool(&user1, &tokens, &30);
-    router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+    router.init_stableswap_pool(&user1, &tokens, &30);
 
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
     router.config_global_rewards(
@@ -1771,13 +1792,13 @@ fn test_config_rewards_duplicated_tokens() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
     reward_token.mint(&user1, &1000_0000000);
     router.init_standard_pool(&user1, &tokens, &30);
-    router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+    router.init_stableswap_pool(&user1, &tokens, &30);
 
     let rewards = Vec::from_array(
         &e,
@@ -1826,13 +1847,13 @@ fn test_config_rewards_tokens_not_sorted() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
     reward_token.mint(&user1, &1000_0000000);
     router.init_standard_pool(&user1, &tokens, &30);
-    router.init_stableswap_pool(&user1, &tokens, &10, &30, &0);
+    router.init_stableswap_pool(&user1, &tokens, &30);
 
     let rewards = Vec::from_array(
         &e,
@@ -1878,7 +1899,7 @@ fn test_config_rewards_no_pools_for_tokens() {
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);
     router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &1000_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
@@ -1986,6 +2007,7 @@ fn test_event_correct() {
     router.set_reward_token(&reward_token.address);
     router.configure_init_pool_payment(
         &reward_token.address,
+        &0,
         &1000_0000000,
         &payment_for_creation_address,
     );
@@ -1995,10 +2017,8 @@ fn test_event_correct() {
 
     reward_token.mint(&user1, &10000000_0000000);
     let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1];
-    let admin_fee = 0;
 
-    let (pool_hash, pool_address) =
-        router.init_stableswap_pool(&user1, &tokens, &10, &fee, &admin_fee);
+    let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &fee);
     assert_eq!(
         reward_token.balance(&payment_for_creation_address),
         1000_0000000
@@ -2019,11 +2039,7 @@ fn test_event_correct() {
                     pool_hash.clone(),
                     Vec::<Val>::from_array(
                         &e,
-                        [
-                            fee.into_val(&e),
-                            10_u128.into_val(&e),
-                            admin_fee.into_val(&e)
-                        ],
+                        [fee.into_val(&e), 1500_u128.into_val(&e), 0_u32.into_val(&e)],
                     ),
                 )
                     .into_val(&e)
@@ -2185,7 +2201,7 @@ fn test_swap_routed() {
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_swap_router(&admin, &swap_router.address);
-    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1_0000000, &router.address);
 
     reward_token.mint(&user1, &3_0000000);
     token1.mint(&user1, &100000_0000000);
@@ -2222,7 +2238,7 @@ fn test_swap_routed() {
     );
 
     let (stable1_pool_hash, stable1_pool_address) =
-        router.init_stableswap_pool(&user1, &tokens, &85, &6, &0);
+        router.init_stableswap_pool(&user1, &tokens, &6);
     router.deposit(
         &user1,
         &tokens,
@@ -2232,7 +2248,7 @@ fn test_swap_routed() {
     );
 
     let (stable2_pool_hash, _stable2_pool_address) =
-        router.init_stableswap_pool(&user1, &tokens, &85, &6, &0);
+        router.init_stableswap_pool(&user1, &tokens, &6);
     router.deposit(
         &user1,
         &tokens,
@@ -2242,7 +2258,7 @@ fn test_swap_routed() {
     );
 
     let (stable3_pool_hash, _stable3_pool_address) =
-        router.init_stableswap_pool(&user1, &tokens, &85, &6, &0);
+        router.init_stableswap_pool(&user1, &tokens, &6);
     router.deposit(
         &user1,
         &tokens,
@@ -2257,7 +2273,7 @@ fn test_swap_routed() {
     e.budget().print();
     assert_eq!(best_pool, stable1_pool_hash);
     assert_eq!(best_pool_address, stable1_pool_address);
-    assert_eq!(best_result, 8_9936585);
+    assert_eq!(best_result, 8_9945459);
 }
 
 #[test]
@@ -2292,16 +2308,14 @@ fn test_stableswap_validation_fee_out_of_bounds() {
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_swap_router(&admin, &swap_router.address);
-    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1_0000000, &router.address);
 
     reward_token.mint(&user1, &1_0000000);
 
     router.init_stableswap_pool(
         &user1,
         &Vec::from_array(&e, [token1.address, token2.address]),
-        &85,
         &101,
-        &0,
     );
 }
 
@@ -2338,7 +2352,7 @@ fn test_tokens_storage() {
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_swap_router(&admin, &swap_router.address);
-    router.configure_init_pool_payment(&reward_token.address, &1_0000000, &router.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1_0000000, &router.address);
 
     reward_token.mint(&user1, &10_0000000);
 
@@ -2352,8 +2366,8 @@ fn test_tokens_storage() {
         ),
     ];
     for pair in pairs.clone() {
-        router.init_stableswap_pool(&user1, &pair, &100, &0, &0);
-        router.init_stableswap_pool(&user1, &pair, &100, &0, &0);
+        router.init_stableswap_pool(&user1, &pair, &0);
+        router.init_stableswap_pool(&user1, &pair, &0);
         if pair.len() == 2 {
             router.init_standard_pool(&user1, &pair, &30);
         }
@@ -2423,6 +2437,12 @@ fn test_chained_swap() {
     router
         .mock_all_auths()
         .set_swap_router(&admin, &swap_router.address);
+    router.mock_all_auths().configure_init_pool_payment(
+        &create_token_contract(&e, &admin).address,
+        &0,
+        &0,
+        &router.address,
+    );
 
     let (pool_index1, _pool_address1) = router
         .mock_all_auths()
@@ -2582,6 +2602,12 @@ fn test_chained_swap_min_not_met() {
     router.set_reward_token(&token1.address);
     router.set_pools_plane(&admin, &plane.address);
     router.set_swap_router(&admin, &swap_router.address);
+    router.configure_init_pool_payment(
+        &create_token_contract(&e, &admin).address,
+        &0,
+        &0,
+        &router.address,
+    );
 
     let (pool_index1, _pool_address1) = router.init_standard_pool(&swapper, &tokens1, &30);
     let (pool_index2, _pool_address2) = router.init_standard_pool(&swapper, &tokens2, &30);
@@ -2616,4 +2642,46 @@ fn test_chained_swap_min_not_met() {
         &20,
         &95,
     );
+}
+
+#[test]
+fn test_create_pool_payment() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let payments_destination = Address::generate(&e);
+    let admin = Address::generate(&e);
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let reward_token = create_token_contract(&e, &admin);
+
+    let user1 = Address::generate(&e);
+    reward_token.mint(&user1, &100000);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let swap_router = create_swap_router_contract(&e);
+    swap_router.init_admin(&admin);
+    swap_router.set_pools_plane(&admin, &plane.address);
+    let router = create_liqpool_router_contract(&e);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_swap_router(&admin, &swap_router.address);
+    router.configure_init_pool_payment(&reward_token.address, &100, &1000, &payments_destination);
+
+    assert_eq!(reward_token.balance(&payments_destination), 0);
+    router.init_standard_pool(&user1, &tokens, &30);
+    assert_eq!(reward_token.balance(&payments_destination), 100);
+    router.init_stableswap_pool(&user1, &tokens, &30);
+    assert_eq!(reward_token.balance(&payments_destination), 1100);
 }

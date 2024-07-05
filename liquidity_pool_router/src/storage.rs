@@ -54,8 +54,9 @@ enum DataKey {
     TokensSetPools(BytesN<32>),
     TokenHash,
     InitPoolPaymentToken,
-    InitPoolPaymentAmount,
-    InitPoolPaymentAddress,
+    InitStandardPoolPaymentAmount,
+    InitStablePoolPaymentAmount,
+    InitPoolsPaymentsAddress,
     ConstantPoolHash,
     StableSwapPoolHash,
     PoolCounter,
@@ -98,13 +99,18 @@ generate_instance_storage_getter_and_setter!(
     Address
 );
 generate_instance_storage_getter_and_setter!(
-    init_pool_payment_amount,
-    DataKey::InitPoolPaymentAmount,
+    init_stable_pool_payment_amount,
+    DataKey::InitStablePoolPaymentAmount,
+    u128
+);
+generate_instance_storage_getter_and_setter!(
+    init_standard_pool_payment_amount,
+    DataKey::InitStandardPoolPaymentAmount,
     u128
 );
 generate_instance_storage_getter_and_setter!(
     init_pool_payment_address,
-    DataKey::InitPoolPaymentAddress,
+    DataKey::InitPoolsPaymentsAddress,
     Address
 );
 generate_instance_storage_getter_and_setter_with_default!(
