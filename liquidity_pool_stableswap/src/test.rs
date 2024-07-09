@@ -2318,10 +2318,16 @@ fn test_kill_deposit() {
         &token_reward.address,
         &plane.address,
     );
+    assert_eq!(liqpool.get_is_killed_deposit(), false);
+    assert_eq!(liqpool.get_is_killed_swap(), false);
+    assert_eq!(liqpool.get_is_killed_claim(), false);
     token1_admin_client.mint(&user1, &1000_0000000);
     token2_admin_client.mint(&user1, &1000_0000000);
 
     liqpool.kill_deposit(&admin);
+    assert_eq!(liqpool.get_is_killed_deposit(), true);
+    assert_eq!(liqpool.get_is_killed_swap(), false);
+    assert_eq!(liqpool.get_is_killed_claim(), false);
     assert_eq!(
         liqpool
             .try_deposit(
@@ -2333,6 +2339,9 @@ fn test_kill_deposit() {
         Ok(Error::from_contract_error(205))
     );
     liqpool.unkill_deposit(&admin);
+    assert_eq!(liqpool.get_is_killed_deposit(), false);
+    assert_eq!(liqpool.get_is_killed_swap(), false);
+    assert_eq!(liqpool.get_is_killed_claim(), false);
     liqpool.deposit(
         &user1,
         &Vec::from_array(&e, [1000_0000000, 1000_0000000]),
@@ -2369,10 +2378,16 @@ fn test_kill_swap() {
         &token_reward.address,
         &plane.address,
     );
+    assert_eq!(liqpool.get_is_killed_deposit(), false);
+    assert_eq!(liqpool.get_is_killed_swap(), false);
+    assert_eq!(liqpool.get_is_killed_claim(), false);
     token1_admin_client.mint(&user1, &10000_0000000);
     token2_admin_client.mint(&user1, &10000_0000000);
 
     liqpool.kill_swap(&admin);
+    assert_eq!(liqpool.get_is_killed_deposit(), false);
+    assert_eq!(liqpool.get_is_killed_swap(), true);
+    assert_eq!(liqpool.get_is_killed_claim(), false);
     liqpool.deposit(
         &user1,
         &Vec::from_array(&e, [1000_0000000, 1000_0000000]),
@@ -2385,6 +2400,9 @@ fn test_kill_swap() {
         Ok(Error::from_contract_error(206))
     );
     liqpool.unkill_swap(&admin);
+    assert_eq!(liqpool.get_is_killed_deposit(), false);
+    assert_eq!(liqpool.get_is_killed_swap(), false);
+    assert_eq!(liqpool.get_is_killed_claim(), false);
     liqpool.swap(&user1, &0, &1, &10_0000000, &0);
 }
 
@@ -2419,7 +2437,15 @@ fn test_kill_claim() {
         &token_reward.address,
         &plane.address,
     );
+
+    assert_eq!(liqpool.get_is_killed_deposit(), false);
+    assert_eq!(liqpool.get_is_killed_swap(), false);
+    assert_eq!(liqpool.get_is_killed_claim(), false);
+
     liqpool.kill_claim(&admin);
+    assert_eq!(liqpool.get_is_killed_deposit(), false);
+    assert_eq!(liqpool.get_is_killed_swap(), false);
+    assert_eq!(liqpool.get_is_killed_claim(), true);
 
     token1_admin_client.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1) as u128, 1000);
@@ -2452,6 +2478,11 @@ fn test_kill_claim() {
         liqpool.try_claim(&user1).unwrap_err(),
         Ok(Error::from_contract_error(207))
     );
+
     liqpool.unkill_claim(&admin);
+    assert_eq!(liqpool.get_is_killed_deposit(), false);
+    assert_eq!(liqpool.get_is_killed_swap(), false);
+    assert_eq!(liqpool.get_is_killed_claim(), false);
+
     assert_eq!(liqpool.claim(&user1), total_reward_1);
 }

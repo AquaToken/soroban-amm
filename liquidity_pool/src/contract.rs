@@ -145,9 +145,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_token_share(&e, share_contract);
         put_reserve_a(&e, 0);
         put_reserve_b(&e, 0);
-        set_is_killed_deposit(&e, &false);
-        set_is_killed_swap(&e, &false);
-        set_is_killed_claim(&e, &false);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -629,6 +626,21 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         set_is_killed_claim(&e, &false);
+    }
+
+    // Get deposit killswitch status.
+    fn get_is_killed_deposit(e: Env) -> bool {
+        get_is_killed_deposit(&e)
+    }
+
+    // Get swap killswitch status.
+    fn get_is_killed_swap(e: Env) -> bool {
+        get_is_killed_swap(&e)
+    }
+
+    // Get claim killswitch status.
+    fn get_is_killed_claim(e: Env) -> bool {
+        get_is_killed_claim(&e)
     }
 }
 

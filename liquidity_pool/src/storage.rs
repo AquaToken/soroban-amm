@@ -3,8 +3,8 @@ use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 pub use utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
 use utils::{
-    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
-    generate_instance_storage_setter,
+    generate_instance_storage_getter_and_setter_with_default,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
 #[derive(Clone)]
@@ -22,9 +22,24 @@ enum DataKey {
     IsKilledClaim,
 }
 
-generate_instance_storage_getter_and_setter!(is_killed_swap, DataKey::IsKilledSwap, bool);
-generate_instance_storage_getter_and_setter!(is_killed_deposit, DataKey::IsKilledDeposit, bool);
-generate_instance_storage_getter_and_setter!(is_killed_claim, DataKey::IsKilledClaim, bool);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_swap,
+    DataKey::IsKilledSwap,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_deposit,
+    DataKey::IsKilledDeposit,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_claim,
+    DataKey::IsKilledClaim,
+    bool,
+    false
+);
 
 pub fn get_token_a(e: &Env) -> Address {
     bump_instance(e);

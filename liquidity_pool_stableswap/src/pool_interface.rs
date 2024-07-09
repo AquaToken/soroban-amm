@@ -169,6 +169,11 @@ pub trait AdminInterfaceTrait {
     fn unkill_deposit(e: Env, admin: Address);
     fn unkill_swap(e: Env, admin: Address);
     fn unkill_claim(e: Env, admin: Address);
+
+    // Get killswitch status
+    fn get_is_killed_deposit(e: Env) -> bool;
+    fn get_is_killed_swap(e: Env) -> bool;
+    fn get_is_killed_claim(e: Env) -> bool;
 }
 
 pub trait InternalInterfaceTrait {

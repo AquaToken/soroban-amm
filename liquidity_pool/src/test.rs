@@ -1149,8 +1149,18 @@ fn test_swap_killed() {
         mint_to_user: i128::MAX,
         ..TestConfig::default()
     });
+
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
     let admin = users[0].clone();
+
     liq_pool.kill_swap(&admin);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), true);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
     let user1 = users[1].clone();
     let amount_to_deposit = 1_0000000;
     let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
@@ -1161,7 +1171,12 @@ fn test_swap_killed() {
         liq_pool.try_swap(&user1, &0, &1, &100, &0).unwrap_err(),
         Ok(Error::from_contract_error(206))
     );
+
     liq_pool.unkill_swap(&admin);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
     liq_pool.swap(&user1, &0, &1, &100, &0);
 }
 
@@ -1181,8 +1196,18 @@ fn test_deposit_killed() {
         mint_to_user: i128::MAX,
         ..TestConfig::default()
     });
+
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
     let admin = users[0].clone();
+
     liq_pool.kill_deposit(&admin);
+    assert_eq!(liq_pool.get_is_killed_deposit(), true);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
     let user1 = users[1].clone();
     let amount_to_deposit = 1_0000000;
     let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
@@ -1193,7 +1218,12 @@ fn test_deposit_killed() {
             .unwrap_err(),
         Ok(Error::from_contract_error(205))
     );
+
     liq_pool.unkill_deposit(&admin);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
     liq_pool.deposit(&user1, &desired_amounts, &0);
 }
 
@@ -1212,7 +1242,14 @@ fn test_claim_killed() {
         liq_pool,
         plane: _plane,
     } = setup;
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
     liq_pool.kill_claim(&users[0]);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), true);
 
     // 10 seconds. user depositing
     jump(&env, 10);
@@ -1239,5 +1276,8 @@ fn test_claim_killed() {
         Ok(Error::from_contract_error(207))
     );
     liq_pool.unkill_claim(&users[0]);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
     assert_eq!(liq_pool.claim(&users[1]), total_reward_1);
 }

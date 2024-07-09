@@ -958,6 +958,21 @@ impl AdminInterfaceTrait for LiquidityPool {
 
         set_is_killed_claim(&e, &false);
     }
+
+    // Get deposit killswitch status.
+    fn get_is_killed_deposit(e: Env) -> bool {
+        get_is_killed_deposit(&e)
+    }
+
+    // Get swap killswitch status.
+    fn get_is_killed_swap(e: Env) -> bool {
+        get_is_killed_swap(&e)
+    }
+
+    // Get claim killswitch status.
+    fn get_is_killed_claim(e: Env) -> bool {
+        get_is_killed_claim(&e)
+    }
 }
 
 #[contractimpl]
@@ -1076,9 +1091,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_future_a_time(&e, &e.ledger().timestamp());
         put_admin_actions_deadline(&e, &0);
         put_transfer_ownership_deadline(&e, &0);
-        set_is_killed_deposit(&e, &false);
-        set_is_killed_swap(&e, &false);
-        set_is_killed_claim(&e, &false);
 
         // update plane data for every pool update
         update_plane(&e);
