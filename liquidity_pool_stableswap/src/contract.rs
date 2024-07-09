@@ -1,6 +1,6 @@
 use crate::pool_constants::{
-    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, KILL_DEADLINE_DT, MAX_A, MAX_ADMIN_FEE, MAX_A_CHANGE,
-    MAX_FEE, MIN_RAMP_TIME, PRICE_PRECISION,
+    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, MAX_A, MAX_ADMIN_FEE, MAX_A_CHANGE, MAX_FEE,
+    MIN_RAMP_TIME, PRICE_PRECISION,
 };
 use crate::pool_interface::{
     AdminInterfaceTrait, InternalInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait,
@@ -8,12 +8,12 @@ use crate::pool_interface::{
 };
 use crate::storage::{
     get_admin_actions_deadline, get_admin_fee, get_fee, get_future_a, get_future_a_time,
-    get_future_admin_fee, get_future_fee, get_initial_a, get_initial_a_time, get_is_killed,
-    get_kill_deadline, get_plane, get_reserves, get_router, get_tokens,
+    get_future_admin_fee, get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim,
+    get_is_killed_deposit, get_is_killed_swap, get_plane, get_reserves, get_router, get_tokens,
     get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline, put_admin_fee, put_fee,
     put_future_a, put_future_a_time, put_future_admin_fee, put_future_fee, put_initial_a,
-    put_initial_a_time, put_is_killed, put_kill_deadline, put_reserves, put_tokens,
-    put_transfer_ownership_deadline, set_plane, set_router,
+    put_initial_a_time, put_reserves, put_tokens, put_transfer_ownership_deadline,
+    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -189,10 +189,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             .update_user_reward(&pool_data, &user, user_shares);
         rewards.storage().bump_user_reward_data(&user);
 
-        if get_is_killed(&e) {
-            panic_with_error!(e, LiquidityPoolError::PoolKilled);
-        }
-
         let token_supply = get_total_shares(&e);
         if token_supply == 0 {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
@@ -329,10 +325,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             .manager()
             .update_user_reward(&pool_data, &user, user_shares);
         rewards.storage().bump_user_reward_data(&user);
-
-        if get_is_killed(&e) {
-            panic_with_error!(e, LiquidityPoolError::PoolKilled);
-        }
 
         let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), share_amount, i);
         if dy < min_amount {
@@ -889,33 +881,82 @@ impl AdminInterfaceTrait for LiquidityPool {
         update_plane(&e);
     }
 
-    // Stops the pool instantly.
+    // Stops the pool deposits instantly.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    fn kill_me(e: Env, admin: Address) {
+    fn kill_deposit(e: Env, admin: Address) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
 
-        if get_kill_deadline(&e) <= e.ledger().timestamp() {
-            panic_with_error!(&e, LiquidityPoolError::ActionNotReadyYet);
-        }
-        put_is_killed(&e, &true);
+        set_is_killed_deposit(&e, &true);
     }
 
-    // Resumes the pool.
+    // Stops the pool swaps instantly.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    fn unkill_me(e: Env, admin: Address) {
+    fn kill_swap(e: Env, admin: Address) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
 
-        put_is_killed(&e, &false);
+        set_is_killed_swap(&e, &true);
+    }
+
+    // Stops the pool claims instantly.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn kill_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_claim(&e, &true);
+    }
+
+    // Resumes the pool deposits.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn unkill_deposit(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_deposit(&e, &false);
+    }
+
+    // Resumes the pool swaps.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn unkill_swap(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_swap(&e, &false);
+    }
+
+    // Resumes the pool claims.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn unkill_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_claim(&e, &false);
     }
 }
 
@@ -1033,10 +1074,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_initial_a_time(&e, &e.ledger().timestamp());
         put_future_a(&e, &a);
         put_future_a_time(&e, &e.ledger().timestamp());
-        put_kill_deadline(&e, &(e.ledger().timestamp() + KILL_DEADLINE_DT));
         put_admin_actions_deadline(&e, &0);
         put_transfer_ownership_deadline(&e, &0);
-        put_is_killed(&e, &false);
+        set_is_killed_deposit(&e, &false);
+        set_is_killed_swap(&e, &false);
+        set_is_killed_claim(&e, &false);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1109,8 +1151,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // A tuple containing a vector of actual amounts of each token deposited and a u128 representing the amount of pool tokens minted.
     fn deposit(e: Env, user: Address, amounts: Vec<u128>, min_shares: u128) -> (Vec<u128>, u128) {
         user.require_auth();
-        if get_is_killed(&e) {
-            panic_with_error!(e, LiquidityPoolError::PoolKilled);
+
+        if get_is_killed_deposit(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolDepositKilled);
         }
 
         let tokens = Self::get_tokens(e.clone());
@@ -1249,8 +1292,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
-        if get_is_killed(&e) {
-            panic_with_error!(e, LiquidityPoolError::PoolKilled);
+        if get_is_killed_swap(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolSwapKilled);
         }
 
         if in_amount == 0 {
@@ -1600,6 +1643,10 @@ impl RewardsTrait for LiquidityPool {
     //
     // The amount of tokens rewarded to the user as a u128.
     fn claim(e: Env, user: Address) -> u128 {
+        if get_is_killed_claim(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolClaimKilled);
+        }
+
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);

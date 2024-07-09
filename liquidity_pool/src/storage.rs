@@ -1,6 +1,11 @@
+use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 pub use utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
+use utils::{
+    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
+    generate_instance_storage_setter,
+};
 
 #[derive(Clone)]
 #[contracttype]
@@ -12,7 +17,14 @@ enum DataKey {
     FeeFraction, // 1 = 0.01%
     Plane,
     Router,
+    IsKilledSwap,
+    IsKilledDeposit,
+    IsKilledClaim,
 }
+
+generate_instance_storage_getter_and_setter!(is_killed_swap, DataKey::IsKilledSwap, bool);
+generate_instance_storage_getter_and_setter!(is_killed_deposit, DataKey::IsKilledDeposit, bool);
+generate_instance_storage_getter_and_setter!(is_killed_claim, DataKey::IsKilledClaim, bool);
 
 pub fn get_token_a(e: &Env) -> Address {
     bump_instance(e);

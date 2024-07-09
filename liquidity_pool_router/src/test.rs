@@ -975,7 +975,7 @@ fn test_init_pool_bad_tokens() {
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
 
-    router.init_pool(&tokens);
+    router.init_standard_pool(&admin, &tokens, &30);
 }
 
 #[should_panic(expected = "Error(WasmVm, MissingValue)")]
@@ -1043,7 +1043,7 @@ fn test_init_stable_pool_bad_tokens() {
     router.set_reward_token(&reward_token.address);
     router.set_pools_plane(&admin, &plane.address);
 
-    router.init_stableswap_pool(&admin, &tokens, &10, &30, &0);
+    router.init_stableswap_pool(&admin, &tokens, &30);
 }
 
 #[test]

@@ -80,6 +80,18 @@ pub trait LiquidityPoolTrait {
     fn get_info(e: Env) -> Map<Symbol, Val>;
 }
 
+pub trait AdminInterfaceTrait {
+    // Stop pool instantly
+    fn kill_deposit(e: Env, admin: Address);
+    fn kill_swap(e: Env, admin: Address);
+    fn kill_claim(e: Env, admin: Address);
+
+    // Resume pool
+    fn unkill_deposit(e: Env, admin: Address);
+    fn unkill_swap(e: Env, admin: Address);
+    fn unkill_claim(e: Env, admin: Address);
+}
+
 pub trait UpgradeableContractTrait {
     // Get contract version
     fn version() -> u32;

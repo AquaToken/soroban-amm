@@ -14,6 +14,7 @@ access_control = { workspace = true }
 rewards = { workspace = true }
 token_share = { workspace = true }
 utils = { workspace = true }
+paste = { workspace = true }
 liquidity-pool-validation-errors = { workspace = true }
 liquidity-pool-events = { workspace = true }
 soroban-fixed-point-math = { workspace = true }

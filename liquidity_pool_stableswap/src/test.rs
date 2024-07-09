@@ -10,7 +10,9 @@ use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{testutils::Address as _, vec, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{
+    testutils::Address as _, vec, Address, BytesN, Env, Error, IntoVal, Symbol, Vec,
+};
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
     SorobanTokenClient::new(e, &e.register_stellar_asset_contract(admin.clone()))
@@ -694,46 +696,6 @@ fn test_pool_zero_swap() {
         &0,
     );
     liqpool.swap(&user1, &2, &1, &0, &0);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #2901)")]
-fn test_kill() {
-    let e = Env::default();
-    e.mock_all_auths();
-    e.budget().reset_unlimited();
-
-    let admin1 = Address::generate(&e);
-    let admin2 = Address::generate(&e);
-
-    let token1 = create_token_contract(&e, &admin1);
-    let token2 = create_token_contract(&e, &admin2);
-    let token1_admin_client = get_token_admin_client(&e, &token1.address);
-    let token2_admin_client = get_token_admin_client(&e, &token2.address);
-    let token_reward = create_token_contract(&e, &admin1);
-    let user1 = Address::generate(&e);
-    let plane = create_plane_contract(&e);
-    let liqpool = create_liqpool_contract(
-        &e,
-        &user1,
-        &Address::generate(&e),
-        &install_token_wasm(&e),
-        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-        10,
-        0,
-        0,
-        &token_reward.address,
-        &plane.address,
-    );
-    token1_admin_client.mint(&user1, &1000_0000000);
-    token2_admin_client.mint(&user1, &1000_0000000);
-
-    liqpool.kill_me(&user1);
-    liqpool.deposit(
-        &user1,
-        &Vec::from_array(&e, [1000_0000000, 1000_0000000]),
-        &0,
-    );
 }
 
 #[test]
@@ -2325,4 +2287,171 @@ fn test_large_numbers() {
     assert_eq!(token1.balance(&liqpool.address), 0);
     assert_eq!(token2.balance(&liqpool.address), 0);
     assert_eq!(token_share.balance(&liqpool.address), 0);
+}
+
+#[test]
+fn test_kill_deposit() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin1);
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &admin,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+
+    liqpool.kill_deposit(&admin);
+    assert_eq!(
+        liqpool
+            .try_deposit(
+                &user1,
+                &Vec::from_array(&e, [1000_0000000, 1000_0000000]),
+                &0,
+            )
+            .unwrap_err(),
+        Ok(Error::from_contract_error(205))
+    );
+    liqpool.unkill_deposit(&admin);
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [1000_0000000, 1000_0000000]),
+        &0,
+    );
+}
+
+#[test]
+fn test_kill_swap() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin1);
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &admin,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+    token1_admin_client.mint(&user1, &10000_0000000);
+    token2_admin_client.mint(&user1, &10000_0000000);
+
+    liqpool.kill_swap(&admin);
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [1000_0000000, 1000_0000000]),
+        &0,
+    );
+    assert_eq!(
+        liqpool
+            .try_swap(&user1, &0, &1, &10_0000000, &0)
+            .unwrap_err(),
+        Ok(Error::from_contract_error(206))
+    );
+    liqpool.unkill_swap(&admin);
+    liqpool.swap(&user1, &0, &1, &10_0000000, &0);
+}
+
+#[test]
+fn test_kill_claim() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin1);
+    let token_reward_admin_client = get_token_admin_client(&e, &token_reward.address);
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &admin,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        0,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+    liqpool.kill_claim(&admin);
+
+    token1_admin_client.mint(&user1, &1000);
+    assert_eq!(token1.balance(&user1) as u128, 1000);
+
+    token2_admin_client.mint(&user1, &1000);
+    assert_eq!(token2.balance(&user1) as u128, 1000);
+
+    // 10 seconds. user depositing
+    jump(&e, 10);
+    liqpool.deposit(&user1, &Vec::from_array(&e, [100, 100]), &0);
+
+    // 20 seconds. rewards set up for 60 seconds
+    jump(&e, 10);
+    token_reward_admin_client.mint(&liqpool.address, &1_000_000_0000000);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    liqpool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(60),
+        &reward_1_tps,
+    );
+
+    // 90 seconds. rewards ended.
+    jump(&e, 70);
+
+    // 100 seconds. user claim reward
+    jump(&e, 10);
+
+    assert_eq!(
+        liqpool.try_claim(&user1).unwrap_err(),
+        Ok(Error::from_contract_error(207))
+    );
+    liqpool.unkill_claim(&admin);
+    assert_eq!(liqpool.claim(&user1), total_reward_1);
 }

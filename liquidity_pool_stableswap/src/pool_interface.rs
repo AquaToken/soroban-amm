@@ -161,10 +161,14 @@ pub trait AdminInterfaceTrait {
     fn donate_admin_fees(e: Env, admin: Address);
 
     // Stop pool instantly
-    fn kill_me(e: Env, admin: Address);
+    fn kill_deposit(e: Env, admin: Address);
+    fn kill_swap(e: Env, admin: Address);
+    fn kill_claim(e: Env, admin: Address);
 
     // Resume pool
-    fn unkill_me(e: Env, admin: Address);
+    fn unkill_deposit(e: Env, admin: Address);
+    fn unkill_swap(e: Env, admin: Address);
+    fn unkill_claim(e: Env, admin: Address);
 }
 
 pub trait InternalInterfaceTrait {
