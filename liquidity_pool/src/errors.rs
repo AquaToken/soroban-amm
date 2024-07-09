@@ -8,5 +8,8 @@ pub enum LiquidityPoolError {
     PlaneAlreadyInitialized = 202,
     RewardsAlreadyInitialized = 203,
     InvariantDoesNotHold = 204,
+    PoolDepositKilled = 205,
+    PoolSwapKilled = 206,
+    PoolClaimKilled = 207,
     // pool specific validation errors
 }

@@ -5,7 +5,7 @@ use crate::testutils::{
     create_liqpool_contract, create_token_contract, install_token_wasm, jump, Setup, TestConfig,
 };
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
-use soroban_sdk::{testutils::Address as _, vec, Address, IntoVal, Symbol, Vec};
+use soroban_sdk::{testutils::Address as _, vec, Address, Error, IntoVal, Symbol, Vec};
 use utils::test_utils::assert_approx_eq_abs;
 
 #[test]
@@ -1131,4 +1131,153 @@ fn test_large_numbers() {
     assert_eq!(token1.balance(&liq_pool.address), 0);
     assert_eq!(token2.balance(&liq_pool.address), 0);
     assert_eq!(token_share.balance(&liq_pool.address), 0);
+}
+
+#[test]
+fn test_swap_killed() {
+    let Setup {
+        env: e,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        mint_to_user: i128::MAX,
+        ..TestConfig::default()
+    });
+
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
+    let admin = users[0].clone();
+
+    liq_pool.kill_swap(&admin);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), true);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
+    let user1 = users[1].clone();
+    let amount_to_deposit = 1_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    assert_eq!(
+        liq_pool.try_swap(&user1, &0, &1, &100, &0).unwrap_err(),
+        Ok(Error::from_contract_error(206))
+    );
+
+    liq_pool.unkill_swap(&admin);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
+    liq_pool.swap(&user1, &0, &1, &100, &0);
+}
+
+#[test]
+fn test_deposit_killed() {
+    let Setup {
+        env: e,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        mint_to_user: i128::MAX,
+        ..TestConfig::default()
+    });
+
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
+    let admin = users[0].clone();
+
+    liq_pool.kill_deposit(&admin);
+    assert_eq!(liq_pool.get_is_killed_deposit(), true);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
+    let user1 = users[1].clone();
+    let amount_to_deposit = 1_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+
+    assert_eq!(
+        liq_pool
+            .try_deposit(&user1, &desired_amounts, &0)
+            .unwrap_err(),
+        Ok(Error::from_contract_error(205))
+    );
+
+    liq_pool.unkill_deposit(&admin);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+}
+
+#[test]
+fn test_claim_killed() {
+    let setup = Setup::setup(&TestConfig::default());
+    setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
+    let Setup {
+        env,
+        router: _router,
+        users,
+        token1: _token1,
+        token2: _token2,
+        token_reward: _token_reward,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = setup;
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+
+    liq_pool.kill_claim(&users[0]);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), true);
+
+    // 10 seconds. user depositing
+    jump(&env, 10);
+    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
+
+    // 20 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    liq_pool.set_rewards_config(
+        &users[0],
+        &env.ledger().timestamp().saturating_add(60),
+        &reward_1_tps,
+    );
+
+    // 90 seconds. rewards ended.
+    jump(&env, 70);
+
+    // 100 seconds. user claim reward
+    jump(&env, 10);
+
+    assert_eq!(
+        liq_pool.try_claim(&users[1]).unwrap_err(),
+        Ok(Error::from_contract_error(207))
+    );
+    liq_pool.unkill_claim(&users[0]);
+    assert_eq!(liq_pool.get_is_killed_deposit(), false);
+    assert_eq!(liq_pool.get_is_killed_swap(), false);
+    assert_eq!(liq_pool.get_is_killed_claim(), false);
+    assert_eq!(liq_pool.claim(&users[1]), total_reward_1);
 }

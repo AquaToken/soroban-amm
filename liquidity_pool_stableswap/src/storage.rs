@@ -1,6 +1,12 @@
-use rewards::utils::bump::bump_instance;
+use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
+
+use rewards::utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
+use utils::{
+    generate_instance_storage_getter_and_setter_with_default,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
+};
 
 #[derive(Clone)]
 #[contracttype]
@@ -17,11 +23,31 @@ enum DataKey {
     FutureAdminFee,
     AdminActionsDeadline,
     TransferOwnershipDeadline,
-    KillDeadline,
-    IsKilled,
+    IsKilledSwap,
+    IsKilledDeposit,
+    IsKilledClaim,
     Plane,
     Router,
 }
+
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_swap,
+    DataKey::IsKilledSwap,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_deposit,
+    DataKey::IsKilledDeposit,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_claim,
+    DataKey::IsKilledClaim,
+    bool,
+    false
+);
 
 pub fn get_tokens(e: &Env) -> Vec<Address> {
     bump_instance(e);
@@ -197,34 +223,7 @@ pub fn put_transfer_ownership_deadline(e: &Env, value: &u64) {
         .set(&DataKey::TransferOwnershipDeadline, value);
 }
 
-// kill_deadline
-pub fn get_kill_deadline(e: &Env) -> u64 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::KillDeadline) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_kill_deadline(e: &Env, value: &u64) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::KillDeadline, value);
-}
-
-// is_killed
-pub fn get_is_killed(e: &Env) -> bool {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::IsKilled) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_is_killed(e: &Env, value: &bool) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::IsKilled, value);
-}
-
+// pool plane
 pub(crate) fn set_plane(e: &Env, plane: &Address) {
     let key = DataKey::Plane;
     bump_instance(e);

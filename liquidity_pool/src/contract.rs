@@ -5,13 +5,15 @@ use crate::plane_interface::Plane;
 use crate::pool;
 use crate::pool::get_amount_out;
 use crate::pool_interface::{
-    LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContractTrait,
+    AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait,
+    UpgradeableContractTrait,
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_fee_fraction, get_plane, get_reserve_a, get_reserve_b, get_router, get_token_a,
-    get_token_b, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a,
-    put_token_b, set_plane, set_router,
+    get_fee_fraction, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_plane,
+    get_reserve_a, get_reserve_b, get_router, get_token_a, get_token_b, has_plane,
+    put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a, put_token_b, set_is_killed_claim,
+    set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
 };
 use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -195,6 +197,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         // Depositor needs to authorize the deposit
         user.require_auth();
 
+        if get_is_killed_deposit(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolDepositKilled);
+        }
+
         if desired_amounts.len() != 2 {
             panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
@@ -306,6 +312,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
+
+        if get_is_killed_swap(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolSwapKilled);
+        }
 
         if in_idx == out_idx {
             panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
@@ -539,6 +549,102 @@ impl LiquidityPoolTrait for LiquidityPool {
 }
 
 #[contractimpl]
+impl AdminInterfaceTrait for LiquidityPool {
+    // Stops the pool deposits instantly.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn kill_deposit(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_deposit(&e, &true);
+    }
+
+    // Stops the pool swaps instantly.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn kill_swap(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_swap(&e, &true);
+    }
+
+    // Stops the pool claims instantly.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn kill_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_claim(&e, &true);
+    }
+
+    // Resumes the pool deposits.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn unkill_deposit(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_deposit(&e, &false);
+    }
+
+    // Resumes the pool swaps.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn unkill_swap(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_swap(&e, &false);
+    }
+
+    // Resumes the pool claims.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn unkill_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+
+        set_is_killed_claim(&e, &false);
+    }
+
+    // Get deposit killswitch status.
+    fn get_is_killed_deposit(e: Env) -> bool {
+        get_is_killed_deposit(&e)
+    }
+
+    // Get swap killswitch status.
+    fn get_is_killed_swap(e: Env) -> bool {
+        get_is_killed_swap(&e)
+    }
+
+    // Get claim killswitch status.
+    fn get_is_killed_claim(e: Env) -> bool {
+        get_is_killed_claim(&e)
+    }
+}
+
+#[contractimpl]
 impl UpgradeableContractTrait for LiquidityPool {
     // Returns the version of the contract.
     //
@@ -717,6 +823,10 @@ impl RewardsTrait for LiquidityPool {
     //
     // The amount of tokens rewarded to the user as a u128.
     fn claim(e: Env, user: Address) -> u128 {
+        if get_is_killed_claim(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolClaimKilled);
+        }
+
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
