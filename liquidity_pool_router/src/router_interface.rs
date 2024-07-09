@@ -22,7 +22,13 @@ pub trait AdminInterface {
     fn set_stableswap_pool_hash(e: Env, new_hash: BytesN<32>);
 
     // Configure stableswap init payment: token address, amount and destination address
-    fn configure_init_pool_payment(e: Env, token: Address, amount: u128, to: Address);
+    fn configure_init_pool_payment(
+        e: Env,
+        token: Address,
+        stable_pool_amount: u128,
+        standard_pool_amount: u128,
+        to: Address,
+    );
 
     // Set reward token address
     fn set_reward_token(e: Env, reward_token: Address);

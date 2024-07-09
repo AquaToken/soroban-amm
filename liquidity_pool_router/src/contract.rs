@@ -1,4 +1,7 @@
-use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_FEE};
+use crate::constants::{
+    CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_DEFAULT_ADMIN_FEE,
+    STABLESWAP_MAX_FEE,
+};
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::liquidity_calculator::LiquidityCalculatorClient;
@@ -13,11 +16,13 @@ use crate::pool_utils::{
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
-    get_init_pool_payment_address, get_init_pool_payment_amount, get_init_pool_payment_token,
+    get_init_pool_payment_address, get_init_pool_payment_token,
+    get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
     get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_reward_tokens,
     get_reward_tokens_detailed, get_rewards_config, get_swap_router, get_tokens_set,
     get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_init_pool_payment_address, set_init_pool_payment_amount, set_init_pool_payment_token,
+    set_init_pool_payment_address, set_init_pool_payment_token,
+    set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
     set_liquidity_calculator, set_pool_plane, set_reward_tokens, set_reward_tokens_detailed,
     set_rewards_config, set_stableswap_pool_hash, set_swap_router, set_token_hash,
     GlobalRewardsConfig, LiquidityPoolRewardInfo,
@@ -492,11 +497,18 @@ impl AdminInterface for LiquidityPoolRouter {
     // * `token` - The address of the token.
     // * `amount` - The amount of the token.
     // * `to` - The address to send the payment to.
-    fn configure_init_pool_payment(e: Env, token: Address, amount: u128, to: Address) {
+    fn configure_init_pool_payment(
+        e: Env,
+        token: Address,
+        standard_pool_amount: u128,
+        stable_pool_amount: u128,
+        to: Address,
+    ) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         set_init_pool_payment_token(&e, &token);
-        set_init_pool_payment_amount(&e, &amount);
+        set_init_stable_pool_payment_amount(&e, &stable_pool_amount);
+        set_init_standard_pool_payment_amount(&e, &standard_pool_amount);
         set_init_pool_payment_address(&e, &to);
     }
 
@@ -960,26 +972,6 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 // The `PoolsManagementTrait` trait provides the interface for managing liquidity pools.
 #[contractimpl]
 impl PoolsManagementTrait for LiquidityPoolRouter {
-    // Initializes a standard pool with default arguments.
-    // fee = 0.3%
-    //
-    // # Returns
-    //
-    // A tuple containing:
-    // * The pool index hash.
-    // * The address of the pool.
-    fn init_pool(e: Env, tokens: Vec<Address>) -> (BytesN<32>, Address) {
-        validate_tokens(&e, &tokens);
-        let salt = get_tokens_salt(&e, tokens.clone());
-        let pools = get_pools_plain(&e, &salt);
-        if pools.is_empty() {
-            deploy_standard_pool(&e, tokens, 30)
-        } else {
-            let pool_hash = pools.keys().first().unwrap();
-            (pool_hash.clone(), pools.get(pool_hash).unwrap())
-        }
-    }
-
     // Initializes a standard pool with custom arguments.
     //
     // # Arguments
@@ -1011,7 +1003,21 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),
-            None => deploy_standard_pool(&e, tokens, fee_fraction),
+            None => {
+                // pay for pool creation
+                let init_pool_token = get_init_pool_payment_token(&e);
+                let init_pool_amount = get_init_standard_pool_payment_amount(&e);
+                let init_pool_address = get_init_pool_payment_address(&e);
+                if init_pool_amount > 0 {
+                    SorobanTokenClient::new(&e, &init_pool_token).transfer(
+                        &user,
+                        &init_pool_address,
+                        &(init_pool_amount as i128),
+                    );
+                }
+
+                deploy_standard_pool(&e, tokens, fee_fraction)
+            }
         }
     }
 
@@ -1034,9 +1040,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         e: Env,
         user: Address,
         tokens: Vec<Address>,
-        a: u128,
         fee_fraction: u32,
-        admin_fee: u32,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
         validate_tokens(&e, &tokens);
@@ -1044,23 +1048,33 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
         }
 
-        // pay for pool creation
-        let init_pool_token = get_init_pool_payment_token(&e);
-        let init_pool_amount = get_init_pool_payment_amount(&e);
-        let init_pool_address = get_init_pool_payment_address(&e);
-        SorobanTokenClient::new(&e, &init_pool_token).transfer(
-            &user,
-            &init_pool_address,
-            &(init_pool_amount as i128),
-        );
-
         let salt = get_tokens_salt(&e, tokens.clone());
         let pools = get_pools_plain(&e, &salt);
         let pool_index = get_stableswap_pool_salt(&e);
 
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),
-            None => deploy_stableswap_pool(&e, tokens, a, fee_fraction, admin_fee),
+            None => {
+                // pay for pool creation
+                let init_pool_token = get_init_pool_payment_token(&e);
+                let init_pool_amount = get_init_stable_pool_payment_amount(&e);
+                let init_pool_address = get_init_pool_payment_address(&e);
+                if init_pool_amount > 0 {
+                    SorobanTokenClient::new(&e, &init_pool_token).transfer(
+                        &user,
+                        &init_pool_address,
+                        &(init_pool_amount as i128),
+                    );
+                }
+
+                deploy_stableswap_pool(
+                    &e,
+                    tokens,
+                    STABLESWAP_DEFAULT_A,
+                    fee_fraction,
+                    STABLESWAP_DEFAULT_ADMIN_FEE,
+                )
+            }
         }
     }
 
