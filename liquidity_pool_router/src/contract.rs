@@ -512,6 +512,23 @@ impl AdminInterface for LiquidityPoolRouter {
         set_init_pool_payment_address(&e, &to);
     }
 
+    // Getters for init pool payment config
+    fn get_init_pool_payment_token(e: Env) -> Address {
+        get_init_pool_payment_token(&e)
+    }
+
+    fn get_init_pool_payment_address(e: Env) -> Address {
+        get_init_pool_payment_address(&e)
+    }
+
+    fn get_init_stable_pool_payment_amount(e: Env) -> u128 {
+        get_init_stable_pool_payment_amount(&e)
+    }
+
+    fn get_init_standard_pool_payment_amount(e: Env) -> u128 {
+        get_init_standard_pool_payment_amount(&e)
+    }
+
     // Sets the reward token.
     //
     // # Arguments
