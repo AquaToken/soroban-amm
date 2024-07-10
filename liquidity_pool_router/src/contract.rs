@@ -521,11 +521,11 @@ impl AdminInterface for LiquidityPoolRouter {
         get_init_pool_payment_address(&e)
     }
 
-    fn get_init_stable_pool_payment_amount(e: Env) -> u128 {
+    fn get_stable_pool_payment_amount(e: Env) -> u128 {
         get_init_stable_pool_payment_amount(&e)
     }
 
-    fn get_init_standard_pool_payment_amount(e: Env) -> u128 {
+    fn get_standard_pool_payment_amount(e: Env) -> u128 {
         get_init_standard_pool_payment_amount(&e)
     }
 
