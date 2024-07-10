@@ -2,9 +2,6 @@ use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
 const DAY_IN_LEDGERS: u32 = 17280;
 
-const PERSISTENT_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
-const PERSISTENT_LIFETIME_THRESHOLD: u32 = PERSISTENT_BUMP_AMOUNT - DAY_IN_LEDGERS;
-
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
@@ -20,9 +17,10 @@ pub struct PoolPlane {
 }
 
 fn bump_persistent(e: &Env, key: &DataKey) {
+    let max_ttl = e.storage().max_ttl();
     e.storage()
         .persistent()
-        .extend_ttl(key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        .extend_ttl(key, max_ttl - DAY_IN_LEDGERS, max_ttl);
 }
 
 fn get_default_pool(e: &Env) -> PoolPlane {

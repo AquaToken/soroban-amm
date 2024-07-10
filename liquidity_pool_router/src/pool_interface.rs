@@ -199,9 +199,7 @@ pub trait PoolsManagementTrait {
     ) -> (BytesN<32>, Address);
 
     // Initialize stableswap pool with custom arguments.
-    // a - amplification coefficient
     // fee_fraction has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%
-    // admin_fee - percentage of fee that goes to pool admin
     fn init_stableswap_pool(
         e: Env,
         user: Address,

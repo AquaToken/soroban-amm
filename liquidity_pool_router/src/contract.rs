@@ -1027,9 +1027,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     //
     // * `user` - The address of the user initializing the pool.
     // * `tokens` - A vector of token addresses that the pool consists of.
-    // * `a` - The amplification coefficient for the pool.
     // * `fee_fraction` - The fee fraction for the pool. Has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%.
-    // * `admin_fee` - The percentage of fee that goes to pool admin.
     //
     // # Returns
     //

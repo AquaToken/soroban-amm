@@ -15,6 +15,7 @@ members = [
     "liquidity_pool_plane",
     "liquidity_pool_validation_errors",
     "liquidity_pool_events",
+    "fees_collector",
 ]
 
 [workspace.package]
