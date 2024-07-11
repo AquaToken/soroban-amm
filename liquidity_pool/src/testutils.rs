@@ -2,12 +2,15 @@
 extern crate std;
 use crate::plane::{pool_plane, PoolPlaneClient};
 use crate::LiquidityPoolClient;
+use soroban_sdk::token::{
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+};
 use soroban_sdk::{
     testutils::{Address as _, Ledger, LedgerInfo},
     Address, BytesN, Env, Vec,
 };
 use std::vec;
-use token_share::token_contract::{Client, WASM};
+use token_share::token_contract::{Client as ShareTokenClient, WASM};
 
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
@@ -33,10 +36,13 @@ pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
     pub(crate) router: Address,
     pub(crate) users: vec::Vec<Address>,
-    pub(crate) token1: Client<'a>,
-    pub(crate) token2: Client<'a>,
-    pub(crate) token_reward: Client<'a>,
-    pub(crate) token_share: Client<'a>,
+    pub(crate) token1: SorobanTokenClient<'a>,
+    pub(crate) token1_admin_client: SorobanTokenAdminClient<'a>,
+    pub(crate) token2: SorobanTokenClient<'a>,
+    pub(crate) token2_admin_client: SorobanTokenAdminClient<'a>,
+    pub(crate) token_reward: SorobanTokenClient<'a>,
+    pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
+    pub(crate) token_share: ShareTokenClient<'a>,
     pub(crate) liq_pool: LiquidityPoolClient<'a>,
     pub(crate) plane: PoolPlaneClient<'a>,
 }
@@ -81,6 +87,9 @@ impl Setup<'_> {
             std::mem::swap(&mut token1, &mut token2);
             std::mem::swap(&mut token_admin1, &mut token_admin2);
         }
+        let token1_admin_client = get_token_admin_client(&e, &token1.address.clone());
+        let token2_admin_client = get_token_admin_client(&e, &token2.address.clone());
+        let token_reward_admin_client = get_token_admin_client(&e, &token_reward.address.clone());
 
         let router = Address::generate(&e);
 
@@ -94,17 +103,20 @@ impl Setup<'_> {
             config.liq_pool_fee,
             &plane.address,
         );
-        token_reward.mint(&liq_pool.address, &config.rewards_count);
+        token_reward_admin_client.mint(&liq_pool.address, &config.rewards_count);
 
-        let token_share = Client::new(&e, &liq_pool.share_id());
+        let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
         Self {
             env: e,
             router,
             users,
             token1,
+            token1_admin_client,
             token2,
+            token2_admin_client,
             token_reward,
+            token_reward_admin_client,
             token_share,
             liq_pool,
             plane,
@@ -121,10 +133,10 @@ impl Setup<'_> {
 
     pub(crate) fn mint_tokens_for_users(&self, amount: i128) {
         for user in self.users.iter() {
-            self.token1.mint(user, &amount);
+            self.token1_admin_client.mint(user, &amount);
             assert_eq!(self.token1.balance(user), amount.clone());
 
-            self.token2.mint(user, &amount);
+            self.token2_admin_client.mint(user, &amount);
             assert_eq!(self.token2.balance(user), amount.clone());
         }
     }
@@ -140,11 +152,18 @@ impl Setup<'_> {
     }
 }
 
-pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> Client<'a> {
-    Client::new(e, &e.register_stellar_asset_contract(admin.clone()))
+pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
+    SorobanTokenClient::new(e, &e.register_stellar_asset_contract(admin.clone()))
 }
 
-fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
+pub(crate) fn get_token_admin_client<'a>(
+    e: &Env,
+    address: &Address,
+) -> SorobanTokenAdminClient<'a> {
+    SorobanTokenAdminClient::new(e, address)
+}
+
+pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     PoolPlaneClient::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
 }
 

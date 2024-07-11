@@ -1479,7 +1479,7 @@ impl UpgradeableContractTrait for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        104
+        105
     }
 
     // Upgrades the contract to a new version.

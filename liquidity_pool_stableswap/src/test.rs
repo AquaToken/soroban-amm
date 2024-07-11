@@ -7,21 +7,25 @@ use crate::plane::{pool_plane, PoolPlaneClient};
 use crate::pool_constants::{ADMIN_ACTIONS_DELAY, MIN_RAMP_TIME};
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
-use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
-};
 use soroban_sdk::{
     testutils::Address as _, vec, Address, BytesN, Env, Error, IntoVal, Symbol, Vec,
 };
+use token_share::Client as ShareTokenClient;
 
-fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
+use soroban_sdk::token::{
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+};
+
+pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
     SorobanTokenClient::new(e, &e.register_stellar_asset_contract(admin.clone()))
 }
 
-fn get_token_admin_client<'a>(e: &'a Env, address: &'a Address) -> SorobanTokenAdminClient<'a> {
+pub(crate) fn get_token_admin_client<'a>(
+    e: &'a Env,
+    address: &'a Address,
+) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
-
 fn create_liqpool_contract<'a>(
     e: &Env,
     admin: &Address,
@@ -2485,4 +2489,271 @@ fn test_kill_claim() {
     assert_eq!(liqpool.get_is_killed_claim(), false);
 
     assert_eq!(liqpool.claim(&user1), total_reward_1);
+}
+
+#[test]
+fn test_withdraw_rewards() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+
+    let plane = create_plane_contract(&e);
+
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward_admin_client = get_token_admin_client(&e, &token1.address);
+
+    let router = Address::generate(&e);
+
+    let liq_pool = create_liqpool_contract(
+        &e,
+        &admin,
+        &router,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        85,
+        30,
+        0,
+        &token_reward_admin_client.address,
+        &plane.address,
+    );
+    let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
+
+    token1_admin_client.mint(&user1, &100_0000000);
+    token2_admin_client.mint(&user1, &100_0000000);
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [100_0000000, 100_0000000])
+    );
+
+    liq_pool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(100),
+        &1_000_0000000,
+    );
+    token_reward_admin_client.mint(&liq_pool.address, &(1_000_0000000 * 100));
+    jump(&e, 100);
+
+    token1_admin_client.mint(&user2, &1_000_0000000);
+    token2_admin_client.mint(&user2, &1_000_0000000);
+    liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [1_100_0000000, 1_100_0000000])
+    );
+
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [1_100_0000000, 1_100_0000000])
+    );
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        1_100_0000000 + 1_000_0000000 * 100
+    );
+    assert_eq!(token2.balance(&liq_pool.address), 1_100_0000000);
+
+    assert_eq!(
+        liq_pool.withdraw(
+            &user2,
+            &(token_share.balance(&user2) as u128),
+            &Vec::from_array(&e, [0, 0]),
+        ),
+        Vec::from_array(&e, [1_000_0000000, 1_000_0000000])
+    );
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [100_0000000, 100_0000000])
+    );
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        100_0000000 + 1_000_0000000 * 100
+    );
+    assert_eq!(token2.balance(&liq_pool.address), 100_0000000);
+    assert_eq!(token1.balance(&user2), 1_000_0000000);
+    assert_eq!(token2.balance(&user2), 1_000_0000000);
+
+    assert_eq!(liq_pool.claim(&user1), 1_000_0000000 * 100);
+    assert_eq!(liq_pool.claim(&user2), 0);
+}
+
+#[test]
+fn test_deposit_rewards() {
+    // test pool reserves are not affected by rewards if reward token is one of pool tokens and presented in pool balance
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+
+    let plane = create_plane_contract(&e);
+
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+
+    let router = Address::generate(&e);
+
+    let liq_pool = create_liqpool_contract(
+        &e,
+        &admin,
+        &router,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        85,
+        30,
+        0,
+        &token_reward_admin_client.address,
+        &plane.address,
+    );
+
+    liq_pool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(100),
+        &1_000_0000000,
+    );
+    token_reward_admin_client.mint(&liq_pool.address, &(1_000_0000000 * 100));
+    assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [0, 0]));
+
+    token1_admin_client.mint(&user1, &100_0000000);
+    token2_admin_client.mint(&user1, &100_0000000);
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [100_0000000, 100_0000000])
+    );
+}
+
+#[test]
+fn test_swap_rewards() {
+    // check that swap rewards are calculated correctly if reward token is one of pool tokens
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+
+    let plane = create_plane_contract(&e);
+
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+
+    let router = Address::generate(&e);
+
+    // we compare two pools to check swap in both directions
+    let liq_pool1 = create_liqpool_contract(
+        &e,
+        &admin,
+        &router,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        85,
+        30,
+        0,
+        &token_reward_admin_client.address,
+        &plane.address,
+    );
+    let liq_pool2 = create_liqpool_contract(
+        &e,
+        &admin,
+        &router,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        85,
+        30,
+        0,
+        &token_reward_admin_client.address,
+        &plane.address,
+    );
+    token1_admin_client.mint(&user1, &200_0000000);
+    token2_admin_client.mint(&user1, &200_0000000);
+    liq_pool1.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+    liq_pool2.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+    assert_eq!(
+        liq_pool1.get_reserves(),
+        Vec::from_array(&e, [100_0000000, 100_0000000])
+    );
+    assert_eq!(
+        liq_pool2.get_reserves(),
+        Vec::from_array(&e, [100_0000000, 100_0000000])
+    );
+
+    let estimate1_before_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000);
+    let estimate2_before_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000);
+    // swap is balanced, so values should be the same
+    assert_eq!(estimate1_before_rewards, estimate2_before_rewards);
+
+    liq_pool1.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(100),
+        &1_000_0000000,
+    );
+    liq_pool2.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(100),
+        &1_000_0000000,
+    );
+    token_reward_admin_client.mint(&liq_pool1.address, &(1_000_0000000 * 100));
+    token_reward_admin_client.mint(&liq_pool2.address, &(1_000_0000000 * 100));
+    jump(&e, 100);
+
+    let estimate1_after_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000);
+    let estimate2_after_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000);
+    // balances are out of balance, but reserves are balanced.
+    assert_eq!(estimate1_after_rewards, estimate2_after_rewards);
+    assert_eq!(estimate1_before_rewards, estimate1_after_rewards);
+
+    token1_admin_client.mint(&user2, &10_0000000);
+    token2_admin_client.mint(&user2, &10_0000000);
+    // in case of disbalance, user may receive much more tokens than he sent as reward is included
+    let swap_result1 = liq_pool1.swap(&user2, &0, &1, &10_0000000, &estimate1_after_rewards);
+    let swap_result2 = liq_pool2.swap(&user2, &1, &0, &10_0000000, &estimate1_after_rewards);
+    assert_eq!(swap_result1, estimate1_after_rewards);
+    assert_eq!(swap_result2, estimate1_after_rewards);
+
+    let reserves1 = liq_pool1.get_reserves();
+
+    // check that balance minus rewards is equal to reserves as they should also have fee and it's same for both pools but in different order
+    assert_eq!(
+        liq_pool1.get_reserves(),
+        Vec::from_array(
+            &e,
+            [
+                token1.balance(&liq_pool1.address) as u128 - 1_000_0000000 * 100,
+                token2.balance(&liq_pool1.address) as u128
+            ]
+        )
+    );
+    // reverse pool1 reserves to check swap in other direction gave same results
+    assert_eq!(
+        liq_pool2.get_reserves(),
+        Vec::from_array(&e, [reserves1.get(1).unwrap(), reserves1.get(0).unwrap()])
+    );
 }
