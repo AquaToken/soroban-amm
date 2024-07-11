@@ -2619,8 +2619,10 @@ fn test_deposit_rewards() {
         &router,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-        &token_reward_admin_client.address,
+        85,
         30,
+        0,
+        &token_reward_admin_client.address,
         &plane.address,
     );
 
