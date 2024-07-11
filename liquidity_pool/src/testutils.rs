@@ -140,11 +140,11 @@ impl Setup<'_> {
     }
 }
 
-pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> Client<'a> {
+pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> Client<'a> {
     Client::new(e, &e.register_stellar_asset_contract(admin.clone()))
 }
 
-fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
+pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     PoolPlaneClient::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
 }
 

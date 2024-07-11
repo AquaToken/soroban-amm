@@ -15,7 +15,7 @@ use crate::storage::{
     put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a, put_token_b, set_is_killed_claim,
     set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
 };
-use crate::token::{create_contract, get_balance_a, get_balance_b, transfer_a, transfer_b};
+use crate::token::{create_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
 use liquidity_pool_events::Events as PoolEvents;
 use liquidity_pool_events::LiquidityPoolEvents;
@@ -236,6 +236,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let amounts =
             pool::get_deposit_amounts(&e, desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
 
+        // Increase reserves
+        put_reserve_a(&e, reserve_a + amounts.0);
+        put_reserve_b(&e, reserve_a + amounts.1);
+
         if amounts.0 < desired_a {
             token_a_client.transfer(
                 &e.current_contract_address(),
@@ -252,18 +256,18 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // Now calculate how many new pool shares to mint
-        let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
+        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
         let total_shares = get_total_shares(&e);
 
         let zero = 0;
         let new_total_shares = if reserve_a > zero && reserve_b > zero {
-            let shares_a = balance_a.fixed_mul_floor(&e, &total_shares, &reserve_a);
-            let shares_b = balance_b.fixed_mul_floor(&e, &total_shares, &reserve_b);
+            let shares_a = new_reserve_a.fixed_mul_floor(&e, &total_shares, &reserve_a);
+            let shares_b = new_reserve_b.fixed_mul_floor(&e, &total_shares, &reserve_b);
             shares_a.min(shares_b)
         } else {
             // if .mul doesn't fail, sqrt also won't -> safe to unwrap
-            U256::from_u128(&e, balance_a)
-                .mul(&U256::from_u128(&e, balance_b))
+            U256::from_u128(&e, new_reserve_a)
+                .mul(&U256::from_u128(&e, new_reserve_b))
                 .sqrt()
                 .to_u128()
                 .unwrap()
@@ -274,8 +278,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
         mint_shares(&e, user, shares_to_mint as i128);
-        put_reserve_a(&e, balance_a);
-        put_reserve_b(&e, balance_b);
+        put_reserve_a(&e, new_reserve_a);
+        put_reserve_b(&e, new_reserve_b);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -355,31 +359,39 @@ impl LiquidityPoolTrait for LiquidityPool {
         let sell_token_client = SorobanTokenClient::new(&e, &sell_token);
         sell_token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
 
-        let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
+        if in_idx == 0 {
+            put_reserve_a(&e, reserve_a + in_amount);
+        } else {
+            put_reserve_b(&e, reserve_b + in_amount);
+        }
+
+        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
         let residue_numerator = FEE_MULTIPLIER - (get_fee_fraction(&e) as u128);
         let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
 
-        let new_invariant_factor = |balance: u128, reserve: u128, out: u128| {
-            if balance - reserve > out {
-                residue_denominator.mul(&U256::from_u128(&e, reserve)).add(
-                    &(U256::from_u128(&e, residue_numerator)
-                        .mul(&U256::from_u128(&e, balance - reserve - out))),
-                )
+        let new_invariant_factor = |reserve: u128, old_reserve: u128, out: u128| {
+            if reserve - old_reserve > out {
+                residue_denominator
+                    .mul(&U256::from_u128(&e, old_reserve))
+                    .add(
+                        &(U256::from_u128(&e, residue_numerator)
+                            .mul(&U256::from_u128(&e, reserve - old_reserve - out))),
+                    )
             } else {
                 residue_denominator
-                    .mul(&U256::from_u128(&e, reserve))
-                    .add(&residue_denominator.mul(&U256::from_u128(&e, balance)))
-                    .sub(&(residue_denominator.mul(&U256::from_u128(&e, reserve + out))))
+                    .mul(&U256::from_u128(&e, old_reserve))
+                    .add(&residue_denominator.mul(&U256::from_u128(&e, reserve)))
+                    .sub(&(residue_denominator.mul(&U256::from_u128(&e, old_reserve + out))))
             }
         };
 
         let (out_a, out_b) = if out_idx == 0 { (out, 0) } else { (0, out) };
 
-        let new_inv_a = new_invariant_factor(balance_a, reserve_a, out_a);
-        let new_inv_b = new_invariant_factor(balance_b, reserve_b, out_b);
+        let new_inv_a = new_invariant_factor(new_reserve_a, reserve_a, out_a);
+        let new_inv_b = new_invariant_factor(new_reserve_b, reserve_b, out_b);
         let old_inv_a = residue_denominator.mul(&U256::from_u128(&e, reserve_a));
         let old_inv_b = residue_denominator.mul(&U256::from_u128(&e, reserve_b));
 
@@ -389,12 +401,11 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         if out_idx == 0 {
             transfer_a(&e, user.clone(), out_a);
+            put_reserve_a(&e, reserve_a - out);
         } else {
             transfer_b(&e, user.clone(), out_b);
+            put_reserve_b(&e, reserve_b - out);
         }
-
-        put_reserve_a(&e, balance_a - out_a);
-        put_reserve_b(&e, balance_b - out_b);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -480,13 +491,13 @@ impl LiquidityPoolTrait for LiquidityPool {
             &(share_amount as i128),
         );
 
-        let (balance_a, balance_b) = (get_balance_a(&e), get_balance_b(&e));
+        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
         let balance_shares = get_balance_shares(&e);
         let total_shares = get_total_shares(&e);
 
         // Now calculate the withdraw amounts
-        let out_a = balance_a.fixed_mul_floor(&e, &balance_shares, &total_shares);
-        let out_b = balance_b.fixed_mul_floor(&e, &balance_shares, &total_shares);
+        let out_a = reserve_a.fixed_mul_floor(&e, &balance_shares, &total_shares);
+        let out_b = reserve_b.fixed_mul_floor(&e, &balance_shares, &total_shares);
 
         let min_a = min_amounts.get(0).unwrap();
         let min_b = min_amounts.get(1).unwrap();
@@ -498,8 +509,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         burn_shares(&e, balance_shares as i128);
         transfer_a(&e, user.clone(), out_a);
         transfer_b(&e, user, out_b);
-        put_reserve_a(&e, balance_a - out_a);
-        put_reserve_b(&e, balance_b - out_b);
+        put_reserve_a(&e, reserve_a - out_a);
+        put_reserve_b(&e, reserve_b - out_b);
 
         // update plane data for every pool update
         update_plane(&e);

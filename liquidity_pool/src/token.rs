@@ -23,14 +23,6 @@ pub fn get_balance(e: &Env, contract: Address) -> u128 {
     Client::new(e, &contract).balance(&e.current_contract_address()) as u128
 }
 
-pub fn get_balance_a(e: &Env) -> u128 {
-    get_balance(e, get_token_a(e))
-}
-
-pub fn get_balance_b(e: &Env) -> u128 {
-    get_balance(e, get_token_b(e))
-}
-
 fn transfer(e: &Env, token: Address, to: Address, amount: i128) {
     Client::new(e, &token).transfer(&e.current_contract_address(), &to, &amount);
 }
