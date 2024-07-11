@@ -2,12 +2,13 @@
 extern crate std;
 
 use crate::testutils::{
-    create_liqpool_contract, create_plane_contract, create_token_contract, install_token_wasm,
-    jump, Setup, TestConfig,
+    create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
+    install_token_wasm, jump, Setup, TestConfig,
 };
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
+use soroban_sdk::token::StellarAssetClient as SorobanTokenAdminClient;
 use soroban_sdk::{testutils::Address as _, vec, Address, Env, Error, IntoVal, Symbol, Vec};
-use token_share::Client;
+use token_share::Client as ShareTokenClient;
 use utils::test_utils::assert_approx_eq_abs;
 
 #[test]
@@ -17,8 +18,11 @@ fn test() {
         router: _router,
         users,
         token1,
+        token1_admin_client: _token1_admin_client,
         token2,
+        token2_admin_client: _token2_admin_client,
         token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share,
         liq_pool,
         plane: _plane,
@@ -259,8 +263,11 @@ fn test_events() {
         router: _router,
         users,
         token1,
+        token1_admin_client: _token1_admin_client,
         token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -348,8 +355,11 @@ fn test_deposit_min_mint() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -375,8 +385,11 @@ fn test_zero_initial_deposit() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -392,8 +405,11 @@ fn test_zero_deposit_ok() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -493,8 +509,11 @@ fn test_simple_ongoing_reward() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -572,8 +591,11 @@ fn test_estimate_ongoing_reward() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -600,8 +622,11 @@ fn test_simple_reward() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -645,8 +670,11 @@ fn test_two_users_rewards() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -677,8 +705,11 @@ fn test_lazy_user_rewards() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -710,8 +741,11 @@ fn test_rewards_disable_before_expiration() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -758,8 +792,11 @@ fn test_rewards_disable_after_expiration() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -792,8 +829,11 @@ fn test_rewards_set_new_after_expiration() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -839,8 +879,11 @@ fn test_rewards_same_expiration_time() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -860,8 +903,11 @@ fn test_rewards_past() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -883,9 +929,12 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         env,
         router: _router,
         users,
-        token1,
-        token2,
-        token_reward,
+        token1: _token1,
+        token1_admin_client,
+        token2: _token2,
+        token2_admin_client,
+        token_reward: _token_reward,
+        token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -902,11 +951,11 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
             0 => &first_user,
             val => &users[val - 1],
         };
-        token1.mint(user, &1_000_000_000_000_000_000_000);
-        token2.mint(user, &1_000_000_000_000_000_000_000);
+        token1_admin_client.mint(user, &1_000_000_000_000_000_000_000);
+        token2_admin_client.mint(user, &1_000_000_000_000_000_000_000);
     }
 
-    token_reward.mint(&liq_pool.address, &1_000_000_000_000_0000000);
+    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_000_000_0000000);
 
     let reward_1_tps = 10_5000000_u128;
     liq_pool.set_rewards_config(
@@ -955,8 +1004,12 @@ fn test_deposit_inequal_return_change() {
         router: _router,
         users,
         token1,
+        token1_admin_client: _token1_admin_client,
         token2,
+        token2_admin_client: _token2_admin_client,
+
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -991,8 +1044,11 @@ fn test_config_rewards_not_admin() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -1014,8 +1070,11 @@ fn test_config_rewards_router() {
         router,
         users: _users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -1036,8 +1095,11 @@ fn test_zero_swap() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -1060,8 +1122,11 @@ fn test_large_numbers() {
         router: _router,
         users,
         token1,
+        token1_admin_client: _token1_admin_client,
         token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share,
         liq_pool,
         plane: _plane,
@@ -1142,8 +1207,11 @@ fn test_swap_killed() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -1189,8 +1257,11 @@ fn test_deposit_killed() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -1238,8 +1309,11 @@ fn test_claim_killed() {
         router: _router,
         users,
         token1: _token1,
+        token1_admin_client: _token1_admin_client,
         token2: _token2,
+        token2_admin_client: _token2_admin_client,
         token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
         token_share: _token_share,
         liq_pool,
         plane: _plane,
@@ -1301,7 +1375,9 @@ fn test_withdraw_rewards() {
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
     }
-    let token_reward = Client::new(&e, &token1.address.clone());
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
 
     let router = Address::generate(&e);
 
@@ -1311,14 +1387,14 @@ fn test_withdraw_rewards() {
         &router,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-        &token_reward.address,
+        &token_reward_admin_client.address,
         30,
         &plane.address,
     );
-    let token_share = Client::new(&e, &liq_pool.share_id());
+    let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
-    token1.mint(&user1, &100_0000000);
-    token2.mint(&user1, &100_0000000);
+    token1_admin_client.mint(&user1, &100_0000000);
+    token2_admin_client.mint(&user1, &100_0000000);
     liq_pool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
     assert_eq!(
         liq_pool.get_reserves(),
@@ -1330,11 +1406,11 @@ fn test_withdraw_rewards() {
         &e.ledger().timestamp().saturating_add(100),
         &1_000_0000000,
     );
-    token_reward.mint(&liq_pool.address, &(1_000_0000000 * 100));
+    token_reward_admin_client.mint(&liq_pool.address, &(1_000_0000000 * 100));
     jump(&e, 100);
 
-    token1.mint(&user2, &1_000_0000000);
-    token2.mint(&user2, &1_000_0000000);
+    token1_admin_client.mint(&user2, &1_000_0000000);
+    token2_admin_client.mint(&user2, &1_000_0000000);
     liq_pool.deposit(
         &user2,
         &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
