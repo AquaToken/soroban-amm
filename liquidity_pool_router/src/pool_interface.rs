@@ -182,6 +182,19 @@ pub trait RewardsInterfaceTrait {
     // Get total amount of claimed reward for the pool
     fn get_total_claimed_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
+    // Calculate difference between total configured reward and total claimed reward.
+    // Helps to estimate the amount of missing reward tokens pool has configured to distribute
+    fn get_total_outstanding_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+
+    // Transfer outstanding reward to the pool
+    fn distribute_outstanding_reward(
+        e: Env,
+        admin: Address,
+        from: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128;
+
     // Claim reward as a user.
     // returns amount of tokens rewarded to the user
     fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
