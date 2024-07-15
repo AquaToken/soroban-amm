@@ -948,6 +948,83 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         )
     }
 
+    // Calculate difference between total configured reward and total claimed reward.
+    // Helps to estimate the amount of missing reward tokens pool has configured to distribute
+    fn get_total_outstanding_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
+
+        let configured_reward: u128 = e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_total_configured_reward"),
+            Vec::new(&e),
+        );
+        let claimed_reward: u128 = e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_total_claimed_reward"),
+            Vec::new(&e),
+        );
+
+        let rewards = get_rewards_manager(&e);
+        let reward_token = rewards.storage().get_reward_token();
+        let reward_token_client = SorobanTokenClient::new(&e, &reward_token);
+        let mut pool_reward_balance = reward_token_client.balance(&pool_id) as u128;
+
+        // handle edge case - if pool has reward token in reserves
+        match tokens.first_index_of(reward_token) {
+            Some(i) => {
+                let pool_reserves: Vec<u128> =
+                    e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e));
+                let reward_token_reserve = pool_reserves.get(i).unwrap();
+                pool_reward_balance -= reward_token_reserve;
+            }
+            None => {}
+        }
+
+        configured_reward - claimed_reward - pool_reward_balance
+    }
+
+    // Transfer outstanding reward to the pool
+    fn distribute_outstanding_reward(
+        e: Env,
+        admin: Address,
+        from: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128 {
+        let access_control = AccessControl::new(&e);
+        admin.require_auth();
+        access_control.check_admin(&admin);
+
+        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
+            Ok(v) => v,
+            Err(err) => panic_with_error!(&e, err),
+        };
+
+        let outstanding_reward =
+            Self::get_total_outstanding_reward(e.clone(), tokens.clone(), pool_index.clone());
+        let rewards = get_rewards_manager(&e);
+        let reward_token = rewards.storage().get_reward_token();
+
+        if from != e.current_contract_address() {
+            SorobanTokenClient::new(&e, &reward_token).transfer_from(
+                &e.current_contract_address(),
+                &from,
+                &pool_id,
+                &(outstanding_reward as i128),
+            );
+        } else {
+            SorobanTokenClient::new(&e, &reward_token).transfer(
+                &e.current_contract_address(),
+                &pool_id,
+                &(outstanding_reward as i128),
+            );
+        }
+        outstanding_reward
+    }
+
     // Claims the reward.
     //
     // # Arguments
