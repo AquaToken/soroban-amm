@@ -8,7 +8,7 @@ use crate::pool_constants::{ADMIN_ACTIONS_DELAY, MIN_RAMP_TIME};
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
 use soroban_sdk::{
-    testutils::Address as _, vec, Address, BytesN, Env, Error, IntoVal, Symbol, Vec,
+    testutils::Address as _, vec, Address, BytesN, Env, Error, IntoVal, Symbol, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
 
@@ -2329,6 +2329,17 @@ fn test_kill_deposit() {
     token2_admin_client.mint(&user1, &1000_0000000);
 
     liqpool.kill_deposit(&admin);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (Symbol::new(&e, "kill_deposit"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
+    );
     assert_eq!(liqpool.get_is_killed_deposit(), true);
     assert_eq!(liqpool.get_is_killed_swap(), false);
     assert_eq!(liqpool.get_is_killed_claim(), false);
@@ -2343,6 +2354,17 @@ fn test_kill_deposit() {
         Ok(Error::from_contract_error(205))
     );
     liqpool.unkill_deposit(&admin);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (Symbol::new(&e, "unkill_deposit"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
+    );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
     assert_eq!(liqpool.get_is_killed_swap(), false);
     assert_eq!(liqpool.get_is_killed_claim(), false);
@@ -2389,6 +2411,17 @@ fn test_kill_swap() {
     token2_admin_client.mint(&user1, &10000_0000000);
 
     liqpool.kill_swap(&admin);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (Symbol::new(&e, "kill_swap"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
+    );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
     assert_eq!(liqpool.get_is_killed_swap(), true);
     assert_eq!(liqpool.get_is_killed_claim(), false);
@@ -2404,6 +2437,17 @@ fn test_kill_swap() {
         Ok(Error::from_contract_error(206))
     );
     liqpool.unkill_swap(&admin);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (Symbol::new(&e, "unkill_swap"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
+    );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
     assert_eq!(liqpool.get_is_killed_swap(), false);
     assert_eq!(liqpool.get_is_killed_claim(), false);
@@ -2447,6 +2491,17 @@ fn test_kill_claim() {
     assert_eq!(liqpool.get_is_killed_claim(), false);
 
     liqpool.kill_claim(&admin);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (Symbol::new(&e, "kill_claim"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
+    );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
     assert_eq!(liqpool.get_is_killed_swap(), false);
     assert_eq!(liqpool.get_is_killed_claim(), true);
@@ -2484,6 +2539,17 @@ fn test_kill_claim() {
     );
 
     liqpool.unkill_claim(&admin);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![
+            &e,
+            (
+                liqpool.address.clone(),
+                (Symbol::new(&e, "unkill_claim"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
+    );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
     assert_eq!(liqpool.get_is_killed_swap(), false);
     assert_eq!(liqpool.get_is_killed_claim(), false);

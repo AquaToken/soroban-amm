@@ -572,6 +572,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         set_is_killed_deposit(&e, &true);
+        PoolEvents::new(&e).kill_deposit();
     }
 
     // Stops the pool swaps instantly.
@@ -585,6 +586,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         set_is_killed_swap(&e, &true);
+        PoolEvents::new(&e).kill_swap();
     }
 
     // Stops the pool claims instantly.
@@ -598,6 +600,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         set_is_killed_claim(&e, &true);
+        PoolEvents::new(&e).kill_claim();
     }
 
     // Resumes the pool deposits.
@@ -611,6 +614,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         set_is_killed_deposit(&e, &false);
+        PoolEvents::new(&e).unkill_deposit();
     }
 
     // Resumes the pool swaps.
@@ -624,6 +628,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         set_is_killed_swap(&e, &false);
+        PoolEvents::new(&e).unkill_swap();
     }
 
     // Resumes the pool claims.
@@ -637,6 +642,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         set_is_killed_claim(&e, &false);
+        PoolEvents::new(&e).unkill_claim();
     }
 
     // Get deposit killswitch status.

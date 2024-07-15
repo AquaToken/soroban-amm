@@ -35,6 +35,18 @@ pub trait LiquidityPoolEvents {
         out_amount: u128,
         fee_amount: u128,
     );
+
+    fn kill_deposit(&self);
+
+    fn unkill_deposit(&self);
+
+    fn kill_swap(&self);
+
+    fn unkill_swap(&self);
+
+    fn kill_claim(&self);
+
+    fn unkill_claim(&self);
 }
 
 // This trait is used to emit events related to liquidity pool operations.
@@ -123,5 +135,41 @@ impl LiquidityPoolEvents for Events {
             (Symbol::new(e, "trade"), token_in, token_out, user),
             (in_amount as i128, out_amount as i128, fee_amount as i128),
         );
+    }
+
+    fn kill_deposit(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "kill_deposit"),), ())
+    }
+
+    fn unkill_deposit(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "unkill_deposit"),), ())
+    }
+
+    fn kill_swap(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "kill_swap"),), ())
+    }
+
+    fn unkill_swap(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "unkill_swap"),), ())
+    }
+
+    fn kill_claim(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "kill_claim"),), ())
+    }
+
+    fn unkill_claim(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "unkill_claim"),), ())
     }
 }
