@@ -238,7 +238,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // Increase reserves
         put_reserve_a(&e, reserve_a + amounts.0);
-        put_reserve_b(&e, reserve_a + amounts.1);
+        put_reserve_b(&e, reserve_b + amounts.1);
 
         if amounts.0 < desired_a {
             token_a_client.transfer(

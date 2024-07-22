@@ -1564,12 +1564,17 @@ fn test_deposit_rewards() {
     token_reward_admin_client.mint(&liq_pool.address, &(1_000_0000000 * 100));
     assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [0, 0]));
 
-    token1_admin_client.mint(&user1, &100_0000000);
-    token2_admin_client.mint(&user1, &100_0000000);
-    liq_pool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [1_0000000, 100_0000000]), &0);
     assert_eq!(
         liq_pool.get_reserves(),
-        Vec::from_array(&e, [100_0000000, 100_0000000])
+        Vec::from_array(&e, [1_0000000, 100_0000000])
+    );
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [1_0000000, 100_0000000]), &0);
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [2_0000000, 200_0000000])
     );
 }
 
