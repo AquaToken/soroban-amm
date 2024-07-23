@@ -1,9 +1,15 @@
 use crate::calculator::{get_max_reserve, get_next_in_amt, normalize_reserves, price_weight};
 use crate::constants::{FEE_MULTIPLIER, PRECISION};
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{Env, Vec};
+use soroban_sdk::{Env, Vec, U256};
 
-fn a(e: &Env, initial_a: u128, initial_a_time: u128, future_a: u128, future_a_time: u128) -> u128 {
+pub(crate) fn a(
+    e: &Env,
+    initial_a: u128,
+    initial_a_time: u128,
+    future_a: u128,
+    future_a_time: u128,
+) -> u128 {
     // Handle ramping A up or down
     let t1 = future_a_time;
     let a1 = future_a;
@@ -176,40 +182,27 @@ fn estimate_swap(
     )
 }
 
-pub(crate) fn get_liquidity(
+pub fn get_liquidity(
     e: &Env,
     fee_fraction: u128,
-    initial_a: u128,
-    initial_a_time: u128,
-    future_a: u128,
-    future_a_time: u128,
-    reserves: &Vec<u128>,
+    amp: u128,
+    reserves_adj: &Vec<u128>,
+    reserves_norm: &Vec<u128>,
+    d_adj: u128,
+    d_norm: u128,
     in_idx: u32,
     out_idx: u32,
 ) -> u128 {
-    let reserve_in = reserves.get(0).unwrap();
-    let reserve_out = reserves.get(1).unwrap();
+    let reserve_in = reserves_norm.get(in_idx).unwrap();
+    let reserve_out = reserves_norm.get(out_idx).unwrap();
 
     if reserve_in == 0 || reserve_out == 0 {
         return 0;
     }
 
-    let (reserves_norm, nominator, denominator) = normalize_reserves(reserves);
-
     let mut result_big = 0;
-    let min_amount = PRECISION;
-    let mut reserves_adj = Vec::new(e);
-    let mut reserves_big = Vec::new(e);
-    for i in 0..reserves_norm.len() {
-        let value = reserves_norm.get(i).unwrap();
-        reserves_big.push_back(value);
-        reserves_adj.push_back(value * PRECISION);
-    }
 
-    let amp = a(e, initial_a, initial_a_time, future_a, future_a_time);
-    let n_tokens = reserves_adj.len();
-    let d_adj = get_d(e, n_tokens, &reserves_adj, amp);
-    let d = get_d(e, n_tokens, &reserves_big, amp);
+    let min_amount = PRECISION;
     let min_estimate = estimate_swap(
         e,
         fee_fraction,
@@ -241,9 +234,9 @@ pub(crate) fn get_liquidity(
         let mut depth = estimate_swap(
             e,
             fee_fraction,
-            d,
+            d_norm,
             amp,
-            &reserves_big,
+            &reserves_norm,
             in_idx,
             out_idx,
             in_amt,
@@ -291,5 +284,50 @@ pub(crate) fn get_liquidity(
         prev_depth = depth;
         in_amt = get_next_in_amt(in_amt);
     }
-    result_big / PRECISION * nominator / denominator
+    result_big / PRECISION
+}
+
+pub(crate) fn get_pool_liquidity(
+    e: &Env,
+    fee_fraction: u128,
+    amp: u128,
+    reserves: &Vec<u128>,
+) -> U256 {
+    let n_tokens = reserves.len();
+    let (reserves_norm, nominator, denominator) = normalize_reserves(reserves);
+
+    let mut result_big = U256::from_u128(e, 0);
+    let mut reserves_adj = Vec::new(e);
+    for i in 0..n_tokens {
+        reserves_adj.push_back(reserves_norm.get(i).unwrap() * PRECISION);
+    }
+
+    let d_adj = get_d(e, n_tokens, &reserves_adj, amp);
+    let d_norm = get_d(e, n_tokens, &reserves_norm, amp);
+
+    for in_idx in 0..n_tokens {
+        for out_idx in 0..n_tokens {
+            if in_idx == out_idx {
+                continue;
+            }
+
+            result_big = result_big.add(&U256::from_u128(
+                e,
+                get_liquidity(
+                    &e,
+                    fee_fraction,
+                    amp,
+                    &reserves_adj,
+                    &reserves_norm,
+                    d_adj,
+                    d_norm,
+                    in_idx,
+                    out_idx,
+                ) * nominator
+                    / denominator,
+            ));
+        }
+    }
+
+    result_big
 }
