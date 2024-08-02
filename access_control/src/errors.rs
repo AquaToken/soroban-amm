@@ -5,6 +5,6 @@ use soroban_sdk::contracterror;
 #[repr(u32)]
 pub enum AccessControlError {
     AdminNotFound = 101,
-    UserNotAdmin = 102,
+    Unauthorized = 102,
     AdminAlreadySet = 103,
 }
