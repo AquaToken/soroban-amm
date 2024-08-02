@@ -52,7 +52,7 @@ impl AccessControlTrait for AccessControl {
             Err(err) => panic_with_error!(self.0, err),
         };
         if admin != user.clone() {
-            panic_with_error!(&self.0, AccessControlError::UserNotAdmin);
+            panic_with_error!(&self.0, AccessControlError::Unauthorized);
         }
     }
 

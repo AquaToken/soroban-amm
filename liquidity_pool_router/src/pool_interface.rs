@@ -189,7 +189,7 @@ pub trait RewardsInterfaceTrait {
     // Transfer outstanding reward to the pool
     fn distribute_outstanding_reward(
         e: Env,
-        admin: Address,
+        user: Address,
         from: Address,
         tokens: Vec<Address>,
         pool_index: BytesN<32>,

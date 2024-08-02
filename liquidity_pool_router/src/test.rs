@@ -1698,6 +1698,118 @@ fn test_rewards_distribution() {
 }
 
 #[test]
+fn test_rewards_distribution_as_operator() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+    if token2.address < token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let reward_token = create_token_contract(&e, &admin);
+
+    let user1 = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    reward_token.mint(&user1, &1000_0000000);
+    reward_token.mint(&router.address, &2_000_000_0000000);
+    reward_token.mint(&admin, &2_000_000_0000000);
+
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
+    let (stable_pool_hash, _stable_pool_address) =
+        router.init_stableswap_pool(&user1, &tokens, &10);
+
+    let reward_1_tps = 10_5000000_u128;
+
+    token1.mint(&user1, &2000);
+    token2.mint(&user1, &2000);
+
+    // 10 seconds passed since config, user depositing
+    jump(&e, 10);
+    router.deposit(
+        &user1,
+        &tokens,
+        &standard_pool_hash,
+        &Vec::from_array(&e, [1000, 1000]),
+        &0,
+    );
+    router.deposit(
+        &user1,
+        &tokens,
+        &stable_pool_hash,
+        &Vec::from_array(&e, [1000, 1000]),
+        &0,
+    );
+
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
+        &admin,
+        &reward_1_tps,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+    router.fill_liquidity(&tokens);
+    let standard_pool_tps = router.config_pool_rewards(&tokens, &standard_pool_hash);
+    let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
+
+    // 30 seconds passed, half of the reward is available for the user
+    jump(&e, 30);
+
+    // operator not set yet. admin should be able to distribute rewards but no one else should
+    let operator = Address::generate(&e);
+    assert!(router
+        .try_distribute_outstanding_reward(&user1, &router.address, &tokens, &standard_pool_hash)
+        .is_err(),);
+    assert!(router
+        .try_distribute_outstanding_reward(&operator, &router.address, &tokens, &standard_pool_hash)
+        .is_err(),);
+    router.set_operator(&operator);
+    assert!(router
+        .try_distribute_outstanding_reward(&user1, &router.address, &tokens, &standard_pool_hash)
+        .is_err(),);
+    assert_eq!(
+        router.distribute_outstanding_reward(
+            &operator,
+            &router.address,
+            &tokens,
+            &standard_pool_hash
+        ),
+        standard_pool_tps * 60
+    );
+    assert_eq!(
+        router.distribute_outstanding_reward(
+            &operator,
+            &router.address,
+            &tokens,
+            &stable_pool_hash
+        ),
+        stable_pool_tps * 60
+    );
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #309)")]
 fn test_liqidity_not_filled() {
     let e = Env::default();
