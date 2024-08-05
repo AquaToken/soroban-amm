@@ -117,14 +117,14 @@ pub trait RewardsInterfaceTrait {
     //
     // # Arguments
     //
-    // * `admin` - The address of the admin user. This user must be authenticated and have admin privileges.
+    // * `user` - This user must be authenticated and have admin or operator privileges.
     // * `reward_tps` - The rewards per second. This value is scaled by 1e7 for precision.
     // * `expired_at` - The timestamp at which the rewards configuration will expire.
     // * `tokens_votes` - A vector of tuples, where each tuple contains a vector of token addresses and a voting share.
     //   The voting share is a value between 0 and 1, scaled by 1e7 for precision.
     fn config_global_rewards(
         e: Env,
-        admin: Address,
+        user: Address,
         reward_tps: u128,
         expired_at: u64,
         tokens_votes: Vec<(Vec<Address>, u32)>,
