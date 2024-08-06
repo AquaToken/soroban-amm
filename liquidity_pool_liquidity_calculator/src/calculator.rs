@@ -33,6 +33,11 @@ pub fn normalize_reserves(reserves: &Vec<u128>) -> (Vec<u128>, u128, u128) {
     let mut reserves_norm = reserves.clone();
     let max_reserve = get_max_reserve(reserves);
 
+    if max_reserve == 0 {
+        // nothing to normalize. we'll just get division by zero error
+        return (reserves_norm, 1, 1);
+    }
+
     // normalize reserves
     let mut nominator = 1;
     let mut denominator = 1;

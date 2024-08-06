@@ -81,31 +81,14 @@ impl Calculator for LiquidityPoolLiquidityCalculator {
                 ));
             } else if pool_type == POOL_TYPE_STABLESWAP {
                 let data = parse_stableswap_data(init_args, reserves);
-                // calculate liquidity for all non-duplicate permutations
-                for i in 0..data.reserves.len() {
-                    for j in 0..data.reserves.len() {
-                        let in_idx = i;
-                        let out_idx = data.reserves.len() - j - 1;
-                        if in_idx == out_idx {
-                            continue;
-                        }
-
-                        out = out.add(&U256::from_u128(
-                            &e,
-                            stableswap_pool::get_liquidity(
-                                &e,
-                                data.fee,
-                                data.initial_a,
-                                data.initial_a_time,
-                                data.future_a,
-                                data.future_a_time,
-                                &data.reserves,
-                                in_idx,
-                                out_idx,
-                            ),
-                        ));
-                    }
-                }
+                let amp = stableswap_pool::a(
+                    &e,
+                    data.initial_a,
+                    data.initial_a_time,
+                    data.future_a,
+                    data.future_a_time,
+                );
+                out = stableswap_pool::get_pool_liquidity(&e, data.fee, amp, &data.reserves);
             } else {
                 panic!("unknown pool type");
             };
