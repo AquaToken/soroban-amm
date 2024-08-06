@@ -1,3 +1,4 @@
+use crate::access_utils::require_admin_or_operator;
 use crate::constants::{
     CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_DEFAULT_ADMIN_FEE,
     STABLESWAP_MAX_FEE,
@@ -638,21 +639,20 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     //
     // # Arguments
     //
-    // * `admin` - The address of the admin user. This user must be authenticated and have admin privileges.
+    // * `user` - This user must be authenticated and have admin or operator privileges.
     // * `reward_tps` - The rewards per second. This value is scaled by 1e7 for precision.
     // * `expired_at` - The timestamp at which the rewards configuration will expire.
     // * `tokens_votes` - A vector of tuples, where each tuple contains a vector of token addresses and a voting share.
     //   The voting share is a value between 0 and 1, scaled by 1e7 for precision.
     fn config_global_rewards(
         e: Env,
-        admin: Address,
+        user: Address,
         reward_tps: u128, // value with 7 decimal places. example: 600_0000000
         expired_at: u64,  // timestamp
         tokens_votes: Vec<(Vec<Address>, u32)>, // {[token1, token2]: voting_percentage}, voting percentage 0_0000000 .. 1_0000000
     ) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        user.require_auth();
+        require_admin_or_operator(&e, user);
 
         let rewards_config = get_rewards_config(&e);
         let new_rewards_block = rewards_config.current_block + 1;
@@ -1014,22 +1014,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         pool_index: BytesN<32>,
     ) -> u128 {
         user.require_auth();
-
-        // both admin and operator are authorized to perform this
-        let access_control = AccessControl::new(&e);
-        let admin = match access_control.perform_admin_check() {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
-        if user != admin {
-            // the user is not an admin, so let's check if it's operator
-            if !has_operator(&e) {
-                panic_with_error!(&e, AccessControlError::Unauthorized);
-            }
-            if user != get_operator(&e) {
-                panic_with_error!(&e, AccessControlError::Unauthorized);
-            }
-        }
+        require_admin_or_operator(&e, user);
 
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
