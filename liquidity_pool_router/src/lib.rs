@@ -11,7 +11,6 @@ mod pool_utils;
 mod rewards;
 mod router_interface;
 mod storage;
-mod swap_router;
 mod test;
 
 pub use contract::{LiquidityPoolRouter, LiquidityPoolRouterClient};

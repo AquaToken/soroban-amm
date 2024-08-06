@@ -7,7 +7,7 @@ use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_interface::{
     CombinedSwapInterface, LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait,
-    RewardsInterfaceTrait, SwapRouterInterface,
+    RewardsInterfaceTrait,
 };
 use crate::pool_utils::{
     deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt, get_standard_pool_salt,
@@ -19,15 +19,14 @@ use crate::storage::{
     get_init_pool_payment_address, get_init_pool_payment_token,
     get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
     get_liquidity_calculator, get_operator, get_pool, get_pool_plane, get_pools_plain,
-    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_swap_router,
-    get_tokens_set, get_tokens_set_count, has_operator, has_pool, remove_pool,
-    set_constant_product_pool_hash, set_init_pool_payment_address, set_init_pool_payment_token,
+    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_tokens_set,
+    get_tokens_set_count, has_operator, has_pool, remove_pool, set_constant_product_pool_hash,
+    set_init_pool_payment_address, set_init_pool_payment_token,
     set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
     set_liquidity_calculator, set_operator, set_pool_plane, set_reward_tokens,
-    set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_swap_router,
-    set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
+    set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash,
+    GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
-use crate::swap_router::SwapRouterClient;
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::errors::AccessControlError;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -1307,79 +1306,6 @@ impl PoolPlaneInterface for LiquidityPoolRouter {
     // Returns the address of the pool plane.
     fn get_plane(e: Env) -> Address {
         get_pool_plane(&e)
-    }
-}
-
-// The `SwapRouterInterface` trait provides the interface for interacting with a specialized contract used to estimate swaps.
-#[contractimpl]
-impl SwapRouterInterface for LiquidityPoolRouter {
-    // Sets the swap router.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin user.
-    // * `router` - The address of the router.
-    fn set_swap_router(e: Env, admin: Address, router: Address) {
-        let access_control = AccessControl::new(&e);
-        admin.require_auth();
-        access_control.check_admin(&admin);
-        set_swap_router(&e, &router);
-    }
-
-    // Returns the address of the swap router.
-    fn get_swap_router(e: Env) -> Address {
-        get_swap_router(&e)
-    }
-
-    // Estimates the result of a routed swap operation.
-    //
-    // # Arguments
-    //
-    // * `tokens` - A vector of token addresses that the swap route consists of.
-    // * `token_in` - The address of the input token to be swapped.
-    // * `token_out` - The address of the output token to be received.
-    // * `in_amount` - The amount of the input token to be swapped.
-    //
-    // # Returns
-    //
-    // A tuple containing:
-    // * The pool index hash of the best pool for the swap.
-    // * The address of the best pool for the swap.
-    // * The estimated amount of the output token that would be received.
-    fn estimate_swap_routed(
-        e: Env,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
-        in_amount: u128,
-    ) -> (BytesN<32>, Address, u128) {
-        let salt = get_tokens_salt(&e, tokens.clone());
-        let pools = get_pools_plain(&e, &salt);
-
-        let swap_router = get_swap_router(&e);
-        let mut pools_vec: Vec<Address> = Vec::new(&e);
-        let mut pools_reversed: Map<Address, BytesN<32>> = Map::new(&e);
-        for (key, value) in pools {
-            pools_vec.push_back(value.clone());
-            pools_reversed.set(value, key);
-        }
-
-        let (best_pool_address, swap_result) = SwapRouterClient::new(&e, &swap_router)
-            .estimate_swap(
-                &pools_vec,
-                &(tokens.first_index_of(token_in).unwrap()),
-                &(tokens.first_index_of(token_out).unwrap()),
-                &in_amount,
-            );
-
-        (
-            match pools_reversed.get(best_pool_address.clone()) {
-                Some(v) => v,
-                None => panic_with_error!(e, LiquidityPoolRouterError::PoolNotFound),
-            },
-            best_pool_address,
-            swap_result,
-        )
     }
 }
 
