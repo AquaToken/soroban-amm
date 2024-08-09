@@ -42,6 +42,20 @@ contractmeta!(
 #[contract]
 pub struct LiquidityPool;
 
+impl LiquidityPool {
+    fn validate(e: Env) {
+        let reserves = Self::get_reserves(e.clone());
+        let tokens = Self::get_tokens(e.clone());
+        for i in 0..reserves.len() {
+            let balance = SorobanTokenClient::new(&e, &tokens.get(i).unwrap())
+                .balance(&e.current_contract_address()) as u128;
+            if reserves.get(i).unwrap() > balance {
+                panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
+            }
+        }
+    }
+}
+
 #[contractimpl]
 impl LiquidityPoolCrunch for LiquidityPool {
     // Initializes all the components of the liquidity pool.
@@ -281,6 +295,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_a(&e, new_reserve_a);
         put_reserve_b(&e, new_reserve_b);
 
+        Self::validate(e.clone());
+
         // update plane data for every pool update
         update_plane(&e);
 
@@ -407,6 +423,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             put_reserve_b(&e, reserve_b - out);
         }
 
+        Self::validate(e.clone());
+
         // update plane data for every pool update
         update_plane(&e);
 
@@ -511,6 +529,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         transfer_b(&e, user, out_b);
         put_reserve_a(&e, reserve_a - out_a);
         put_reserve_b(&e, reserve_b - out_b);
+
+        Self::validate(e.clone());
 
         // update plane data for every pool update
         update_plane(&e);
@@ -851,6 +871,9 @@ impl RewardsTrait for LiquidityPool {
             .manager()
             .claim_reward(&user, total_shares, user_shares);
         rewards.storage().bump_user_reward_data(&user);
+
+        Self::validate(e.clone());
+
         reward
     }
 }
