@@ -1688,3 +1688,53 @@ fn test_swap_rewards() {
         Vec::from_array(&e, [reserves1.get(1).unwrap(), reserves1.get(0).unwrap()])
     );
 }
+
+#[test]
+fn test_claim_rewards() {
+    // test user cannot claim from pool if rewards configured but not distributed
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+
+    let plane = create_plane_contract(&e);
+
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+
+    let router = Address::generate(&e);
+
+    let liq_pool = create_liqpool_contract(
+        &e,
+        &admin,
+        &router,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &token_reward_admin_client.address,
+        30,
+        &plane.address,
+    );
+
+    token1_admin_client.mint(&user1, &100_0000000);
+    token2_admin_client.mint(&user1, &100_0000000);
+    liq_pool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [100_0000000, 100_0000000])
+    );
+
+    liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(100), &1000);
+    jump(&e, 100);
+
+    assert!(liq_pool.try_claim(&user1).is_err());
+    token_reward_admin_client.mint(&liq_pool.address, &(1000 * 100));
+    assert_eq!(liq_pool.claim(&user1), 1000 * 100);
+}
