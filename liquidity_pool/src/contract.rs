@@ -42,20 +42,6 @@ contractmeta!(
 #[contract]
 pub struct LiquidityPool;
 
-impl LiquidityPool {
-    fn validate(e: Env) {
-        let reserves = Self::get_reserves(e.clone());
-        let tokens = Self::get_tokens(e.clone());
-        for i in 0..reserves.len() {
-            let balance = SorobanTokenClient::new(&e, &tokens.get(i).unwrap())
-                .balance(&e.current_contract_address()) as u128;
-            if reserves.get(i).unwrap() > balance {
-                panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
-            }
-        }
-    }
-}
-
 #[contractimpl]
 impl LiquidityPoolCrunch for LiquidityPool {
     // Initializes all the components of the liquidity pool.
@@ -295,8 +281,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_a(&e, new_reserve_a);
         put_reserve_b(&e, new_reserve_b);
 
-        Self::validate(e.clone());
-
         // update plane data for every pool update
         update_plane(&e);
 
@@ -423,8 +407,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             put_reserve_b(&e, reserve_b - out);
         }
 
-        Self::validate(e.clone());
-
         // update plane data for every pool update
         update_plane(&e);
 
@@ -529,8 +511,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         transfer_b(&e, user, out_b);
         put_reserve_a(&e, reserve_a - out_a);
         put_reserve_b(&e, reserve_b - out_b);
-
-        Self::validate(e.clone());
 
         // update plane data for every pool update
         update_plane(&e);
@@ -867,12 +847,28 @@ impl RewardsTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let reward = rewards
-            .manager()
-            .claim_reward(&user, total_shares, user_shares);
-        rewards.storage().bump_user_reward_data(&user);
+        let mut rewards_manager = rewards.manager();
+        let rewards_storage = rewards.storage();
+        let reward = rewards_manager.claim_reward(&user, total_shares, user_shares);
+        rewards_storage.bump_user_reward_data(&user);
 
-        Self::validate(e.clone());
+        // validate reserves after claim - they should be less than or equal to the balance
+        let tokens = Self::get_tokens(e.clone());
+        let reward_token = rewards_storage.get_reward_token();
+        let reserves = Self::get_reserves(e.clone());
+
+        for i in 0..reserves.len() {
+            let token = tokens.get(i).unwrap();
+            if token != reward_token {
+                continue;
+            }
+
+            let balance = SorobanTokenClient::new(&e, &tokens.get(i).unwrap())
+                .balance(&e.current_contract_address()) as u128;
+            if reserves.get(i).unwrap() > balance {
+                panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
+            }
+        }
 
         reward
     }
