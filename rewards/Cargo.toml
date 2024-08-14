@@ -3,6 +3,7 @@ name = "rewards"
 version.workspace = true
 edition = "2021"
 publish = false
+rust-version.workspace = true
 
 
 [lib]

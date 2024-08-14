@@ -3,6 +3,7 @@ name = "soroban-liquidity-pool-router-contract"
 version.workspace = true
 edition = "2021"
 publish = false
+rust-version.workspace = true
 
 [lib]
 crate-type = ["cdylib"]

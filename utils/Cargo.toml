@@ -3,6 +3,7 @@ name = "utils"
 version.workspace = true
 edition = "2021"
 publish = false
+rust-version.workspace = true
 
 
 [lib]

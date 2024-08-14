@@ -3,6 +3,7 @@ name = "soroban-fees-collector-contract"
 version.workspace = true
 edition = "2021"
 publish = false
+rust-version.workspace = true
 
 [lib]
 crate-type = ["cdylib"]
