@@ -21,7 +21,7 @@ use crate::storage::{
     get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
     get_liquidity_calculator, get_operator, get_pool, get_pool_plane, get_pools_plain,
     get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_tokens_set,
-    get_tokens_set_count, has_operator, has_pool, remove_pool, set_constant_product_pool_hash,
+    get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
     set_init_pool_payment_address, set_init_pool_payment_token,
     set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
     set_liquidity_calculator, set_operator, set_pool_plane, set_reward_tokens,

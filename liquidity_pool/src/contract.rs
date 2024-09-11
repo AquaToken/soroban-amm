@@ -847,10 +847,29 @@ impl RewardsTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let reward = rewards
-            .manager()
-            .claim_reward(&user, total_shares, user_shares);
-        rewards.storage().bump_user_reward_data(&user);
+        let mut rewards_manager = rewards.manager();
+        let rewards_storage = rewards.storage();
+        let reward = rewards_manager.claim_reward(&user, total_shares, user_shares);
+        rewards_storage.bump_user_reward_data(&user);
+
+        // validate reserves after claim - they should be less than or equal to the balance
+        let tokens = Self::get_tokens(e.clone());
+        let reward_token = rewards_storage.get_reward_token();
+        let reserves = Self::get_reserves(e.clone());
+
+        for i in 0..reserves.len() {
+            let token = tokens.get(i).unwrap();
+            if token != reward_token {
+                continue;
+            }
+
+            let balance = SorobanTokenClient::new(&e, &tokens.get(i).unwrap())
+                .balance(&e.current_contract_address()) as u128;
+            if reserves.get(i).unwrap() > balance {
+                panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
+            }
+        }
+
         reward
     }
 }

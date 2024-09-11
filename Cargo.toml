@@ -22,8 +22,8 @@ version = "1.1.0"
 rust-version = "1.80"
 
 [workspace.dependencies]
-soroban-sdk = { version = "21.1.1" }
-soroban-token-sdk = { version = "21.1.1" }
+soroban-sdk = { version = "21.5.0" }
+soroban-token-sdk = { version = "21.5.0" }
 num-integer = { version = "0.1.45", default-features = false, features = ["i128"] }
 soroban-fixed-point-math = { version = "1.1.1"}
 paste = { version = "1.0.15" }
