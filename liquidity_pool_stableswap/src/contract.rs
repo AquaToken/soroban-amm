@@ -18,7 +18,7 @@ use crate::storage::{
 use crate::token::create_contract;
 use token_share::{
     burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
-    put_token_share, Client as LPToken,
+    put_token_share, upgrade_token_share, Client as LPToken,
 };
 
 use crate::errors::LiquidityPoolError;
@@ -26,6 +26,7 @@ use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
 use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::errors::AccessControlError;
 use cast::i128 as to_i128;
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -153,134 +154,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         dy - fee
     }
 
-    // Withdraw coins from the pool in an imbalanced amount.
-    //
-    // # Arguments
-    //
-    // * `user` - The address of the user withdrawing funds.
-    // * `amounts` - The amounts of tokens to withdraw.
-    // * `max_burn_amount` - The maximum amount of LP tokens to burn.
-    //
-    // # Returns
-    //
-    // * The actual amount of LP tokens burned.
-    fn remove_liquidity_imbalance(
-        e: Env,
-        user: Address,
-        amounts: Vec<u128>,
-        max_burn_amount: u128,
-    ) -> u128 {
-        user.require_auth();
-
-        let tokens = Self::get_tokens(e.clone());
-        let n_coins = tokens.len();
-
-        if amounts.len() != n_coins {
-            panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
-        }
-
-        // Before actual changes were made to the pool, update total rewards data and refresh user reward
-        let rewards = get_rewards_manager(&e);
-        let total_shares = get_total_shares(&e);
-        let pool_data = rewards.manager().update_rewards_data(total_shares);
-        let user_shares = get_user_balance_shares(&e, &user);
-        rewards
-            .manager()
-            .update_user_reward(&pool_data, &user, user_shares);
-        rewards.storage().bump_user_reward_data(&user);
-
-        let token_supply = get_total_shares(&e);
-        if token_supply == 0 {
-            panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
-        }
-        let admin_fee = get_admin_fee(&e) as u128;
-        let amp = Self::a(e.clone());
-        let mut reserves = get_reserves(&e);
-
-        let old_balances = reserves.clone();
-        let mut new_balances = old_balances.clone();
-
-        let d0 = Self::get_d(e.clone(), old_balances.clone(), amp);
-        for i in 0..n_coins {
-            new_balances.set(i, new_balances.get(i).unwrap() - amounts.get(i).unwrap());
-        }
-
-        let d1 = Self::get_d(e.clone(), new_balances.clone(), amp);
-        let mut fees = Vec::new(&e);
-
-        for i in 0..n_coins {
-            let new_balance = new_balances.get(i).unwrap();
-            let ideal_balance = d1.fixed_mul_floor(&e, &old_balances.get(i).unwrap(), &d0);
-            let difference = if ideal_balance > new_balance {
-                ideal_balance - new_balance
-            } else {
-                new_balance - ideal_balance
-            };
-            // This formula ensures that the fee is proportionally distributed
-            //  among the different coins in the pool. The denominator (4 * (N_COINS - 1)) is used
-            //  to adjust the fee based on the number of coins. As the number of coins increases,
-            //  the fee for each individual coin decreases.
-            let fee = difference.fixed_mul_ceil(
-                &e,
-                &(get_fee(&e) as u128 * n_coins as u128),
-                &(4 * (n_coins as u128 - 1) * FEE_DENOMINATOR as u128),
-            );
-            fees.push_back(fee);
-            // Admin fee is deducted from pool available reserves
-            reserves.set(
-                i,
-                new_balance - (fee.fixed_mul_ceil(&e, &admin_fee, &(FEE_DENOMINATOR as u128))),
-            );
-            new_balances.set(i, new_balance - fee);
-        }
-        put_reserves(&e, &reserves);
-
-        let d2 = Self::get_d(e.clone(), new_balances, amp);
-
-        let mut token_amount = (d0 - d2).fixed_mul_floor(&e, &token_supply, &d0);
-        if token_amount == 0 {
-            panic_with_error!(&e, LiquidityPoolValidationError::ZeroSharesBurned);
-        }
-        token_amount += 1; // In case of rounding errors - make it unfavorable for the "attacker"
-        if token_amount > max_burn_amount {
-            panic_with_error!(&e, LiquidityPoolValidationError::TooManySharesBurned);
-        }
-
-        // First transfer the pool shares that need to be redeemed
-        // Transfer max amount and return back change to avoid auth race condition
-        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &(max_burn_amount as i128),
-        );
-        if max_burn_amount > token_amount {
-            share_token_client.transfer(
-                &e.current_contract_address(),
-                &user,
-                &((max_burn_amount - token_amount) as i128),
-            );
-        }
-        burn_shares(&e, token_amount as i128);
-
-        for i in 0..n_coins {
-            if amounts.get(i).unwrap() != 0 {
-                let coins = get_tokens(&e);
-                let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
-                token_client.transfer(
-                    &e.current_contract_address(),
-                    &user,
-                    &(amounts.get(i).unwrap() as i128),
-                );
-            }
-        }
-
-        // update plane data for every pool update
-        update_plane(&e);
-
-        token_amount
-    }
-
     // Calculate the amount received when withdrawing a single coin.
     //
     // # Arguments
@@ -344,14 +217,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         );
         put_reserves(&e, &reserves);
 
-        // First transfer the pool shares that need to be redeemed
-        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &(share_amount as i128),
-        );
-        burn_shares(&e, share_amount as i128);
+        // Redeem shares
+        burn_shares(&e, &user, share_amount);
 
         let coins = get_tokens(&e);
         let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
@@ -1440,14 +1307,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
         put_reserves(&e, &reserves);
 
-        // First transfer the pool shares that need to be redeemed
-        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &(share_amount as i128),
-        );
-        burn_shares(&e, share_amount as i128);
+        // Redeem shares
+        burn_shares(&e, &user, share_amount);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1498,6 +1359,12 @@ impl UpgradeableContractTrait for LiquidityPool {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         e.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
+    fn upgrade_token(e: Env, new_token_wasm: BytesN<32>) {
+        let access_control = AccessControl::new(&e);
+        access_control.require_admin();
+        upgrade_token_share(&e, new_token_wasm);
     }
 }
 
@@ -1603,6 +1470,20 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .get_amount_to_claim(&user, total_shares, user_shares)
+    }
+
+    fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128) {
+        // checkpoint reward with provided values to avoid re-entrancy issue
+        token_contract.require_auth();
+        if token_contract != get_token_share(&e) {
+            panic_with_error!(&e, AccessControlError::Unauthorized);
+        }
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        let rewards_data = rewards.manager().update_rewards_data(total_shares);
+        rewards
+            .manager()
+            .update_user_reward(&rewards_data, &user, user_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.

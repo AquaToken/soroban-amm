@@ -17,6 +17,7 @@ use crate::storage::{
 };
 use crate::token::{create_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::errors::AccessControlError;
 use liquidity_pool_events::Events as PoolEvents;
 use liquidity_pool_events::LiquidityPoolEvents;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -28,8 +29,8 @@ use soroban_sdk::{
     IntoVal, Map, Symbol, Val, Vec, U256,
 };
 use token_share::{
-    burn_shares, get_balance_shares, get_token_share, get_total_shares, get_user_balance_shares,
-    mint_shares, put_token_share, Client as LPTokenClient,
+    burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
+    put_token_share, upgrade_token_share, Client as LPTokenClient,
 };
 use utils::u256_math::ExtraMath;
 
@@ -483,21 +484,14 @@ impl LiquidityPoolTrait for LiquidityPool {
             .update_user_reward(&pool_data, &user, user_shares);
         rewards.storage().bump_user_reward_data(&user);
 
-        // First transfer the pool shares that need to be redeemed
-        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &(share_amount as i128),
-        );
+        let total_shares = get_total_shares(&e);
+        burn_shares(&e, &user, share_amount);
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-        let balance_shares = get_balance_shares(&e);
-        let total_shares = get_total_shares(&e);
 
         // Now calculate the withdraw amounts
-        let out_a = reserve_a.fixed_mul_floor(&e, &balance_shares, &total_shares);
-        let out_b = reserve_b.fixed_mul_floor(&e, &balance_shares, &total_shares);
+        let out_a = reserve_a.fixed_mul_floor(&e, &share_amount, &total_shares);
+        let out_b = reserve_b.fixed_mul_floor(&e, &share_amount, &total_shares);
 
         let min_a = min_amounts.get(0).unwrap();
         let min_b = min_amounts.get(1).unwrap();
@@ -506,7 +500,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
-        burn_shares(&e, balance_shares as i128);
         transfer_a(&e, user.clone(), out_a);
         transfer_b(&e, user, out_b);
         put_reserve_a(&e, reserve_a - out_a);
@@ -683,6 +676,12 @@ impl UpgradeableContractTrait for LiquidityPool {
         access_control.require_admin();
         e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
+
+    fn upgrade_token(e: Env, new_token_wasm: BytesN<32>) {
+        let access_control = AccessControl::new(&e);
+        access_control.require_admin();
+        upgrade_token_share(&e, new_token_wasm);
+    }
 }
 
 #[contractimpl]
@@ -782,6 +781,20 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .get_amount_to_claim(&user, total_shares, user_shares)
+    }
+
+    fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128) {
+        // checkpoint reward with provided values to avoid re-entrancy issue
+        token_contract.require_auth();
+        if token_contract != get_token_share(&e) {
+            panic_with_error!(&e, AccessControlError::Unauthorized);
+        }
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        let rewards_data = rewards.manager().update_rewards_data(total_shares);
+        rewards
+            .manager()
+            .update_user_reward(&rewards_data, &user, user_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.

@@ -18,7 +18,11 @@ pub(crate) mod test_token {
 }
 
 fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client<'a> {
-    test_token::Client::new(e, &e.register_stellar_asset_contract(admin.clone()))
+    test_token::Client::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
 }
 
 fn create_liqpool_router_contract<'a>(e: &Env) -> LiquidityPoolRouterClient<'a> {

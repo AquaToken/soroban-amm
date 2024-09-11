@@ -4,7 +4,7 @@ extern crate std;
 use crate::{contract::Token, TokenClient};
 use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
 use soroban_sdk::{
-    symbol_short,
+    contract, contractimpl, symbol_short,
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
     Address, Env, IntoVal, Symbol, Vec,
 };
@@ -15,13 +15,27 @@ fn create_token<'a>(e: &Env, admin: &Address) -> TokenClient<'a> {
     token
 }
 
+#[contract]
+pub struct DummyPool;
+
+#[contractimpl]
+impl DummyPool {
+    pub fn checkpoint_reward(_e: Env, token_contract: Address, _user: Address, _user_shares: u128) {
+        token_contract.require_auth();
+    }
+}
+
+fn create_dummy_pool<'a>(e: &Env) -> DummyPoolClient<'a> {
+    DummyPoolClient::new(e, &e.register_contract(None, DummyPool {}))
+}
+
 #[test]
 fn test() {
     let e = Env::default();
     e.mock_all_auths();
 
-    let admin1 = Address::generate(&e);
-    let admin2 = Address::generate(&e);
+    let admin1 = create_dummy_pool(&e).address;
+    let admin2 = create_dummy_pool(&e).address;
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let user3 = Address::generate(&e);
@@ -155,7 +169,7 @@ fn test_burn() {
     let e = Env::default();
     e.mock_all_auths();
 
-    let admin = Address::generate(&e);
+    let admin = create_dummy_pool(&e).address;
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
@@ -212,7 +226,7 @@ fn transfer_insufficient_balance() {
     let e = Env::default();
     e.mock_all_auths();
 
-    let admin = Address::generate(&e);
+    let admin = create_dummy_pool(&e).address;
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
@@ -229,7 +243,7 @@ fn transfer_from_insufficient_allowance() {
     let e = Env::default();
     e.mock_all_auths();
 
-    let admin = Address::generate(&e);
+    let admin = create_dummy_pool(&e).address;
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let user3 = Address::generate(&e);
@@ -248,7 +262,7 @@ fn transfer_from_insufficient_allowance() {
 #[should_panic(expected = "Error(Contract, #601)")]
 fn initialize_already_initialized() {
     let e = Env::default();
-    let admin = Address::generate(&e);
+    let admin = create_dummy_pool(&e).address;
     let token = create_token(&e, &admin);
 
     token.initialize(&admin, &10, &"name".into_val(&e), &"symbol".into_val(&e));
@@ -258,7 +272,7 @@ fn initialize_already_initialized() {
 #[should_panic(expected = "Error(Contract, #605)")]
 fn decimal_is_over_max() {
     let e = Env::default();
-    let admin = Address::generate(&e);
+    let admin = create_dummy_pool(&e).address;
     let token = TokenClient::new(&e, &e.register_contract(None, Token {}));
     token.initialize(
         &admin,

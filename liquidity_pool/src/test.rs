@@ -6,7 +6,9 @@ use crate::testutils::{
     install_token_wasm, jump, Setup, TestConfig,
 };
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
-use soroban_sdk::token::StellarAssetClient as SorobanTokenAdminClient;
+use soroban_sdk::token::{
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+};
 use soroban_sdk::{testutils::Address as _, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec};
 use token_share::Client as ShareTokenClient;
 use utils::test_utils::assert_approx_eq_abs;
@@ -225,14 +227,10 @@ fn test() {
                 sub_invocations: std::vec![AuthorizedInvocation {
                     function: AuthorizedFunction::Contract((
                         token_share.address.clone(),
-                        Symbol::new(&e, "transfer"),
+                        Symbol::new(&e, "burn"),
                         Vec::from_array(
                             &e,
-                            [
-                                user1.to_val(),
-                                liq_pool.address.to_val(),
-                                (amount_to_deposit as i128).into_val(&e),
-                            ]
+                            [user1.to_val(), (amount_to_deposit as i128).into_val(&e),]
                         ),
                     )),
                     sub_invocations: std::vec![],
@@ -1737,4 +1735,152 @@ fn test_claim_rewards() {
     assert!(liq_pool.try_claim(&user1).is_err());
     token_reward_admin_client.mint(&liq_pool.address, &(1000 * 100));
     assert_eq!(liq_pool.claim(&user1), 1000 * 100);
+}
+
+#[test]
+fn test_drain_reward() {
+    let Setup {
+        env,
+        router: _router,
+        users,
+        token1: _token1,
+        token1_admin_client: _token1_admin_client,
+        token2: _token2,
+        token2_admin_client: _token2_admin_client,
+        token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
+        token_share,
+        liq_pool,
+        plane: _plane,
+    } = Setup::new_with_config(&TestConfig {
+        users_count: 5,
+        reward_tps: 10_5000000,
+        rewards_count: 10_5000000 * 60,
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+
+    // 10 seconds passed since config, user depositing
+    jump(&env, 10);
+
+    liq_pool.deposit(
+        &users[0],
+        &Vec::from_array(&env, [1000_0000000, 1000_0000000]),
+        &0,
+    );
+    let (_, lp_amount) = liq_pool.deposit(
+        &users[1],
+        &Vec::from_array(&env, [100_0000000, 100_0000000]),
+        &0,
+    );
+
+    jump(&env, 10);
+
+    for i in 2..5 {
+        token_share.transfer(&users[i - 1], &users[i], &(lp_amount as i128));
+        // liq_pool.get_user_reward(&users[i]);
+        // liq_pool.claim(&users[i]);
+        liq_pool.deposit(&users[i], &Vec::from_array(&env, [1, 1]), &0);
+    }
+
+    jump(&env, 50);
+    assert_eq!(liq_pool.claim(&users[4]), 381818182);
+    token_share.transfer(&users[4], &users[3], &(lp_amount as i128));
+    assert_eq!(liq_pool.claim(&users[3]), 0);
+    token_share.transfer(&users[3], &users[2], &(lp_amount as i128));
+    assert_eq!(liq_pool.claim(&users[2]), 0);
+    token_share.transfer(&users[2], &users[1], &(lp_amount as i128));
+    assert_eq!(liq_pool.claim(&users[1]), 95454545);
+    assert_eq!(liq_pool.claim(&users[0]), 4772727271);
+}
+
+#[test]
+fn test_drain_reserves() {
+    // test pool reserves are not affected by rewards if reward token is one of pool tokens and presented in pool balance
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    let user3 = Address::generate(&e);
+    let user4 = Address::generate(&e);
+
+    let mut token1 = create_token_contract(&e, &admin);
+    let mut token2 = create_token_contract(&e, &admin);
+
+    let plane = create_plane_contract(&e);
+
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+
+    let router = Address::generate(&e);
+
+    let liq_pool = create_liqpool_contract(
+        &e,
+        &admin,
+        &router,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &token_reward_admin_client.address,
+        30,
+        &plane.address,
+    );
+
+    liq_pool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(100),
+        &1_000_0000000,
+    );
+    token_reward_admin_client.mint(&liq_pool.address, &(1_000_0000000 * 100));
+    assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [0, 0]));
+
+    // first user deposits
+    token1_admin_client.mint(&user1, &1_000_000_0000000);
+    token2_admin_client.mint(&user1, &1_000_000_0000000);
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&e, [1_000_000_0000000, 1_000_000_0000000]),
+        &0,
+    );
+
+    // first exploiter deposits
+    token1_admin_client.mint(&user2, &1_000_000_0000000);
+    token2_admin_client.mint(&user2, &1_000_000_0000000);
+    let (_, lp_amount) = liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&e, [300_000_0000000, 300_000_0000000]),
+        &0,
+    );
+
+    let token_share = SorobanTokenClient::new(&e, &liq_pool.share_id());
+
+    token_share.transfer(&user2, &user3, &(lp_amount as i128));
+    liq_pool.claim(&user3);
+    token_share.transfer(&user3, &user4, &(lp_amount as i128));
+    liq_pool.claim(&user4);
+
+    jump(&e, 100);
+
+    // exploit starts
+    assert_eq!(liq_pool.claim(&user4), 230769230769);
+    token_share.transfer(&user4, &user3, &(lp_amount as i128));
+    assert_eq!(liq_pool.claim(&user3), 0);
+    token_share.transfer(&user3, &user2, &(lp_amount as i128));
+    assert_eq!(liq_pool.claim(&user2), 0);
+
+    // first user claims
+    assert_eq!(liq_pool.claim(&user1), 769230769230);
+
+    // check reserves
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [1_300_000_0000000, 1_300_000_0000000])
+    );
+    assert_eq!(token1.balance(&liq_pool.address), 1_300_000_0000001); // 1 token left on balance because of rounding
+    assert_eq!(token2.balance(&liq_pool.address), 1_300_000_0000000);
 }

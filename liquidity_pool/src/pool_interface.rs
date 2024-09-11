@@ -103,6 +103,8 @@ pub trait UpgradeableContractTrait {
 
     // Upgrade contract with new wasm code
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
+
+    fn upgrade_token(e: Env, new_token_wasm: BytesN<32>);
 }
 
 pub trait RewardsTrait {
@@ -120,6 +122,8 @@ pub trait RewardsTrait {
 
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
+
+    fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128);
 
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env) -> u128;
