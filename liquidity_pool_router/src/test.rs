@@ -2202,6 +2202,7 @@ fn test_config_rewards_not_admin() {
     liquidity_calculator.init_admin(&admin);
     liquidity_calculator.set_pools_plane(&admin, &plane.address);
     router.init_admin(&admin);
+    router.set_operator(&admin);
     router.set_pool_hash(&pool_hash);
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);

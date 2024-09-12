@@ -1,6 +1,4 @@
-use crate::storage::{get_operator, has_operator};
-use access_control::access::{AccessControl, AccessControlTrait};
-use access_control::errors::AccessControlError;
+use access_control::access::{AccessControl, AccessControlTrait, OperatorAccessTrait};
 use soroban_sdk::{panic_with_error, Address, Env};
 
 pub(crate) fn require_admin_or_operator(e: &Env, user: Address) {
@@ -13,11 +11,6 @@ pub(crate) fn require_admin_or_operator(e: &Env, user: Address) {
 
     if user != admin {
         // the user is not an admin, so let's check if it's operator
-        if !has_operator(&e) {
-            panic_with_error!(&e, AccessControlError::Unauthorized);
-        }
-        if user != get_operator(&e) {
-            panic_with_error!(&e, AccessControlError::Unauthorized);
-        }
+        access_control.check_operator(&user);
     }
 }

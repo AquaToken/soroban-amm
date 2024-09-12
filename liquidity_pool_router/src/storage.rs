@@ -65,7 +65,6 @@ enum DataKey {
     RewardsConfig,
     RewardTokensList(u64),
     RewardTokensPoolsLiquidity(u64, BytesN<32>),
-    Operator,
 }
 
 #[contracterror]
@@ -141,7 +140,6 @@ generate_instance_storage_getter_and_setter_with_default!(
         current_block: 0,
     }
 );
-generate_instance_storage_getter_and_setter!(operator, DataKey::Operator, Address);
 
 pub fn get_reward_tokens(e: &Env, block: u64) -> Map<Vec<Address>, LiquidityPoolRewardInfo> {
     let key = DataKey::RewardTokensList(block);
@@ -310,9 +308,4 @@ pub fn put_tokens_set(e: &Env, index: u128, tokens: &Vec<Address>) {
     let key = DataKey::TokensSet(index);
     e.storage().persistent().set(&key, tokens);
     bump_persistent(e, &key);
-}
-
-pub fn has_operator(e: &Env) -> bool {
-    bump_instance(e);
-    e.storage().instance().has(&DataKey::Operator)
 }

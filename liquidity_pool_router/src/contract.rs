@@ -19,16 +19,15 @@ use crate::router_interface::{AdminInterface, UpgradeableContract};
 use crate::storage::{
     get_init_pool_payment_address, get_init_pool_payment_token,
     get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
-    get_liquidity_calculator, get_operator, get_pool, get_pool_plane, get_pools_plain,
-    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_tokens_set,
-    get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_init_pool_payment_address, set_init_pool_payment_token,
-    set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
-    set_liquidity_calculator, set_operator, set_pool_plane, set_reward_tokens,
-    set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash,
-    GlobalRewardsConfig, LiquidityPoolRewardInfo,
+    get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_reward_tokens,
+    get_reward_tokens_detailed, get_rewards_config, get_tokens_set, get_tokens_set_count, has_pool,
+    remove_pool, set_constant_product_pool_hash, set_init_pool_payment_address,
+    set_init_pool_payment_token, set_init_stable_pool_payment_amount,
+    set_init_standard_pool_payment_amount, set_liquidity_calculator, set_pool_plane,
+    set_reward_tokens, set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash,
+    set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
-use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::access::{AccessControl, AccessControlTrait, OperatorAccessTrait};
 use access_control::errors::AccessControlError;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
@@ -465,7 +464,7 @@ impl AdminInterface for LiquidityPoolRouter {
     fn set_operator(e: Env, operator: Address) {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
-        set_operator(&e, &operator);
+        access_control.set_operator(&operator);
     }
 
     // Sets the liquidity pool share token wasm hash.
@@ -558,7 +557,10 @@ impl AdminInterface for LiquidityPoolRouter {
     //
     // The operator address.
     fn get_operator(e: Env) -> Address {
-        get_operator(&e)
+        match AccessControl::new(&e).get_operator() {
+            Some(address) => address,
+            None => panic_with_error!(e, AccessControlError::RoleNotFound),
+        }
     }
 }
 
