@@ -1088,6 +1088,46 @@ fn test_config_rewards_router() {
     );
 }
 
+#[test]
+fn test_config_rewards_override() {
+    let setup = Setup::setup(&TestConfig::default());
+    setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
+    let Setup {
+        env,
+        router,
+        users,
+        token1: _token1,
+        token1_admin_client: _token1_admin_client,
+        token2: _token2,
+        token2_admin_client: _token2_admin_client,
+        token_reward: _token_reward,
+        token_reward_admin_client: _token_reward_admin_client,
+        token_share: _token_share,
+        liq_pool,
+        plane: _plane,
+    } = setup;
+
+    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
+
+    assert_eq!(liq_pool.get_total_accumulated_reward(), 0);
+    assert_eq!(liq_pool.get_total_configured_reward(), 0);
+    let tps = 10_5000000_u128;
+    liq_pool.set_rewards_config(&router, &env.ledger().timestamp().saturating_add(60), &tps);
+
+    jump(&env, 30);
+    // assert_eq!(liq_pool.get_total_accumulated_reward(), tps * 30);
+    // assert_eq!(liq_pool.get_total_configured_reward(), tps * 60);
+    liq_pool.set_rewards_config(&router, &env.ledger().timestamp().saturating_add(0), &0);
+
+    // assert_eq!(liq_pool.get_total_accumulated_reward(), tps * 30);
+    // assert_eq!(liq_pool.get_total_configured_reward(), tps * 30);
+
+    jump(&env, 5);
+
+    assert_eq!(liq_pool.get_total_accumulated_reward(), tps * 30);
+    assert_eq!(liq_pool.get_total_configured_reward(), tps * 30);
+}
+
 #[should_panic(expected = "Error(Contract, #2018)")]
 #[test]
 fn test_zero_swap() {
