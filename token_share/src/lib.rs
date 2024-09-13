@@ -89,7 +89,7 @@ pub fn replicate_token_share_balance_to_future(e: &Env, user: &Address) {
     };
 
     let share_token_balance = SorobanTokenClient::new(e, &get_token_share(e)).balance(user);
-    let future_share_token_balance = SorobanTokenClient::new(e, &get_token_share(e)).balance(user);
+    let future_share_token_balance = SorobanTokenClient::new(e, &future_token_share).balance(user);
     if share_token_balance > future_share_token_balance {
         let diff = share_token_balance - future_share_token_balance;
         SorobanTokenAdminClient::new(e, &future_token_share).mint(user, &diff);
