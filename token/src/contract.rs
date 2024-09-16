@@ -168,7 +168,7 @@ impl UpgradeableContract for Token {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        110
+        120
     }
 
     // Upgrades the contract to a new version.
