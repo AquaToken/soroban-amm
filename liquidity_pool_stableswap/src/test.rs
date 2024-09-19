@@ -2822,4 +2822,8 @@ fn test_swap_rewards() {
         liq_pool2.get_reserves(),
         Vec::from_array(&e, [reserves1.get(1).unwrap(), reserves1.get(0).unwrap()])
     );
+
+    // receive tokens decimals
+    assert_eq!(liq_pool1.get_decimals(), vec![&e, 7u32, 7u32]);
+    assert_eq!(liq_pool2.get_decimals(), vec![&e, 7u32, 7u32]);
 }

@@ -7,13 +7,14 @@ use crate::pool_interface::{
     ManagedLiquidityPool, RewardsTrait, UpgradeableContractTrait,
 };
 use crate::storage::{
-    get_admin_actions_deadline, get_admin_fee, get_fee, get_future_a, get_future_a_time,
-    get_future_admin_fee, get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim,
-    get_is_killed_deposit, get_is_killed_swap, get_plane, get_reserves, get_router, get_tokens,
-    get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline, put_admin_fee, put_fee,
-    put_future_a, put_future_a_time, put_future_admin_fee, put_future_fee, put_initial_a,
-    put_initial_a_time, put_reserves, put_tokens, put_transfer_ownership_deadline,
-    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
+    get_admin_actions_deadline, get_admin_fee, get_decimals, get_fee, get_future_a,
+    get_future_a_time, get_future_admin_fee, get_future_fee, get_initial_a, get_initial_a_time,
+    get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_plane, get_reserves,
+    get_router, get_tokens, get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline,
+    put_admin_fee, put_decimals, put_fee, put_future_a, put_future_a_time, put_future_admin_fee,
+    put_future_fee, put_initial_a, put_initial_a_time, put_reserves, put_tokens,
+    put_transfer_ownership_deadline, set_is_killed_claim, set_is_killed_deposit,
+    set_is_killed_swap, set_plane, set_router,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -31,7 +32,7 @@ use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::token::Client as SorobanTokenClient;
+use soroban_sdk::token::{self, Client as SorobanTokenClient};
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
     IntoVal, Map, Symbol, Val, Vec, U256,
@@ -1075,6 +1076,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         put_tokens(&e, &coins);
 
+        let mut tokens_deecimals: Vec<u32> = Vec::new(&e);
+
+        for coin in coins.iter() {
+            // get coin decimals
+            let token_client = token::Client::new(&e, &coin);
+            let decimal = token_client.decimals();
+            tokens_deecimals.push_back(decimal);
+        }
+
+        put_decimals(&e, &tokens_deecimals);
+
         // LP token
         let share_contract = create_contract(&e, token_wasm_hash);
         LPToken::new(&e, &share_contract).initialize(
@@ -1154,6 +1166,15 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // A vector of token addresses.
     fn get_tokens(e: Env) -> Vec<Address> {
         get_tokens(&e)
+    }
+
+    // Returns the pools's decimals.
+    //
+    // # Returns
+    //
+    // A vector of token decimals the same order as the tokens.
+    fn get_decimals(e: Env) -> Vec<u32> {
+        get_decimals(&e)
     }
 
     // Deposits tokens into the pool.

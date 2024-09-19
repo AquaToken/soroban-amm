@@ -12,6 +12,7 @@ use utils::{
 #[contracttype]
 enum DataKey {
     Tokens,
+    Decimals,
     Reserves,
     InitialA,
     InitialATime,
@@ -57,6 +58,14 @@ pub fn get_tokens(e: &Env) -> Vec<Address> {
     }
 }
 
+pub fn get_decimals(e: &Env) -> Vec<u32> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::Decimals) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
+}
+
 pub fn get_reserves(e: &Env) -> Vec<u128> {
     bump_instance(e);
     match e.storage().instance().get(&DataKey::Reserves) {
@@ -68,6 +77,11 @@ pub fn get_reserves(e: &Env) -> Vec<u128> {
 pub fn put_tokens(e: &Env, contracts: &Vec<Address>) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::Tokens, contracts);
+}
+
+pub fn put_decimals(e: &Env, decimals: &Vec<u32>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::Decimals, decimals);
 }
 
 pub fn put_reserves(e: &Env, amounts: &Vec<u128>) {

@@ -50,6 +50,9 @@ pub trait LiquidityPoolInterfaceTrait {
     // Getter for the array of swappable coins within the pool.
     fn get_tokens(e: Env) -> Vec<Address>;
 
+    // Getter for array of tokens decimals in the pool.
+    fn get_decimals(e: Env) -> Vec<u32>;
+
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
