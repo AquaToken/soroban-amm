@@ -2827,3 +2827,58 @@ fn test_swap_rewards() {
     assert_eq!(liq_pool1.get_decimals(), vec![&e, 7u32, 7u32]);
     assert_eq!(liq_pool2.get_decimals(), vec![&e, 7u32, 7u32]);
 }
+
+fn install_token_wasm_with_decimal<'a>(
+    e: &Env,
+    admin: Address,
+    decimal: u32,
+) -> ShareTokenClient<'a> {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
+    );
+
+    let token_client = ShareTokenClient::new(e, &e.register_contract_wasm(None, WASM));
+    token_client.initialize(&admin, &decimal, &"Token 1".into_val(e), &"TOK".into_val(e));
+    token_client
+}
+
+#[test]
+fn test_decimals_in_swap_pool() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let mut token1 = install_token_wasm_with_decimal(&e, admin.clone(), 18u32);
+    let mut token2 = install_token_wasm_with_decimal(&e, admin.clone(), 12u32);
+    let plane = create_plane_contract(&e);
+
+    if &token2.address < &token1.address {
+        std::mem::swap(&mut token1, &mut token2);
+    }
+
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address);
+    let router = Address::generate(&e);
+
+    // we compare two pools to check swap in both directions
+    let liq_pool1 = create_liqpool_contract(
+        &e,
+        &admin,
+        &router,
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        85,
+        30,
+        0,
+        &token_reward_admin_client.address,
+        &plane.address,
+    );
+
+    assert_eq!(
+        liq_pool1.get_decimals(),
+        vec![&e, token1.decimals(), token2.decimals()]
+    );
+    assert_eq!(
+        liq_pool1.get_tokens(),
+        vec![&e, token1.address, token2.address]
+    );
+}

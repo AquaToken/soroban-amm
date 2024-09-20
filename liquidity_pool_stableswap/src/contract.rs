@@ -32,7 +32,7 @@ use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::token::{self, Client as SorobanTokenClient};
+use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
     IntoVal, Map, Symbol, Val, Vec, U256,
@@ -1080,7 +1080,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         for coin in coins.iter() {
             // get coin decimals
-            let token_client = token::Client::new(&e, &coin);
+            let token_client = SorobanTokenClient::new(&e, &coin);
             let decimal = token_client.decimals();
             tokens_deecimals.push_back(decimal);
         }
