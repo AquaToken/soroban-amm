@@ -1001,8 +1001,11 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             }
             None => {}
         }
-
-        configured_reward - claimed_reward - pool_reward_balance
+        if configured_reward - claimed_reward < pool_reward_balance {
+            0_u128
+        } else {
+            configured_reward - claimed_reward - pool_reward_balance
+        }
     }
 
     // Transfer outstanding reward to the pool
