@@ -5,6 +5,7 @@ use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
     install_token_wasm, jump, Setup, TestConfig,
 };
+use crate::LiquidityPoolClient;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -952,11 +953,11 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
             0 => &first_user,
             val => &users[val - 1],
         };
-        token1_admin_client.mint(user, &1_000_000_000_000_000_000_000);
-        token2_admin_client.mint(user, &1_000_000_000_000_000_000_000);
+        token1_admin_client.mint(user, &(i128::MAX / 100));
+        token2_admin_client.mint(user, &(i128::MAX / 100));
     }
 
-    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_000_000_0000000);
+    token_reward_admin_client.mint(&liq_pool.address, &(i128::MAX / 100));
 
     let reward_1_tps = 10_5000000_u128;
     liq_pool.set_rewards_config(
@@ -968,21 +969,19 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     );
     jump(&env, 10);
 
+    let starting_iteration = 42;
+
     // we have this because of last jump(100)
     let mut expected_reward = 100 * reward_1_tps / iterations_to_simulate as u128;
-    for i in 0..iterations_to_simulate as u128 {
+    for i in starting_iteration as u128..iterations_to_simulate as u128 {
         expected_reward += reward_1_tps / (i + 1);
     }
 
-    liq_pool.deposit(
-        &first_user,
-        &Vec::from_array(&env, [1_000_000_000_000_0000000, 1_000_000_000_000_0000000]),
-        &0,
-    );
-    jump(&env, 1);
-
-    for i in 1..iterations_to_simulate as usize {
-        let user = &users[i % 10];
+    for i in 0..iterations_to_simulate as usize {
+        let user = match i == starting_iteration {
+            true => &first_user,
+            false => &users[i % 10],
+        };
         liq_pool.deposit(
             user,
             &Vec::from_array(&env, [1_000_000_000_000_0000000, 1_000_000_000_000_0000000]),
@@ -992,6 +991,8 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     }
 
     jump(&env, 100);
+    // re-initialize init pool to clear cache
+    let liq_pool = LiquidityPoolClient::new(&env, &liq_pool.address);
     env.budget().reset_default();
     let user1_claim = liq_pool.claim(&first_user);
     env.budget().print();
@@ -1027,6 +1028,12 @@ fn test_deposit_inequal_return_change() {
 #[test]
 fn test_rewards_1k() {
     test_rewards_many_users(1_000);
+}
+
+// #[cfg(feature = "slow_tests")]
+#[test]
+fn test_rewards_5k() {
+    test_rewards_many_users(5_000);
 }
 
 #[cfg(feature = "slow_tests")]
