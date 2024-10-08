@@ -179,19 +179,8 @@ pub trait AdminInterfaceTrait {
     fn get_is_killed_claim(e: Env) -> bool;
 }
 
-pub trait InternalInterfaceTrait {
-    fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128;
-    fn get_y(e: Env, i: u32, j: u32, x: u128, xp_: Vec<u128>) -> u128;
-    fn get_y_d(e: Env, a: u128, i: u32, xp: Vec<u128>, d: u128) -> u128;
-    fn internal_calc_withdraw_one_coin(e: Env, share_amount: u128, i: u32) -> (u128, u128);
-}
-
 pub trait LiquidityPoolTrait:
-    LiquidityPoolInterfaceTrait
-    + UpgradeableContractTrait
-    + RewardsTrait
-    + AdminInterfaceTrait
-    + InternalInterfaceTrait
+    LiquidityPoolInterfaceTrait + UpgradeableContractTrait + RewardsTrait + AdminInterfaceTrait
 {
     // The amplification coefficient for the pool.
     fn a(e: Env) -> u128;

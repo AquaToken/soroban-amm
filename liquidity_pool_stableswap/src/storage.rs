@@ -1,6 +1,7 @@
 use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
 
+use crate::normalize;
 use rewards::utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
 use utils::{
@@ -29,6 +30,10 @@ enum DataKey {
     IsKilledClaim,
     Plane,
     Router,
+
+    // Tokens precision
+    Precision, // target precision for internal calculations. It's the maximum precision of all tokens.
+    Rates,     // adjust token amounts for decimal differences
 }
 
 generate_instance_storage_getter_and_setter_with_default!(
@@ -268,5 +273,42 @@ pub(crate) fn get_router(e: &Env) -> Address {
     match e.storage().instance().get(&key) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
+}
+
+// Tokens precision
+// Precision - target precision for internal calculations. It's the maximum precision of all tokens.
+pub fn set_precision(e: &Env, value: &u128) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::Precision, value);
+}
+
+pub fn get_precision(e: &Env) -> u128 {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::Precision) {
+        Some(v) => v,
+        None => {
+            let precision = normalize::get_precision(&get_decimals(e));
+            set_precision(e, &precision);
+            precision
+        }
+    }
+}
+
+// Rates - adjust token amounts for decimal differences
+pub fn set_rates(e: &Env, value: &Vec<u128>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::Rates, value);
+}
+
+pub fn get_rates(e: &Env) -> Vec<u128> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::Rates) {
+        Some(v) => v,
+        None => {
+            let rates = normalize::get_rates(e, &get_decimals(e));
+            set_rates(e, &rates);
+            rates
+        }
     }
 }
