@@ -1,19 +1,18 @@
 use crate::pool_constants::{
-    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, MAX_A,  MAX_A_CHANGE, MAX_FEE,
-    MIN_RAMP_TIME,
+    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MAX_FEE, MIN_RAMP_TIME,
 };
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait, ManagedLiquidityPool,
     RewardsTrait, UpgradeableContractTrait, UpgradeableLPTokenTrait,
 };
 use crate::storage::{
-    get_admin_actions_deadline, get_fee, get_future_a, get_future_a_time, get_future_fee,
-    get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_plane, get_reserves, get_router, get_tokens,
-    get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline, put_fee, put_future_a,
-    put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time, put_reserves, put_tokens,
-    put_transfer_ownership_deadline, set_is_killed_claim, set_is_killed_deposit,
-    set_is_killed_swap, set_plane, set_router, get_rates, get_decimals, put_decimals, get_precision,
+    get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
+    get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
+    get_is_killed_swap, get_plane, get_precision, get_rates, get_reserves, get_router, get_tokens,
+    get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline, put_decimals, put_fee,
+    put_future_a, put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time,
+    put_reserves, put_tokens, put_transfer_ownership_deadline, set_is_killed_claim,
+    set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
 };
 use crate::token::create_contract;
 use token_share::{
