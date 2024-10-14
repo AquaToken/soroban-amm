@@ -432,13 +432,16 @@ impl LiquidityPool {
             // // Equality with the precision of 1
             if d.clone() > d_prev {
                 if d.sub(&d_prev) <= one {
-                    break;
+                    return d;
                 }
             } else if d_prev.sub(&d) <= one {
-                break;
+                return d;
             }
         }
-        d
+
+        // convergence typically occurs in 4 rounds or less, this should be unreachable!
+        // if it does happen the pool is borked and LPs can withdraw via `withdraw`
+        panic_with_error!(e, LiquidityPoolError::MaxIterationsReached);
     }
 
     // Calculates the amount of token `j` that will be received for swapping `dx` of token `i`.
@@ -502,13 +505,13 @@ impl LiquidityPool {
             // Equality with the precision of 1
             if y > y_prev {
                 if y.sub(&y_prev) <= U256::from_u32(e, 1) {
-                    break;
+                    return y.to_u128().unwrap();
                 }
             } else if y_prev.sub(&y) <= U256::from_u32(e, 1) {
-                break;
+                return y.to_u128().unwrap();
             }
         }
-        y.to_u128().unwrap()
+        panic_with_error!(e, LiquidityPoolError::MaxIterationsReached);
     }
 
     // Calculates the amount of token `j` that will be received for swapping `dx` of token `i`.
@@ -571,13 +574,13 @@ impl LiquidityPool {
             // Equality with the precision of 1
             if y > y_prev {
                 if y.sub(&y_prev) <= U256::from_u32(e, 1) {
-                    break;
+                    return y.to_u128().unwrap();
                 }
             } else if y_prev.sub(&y) <= U256::from_u32(e, 1) {
-                break;
+                return y.to_u128().unwrap();
             }
         }
-        y.to_u128().unwrap()
+        panic_with_error!(e, LiquidityPoolError::MaxIterationsReached);
     }
 
     // Calculate the amount received when withdrawing a single coin.
