@@ -1061,7 +1061,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     // * `router` - The address of the router.
     // * `token_wasm_hash` - The hash of the token's WASM code.
-    // * `coins` - The addresses of the coins.
+    // * `tokens` - The addresses of the coins.
     // * `a` - The amplification coefficient.
     // * `fee` - The fee to be applied.
     // * `admin_fee` - The admin fee to be applied.
@@ -1071,7 +1071,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         operator: Address,
         router: Address,
         token_wasm_hash: BytesN<32>,
-        coins: Vec<Address>,
+        tokens: Vec<Address>,
         a: u128,
         fee: u32,
         admin_fee: u32,
@@ -1093,10 +1093,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_fee(&e, &fee);
         put_admin_fee(&e, &admin_fee);
 
-        put_tokens(&e, &coins);
+        put_tokens(&e, &tokens);
 
         // LP token
-        let share_contract = create_contract(&e, token_wasm_hash);
+        let share_contract = create_contract(&e, token_wasm_hash, &tokens);
         LPToken::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
@@ -1105,7 +1105,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         );
         put_token_share(&e, share_contract);
         let mut initial_reserves = Vec::new(&e);
-        for _i in 0..coins.len() {
+        for _i in 0..tokens.len() {
             initial_reserves.push_back(0_u128);
         }
         put_reserves(&e, &initial_reserves);
