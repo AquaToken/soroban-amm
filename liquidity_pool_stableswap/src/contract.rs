@@ -1344,8 +1344,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let old_balances = get_reserves(&e);
         let xp = old_balances.clone();
 
-        // Handling an unexpected charge of a fee on transfer (USDT, PAXG)
-        let dx_w_fee = in_amount;
         let coins = get_tokens(&e);
         let input_coin = coins.get(in_idx).unwrap();
 
@@ -1358,7 +1356,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let x = reserve_sell + dx_w_fee;
+        let x = reserve_sell + in_amount;
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = reserve_buy - y - 1; // -1 just in case there were some rounding errors
@@ -1376,7 +1374,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         // Change balances exactly in same way as we change actual ERC20 coin amounts
         let mut reserves = get_reserves(&e);
-        reserves.set(in_idx, old_balances.get(in_idx).unwrap() + dx_w_fee);
+        reserves.set(in_idx, old_balances.get(in_idx).unwrap() + in_amount);
         // When rounding errors happen, we undercharge admin fee in favor of LP
         reserves.set(
             out_idx,
