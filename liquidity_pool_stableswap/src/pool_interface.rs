@@ -5,6 +5,7 @@ pub trait ManagedLiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
+        operator: Address,
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
@@ -24,6 +25,7 @@ pub trait LiquidityPoolInterfaceTrait {
     fn initialize(
         e: Env,
         admin: Address,
+        operator: Address,
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -99,6 +101,14 @@ pub trait UpgradeableContractTrait {
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
 }
 
+pub trait UpgradeableLPTokenTrait {
+    fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>);
+    fn set_future_share_id(e: Env, admin: Address, contract: Address);
+    fn migrate_share_balances(e: Env, operator: Address, users: Vec<Address>);
+    fn get_future_share_id(e: Env) -> Address;
+    fn commit_future_share_id(e: Env, admin: Address);
+}
+
 pub trait RewardsTrait {
     // Initialize rewards token address
     fn initialize_rewards_config(e: Env, reward_token: Address);
@@ -115,6 +125,8 @@ pub trait RewardsTrait {
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
 
+    fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128);
+
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env) -> u128;
 
@@ -130,6 +142,12 @@ pub trait RewardsTrait {
 }
 
 pub trait AdminInterfaceTrait {
+    // Set operator address which can perform some restricted actions
+    fn set_operator(e: Env, admin: Address, operator: Address);
+
+    // Get operator address or panic if doesn't set
+    fn get_operator(e: Env) -> Address;
+
     // Start ramping A to target value in future timestamp
     fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64);
 
@@ -180,7 +198,8 @@ pub trait AdminInterfaceTrait {
 }
 
 pub trait LiquidityPoolTrait:
-    LiquidityPoolInterfaceTrait + UpgradeableContractTrait + RewardsTrait + AdminInterfaceTrait
+    LiquidityPoolInterfaceTrait + UpgradeableContractTrait + UpgradeableLPTokenTrait
+    + RewardsTrait + AdminInterfaceTrait
 {
     // The amplification coefficient for the pool.
     fn a(e: Env) -> u128;

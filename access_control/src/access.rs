@@ -8,6 +8,7 @@ use utils::storage_errors::StorageError;
 enum DataKey {
     Admin,
     FutureAdmin,
+    Operator,
 }
 
 #[derive(Clone)]
@@ -28,6 +29,13 @@ pub trait AccessControlTrait {
     fn get_future_admin(&self) -> Option<Address>;
     fn set_future_admin(&self, admin: &Address);
     fn perform_admin_check(&self) -> Result<Address, AccessControlError>;
+}
+
+pub trait OperatorAccessTrait {
+    fn has_operator(&self) -> bool;
+    fn get_operator(&self) -> Option<Address>;
+    fn set_operator(&self, admin: &Address);
+    fn check_operator(&self, user: &Address);
 }
 
 impl AccessControlTrait for AccessControl {
@@ -82,8 +90,38 @@ impl AccessControlTrait for AccessControl {
 
     fn perform_admin_check(&self) -> Result<Address, AccessControlError> {
         if !self.has_admin() {
-            panic_with_error!(&self.0, AccessControlError::AdminNotFound);
+            panic_with_error!(&self.0, AccessControlError::RoleNotFound);
         }
-        self.get_admin().ok_or(AccessControlError::AdminNotFound)
+        self.get_admin().ok_or(AccessControlError::RoleNotFound)
+    }
+}
+
+impl OperatorAccessTrait for AccessControl {
+    fn has_operator(&self) -> bool {
+        bump_instance(&self.0);
+        self.0.storage().instance().has(&DataKey::Operator)
+    }
+
+    fn get_operator(&self) -> Option<Address> {
+        bump_instance(&self.0);
+        self.0.storage().instance().get(&DataKey::Operator)
+    }
+
+    fn set_operator(&self, operator: &Address) {
+        bump_instance(&self.0);
+        self.0
+            .storage()
+            .instance()
+            .set(&DataKey::Operator, operator)
+    }
+
+    fn check_operator(&self, user: &Address) {
+        let operator = match self.get_operator() {
+            Some(address) => address,
+            None => panic_with_error!(self.0, AccessControlError::RoleNotFound),
+        };
+        if operator != user.clone() {
+            panic_with_error!(&self.0, AccessControlError::Unauthorized);
+        }
     }
 }

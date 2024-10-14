@@ -2,10 +2,12 @@
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::errors::TokenError;
+use crate::interface::UpgradeableContract;
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
+use crate::pool::checkpoint_user_rewards;
 use access_control::access::{AccessControl, AccessControlTrait};
 use soroban_sdk::token::{self, Interface as _};
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, String};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, String};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
 use utils::bump::bump_instance;
@@ -97,6 +99,9 @@ impl token::Interface for Token {
 
         bump_instance(&e);
 
+        checkpoint_user_rewards(&e, from.clone());
+        checkpoint_user_rewards(&e, to.clone());
+
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
         TokenUtils::new(&e).events().transfer(from, to, amount);
@@ -108,6 +113,9 @@ impl token::Interface for Token {
         check_nonnegative_amount(&e, amount);
 
         bump_instance(&e);
+
+        checkpoint_user_rewards(&e, from.clone());
+        checkpoint_user_rewards(&e, to.clone());
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
@@ -148,5 +156,30 @@ impl token::Interface for Token {
 
     fn symbol(e: Env) -> String {
         read_symbol(&e)
+    }
+}
+
+// The `UpgradeableContract` trait provides the interface for upgrading the contract.
+#[contractimpl]
+impl UpgradeableContract for Token {
+    // Returns the version of the contract.
+    //
+    // # Returns
+    //
+    // The version of the contract as a u32.
+    fn version() -> u32 {
+        120
+    }
+
+    // Upgrades the contract to a new version.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `new_wasm_hash` - The hash of the new contract version.
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        let access_control = AccessControl::new(&e);
+        access_control.require_admin();
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

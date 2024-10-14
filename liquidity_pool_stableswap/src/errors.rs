@@ -11,6 +11,7 @@ pub enum LiquidityPoolError {
     PoolDepositKilled = 205,
     PoolSwapKilled = 206,
     PoolClaimKilled = 207,
+    FutureShareIdNotSet = 208,
 
     // pool specific validation errors
     RampTooEarly = 2902,

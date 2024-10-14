@@ -4,7 +4,7 @@ use crate::pool_constants::{
 };
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait, ManagedLiquidityPool,
-    RewardsTrait, UpgradeableContractTrait,
+    RewardsTrait, UpgradeableContractTrait, UpgradeableLPTokenTrait,
 };
 use crate::storage::{
     get_admin_actions_deadline, get_admin_fee, get_decimals, get_fee, get_future_a,
@@ -18,8 +18,9 @@ use crate::storage::{
 };
 use crate::token::create_contract;
 use token_share::{
-    burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
-    put_token_share, Client as LPToken,
+    burn_shares, commit_future_token_share, get_future_token_share, get_token_share,
+    get_total_shares, get_user_balance_shares, mint_shares, put_future_token_share,
+    put_token_share, replicate_token_share_balance_to_future, Client as LPToken,
 };
 
 use crate::errors::LiquidityPoolError;
@@ -27,7 +28,8 @@ use crate::normalize::xp;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
-use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::access::{AccessControl, AccessControlTrait, OperatorAccessTrait};
+use access_control::errors::AccessControlError;
 use cast::i128 as to_i128;
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -268,21 +270,11 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // First transfer the pool shares that need to be redeemed
-        // Transfer max amount and return back change to avoid auth race condition
-        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &(max_burn_amount as i128),
-        );
+        // Burn max amount and mint back change to avoid auth race condition
+        burn_shares(&e, &user, max_burn_amount);
         if max_burn_amount > token_amount {
-            share_token_client.transfer(
-                &e.current_contract_address(),
-                &user,
-                &((max_burn_amount - token_amount) as i128),
-            );
+            mint_shares(&e, &user, (max_burn_amount - token_amount) as i128);
         }
-        burn_shares(&e, token_amount as i128);
 
         for i in 0..n_coins {
             if amounts.get(i).unwrap() != 0 {
@@ -365,14 +357,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         );
         put_reserves(&e, &reserves);
 
-        // First transfer the pool shares that need to be redeemed
-        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &(share_amount as i128),
-        );
-        burn_shares(&e, share_amount as i128);
+        // Redeem shares
+        burn_shares(&e, &user, share_amount);
 
         let coins = get_tokens(&e);
         let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
@@ -380,6 +366,9 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        // migrate user shares if future token share contract is available
+        replicate_token_share_balance_to_future(&e, &user);
 
         let mut amounts: Vec<u128> = Vec::new(&e);
         for token_idx in 0..coins.len() {
@@ -659,6 +648,30 @@ impl LiquidityPool {
 
 #[contractimpl]
 impl AdminInterfaceTrait for LiquidityPool {
+    // Set operator address which can perform some restricted actions
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `operator` - The address of the operator.
+    fn set_operator(e: Env, admin: Address, operator: Address) {
+        let access_control = AccessControl::new(&e);
+        access_control.check_admin(&admin);
+        access_control.set_operator(&operator);
+    }
+
+    // Returns the operator address.
+    //
+    // # Returns
+    //
+    // The operator address.
+    fn get_operator(e: Env) -> Address {
+        match AccessControl::new(&e).get_operator() {
+            Some(address) => address,
+            None => panic_with_error!(e, AccessControlError::RoleNotFound),
+        }
+    }
+
     // Starts ramping A to target value in future timestamp.
     //
     // # Arguments
@@ -1027,6 +1040,7 @@ impl ManagedLiquidityPool for LiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
+        operator: Address,
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
@@ -1042,6 +1056,7 @@ impl ManagedLiquidityPool for LiquidityPool {
         Self::initialize(
             e.clone(),
             admin,
+            operator,
             router,
             token_wasm_hash,
             coins,
@@ -1078,6 +1093,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     fn initialize(
         e: Env,
         admin: Address,
+        operator: Address,
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
@@ -1091,6 +1107,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
 
         access_control.set_admin(&admin);
+        access_control.set_operator(&operator);
         set_router(&e, &router);
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
@@ -1334,10 +1351,13 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
         // Mint pool tokens
-        mint_shares(&e, user, mint_amount as i128);
+        mint_shares(&e, &user, mint_amount as i128);
 
         // update plane data for every pool update
         update_plane(&e);
+
+        // migrate user shares if future token share contract is available
+        replicate_token_share_balance_to_future(&e, &user);
 
         PoolEvents::new(&e).deposit_liquidity(tokens, amounts.clone(), mint_amount);
 
@@ -1428,6 +1448,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
+        // migrate user shares if future token share contract is available
+        replicate_token_share_balance_to_future(&e, &user);
+
         PoolEvents::new(&e).trade(user, input_coin, token_out, in_amount, dy, dy_fee);
 
         dy
@@ -1500,17 +1523,14 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
         put_reserves(&e, &reserves);
 
-        // First transfer the pool shares that need to be redeemed
-        let share_token_client = SorobanTokenClient::new(&e, &get_token_share(&e));
-        share_token_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &(share_amount as i128),
-        );
-        burn_shares(&e, share_amount as i128);
+        // Redeem shares
+        burn_shares(&e, &user, share_amount);
 
         // update plane data for every pool update
         update_plane(&e);
+
+        // migrate user shares if future token share contract is available
+        replicate_token_share_balance_to_future(&e, &user);
 
         PoolEvents::new(&e).withdraw_liquidity(tokens, amounts.clone(), share_amount);
 
@@ -1545,7 +1565,7 @@ impl UpgradeableContractTrait for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        105
+        120
     }
 
     // Upgrades the contract to a new version.
@@ -1558,6 +1578,49 @@ impl UpgradeableContractTrait for LiquidityPool {
         let access_control = AccessControl::new(&e);
         access_control.require_admin();
         e.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+}
+
+#[contractimpl]
+impl UpgradeableLPTokenTrait for LiquidityPool {
+    fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).check_admin(&admin);
+
+        let share_contract = get_token_share(&e);
+        token_share::Client::new(&e, &share_contract).upgrade(&new_token_wasm);
+    }
+
+    fn set_future_share_id(e: Env, admin: Address, contract: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).check_admin(&admin);
+
+        put_future_token_share(&e, contract);
+    }
+
+    fn migrate_share_balances(e: Env, operator: Address, users: Vec<Address>) {
+        operator.require_auth();
+        AccessControl::new(&e).check_operator(&operator);
+
+        for user in users {
+            replicate_token_share_balance_to_future(&e, &user);
+        }
+    }
+
+    // Returns the future share token address.
+    fn get_future_share_id(e: Env) -> Address {
+        match get_future_token_share(&e) {
+            Some(address) => address,
+            None => panic_with_error!(e, LiquidityPoolError::FutureShareIdNotSet),
+        }
+    }
+
+    // Applies the future share token instead of the current one.
+    fn commit_future_share_id(e: Env, admin: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).check_admin(&admin);
+
+        commit_future_token_share(&e);
     }
 }
 
@@ -1665,6 +1728,20 @@ impl RewardsTrait for LiquidityPool {
             .get_amount_to_claim(&user, total_shares, user_shares)
     }
 
+    fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128) {
+        // checkpoint reward with provided values to avoid re-entrancy issue
+        token_contract.require_auth();
+        if token_contract != get_token_share(&e) {
+            panic_with_error!(&e, AccessControlError::Unauthorized);
+        }
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        let rewards_data = rewards.manager().update_rewards_data(total_shares);
+        rewards
+            .manager()
+            .update_user_reward(&rewards_data, &user, user_shares);
+    }
+
     // Returns the total amount of accumulated reward for the pool.
     //
     // # Arguments
@@ -1728,10 +1805,29 @@ impl RewardsTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let reward = rewards
-            .manager()
-            .claim_reward(&user, total_shares, user_shares);
-        rewards.storage().bump_user_reward_data(&user);
+        let mut rewards_manager = rewards.manager();
+        let rewards_storage = rewards.storage();
+        let reward = rewards_manager.claim_reward(&user, total_shares, user_shares);
+        rewards_storage.bump_user_reward_data(&user);
+
+        // validate reserves after claim - they should be less than or equal to the balance
+        let tokens = Self::get_tokens(e.clone());
+        let reward_token = rewards_storage.get_reward_token();
+        let reserves = Self::get_reserves(e.clone());
+
+        for i in 0..reserves.len() {
+            let token = tokens.get(i).unwrap();
+            if token != reward_token {
+                continue;
+            }
+
+            let balance = SorobanTokenClient::new(&e, &tokens.get(i).unwrap())
+                .balance(&e.current_contract_address()) as u128;
+            if reserves.get(i).unwrap() > balance {
+                panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
+            }
+        }
+
         reward
     }
 }
