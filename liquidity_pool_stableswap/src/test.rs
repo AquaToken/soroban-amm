@@ -29,9 +29,7 @@ fn install_token_wasm_with_decimal<'a>(
     admin: &Address,
     decimal: u32,
 ) -> ShareTokenClient<'a> {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_token.wasm");
 
     let token_client = ShareTokenClient::new(e, &e.register_contract_wasm(None, WASM));
     token_client.initialize(admin, &decimal, &"Token 1".into_val(e), &"TOK".into_val(e));
@@ -254,17 +252,16 @@ fn test_happy_flow_different_decimals() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
+        &user1,
         &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token_7.address.clone(), token18.address.clone()]),
         10,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -300,7 +297,7 @@ fn test_happy_flow_different_decimals() {
         &true,
     );
 
-    let total_share_token_amount = 185608974334555384_u128; // share amount after two deposits
+    let total_share_token_amount = 400000000000000000000_u128; // share amount after two deposits
 
     assert_eq!(calculated_amount, total_share_token_amount / 2 / 10);
     assert_eq!(
@@ -813,10 +810,10 @@ fn test_pool_imbalance_draw_tokens_different_decimals() {
     let token_reward = create_token_contract(&e, &admin);
     let user1 = Address::generate(&e);
     let fee = 50_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
+        &user1,
         &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
@@ -831,7 +828,6 @@ fn test_pool_imbalance_draw_tokens_different_decimals() {
         ),
         85,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -1598,11 +1594,11 @@ fn test_remove_liquidity_imbalance_different_decimals() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -1621,7 +1617,7 @@ fn test_remove_liquidity_imbalance_different_decimals() {
     assert_eq!(token1.balance(&user1) as u128, 990_000000000000000000);
     assert_eq!(token2.balance(&user1) as u128, 900_0000000);
     let token_share_amount = token_share.balance(&user1) as u128;
-    assert_eq!(token_share_amount, 19987333335695345);
+    assert_eq!(token_share_amount, 101876761504564086655);
     liqpool.remove_liquidity_imbalance(
         &user1,
         &Vec::from_array(&e, [0_500000000000000000, 99_0000000]),
@@ -1635,7 +1631,7 @@ fn test_remove_liquidity_imbalance_different_decimals() {
     );
     assert_eq!(token2.balance(&liqpool.address) as u128, 1_0000000);
     assert!((token_share.balance(&user1) as u128) < token_share_amount / 10); // more than 90% of the share were burned
-    assert_eq!(token_share.balance(&user1) as u128, 1915521114065428); // control exact value
+    assert_eq!(token_share.balance(&user1) as u128, 9763537957616772036); // control exact value
 }
 
 #[test]
@@ -1716,11 +1712,11 @@ fn test_simple_ongoing_reward_different_decimals() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
+        &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token18.address.clone(), token7.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -3182,12 +3178,12 @@ fn test_decimals_in_swap_pool() {
     let liq_pool1 = create_liqpool_contract(
         &e,
         &admin,
+        &admin,
         &router,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         85,
         30,
-        0,
         &token_reward_admin_client.address,
         &plane.address,
     );

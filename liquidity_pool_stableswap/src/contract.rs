@@ -83,7 +83,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // * The virtual price for 1 LP token.
     fn get_virtual_price(e: Env) -> u128 {
-        let d = Self::_get_d(&e, &get_reserves(&e), Self::a(e.clone()));
+        let d = Self::_get_d(&e, &Self::_xp(&e, &get_reserves(&e)), Self::a(e.clone()));
         // D is in the units similar to DAI (e.g. converted to precision 1e7)
         // When balanced, D = n * x_u - total virtual value of the portfolio
         let token_supply = get_total_shares(&e);
@@ -1029,9 +1029,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         let mut decimals: Vec<u32> = Vec::new(&e);
 
-        for coin in coins.iter() {
+        for token in tokens.iter() {
             // get coin decimals
-            let token_client = SorobanTokenClient::new(&e, &coin);
+            let token_client = SorobanTokenClient::new(&e, &token);
             let decimal = token_client.decimals();
             decimals.push_back(decimal);
         }
@@ -1161,7 +1161,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let mut d0 = U256::from_u32(&e, 0);
         let old_balances = get_reserves(&e);
         if token_supply > 0 {
-            d0 = Self::_get_d(&e, &old_balances, amp);
+            d0 = Self::_get_d(&e, &Self::_xp(&e, &old_balances), amp);
         }
         let mut new_balances: Vec<u128> = old_balances.clone();
         let coins = get_tokens(&e);
@@ -1183,7 +1183,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         }
 
         // Invariant after change
-        let d1 = Self::_get_d(&e, &new_balances, amp);
+        let d1 = Self::_get_d(&e, &Self::_xp(&e, &new_balances), amp);
         if d1 <= d0 {
             panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
         }
@@ -1220,7 +1220,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
                 result.set(i, new_balance);
                 new_balances.set(i, new_balances.get(i).unwrap() - fee);
             }
-            d2 = Self::_get_d(&e, &new_balances, amp);
+            d2 = Self::_get_d(&e, &Self::_xp(&e, &new_balances), amp);
             result
         } else {
             new_balances
@@ -1295,16 +1295,17 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let token_client = SorobanTokenClient::new(&e, &input_coin);
         token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
 
-        let reserve_sell = xp.get(in_idx).unwrap();
-        let reserve_buy = xp.get(out_idx).unwrap();
+        let reserve_sell = old_balances.get(in_idx).unwrap();
+        let reserve_buy = old_balances.get(out_idx).unwrap();
         if reserve_sell == 0 || reserve_buy == 0 {
             panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let x = reserve_sell + in_amount;
+        let x = xp.get(in_idx).unwrap()
+            + in_amount.fixed_mul_floor(&e, &rates.get(in_idx).unwrap(), &get_precision(&e));
         let y = Self::_get_y(&e, in_idx, out_idx, x, &xp);
 
-        let dy = reserve_buy - y - 1; // -1 just in case there were some rounding errors
+        let dy = xp.get(out_idx).unwrap() - y - 1; // -1 just in case there were some rounding errors
         let dy_fee = dy.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
 
         // Convert all to real units
