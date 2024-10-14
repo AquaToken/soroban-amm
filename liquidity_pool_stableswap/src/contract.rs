@@ -403,10 +403,10 @@ impl InternalInterfaceTrait for LiquidityPool {
             // // Equality with the precision of 1
             if d > d_prev {
                 if d - d_prev <= 1 {
-                    return d;
+                    return d
                 }
             } else if d_prev - d <= 1 {
-                return d;
+                return d
             }
         }
 
@@ -483,13 +483,13 @@ impl InternalInterfaceTrait for LiquidityPool {
             // Equality with the precision of 1
             if y > y_prev {
                 if y - y_prev <= 1 {
-                    break;
+                    return y
                 }
             } else if y_prev - y <= 1 {
-                break;
+                return y
             }
         }
-        y
+        panic_with_error!(e, LiquidityPoolError::MaxIterationsReached);
     }
 
     // Calculates the amount of token `j` that will be received for swapping `dx` of token `i`.
@@ -560,13 +560,13 @@ impl InternalInterfaceTrait for LiquidityPool {
             // Equality with the precision of 1
             if y > y_prev {
                 if y - y_prev <= 1 {
-                    break;
+                    return y
                 }
             } else if y_prev - y <= 1 {
-                break;
+                return y
             }
         }
-        y
+        panic_with_error!(e, LiquidityPoolError::MaxIterationsReached);
     }
 
     // Calculate the amount received when withdrawing a single coin.
