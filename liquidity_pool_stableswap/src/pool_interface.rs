@@ -198,8 +198,11 @@ pub trait AdminInterfaceTrait {
 }
 
 pub trait LiquidityPoolTrait:
-    LiquidityPoolInterfaceTrait + UpgradeableContractTrait + UpgradeableLPTokenTrait
-    + RewardsTrait + AdminInterfaceTrait
+    LiquidityPoolInterfaceTrait
+    + UpgradeableContractTrait
+    + UpgradeableLPTokenTrait
+    + RewardsTrait
+    + AdminInterfaceTrait
 {
     // The amplification coefficient for the pool.
     fn a(e: Env) -> u128;
