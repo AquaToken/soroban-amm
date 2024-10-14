@@ -142,7 +142,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         );
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
-        if fee_fraction > 9999 {
+        if fee_fraction as u128 > FEE_MULTIPLIER - 1 {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
         put_fee_fraction(&e, fee_fraction);
