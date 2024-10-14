@@ -145,20 +145,6 @@ pub fn put_fee(e: &Env, value: &u32) {
     e.storage().instance().set(&DataKey::Fee, value);
 }
 
-// admin_fee
-pub fn get_admin_fee(e: &Env) -> u32 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::AdminFee) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_admin_fee(e: &Env, value: &u32) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::AdminFee, value);
-}
-
 // future_fee
 pub fn get_future_fee(e: &Env) -> u32 {
     bump_instance(e);
@@ -171,20 +157,6 @@ pub fn get_future_fee(e: &Env) -> u32 {
 pub fn put_future_fee(e: &Env, value: &u32) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::FutureFee, value);
-}
-
-// future_admin_fee
-pub fn get_future_admin_fee(e: &Env) -> u32 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::FutureAdminFee) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_future_admin_fee(e: &Env, value: &u32) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::FutureAdminFee, value);
 }
 
 // admin_actions_deadline

@@ -2670,10 +2670,7 @@ fn test_event_correct() {
                     pool_address.clone(),
                     symbol_short!("stable"),
                     pool_hash.clone(),
-                    Vec::<Val>::from_array(
-                        &e,
-                        [fee.into_val(&e), 1500_u128.into_val(&e), 0_u32.into_val(&e)],
-                    ),
+                    Vec::<Val>::from_array(&e, [fee.into_val(&e), 1500_u128.into_val(&e)],),
                 )
                     .into_val(&e)
             ),

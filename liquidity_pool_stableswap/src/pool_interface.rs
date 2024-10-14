@@ -11,7 +11,6 @@ pub trait ManagedLiquidityPool {
         coins: Vec<Address>,
         a: u128,
         fee: u32,
-        admin_fee: u32,
         reward_token: Address,
         plane: Address,
     );
@@ -31,14 +30,10 @@ pub trait LiquidityPoolInterfaceTrait {
         tokens: Vec<Address>,
         a: u128,
         fee_fraction: u32,
-        admin_fee: u32,
     );
 
     // The pool swap fee, as an integer with 1e4 precision. 0.01% = 1; 0.3% = 30; 1% = 100;
     fn get_fee_fraction(e: Env) -> u32;
-
-    // The percentage of the swap fee that is taken as an admin fee, as an integer with with 1e4 precision.
-    fn get_admin_fee(e: Env) -> u32;
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
@@ -152,7 +147,7 @@ pub trait AdminInterfaceTrait {
     fn stop_ramp_a(e: Env, admin: Address);
 
     // Set new fee to be applied in future
-    fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32);
+    fn commit_new_fee(e: Env, admin: Address, new_fee: u32);
 
     // Apply committed fee
     fn apply_new_fee(e: Env, admin: Address);
@@ -168,15 +163,6 @@ pub trait AdminInterfaceTrait {
 
     // Revert committed ownership transfer
     fn revert_transfer_ownership(e: Env, admin: Address);
-
-    // Get amount of collected admin fees
-    fn admin_balances(e: Env, i: u32) -> u128;
-
-    // Withdraw collected admin fee
-    fn withdraw_admin_fees(e: Env, admin: Address);
-
-    // Donate collected admin fee to common fee pool
-    fn donate_admin_fees(e: Env, admin: Address);
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);

@@ -39,7 +39,6 @@ fn create_liqpool_contract<'a>(
     coins: &Vec<Address>,
     a: u128,
     fee: u32,
-    admin_fee: u32,
     token_reward: &Address,
     plane: &Address,
 ) -> LiquidityPoolClient<'a> {
@@ -52,7 +51,6 @@ fn create_liqpool_contract<'a>(
         coins,
         &a,
         &fee,
-        &admin_fee,
         token_reward,
         plane,
     );
@@ -100,7 +98,6 @@ fn test_swap_empty_pool() {
     let plane = create_plane_contract(&e);
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
-    let admin_fee = 0_u128;
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -110,7 +107,6 @@ fn test_swap_empty_pool() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -135,7 +131,6 @@ fn test_happy_flow() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -146,7 +141,6 @@ fn test_happy_flow() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -235,7 +229,6 @@ fn test_events_2_tokens() {
     let token_reward = create_token_contract(&e, &admin);
     let user1 = Address::generate(&e);
     let fee = 30_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -246,7 +239,6 @@ fn test_events_2_tokens() {
         &Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone()]),
         10,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -344,7 +336,6 @@ fn test_events_3_tokens() {
     let token_reward = create_token_contract(&e, &admin);
     let user1 = Address::generate(&e);
     let fee = 30_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -358,7 +349,6 @@ fn test_events_3_tokens() {
         ),
         10,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -474,7 +464,6 @@ fn test_events_4_tokens() {
     let token_reward = create_token_contract(&e, &admin);
     let user1 = Address::generate(&e);
     let fee = 30_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -493,7 +482,6 @@ fn test_events_4_tokens() {
         ),
         10,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -616,7 +604,6 @@ fn test_pool_imbalance_draw_tokens() {
     let token_reward = create_token_contract(&e, &admin);
     let user1 = Address::generate(&e);
     let fee = 50_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -635,7 +622,6 @@ fn test_pool_imbalance_draw_tokens() {
         ),
         85,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -679,7 +665,6 @@ fn test_pool_zero_swap() {
     let token_reward = create_token_contract(&e, &admin);
     let user1 = Address::generate(&e);
     let fee = 50_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -698,7 +683,6 @@ fn test_pool_zero_swap() {
         ),
         85,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -739,7 +723,6 @@ fn test_bad_fee() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         10000,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -770,7 +753,6 @@ fn test_zero_initial_deposit() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -806,7 +788,6 @@ fn test_zero_deposit_ok() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -836,7 +817,6 @@ fn test_happy_flow_3_tokens() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -854,7 +834,6 @@ fn test_happy_flow_3_tokens() {
         ),
         10,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -975,7 +954,6 @@ fn test_happy_flow_4_tokens() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -994,7 +972,6 @@ fn test_happy_flow_4_tokens() {
         ),
         10,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -1104,7 +1081,6 @@ fn test_withdraw_partial() {
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let user1 = Address::generate(&e);
     let fee = 0_u128;
-    let admin_fee = 0_u128;
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
@@ -1115,7 +1091,6 @@ fn test_withdraw_partial() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         fee as u32,
-        admin_fee as u32,
         &token_reward.address,
         &plane.address,
     );
@@ -1191,7 +1166,6 @@ fn test_withdraw_one_token() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -1252,18 +1226,12 @@ fn test_custom_fee() {
 
     // we're checking fraction against value required to swap 1 token
     for fee_config in [
-        (0, 0, 9990916, 0, 0),           // fee = 0%, admin fee = 0%
-        (10, 0, 9980925, 0, 0),          // fee = 0.1%, admin fee = 0%
-        (30, 0, 9960943, 0, 0),          // fee = 0.3%, admin fee = 0%
-        (100, 0, 9891006, 0, 0),         // fee = 1%, admin fee = 0%
-        (1000, 0, 8991824, 0, 0),        // fee = 10%, admin fee = 0%
-        (3000, 0, 6993641, 0, 0),        // fee = 30%, admin fee = 0%
-        (100, 10, 9891006, 0, 100),      // fee = 0.1%, admin fee = 0.1%
-        (100, 100, 9891006, 0, 1000),    // fee = 0.1%, admin fee = 1%
-        (100, 1000, 9891006, 0, 9991),   // fee = 0.1%, admin fee = 10%
-        (100, 2000, 9891006, 0, 19982),  // fee = 0.1%, admin fee = 20%
-        (100, 5000, 9891006, 0, 49955),  // fee = 0.1%, admin fee = 50%
-        (100, 10000, 9891006, 0, 99910), // fee = 0.1%, admin fee = 100%
+        (0, 9990916),    // fee = 0%
+        (10, 9980925),   // fee = 0.1%
+        (30, 9960943),   // fee = 0.3%
+        (100, 9891006),  // fee = 1%
+        (1000, 8991824), // fee = 10%
+        (3000, 6993641), // fee = 30%
     ] {
         let plane = create_plane_contract(&e);
         let liqpool = create_liqpool_contract(
@@ -1275,15 +1243,12 @@ fn test_custom_fee() {
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
             10,
             fee_config.0,
-            fee_config.1,
             &token_reward.address,
             &plane.address,
         );
         liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
-        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.2);
-        assert_eq!(liqpool.swap(&user1, &0, &1, &1_0000000, &0), fee_config.2);
-        assert_eq!(liqpool.admin_balances(&0), fee_config.3);
-        assert_eq!(liqpool.admin_balances(&1), fee_config.4)
+        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.1);
+        assert_eq!(liqpool.swap(&user1, &0, &1, &1_0000000, &0), fee_config.1);
     }
 }
 
@@ -1311,7 +1276,6 @@ fn test_deposit_inequal() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -1355,7 +1319,6 @@ fn test_remove_liquidity_imbalance() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -1408,7 +1371,6 @@ fn test_simple_ongoing_reward() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -1466,7 +1428,6 @@ fn test_simple_reward() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -1535,7 +1496,6 @@ fn test_two_users_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -1603,7 +1563,6 @@ fn test_lazy_user_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -1666,7 +1625,6 @@ fn test_config_rewards_not_admin() {
         ),
         10,
         0,
-        0,
         &(create_token_contract(&e, &admin).address),
         &(create_plane_contract(&e).address),
     );
@@ -1702,7 +1660,6 @@ fn test_config_rewards_router() {
         ),
         10,
         0,
-        0,
         &(create_token_contract(&e, &admin).address),
         &(create_plane_contract(&e).address),
     );
@@ -1736,14 +1693,12 @@ fn test_update_fee_too_early() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
 
-    liqpool.commit_new_fee(&pool_admin_original, &30, &1);
+    liqpool.commit_new_fee(&pool_admin_original, &30);
     assert_eq!(liqpool.get_fee_fraction(), 0);
-    assert_eq!(liqpool.get_admin_fee(), 0);
     liqpool.apply_new_fee(&pool_admin_original);
     jump(&e, 2 * 30 * 86400 - 1);
 }
@@ -1773,19 +1728,16 @@ fn test_update_fee() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
 
-    liqpool.commit_new_fee(&pool_admin_original, &30, &1);
+    liqpool.commit_new_fee(&pool_admin_original, &30);
     assert_eq!(liqpool.get_fee_fraction(), 0);
-    assert_eq!(liqpool.get_admin_fee(), 0);
 
     jump(&e, 2 * 30 * 86400 + 1);
     liqpool.apply_new_fee(&pool_admin_original);
     assert_eq!(liqpool.get_fee_fraction(), 30);
-    assert_eq!(liqpool.get_admin_fee(), 1);
 }
 
 #[test]
@@ -1815,14 +1767,13 @@ fn test_transfer_ownership_too_early() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
 
     liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
     // check admin by calling protected method
-    liqpool.donate_admin_fees(&pool_admin_original);
+    liqpool.stop_ramp_a(&pool_admin_original);
     jump(&e, ADMIN_ACTIONS_DELAY - 1);
     liqpool.apply_transfer_ownership(&pool_admin_original);
 }
@@ -1853,7 +1804,6 @@ fn test_transfer_ownership_twice() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -1888,7 +1838,6 @@ fn test_transfer_ownership_not_committed() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -1925,14 +1874,13 @@ fn test_transfer_ownership_reverted() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
 
     liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
     // check admin by calling protected method
-    liqpool.donate_admin_fees(&pool_admin_original);
+    liqpool.stop_ramp_a(&pool_admin_original);
     jump(&e, ADMIN_ACTIONS_DELAY + 1);
     liqpool.revert_transfer_ownership(&pool_admin_original);
     liqpool.apply_transfer_ownership(&pool_admin_original);
@@ -1964,17 +1912,16 @@ fn test_transfer_ownership() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
 
     liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
     // check admin by calling protected method
-    liqpool.donate_admin_fees(&pool_admin_original);
+    liqpool.stop_ramp_a(&pool_admin_original);
     jump(&e, ADMIN_ACTIONS_DELAY + 1);
     liqpool.apply_transfer_ownership(&pool_admin_original);
-    liqpool.donate_admin_fees(&pool_admin_new);
+    liqpool.stop_ramp_a(&pool_admin_new);
 }
 
 #[test]
@@ -2002,7 +1949,6 @@ fn test_ramp_a_too_early() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -2043,7 +1989,6 @@ fn test_ramp_a_too_short() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -2083,7 +2028,6 @@ fn test_ramp_a_too_fast() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -2121,7 +2065,6 @@ fn test_ramp_a() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -2168,7 +2111,6 @@ fn test_deposit_min_mint() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -2211,7 +2153,6 @@ fn test_deposit_inequal_ok() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -2260,7 +2201,6 @@ fn test_large_numbers() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         85,
         6,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -2362,7 +2302,6 @@ fn test_kill_deposit() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -2445,7 +2384,6 @@ fn test_kill_swap() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         0,
-        0,
         &token_reward.address,
         &plane.address,
     );
@@ -2526,7 +2464,6 @@ fn test_kill_claim() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
         0,
         &token_reward.address,
         &plane.address,
@@ -2635,7 +2572,6 @@ fn test_withdraw_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         85,
         30,
-        0,
         &token_reward_admin_client.address,
         &plane.address,
     );
@@ -2735,7 +2671,6 @@ fn test_deposit_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         85,
         30,
-        0,
         &token_reward_admin_client.address,
         &plane.address,
     );
@@ -2791,7 +2726,6 @@ fn test_swap_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         85,
         30,
-        0,
         &token_reward_admin_client.address,
         &plane.address,
     );
@@ -2804,7 +2738,6 @@ fn test_swap_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         85,
         30,
-        0,
         &token_reward_admin_client.address,
         &plane.address,
     );
@@ -2906,7 +2839,6 @@ fn test_claim_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         30,
-        0,
         &token_reward_admin_client.address,
         &plane.address,
     );
@@ -2970,7 +2902,6 @@ fn test_drain_reward() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         30,
-        0,
         &token_reward_admin_client.address,
         &plane.address,
     );
@@ -3054,7 +2985,6 @@ fn test_drain_reserves() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
         30,
-        0,
         &token_reward_admin_client.address,
         &plane.address,
     );

@@ -1,8 +1,5 @@
 use crate::access_utils::require_admin_or_operator;
-use crate::constants::{
-    CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_DEFAULT_ADMIN_FEE,
-    STABLESWAP_MAX_FEE,
-};
+use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_MAX_FEE};
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::liquidity_calculator::LiquidityCalculatorClient;
@@ -1179,13 +1176,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
                     );
                 }
 
-                deploy_stableswap_pool(
-                    &e,
-                    tokens,
-                    STABLESWAP_DEFAULT_A,
-                    fee_fraction,
-                    STABLESWAP_DEFAULT_ADMIN_FEE,
-                )
+                deploy_stableswap_pool(&e, tokens, STABLESWAP_DEFAULT_A, fee_fraction)
             }
         }
     }
