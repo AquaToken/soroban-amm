@@ -403,10 +403,10 @@ impl InternalInterfaceTrait for LiquidityPool {
             // // Equality with the precision of 1
             if d > d_prev {
                 if d - d_prev <= 1 {
-                    return d
+                    return d;
                 }
             } else if d_prev - d <= 1 {
-                return d
+                return d;
             }
         }
 
@@ -483,10 +483,10 @@ impl InternalInterfaceTrait for LiquidityPool {
             // Equality with the precision of 1
             if y > y_prev {
                 if y - y_prev <= 1 {
-                    return y
+                    return y;
                 }
             } else if y_prev - y <= 1 {
-                return y
+                return y;
             }
         }
         panic_with_error!(e, LiquidityPoolError::MaxIterationsReached);
@@ -560,10 +560,10 @@ impl InternalInterfaceTrait for LiquidityPool {
             // Equality with the precision of 1
             if y > y_prev {
                 if y - y_prev <= 1 {
-                    return y
+                    return y;
                 }
             } else if y_prev - y <= 1 {
-                return y
+                return y;
             }
         }
         panic_with_error!(e, LiquidityPoolError::MaxIterationsReached);
