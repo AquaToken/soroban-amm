@@ -1,19 +1,19 @@
 use crate::pool_constants::{
-    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, MAX_A, MAX_ADMIN_FEE, MAX_A_CHANGE, MAX_FEE,
-    MIN_RAMP_TIME, PRICE_PRECISION,
+    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MAX_FEE, MIN_RAMP_TIME,
+    PRICE_PRECISION,
 };
 use crate::pool_interface::{
     AdminInterfaceTrait, InternalInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait,
     ManagedLiquidityPool, RewardsTrait, UpgradeableContractTrait, UpgradeableLPTokenTrait,
 };
 use crate::storage::{
-    get_admin_actions_deadline, get_admin_fee, get_fee, get_future_a, get_future_a_time,
-    get_future_admin_fee, get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim,
-    get_is_killed_deposit, get_is_killed_swap, get_plane, get_reserves, get_router, get_tokens,
-    get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline, put_admin_fee, put_fee,
-    put_future_a, put_future_a_time, put_future_admin_fee, put_future_fee, put_initial_a,
-    put_initial_a_time, put_reserves, put_tokens, put_transfer_ownership_deadline,
-    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
+    get_admin_actions_deadline, get_fee, get_future_a, get_future_a_time, get_future_fee,
+    get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
+    get_is_killed_swap, get_plane, get_reserves, get_router, get_tokens,
+    get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline, put_fee, put_future_a,
+    put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time, put_reserves, put_tokens,
+    put_transfer_ownership_deadline, set_is_killed_claim, set_is_killed_deposit,
+    set_is_killed_swap, set_plane, set_router,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -195,7 +195,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         if token_supply == 0 {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
-        let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
         let mut reserves = get_reserves(&e);
 
@@ -208,7 +207,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let d1 = Self::get_d(e.clone(), new_balances.clone(), amp);
-        let mut fees = Vec::new(&e);
 
         for i in 0..n_coins {
             let new_balance = new_balances.get(i).unwrap();
@@ -227,12 +225,8 @@ impl LiquidityPoolTrait for LiquidityPool {
                 &(get_fee(&e) as u128 * n_coins as u128),
                 &(4 * (n_coins as u128 - 1) * FEE_DENOMINATOR as u128),
             );
-            fees.push_back(fee);
-            // Admin fee is deducted from pool available reserves
-            reserves.set(
-                i,
-                new_balance - (fee.fixed_mul_ceil(&e, &admin_fee, &(FEE_DENOMINATOR as u128))),
-            );
+
+            reserves.set(i, new_balance);
             new_balances.set(i, new_balance - fee);
         }
         put_reserves(&e, &reserves);
@@ -318,22 +312,13 @@ impl LiquidityPoolTrait for LiquidityPool {
             .update_user_reward(&pool_data, &user, user_shares);
         rewards.storage().bump_user_reward_data(&user);
 
-        let (dy, dy_fee) = Self::internal_calc_withdraw_one_coin(e.clone(), share_amount, i);
+        let (dy, _) = Self::internal_calc_withdraw_one_coin(e.clone(), share_amount, i);
         if dy < min_amount {
             panic_with_error!(&e, LiquidityPoolValidationError::InMinNotSatisfied);
         }
 
         let mut reserves = get_reserves(&e);
-        reserves.set(
-            i,
-            reserves.get(i).unwrap()
-                - (dy
-                    + dy_fee.fixed_mul_floor(
-                        &e,
-                        &(get_admin_fee(&e) as u128),
-                        &(FEE_DENOMINATOR as u128),
-                    )),
-        );
+        reserves.set(i, reserves.get(i).unwrap() - dy);
         put_reserves(&e, &reserves);
 
         // Redeem shares
@@ -711,8 +696,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     //
     // * `admin` - The address of the admin.
     // * `new_fee` - The new fee to be applied.
-    // * `new_admin_fee` - The new admin fee to be applied.
-    fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32) {
+    fn commit_new_fee(e: Env, admin: Address, new_fee: u32) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.check_admin(&admin);
@@ -723,14 +707,10 @@ impl AdminInterfaceTrait for LiquidityPool {
         if new_fee > MAX_FEE {
             panic_with_error!(e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
-        if new_admin_fee > MAX_ADMIN_FEE {
-            panic_with_error!(e, LiquidityPoolValidationError::AdminFeeOutOfBounds);
-        }
 
         let deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
         put_admin_actions_deadline(&e, &deadline);
         put_future_fee(&e, &new_fee);
-        put_future_admin_fee(&e, &new_admin_fee);
     }
 
     // Applies the committed fee.
@@ -752,9 +732,7 @@ impl AdminInterfaceTrait for LiquidityPool {
 
         put_admin_actions_deadline(&e, &0);
         let fee = get_future_fee(&e);
-        let admin_fee = get_future_admin_fee(&e);
         put_fee(&e, &fee);
-        put_admin_fee(&e, &admin_fee);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -829,72 +807,6 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.check_admin(&admin);
 
         put_transfer_ownership_deadline(&e, &0);
-    }
-
-    // Gets the amount of collected admin fees.
-    //
-    // # Arguments
-    //
-    // * `i` - The index of the token.
-    //
-    // # Returns
-    //
-    // * The amount of collected admin fees for the token.
-    fn admin_balances(e: Env, i: u32) -> u128 {
-        let coins = get_tokens(&e);
-        let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
-        let balance = token_client.balance(&e.current_contract_address()) as u128;
-        let reserves = get_reserves(&e);
-
-        balance - reserves.get(i).unwrap()
-    }
-
-    // Withdraws the collected admin fees.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    fn withdraw_admin_fees(e: Env, admin: Address) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
-
-        let coins = get_tokens(&e);
-        let reserves = get_reserves(&e);
-
-        for i in 0..coins.len() {
-            let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
-            let balance = token_client.balance(&e.current_contract_address()) as u128;
-
-            let value = balance - reserves.get(i).unwrap();
-            if value > 0 {
-                token_client.transfer(&e.current_contract_address(), &admin, &(value as i128));
-            }
-        }
-    }
-
-    // Donates the collected admin fees to the common fee pool.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    fn donate_admin_fees(e: Env, admin: Address) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
-
-        let coins = get_tokens(&e);
-        let mut reserves = get_reserves(&e);
-
-        for i in 0..coins.len() {
-            let token_client = SorobanTokenClient::new(&e, &coins.get(i).unwrap());
-            let balance = token_client.balance(&e.current_contract_address());
-            reserves.set(i, balance as u128);
-        }
-        put_reserves(&e, &reserves);
-
-        // update plane data for every pool update
-        update_plane(&e);
     }
 
     // Stops the pool deposits instantly.
@@ -1009,7 +921,6 @@ impl ManagedLiquidityPool for LiquidityPool {
     // * `coins` - The addresses of the coins.
     // * `a` - The amplification coefficient.
     // * `fee` - The fee to be applied.
-    // * `admin_fee` - The admin fee to be applied.
     // * `reward_token` - The address of the reward token.
     // * `plane` - The address of the plane.
     fn initialize_all(
@@ -1021,7 +932,6 @@ impl ManagedLiquidityPool for LiquidityPool {
         coins: Vec<Address>,
         a: u128,
         fee: u32,
-        admin_fee: u32,
         reward_token: Address,
         plane: Address,
     ) {
@@ -1037,7 +947,6 @@ impl ManagedLiquidityPool for LiquidityPool {
             coins,
             a,
             fee,
-            admin_fee,
         );
         Self::initialize_rewards_config(e.clone(), reward_token);
     }
@@ -1061,20 +970,18 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     // * `router` - The address of the router.
     // * `token_wasm_hash` - The hash of the token's WASM code.
-    // * `coins` - The addresses of the coins.
+    // * `tokens` - The addresses of the coins.
     // * `a` - The amplification coefficient.
     // * `fee` - The fee to be applied.
-    // * `admin_fee` - The admin fee to be applied.
     fn initialize(
         e: Env,
         admin: Address,
         operator: Address,
         router: Address,
         token_wasm_hash: BytesN<32>,
-        coins: Vec<Address>,
+        tokens: Vec<Address>,
         a: u128,
         fee: u32,
-        admin_fee: u32,
     ) {
         let access_control = AccessControl::new(&e);
         if access_control.has_admin() {
@@ -1086,17 +993,16 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         set_router(&e, &router);
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
-        if fee > MAX_FEE || admin_fee > MAX_ADMIN_FEE {
+        if fee > MAX_FEE {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
 
         put_fee(&e, &fee);
-        put_admin_fee(&e, &admin_fee);
 
-        put_tokens(&e, &coins);
+        put_tokens(&e, &tokens);
 
         // LP token
-        let share_contract = create_contract(&e, token_wasm_hash);
+        let share_contract = create_contract(&e, token_wasm_hash, &tokens);
         LPToken::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
@@ -1105,7 +1011,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         );
         put_token_share(&e, share_contract);
         let mut initial_reserves = Vec::new(&e);
-        for _i in 0..coins.len() {
+        for _i in 0..tokens.len() {
             initial_reserves.push_back(0_u128);
         }
         put_reserves(&e, &initial_reserves);
@@ -1129,15 +1035,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // The pool's fee fraction as a u32.
     fn get_fee_fraction(e: Env) -> u32 {
         get_fee(&e)
-    }
-
-    // Returns the pool's admin fee percentage fraction.
-    //
-    // # Returns
-    //
-    // The pool's fee admin percentage fraction as a u32.
-    fn get_admin_fee(e: Env) -> u32 {
-        get_admin_fee(&e)
     }
 
     // Returns the pool's share token address.
@@ -1211,8 +1108,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             .update_user_reward(&pool_data, &user, user_shares);
         rewards.storage().bump_user_reward_data(&user);
 
-        let mut fees: Vec<u128> = Vec::new(&e);
-        let admin_fee = get_admin_fee(&e) as u128;
         let amp = Self::a(e.clone());
 
         let token_supply = get_total_shares(&e);
@@ -1271,13 +1166,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
                     &(get_fee(&e) as u128 * n_coins as u128),
                     &(FEE_DENOMINATOR as u128 * 4 * (n_coins as u128 - 1)),
                 );
-                fees.push_back(fee);
 
-                // Admin fee is deducted from pool available reserves
-                result.set(
-                    i,
-                    new_balance - (fee.fixed_mul_ceil(&e, &admin_fee, &(FEE_DENOMINATOR as u128))),
-                );
+                result.set(i, new_balance);
                 new_balances.set(i, new_balances.get(i).unwrap() - fee);
             }
             d2 = Self::get_d(e.clone(), new_balances, amp);
@@ -1344,8 +1234,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let old_balances = get_reserves(&e);
         let xp = old_balances.clone();
 
-        // Handling an unexpected charge of a fee on transfer (USDT, PAXG)
-        let dx_w_fee = in_amount;
         let coins = get_tokens(&e);
         let input_coin = coins.get(in_idx).unwrap();
 
@@ -1358,7 +1246,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let x = reserve_sell + dx_w_fee;
+        let x = reserve_sell + in_amount;
         let y = Self::get_y(e.clone(), in_idx, out_idx, x, xp.clone());
 
         let dy = reserve_buy - y - 1; // -1 just in case there were some rounding errors
@@ -1370,18 +1258,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
-        let mut dy_admin_fee =
-            dy_fee.fixed_mul_ceil(&e, &(get_admin_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
-        dy_admin_fee = dy_admin_fee;
-
         // Change balances exactly in same way as we change actual ERC20 coin amounts
         let mut reserves = get_reserves(&e);
-        reserves.set(in_idx, old_balances.get(in_idx).unwrap() + dx_w_fee);
-        // When rounding errors happen, we undercharge admin fee in favor of LP
-        reserves.set(
-            out_idx,
-            old_balances.get(out_idx).unwrap() - dy - dy_admin_fee,
-        );
+        reserves.set(in_idx, old_balances.get(in_idx).unwrap() + in_amount);
+        reserves.set(out_idx, old_balances.get(out_idx).unwrap() - dy);
         put_reserves(&e, &reserves);
 
         let token_out = coins.get(out_idx).unwrap();
