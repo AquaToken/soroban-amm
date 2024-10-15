@@ -1,7 +1,8 @@
 use crate::calculator::{get_max_reserve, get_next_in_amt, normalize_reserves, price_weight};
 use crate::constants::{FEE_MULTIPLIER, PRECISION};
+use crate::errors::LiquidityPoolCalculatorError;
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{Env, Vec, U256};
+use soroban_sdk::{panic_with_error, Env, Vec, U256};
 
 pub(crate) fn a(
     e: &Env,
@@ -58,13 +59,13 @@ fn get_d(e: &Env, n_coins: u32, xp: &Vec<u128>, amp: u128) -> u128 {
         // // Equality with the precision of 1
         if d > d_prev {
             if d - d_prev <= 1 {
-                break;
+                return d;
             }
         } else if d_prev - d <= 1 {
-            break;
+            return d;
         }
     }
-    d
+    panic_with_error!(e, LiquidityPoolCalculatorError::MaxIterationsReached);
 }
 
 fn get_y(
@@ -123,13 +124,13 @@ fn get_y(
         // Equality with the precision of 1
         if y > y_prev {
             if y - y_prev <= 1 {
-                break;
+                return y;
             }
         } else if y_prev - y <= 1 {
-            break;
+            return y;
         }
     }
-    y
+    panic_with_error!(e, LiquidityPoolCalculatorError::MaxIterationsReached);
 }
 
 fn get_dy(
