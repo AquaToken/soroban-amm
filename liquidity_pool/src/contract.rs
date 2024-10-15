@@ -29,8 +29,7 @@ use soroban_sdk::{
     IntoVal, Map, Symbol, Val, Vec, U256,
 };
 use token_share::{
-    burn_shares, get_token_share,
-    get_total_shares, get_user_balance_shares, mint_shares,
+    burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
     put_token_share, Client as LPTokenClient,
 };
 use utils::u256_math::ExtraMath;

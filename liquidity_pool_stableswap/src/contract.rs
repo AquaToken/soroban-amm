@@ -17,8 +17,7 @@ use crate::storage::{
 };
 use crate::token::create_contract;
 use token_share::{
-    burn_shares, get_token_share,
-    get_total_shares, get_user_balance_shares, mint_shares,
+    burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
     put_token_share, Client as LPToken,
 };
 
