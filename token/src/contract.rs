@@ -5,7 +5,7 @@ use crate::errors::TokenError;
 use crate::interface::UpgradeableContract;
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
 use crate::pool::checkpoint_user_rewards;
-use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::access::{AccessControl, AccessControlTrait, Role};
 use soroban_sdk::token::{self, Interface as _};
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, String};
 use soroban_token_sdk::metadata::TokenMetadata;
@@ -25,10 +25,10 @@ pub struct Token;
 impl Token {
     pub fn initialize(e: Env, admin: Address, decimal: u32, name: String, symbol: String) {
         let access_control = AccessControl::new(&e);
-        if access_control.has_admin() {
+        if access_control.get_role_safe(Role::Admin).is_some() {
             panic_with_error!(&e, TokenError::AlreadyInitialized);
         }
-        access_control.set_admin(&admin);
+        access_control.set_role_address(Role::Admin, &admin);
         if decimal > u8::MAX.into() {
             panic_with_error!(&e, TokenError::DecimalTooLarge);
         }
@@ -45,8 +45,7 @@ impl Token {
 
     pub fn mint(e: Env, to: Address, amount: i128) {
         check_nonnegative_amount(&e, amount);
-        let access_control = AccessControl::new(&e);
-        let admin = access_control.get_admin().unwrap();
+        let admin = AccessControl::new(&e).get_role(Role::Admin);
         admin.require_auth();
 
         bump_instance(&e);
@@ -57,12 +56,12 @@ impl Token {
 
     pub fn set_admin(e: Env, new_admin: Address) {
         let access_control = AccessControl::new(&e);
-        let admin = access_control.get_admin().unwrap();
+        let admin = AccessControl::new(&e).get_role(Role::Admin);
         admin.require_auth();
 
         bump_instance(&e);
 
-        access_control.set_admin(&new_admin);
+        access_control.set_role_address(Role::Admin, &new_admin);
         TokenUtils::new(&e).events().set_admin(admin, new_admin);
     }
 }
@@ -179,7 +178,7 @@ impl UpgradeableContract for Token {
     // * `new_wasm_hash` - The hash of the new contract version.
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+        access_control.get_role(Role::Admin).require_auth();
         e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

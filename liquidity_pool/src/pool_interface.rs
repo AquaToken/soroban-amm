@@ -83,11 +83,18 @@ pub trait LiquidityPoolTrait {
 }
 
 pub trait AdminInterfaceTrait {
-    // Set operator address which can perform some restricted actions
-    fn set_operator(e: Env, admin: Address, operator: Address);
+    // Set privileged addresses
+    fn set_privileged_addrs(
+        e: Env,
+        admin: Address,
+        rewards_admin: Address,
+        operations_admin: Address,
+        pause_admin: Address,
+        emergency_pause_admin: Address,
+    );
 
-    // Get operator address or panic if doesn't set
-    fn get_operator(e: Env) -> Address;
+    // Get map of privileged roles
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Option<Address>>;
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);

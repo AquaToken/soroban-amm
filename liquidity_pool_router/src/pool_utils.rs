@@ -6,7 +6,7 @@ use crate::storage::{
     add_pool, add_tokens_set, get_constant_product_pool_hash, get_pool_next_counter,
     get_pool_plane, get_pools_plain, get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
-use access_control::access::{AccessControl, AccessControlTrait, OperatorAccessTrait};
+use access_control::access::{AccessControl, AccessControlTrait, Role};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -136,8 +136,10 @@ fn init_standard_pool(
     let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(e);
-    let admin = access_control.get_admin().unwrap();
-    let operator = access_control.get_operator().unwrap_or(admin.clone());
+    let admin = access_control.get_role(Role::Admin);
+    let operator = access_control
+        .get_role_safe(Role::RewardsAdmin)
+        .unwrap_or(admin.clone());
     let liq_pool_client = StandardLiquidityPoolClient::new(e, pool_contract_id);
     let plane = get_pool_plane(e);
     liq_pool_client.initialize_all(
@@ -163,8 +165,10 @@ fn init_stableswap_pool(
     let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(e);
-    let admin = access_control.get_admin().unwrap();
-    let operator = access_control.get_operator().unwrap_or(admin.clone());
+    let admin = access_control.get_role(Role::Admin);
+    let operator = access_control
+        .get_role_safe(Role::RewardsAdmin)
+        .unwrap_or(admin.clone());
     let plane = get_pool_plane(e);
     e.invoke_contract::<()>(
         pool_contract_id,

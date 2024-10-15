@@ -1746,7 +1746,7 @@ fn test_rewards_distribution_as_operator() {
     assert!(router
         .try_distribute_outstanding_reward(&operator, &router.address, &tokens, &standard_pool_hash)
         .is_err(),);
-    router.set_operator(&operator);
+    router.set_privileged_addrs(&admin, &operator, &admin, &admin, &admin);
     assert!(router
         .try_distribute_outstanding_reward(&user1, &router.address, &tokens, &standard_pool_hash)
         .is_err(),);
@@ -1918,7 +1918,7 @@ fn test_rewards_distribution_override() {
 
     // operator not set yet. admin should be able to distribute rewards but no one else should
     let operator = Address::generate(&e);
-    router.set_operator(&operator);
+    router.set_privileged_addrs(&admin, &operator, &admin, &admin, &admin);
     assert_eq!(
         router.distribute_outstanding_reward(
             &operator,
@@ -2371,7 +2371,7 @@ fn test_config_rewards_not_admin() {
     liquidity_calculator.init_admin(&admin);
     liquidity_calculator.set_pools_plane(&admin, &plane.address);
     router.init_admin(&admin);
-    router.set_operator(&admin);
+    router.set_privileged_addrs(&admin, &admin, &admin, &admin, &admin);
     router.set_pool_hash(&pool_hash);
     router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
     router.set_token_hash(&token_hash);

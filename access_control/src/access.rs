@@ -1,14 +1,38 @@
 use crate::errors::AccessControlError;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Symbol};
 use utils::bump::bump_instance;
-use utils::storage_errors::StorageError;
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
+    Admin,           // owner - upgrade, set privileged roles
+    FutureAdmin,     // pending owner
+    Operator,        // rewards admin - configure rewards. legacy name cannot be changed
+    OperationsAdmin, // operations admin - add/remove pools, ramp A, set fees, etc
+    PauseAdmin,      // pause admin - pause/unpause pools
+    EmPauseAdmin,    // emergency pause admin - pause pools in emergency
+}
+
+pub enum Role {
     Admin,
     FutureAdmin,
-    Operator,
+    RewardsAdmin,
+    OperationsAdmin,
+    PauseAdmin,
+    EmergencyPauseAdmin,
+}
+
+impl Role {
+    pub fn as_symbol(&self, e: &Env) -> Symbol {
+        match self {
+            Role::Admin => Symbol::new(&e, "Admin"),
+            Role::FutureAdmin => Symbol::new(&e, "FutureAdmin"),
+            Role::RewardsAdmin => Symbol::new(&e, "RewardsAdmin"),
+            Role::OperationsAdmin => Symbol::new(&e, "OperationsAdmin"),
+            Role::PauseAdmin => Symbol::new(&e, "PauseAdmin"),
+            Role::EmergencyPauseAdmin => Symbol::new(&e, "EmergencyPauseAdmin"),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -18,109 +42,56 @@ impl AccessControl {
     pub fn new(env: &Env) -> AccessControl {
         AccessControl(env.clone())
     }
+
+    fn get_key(&self, role: Role) -> DataKey {
+        match role {
+            Role::Admin => DataKey::Admin,
+            Role::FutureAdmin => DataKey::FutureAdmin,
+            Role::RewardsAdmin => DataKey::Operator,
+            Role::OperationsAdmin => DataKey::OperationsAdmin,
+            Role::PauseAdmin => DataKey::PauseAdmin,
+            Role::EmergencyPauseAdmin => DataKey::EmPauseAdmin,
+        }
+    }
 }
 
 pub trait AccessControlTrait {
-    fn has_admin(&self) -> bool;
-    fn get_admin(&self) -> Option<Address>;
-    fn set_admin(&self, admin: &Address);
-    fn check_admin(&self, user: &Address);
-    fn require_admin(&self);
-    fn get_future_admin(&self) -> Option<Address>;
-    fn set_future_admin(&self, admin: &Address);
-    fn perform_admin_check(&self) -> Result<Address, AccessControlError>;
-}
-
-pub trait OperatorAccessTrait {
-    fn has_operator(&self) -> bool;
-    fn get_operator(&self) -> Option<Address>;
-    fn set_operator(&self, admin: &Address);
-    fn check_operator(&self, user: &Address);
+    fn get_role_safe(&self, role: Role) -> Option<Address>;
+    fn get_role(&self, role: Role) -> Address;
+    fn set_role_address(&self, role: Role, address: &Address);
+    fn address_has_role(&self, role: Role, address: &Address) -> bool;
+    fn assert_address_has_role(&self, address: &Address, role: Role);
 }
 
 impl AccessControlTrait for AccessControl {
-    fn has_admin(&self) -> bool {
+    fn get_role_safe(&self, role: Role) -> Option<Address> {
+        let key = self.get_key(role);
         bump_instance(&self.0);
-        self.0.storage().instance().has(&DataKey::Admin)
+        self.0.storage().instance().get(&key)
     }
 
-    fn get_admin(&self) -> Option<Address> {
-        bump_instance(&self.0);
-        self.0.storage().instance().get(&DataKey::Admin)
-    }
-
-    fn set_admin(&self, admin: &Address) {
-        bump_instance(&self.0);
-        self.0.storage().instance().set(&DataKey::Admin, admin);
-    }
-
-    fn check_admin(&self, user: &Address) {
-        let admin = match self.perform_admin_check() {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(self.0, err),
-        };
-        if admin != user.clone() {
-            panic_with_error!(&self.0, AccessControlError::Unauthorized);
-        }
-    }
-
-    fn require_admin(&self) {
-        let admin = match self.perform_admin_check() {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(self.0, err),
-        };
-        admin.require_auth();
-    }
-
-    fn get_future_admin(&self) -> Option<Address> {
-        bump_instance(&self.0);
-        match self.0.storage().instance().get(&DataKey::FutureAdmin) {
-            Some(v) => v,
-            None => panic_with_error!(&self.0, StorageError::ValueNotInitialized),
-        }
-    }
-
-    fn set_future_admin(&self, admin: &Address) {
-        bump_instance(&self.0);
-        self.0
-            .storage()
-            .instance()
-            .set(&DataKey::FutureAdmin, admin)
-    }
-
-    fn perform_admin_check(&self) -> Result<Address, AccessControlError> {
-        if !self.has_admin() {
-            panic_with_error!(&self.0, AccessControlError::RoleNotFound);
-        }
-        self.get_admin().ok_or(AccessControlError::RoleNotFound)
-    }
-}
-
-impl OperatorAccessTrait for AccessControl {
-    fn has_operator(&self) -> bool {
-        bump_instance(&self.0);
-        self.0.storage().instance().has(&DataKey::Operator)
-    }
-
-    fn get_operator(&self) -> Option<Address> {
-        bump_instance(&self.0);
-        self.0.storage().instance().get(&DataKey::Operator)
-    }
-
-    fn set_operator(&self, operator: &Address) {
-        bump_instance(&self.0);
-        self.0
-            .storage()
-            .instance()
-            .set(&DataKey::Operator, operator)
-    }
-
-    fn check_operator(&self, user: &Address) {
-        let operator = match self.get_operator() {
+    fn get_role(&self, role: Role) -> Address {
+        match self.get_role_safe(role) {
             Some(address) => address,
-            None => panic_with_error!(self.0, AccessControlError::RoleNotFound),
-        };
-        if operator != user.clone() {
+            None => panic_with_error!(&self.0, AccessControlError::RoleNotFound),
+        }
+    }
+
+    fn set_role_address(&self, role: Role, address: &Address) {
+        let key = self.get_key(role);
+        bump_instance(&self.0);
+        self.0.storage().instance().set(&key, address);
+    }
+
+    fn address_has_role(&self, role: Role, address: &Address) -> bool {
+        match self.get_role_safe(role) {
+            Some(role_address) => address == &role_address,
+            None => false,
+        }
+    }
+
+    fn assert_address_has_role(&self, address: &Address, role: Role) {
+        if !self.address_has_role(role, address) {
             panic_with_error!(&self.0, AccessControlError::Unauthorized);
         }
     }

@@ -2,7 +2,7 @@ use crate::interface::{Calculator, UpgradeableContractTrait};
 use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
-use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::access::{AccessControl, AccessControlTrait, Role};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol, Vec, U256};
 
 #[contract]
@@ -21,8 +21,8 @@ impl Calculator for LiquidityPoolLiquidityCalculator {
     // * `account` - The account to be set as the admin.
     fn init_admin(e: Env, account: Address) {
         let access_control = AccessControl::new(&e);
-        if !access_control.has_admin() {
-            access_control.set_admin(&account)
+        if !access_control.get_role_safe(Role::Admin).is_some() {
+            access_control.set_role_address(Role::Admin, &account)
         }
     }
 
@@ -34,9 +34,8 @@ impl Calculator for LiquidityPoolLiquidityCalculator {
     // * `admin` - The admin account.
     // * `plane` - The plane to be set for the pools.
     fn set_pools_plane(e: Env, admin: Address, plane: Address) {
-        let access_control = AccessControl::new(&e);
         admin.require_auth();
-        access_control.check_admin(&admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
 
         set_plane(&e, &plane);
     }
@@ -119,7 +118,7 @@ impl UpgradeableContractTrait for LiquidityPoolLiquidityCalculator {
     // * `new_wasm_hash` - The hash of the new contract version.
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
         let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+        access_control.get_role(Role::Admin).require_auth();
         e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

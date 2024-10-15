@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol};
 
 pub trait UpgradeableContract {
     // Get contract version
@@ -12,8 +12,18 @@ pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
     fn init_admin(e: Env, account: Address);
 
-    // Set operator address which can perform some restricted actions
-    fn set_operator(e: Env, operator: Address);
+    // Set privileged addresses
+    fn set_privileged_addrs(
+        e: Env,
+        admin: Address,
+        rewards_admin: Address,
+        operations_admin: Address,
+        pause_admin: Address,
+        emergency_pause_admin: Address,
+    );
+
+    // Get map of privileged roles
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Option<Address>>;
 
     // Set liquidity pool token wasm hash
     fn set_token_hash(e: Env, new_hash: BytesN<32>);
@@ -41,7 +51,4 @@ pub trait AdminInterface {
 
     // Set reward token address
     fn set_reward_token(e: Env, reward_token: Address);
-
-    // Get operator address
-    fn get_operator(e: Env) -> Address;
 }
