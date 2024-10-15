@@ -10,7 +10,6 @@ use utils::bump::bump_instance;
 #[contracttype]
 enum DataKey {
     TokenShare,
-    FutureTokenShare,
     TotalShares,
 }
 
@@ -66,46 +65,4 @@ pub fn mint_shares(e: &Env, to: &Address, amount: i128) {
 
     let share_contract_id = get_token_share(e);
     SorobanTokenAdminClient::new(e, &share_contract_id).mint(to, &amount);
-}
-
-// share token migration functionality
-pub fn get_future_token_share(e: &Env) -> Option<Address> {
-    bump_instance(e);
-    e.storage().instance().get(&DataKey::FutureTokenShare)
-}
-
-pub fn put_future_token_share(e: &Env, contract: Address) {
-    bump_instance(e);
-    e.storage()
-        .instance()
-        .set(&DataKey::FutureTokenShare, &contract);
-}
-
-// migrate user share balance to new token share contract
-pub fn replicate_token_share_balance_to_future(e: &Env, user: &Address) {
-    let future_token_share = match get_future_token_share(e) {
-        Some(address) => address,
-        None => return,
-    };
-
-    let share_token_balance = SorobanTokenClient::new(e, &get_token_share(e)).balance(user);
-    let future_share_token_balance = SorobanTokenClient::new(e, &future_token_share).balance(user);
-    if share_token_balance > future_share_token_balance {
-        let diff = share_token_balance - future_share_token_balance;
-        SorobanTokenAdminClient::new(e, &future_token_share).mint(user, &diff);
-    } else if share_token_balance < future_share_token_balance {
-        let diff = future_share_token_balance - share_token_balance;
-        SorobanTokenClient::new(e, &future_token_share).burn(user, &diff);
-    }
-}
-
-// replace token share with future token share when migration is done
-pub fn commit_future_token_share(e: &Env) {
-    let future_token_share = match get_future_token_share(e) {
-        Some(address) => address,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    };
-
-    put_token_share(e, future_token_share);
-    e.storage().instance().remove(&DataKey::FutureTokenShare);
 }
