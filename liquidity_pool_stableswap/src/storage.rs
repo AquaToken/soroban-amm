@@ -33,7 +33,8 @@ enum DataKey {
 
     // Tokens precision
     Precision, // target precision for internal calculations. It's the maximum precision of all tokens.
-    Rates,     // adjust token amounts for decimal differences
+    PrecisionMul, // Scales raw token amounts to match `Precision`, accounting for decimal differences.
+    Rates,        // adjust token amounts for decimal differences
 }
 
 generate_instance_storage_getter_and_setter_with_default!(
@@ -263,6 +264,24 @@ pub fn get_precision(e: &Env) -> u128 {
             let precision = normalize::get_precision(&get_decimals(e));
             set_precision(e, &precision);
             precision
+        }
+    }
+}
+
+// Precision mul - Scales raw token amounts to match `Precision`, accounting for decimal differences.
+pub fn set_precision_mul(e: &Env, value: &Vec<u128>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::PrecisionMul, value);
+}
+
+pub fn get_precision_mul(e: &Env) -> Vec<u128> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::PrecisionMul) {
+        Some(v) => v,
+        None => {
+            let precision_mul = normalize::get_precision_mul(e, &get_decimals(e));
+            set_precision_mul(e, &precision_mul);
+            precision_mul
         }
     }
 }

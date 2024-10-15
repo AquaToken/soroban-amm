@@ -198,6 +198,7 @@ fn test_happy_flow() {
     assert_eq!(token2.balance(&user1) as u128, 800_0000000);
     assert_eq!(token2.balance(&liqpool.address) as u128, 200_0000000);
 
+    assert_eq!(liqpool.estimate_swap(&0, &1, &10_0000000), 79637266);
     liqpool.swap(&user1, &0, &1, &10_0000000, &1_0000000);
 
     assert_eq!(token1.balance(&user1) as u128, 790_0000000);
@@ -313,6 +314,10 @@ fn test_happy_flow_different_decimals() {
         200_000000000000000000
     );
 
+    assert_eq!(
+        liqpool.estimate_swap(&0, &1, &10_0000000),
+        7963726652740971897
+    );
     liqpool.swap(&user1, &0, &1, &10_0000000, &1_000000000000000000);
 
     assert_eq!(token_7.balance(&user1) as u128, 790_0000000);
@@ -1430,6 +1435,76 @@ fn test_withdraw_one_token() {
 }
 
 #[test]
+fn test_withdraw_one_token_different_decimals() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token18 = install_token_wasm_with_decimal(&e, &admin1, 18);
+    let token7 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+    let token18_admin_client = get_token_admin_client(&e, &token18.address);
+    let token7_admin_client = get_token_admin_client(&e, &token7.address);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &user1,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token18.address.clone(), token7.address.clone()]),
+        10,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
+
+    token18_admin_client.mint(&user1, &1000_000000000000000000);
+    assert_eq!(token18.balance(&user1) as u128, 1000_000000000000000000);
+
+    token7_admin_client.mint(&user1, &1000_0000000);
+    assert_eq!(token7.balance(&user1) as u128, 1000_0000000);
+
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [100_000000000000000000, 100_0000000]),
+        &0,
+    );
+
+    let share_token_amount = 200_000000000000000000_u128;
+    assert_eq!(token_share.balance(&user1) as u128, share_token_amount);
+    assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
+    assert_eq!(token18.balance(&user1) as u128, 900_000000000000000000);
+    assert_eq!(
+        token18.balance(&liqpool.address) as u128,
+        100_000000000000000000
+    );
+    assert_eq!(token7.balance(&user1) as u128, 900_0000000);
+    assert_eq!(token7.balance(&liqpool.address) as u128, 100_0000000);
+
+    assert_eq!(
+        liqpool.withdraw_one_coin(&user1, &100_000000000000000000, &0, &10_000000000000000000),
+        Vec::from_array(&e, [91_043560762610399983_u128, 0_u128]),
+    );
+
+    assert_eq!(token18.balance(&user1) as u128, 991_043560762610399983);
+    assert_eq!(
+        token18.balance(&liqpool.address) as u128,
+        8_956439237389600017
+    );
+    assert_eq!(token7.balance(&user1) as u128, 900_0000000);
+    assert_eq!(token7.balance(&liqpool.address) as u128, 100_0000000);
+    assert_eq!(token_share.balance(&user1) as u128, 100_000000000000000000);
+    assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
+}
+
+#[test]
 fn test_custom_fee() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1521,6 +1596,57 @@ fn test_deposit_inequal() {
     liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 10_0000000]), &0);
     assert_eq!(token1.balance(&user1) as u128, 890_0000000);
     assert_eq!(token2.balance(&user1) as u128, 890_0000000);
+}
+
+#[test]
+fn test_deposit_inequal_different_decimals() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token7 = create_token_contract(&e, &admin2);
+    let token18 = install_token_wasm_with_decimal(&e, &admin1, 18);
+    let token7_admin_client = get_token_admin_client(&e, &token7.address);
+    let token18_admin_client = get_token_admin_client(&e, &token18.address);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &user1,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token7.address.clone(), token18.address.clone()]),
+        10,
+        0,
+        &token_reward.address,
+        &plane.address,
+    );
+
+    let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
+
+    token7_admin_client.mint(&user1, &1000_0000000);
+    token18_admin_client.mint(&user1, &1000_000000000000000000);
+
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [10_0000000, 100_000000000000000000]),
+        &0,
+    );
+    assert_eq!(token_share.balance(&user1) as u128, 101_876761504564086655);
+    assert_eq!(token7.balance(&user1) as u128, 990_0000000);
+    assert_eq!(token18.balance(&user1) as u128, 900_000000000000000000);
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&e, [100_0000000, 10_000000000000000000]),
+        &0,
+    );
+    assert_eq!(token7.balance(&user1) as u128, 890_0000000);
+    assert_eq!(token18.balance(&user1) as u128, 890_000000000000000000);
 }
 
 #[test]
@@ -1617,7 +1743,7 @@ fn test_remove_liquidity_imbalance_different_decimals() {
     assert_eq!(token1.balance(&user1) as u128, 990_000000000000000000);
     assert_eq!(token2.balance(&user1) as u128, 900_0000000);
     let token_share_amount = token_share.balance(&user1) as u128;
-    assert_eq!(token_share_amount, 101876761504564086655);
+    assert_eq!(token_share_amount, 101_876761504564086655);
     liqpool.remove_liquidity_imbalance(
         &user1,
         &Vec::from_array(&e, [0_500000000000000000, 99_0000000]),
@@ -1631,7 +1757,7 @@ fn test_remove_liquidity_imbalance_different_decimals() {
     );
     assert_eq!(token2.balance(&liqpool.address) as u128, 1_0000000);
     assert!((token_share.balance(&user1) as u128) < token_share_amount / 10); // more than 90% of the share were burned
-    assert_eq!(token_share.balance(&user1) as u128, 9763537957616772036); // control exact value
+    assert_eq!(token_share.balance(&user1) as u128, 9_763537957616772036); // control exact value
 }
 
 #[test]

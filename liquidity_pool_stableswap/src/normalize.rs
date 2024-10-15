@@ -9,7 +9,7 @@ pub fn get_precision(decimals: &Vec<u32>) -> u128 {
 }
 
 // Scales raw token amounts to match `Precision`, accounting for decimal differences.
-fn get_precision_mul(e: &Env, decimals: &Vec<u32>) -> Vec<u128> {
+pub fn get_precision_mul(e: &Env, decimals: &Vec<u32>) -> Vec<u128> {
     let precision = get_precision(decimals);
     let mut precision_mul = Vec::new(e);
     for token_decimals in decimals.iter() {

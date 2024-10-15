@@ -8,11 +8,11 @@ use crate::pool_interface::{
 use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
     get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_plane, get_precision, get_rates, get_reserves, get_router, get_tokens,
-    get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline, put_decimals, put_fee,
-    put_future_a, put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time,
-    put_reserves, put_tokens, put_transfer_ownership_deadline, set_is_killed_claim,
-    set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
+    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_rates, get_reserves,
+    get_router, get_tokens, get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline,
+    put_decimals, put_fee, put_future_a, put_future_a_time, put_future_fee, put_initial_a,
+    put_initial_a_time, put_reserves, put_tokens, put_transfer_ownership_deadline,
+    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -587,7 +587,7 @@ impl LiquidityPool {
         let amp = Self::a(e.clone());
         let total_supply = get_total_shares(e);
 
-        let xp = get_reserves(e);
+        let xp = Self::_xp(&e, &get_reserves(e));
 
         let d0 = Self::_get_d(e, &xp, amp);
         let d1 = d0.sub(
@@ -598,7 +598,8 @@ impl LiquidityPool {
         let mut xp_reduced = xp.clone();
 
         let new_y = Self::_get_y_d(e, amp, token_idx, &xp, d1.clone());
-        let dy_0 = xp.get(token_idx).unwrap() - new_y; // w/o fees;
+        let token_idx_precision_mul = get_precision_mul(&e).get(token_idx).unwrap();
+        let dy_0 = (xp.get(token_idx).unwrap() - new_y) / token_idx_precision_mul; // w/o fees;
 
         for j in 0..n_coins {
             let dx_expected = if j == token_idx {
@@ -626,7 +627,7 @@ impl LiquidityPool {
 
         let mut dy =
             xp_reduced.get(token_idx).unwrap() - Self::_get_y_d(e, amp, token_idx, &xp_reduced, d1);
-        dy = dy - 1; // Withdraw less to account for rounding errors
+        dy = (dy - 1) / token_idx_precision_mul; // Withdraw less to account for rounding errors
 
         (dy, dy_0 - dy)
     }
