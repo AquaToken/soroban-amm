@@ -96,7 +96,6 @@ impl Setup<'_> {
         let liq_pool = create_liqpool_contract(
             &e,
             &users[0],
-            &users[0],
             &router,
             &install_token_wasm(&e),
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
@@ -175,7 +174,6 @@ pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 pub fn create_liqpool_contract<'a>(
     e: &Env,
     admin: &Address,
-    operator: &Address,
     router: &Address,
     token_wasm_hash: &BytesN<32>,
     tokens: &Vec<Address>,
@@ -185,8 +183,8 @@ pub fn create_liqpool_contract<'a>(
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize_all(
-        admin,
-        operator,
+        &admin,
+        &(admin.clone(), admin.clone(), admin.clone(), admin.clone()),
         router,
         token_wasm_hash,
         tokens,

@@ -24,8 +24,11 @@ use crate::storage::{
     set_reward_tokens, set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash,
     set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
-use access_control::access::{AccessControl, AccessControlTrait, Role};
+use access_control::access::{
+    AccessControl, AccessControlTrait, Role, SymbolRepresentation, TransferOwnershipTrait,
+};
 use access_control::errors::AccessControlError;
+use access_control::interface::TransferableContract;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
@@ -1447,5 +1450,46 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
         );
 
         last_swap_result
+    }
+}
+
+// The `TransferableContract` trait provides the interface for transferring ownership of the contract.
+#[contractimpl]
+impl TransferableContract for LiquidityPoolRouter {
+    // Commits an ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `new_admin` - The address of the new admin.
+    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.commit_transfer_ownership(new_admin);
+    }
+
+    // Applies the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn apply_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.apply_transfer_ownership();
+    }
+
+    // Reverts the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn revert_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.revert_transfer_ownership();
     }
 }

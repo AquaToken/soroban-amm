@@ -5,7 +5,7 @@ pub trait ManagedLiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Address),
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
@@ -24,7 +24,7 @@ pub trait LiquidityPoolInterfaceTrait {
     fn initialize(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Address),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -157,15 +157,6 @@ pub trait AdminInterfaceTrait {
 
     // Revert committed parameters to current values
     fn revert_new_parameters(e: Env, admin: Address);
-
-    // Commit ownership transfer
-    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address);
-
-    // Apply committed transfer ownership
-    fn apply_transfer_ownership(e: Env, admin: Address);
-
-    // Revert committed ownership transfer
-    fn revert_transfer_ownership(e: Env, admin: Address);
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);

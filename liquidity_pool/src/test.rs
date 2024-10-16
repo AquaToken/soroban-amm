@@ -428,7 +428,12 @@ fn initialize_already_initialized() {
 
     setup.liq_pool.initialize(
         &users[0],
-        &users[0],
+        &(
+            users[0].clone(),
+            users[0].clone(),
+            users[0].clone(),
+            users[0].clone(),
+        ),
         &users[0],
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
@@ -447,7 +452,12 @@ fn initialize_already_initialized_plane() {
 
     setup.liq_pool.initialize_all(
         &users[0],
-        &users[0],
+        &(
+            users[0].clone(),
+            users[0].clone(),
+            users[0].clone(),
+            users[0].clone(),
+        ),
         &users[0],
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
@@ -478,7 +488,6 @@ fn test_custom_fee() {
     ] {
         let liqpool = create_liqpool_contract(
             &setup.env,
-            &Address::generate(&setup.env),
             &Address::generate(&setup.env),
             &setup.users[0],
             &install_token_wasm(&setup.env),
@@ -1492,7 +1501,6 @@ fn test_withdraw_rewards() {
     let liq_pool = create_liqpool_contract(
         &e,
         &admin,
-        &admin,
         &router,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
@@ -1590,7 +1598,6 @@ fn test_deposit_rewards() {
     let liq_pool = create_liqpool_contract(
         &e,
         &admin,
-        &admin,
         &router,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
@@ -1649,7 +1656,6 @@ fn test_swap_rewards() {
     let liq_pool1 = create_liqpool_contract(
         &e,
         &admin,
-        &admin,
         &router,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
@@ -1659,7 +1665,6 @@ fn test_swap_rewards() {
     );
     let liq_pool2 = create_liqpool_contract(
         &e,
-        &admin,
         &admin,
         &router,
         &install_token_wasm(&e),
@@ -1759,7 +1764,6 @@ fn test_claim_rewards() {
 
     let liq_pool = create_liqpool_contract(
         &e,
-        &admin,
         &admin,
         &router,
         &install_token_wasm(&e),
@@ -1870,7 +1874,6 @@ fn test_drain_reserves() {
 
     let liq_pool = create_liqpool_contract(
         &e,
-        &admin,
         &admin,
         &router,
         &install_token_wasm(&e),

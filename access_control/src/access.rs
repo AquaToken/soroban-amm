@@ -1,17 +1,9 @@
+use crate::constants::ADMIN_ACTIONS_DELAY;
 use crate::errors::AccessControlError;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env, Symbol};
+use crate::storage::{get_transfer_ownership_deadline, put_transfer_ownership_deadline, DataKey};
+use soroban_sdk::{panic_with_error, Address, Env, Symbol};
 use utils::bump::bump_instance;
-
-#[derive(Clone)]
-#[contracttype]
-enum DataKey {
-    Admin,           // owner - upgrade, set privileged roles
-    FutureAdmin,     // pending owner
-    Operator,        // rewards admin - configure rewards. legacy name cannot be changed
-    OperationsAdmin, // operations admin - add/remove pools, ramp A, set fees, etc
-    PauseAdmin,      // pause admin - pause/unpause pools
-    EmPauseAdmin,    // emergency pause admin - pause pools in emergency
-}
+use utils::storage_errors::StorageError;
 
 pub enum Role {
     Admin,
@@ -22,8 +14,12 @@ pub enum Role {
     EmergencyPauseAdmin,
 }
 
-impl Role {
-    pub fn as_symbol(&self, e: &Env) -> Symbol {
+pub trait SymbolRepresentation {
+    fn as_symbol(&self, e: &Env) -> Symbol;
+}
+
+impl SymbolRepresentation for Role {
+    fn as_symbol(&self, e: &Env) -> Symbol {
         match self {
             Role::Admin => Symbol::new(&e, "Admin"),
             Role::FutureAdmin => Symbol::new(&e, "FutureAdmin"),
@@ -63,6 +59,12 @@ pub trait AccessControlTrait {
     fn assert_address_has_role(&self, address: &Address, role: Role);
 }
 
+pub trait TransferOwnershipTrait {
+    fn commit_transfer_ownership(&self, new_admin: Address);
+    fn apply_transfer_ownership(&self);
+    fn revert_transfer_ownership(&self);
+}
+
 impl AccessControlTrait for AccessControl {
     fn get_role_safe(&self, role: Role) -> Option<Address> {
         let key = self.get_key(role);
@@ -94,5 +96,37 @@ impl AccessControlTrait for AccessControl {
         if !self.address_has_role(role, address) {
             panic_with_error!(&self.0, AccessControlError::Unauthorized);
         }
+    }
+}
+
+impl TransferOwnershipTrait for AccessControl {
+    fn commit_transfer_ownership(&self, new_admin: Address) {
+        if get_transfer_ownership_deadline(&self.0) != 0 {
+            panic_with_error!(&self.0, AccessControlError::AnotherActionActive);
+        }
+
+        let deadline = self.0.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
+        put_transfer_ownership_deadline(&self.0, &deadline);
+        self.set_role_address(Role::FutureAdmin, &new_admin);
+    }
+
+    fn apply_transfer_ownership(&self) {
+        if self.0.ledger().timestamp() < get_transfer_ownership_deadline(&self.0) {
+            panic_with_error!(&self.0, AccessControlError::ActionNotReadyYet);
+        }
+        if get_transfer_ownership_deadline(&self.0) == 0 {
+            panic_with_error!(&self.0, AccessControlError::NoActionActive);
+        }
+
+        put_transfer_ownership_deadline(&self.0, &0);
+        let future_admin = match self.get_role_safe(Role::FutureAdmin) {
+            Some(v) => v,
+            None => panic_with_error!(&self.0, StorageError::ValueNotInitialized),
+        };
+        self.set_role_address(Role::Admin, &future_admin);
+    }
+
+    fn revert_transfer_ownership(&self) {
+        put_transfer_ownership_deadline(&self.0, &0);
     }
 }

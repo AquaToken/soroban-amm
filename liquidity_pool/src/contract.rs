@@ -16,8 +16,11 @@ use crate::storage::{
     set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
 };
 use crate::token::{create_contract, transfer_a, transfer_b};
-use access_control::access::{AccessControl, AccessControlTrait, Role};
+use access_control::access::{
+    AccessControl, AccessControlTrait, Role, SymbolRepresentation, TransferOwnershipTrait,
+};
 use access_control::errors::AccessControlError;
+use access_control::interface::TransferableContract;
 use liquidity_pool_events::Events as PoolEvents;
 use liquidity_pool_events::LiquidityPoolEvents;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -50,7 +53,12 @@ impl LiquidityPoolCrunch for LiquidityPool {
     // # Arguments
     //
     // * `admin` - The address of the admin user.
-    // * `operator` - The address of the operator.
+    // * `privileged_addrs` - (
+    //      rewards admin,
+    //      operations admin,
+    //      pause admin,
+    //      emergency pause admin
+    //  ).
     // * `router` - The address of the router.
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
     // * `tokens` - A vector of token addresses.
@@ -60,7 +68,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Address),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -74,7 +82,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
         Self::initialize(
             e.clone(),
             admin,
-            operator,
+            privileged_addrs,
             router,
             lp_token_wasm_hash,
             tokens,
@@ -100,6 +108,12 @@ impl LiquidityPoolTrait for LiquidityPool {
     // # Arguments
     //
     // * `admin` - The address of the admin user.
+    // * `privileged_addrs` - (
+    //      rewards admin,
+    //      operations admin,
+    //      pause admin,
+    //      emergency pause admin
+    //  ).
     // * `router` - The address of the router.
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
     // * `tokens` - A vector of token addresses.
@@ -107,7 +121,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn initialize(
         e: Env,
         admin: Address,
-        rewards_admin: Address,
+        privileged_addrs: (Address, Address, Address, Address),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -118,7 +132,11 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
         }
         access_control.set_role_address(Role::Admin, &admin);
-        access_control.set_role_address(Role::RewardsAdmin, &rewards_admin);
+        access_control.set_role_address(Role::RewardsAdmin, &privileged_addrs.0);
+        access_control.set_role_address(Role::OperationsAdmin, &privileged_addrs.1);
+        access_control.set_role_address(Role::PauseAdmin, &privileged_addrs.2);
+        access_control.set_role_address(Role::EmergencyPauseAdmin, &privileged_addrs.3);
+
         set_router(&e, &router);
 
         if tokens.len() != 2 {
@@ -994,5 +1012,46 @@ impl Plane for LiquidityPool {
     // Updates the plane data in case the plane contract was updated.
     fn backfill_plane_data(e: Env) {
         update_plane(&e);
+    }
+}
+
+// The `TransferableContract` trait provides the interface for transferring ownership of the contract.
+#[contractimpl]
+impl TransferableContract for LiquidityPool {
+    // Commits an ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `new_admin` - The address of the new admin.
+    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.commit_transfer_ownership(new_admin);
+    }
+
+    // Applies the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn apply_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.apply_transfer_ownership();
+    }
+
+    // Reverts the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn revert_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.revert_transfer_ownership();
     }
 }

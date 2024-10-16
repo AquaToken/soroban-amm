@@ -7,4 +7,9 @@ pub enum AccessControlError {
     RoleNotFound = 101,
     Unauthorized = 102,
     AdminAlreadySet = 103,
+
+    // transfer ownership errors
+    AnotherActionActive = 2906,
+    NoActionActive = 2907,
+    ActionNotReadyYet = 2908,
 }

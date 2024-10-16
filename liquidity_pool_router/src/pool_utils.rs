@@ -136,15 +136,32 @@ fn init_standard_pool(
     let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(e);
+
+    // privileged users
     let admin = access_control.get_role(Role::Admin);
-    let operator = access_control
+    let rewards_admin = access_control
         .get_role_safe(Role::RewardsAdmin)
         .unwrap_or(admin.clone());
+    let operations_admin = access_control
+        .get_role_safe(Role::OperationsAdmin)
+        .unwrap_or(admin.clone());
+    let pause_admin = access_control
+        .get_role_safe(Role::PauseAdmin)
+        .unwrap_or(admin.clone());
+    let emergency_pause_admin = access_control
+        .get_role_safe(Role::EmergencyPauseAdmin)
+        .unwrap_or(admin.clone());
+
     let liq_pool_client = StandardLiquidityPoolClient::new(e, pool_contract_id);
     let plane = get_pool_plane(e);
     liq_pool_client.initialize_all(
         &admin,
-        &operator,
+        &(
+            rewards_admin,
+            operations_admin,
+            pause_admin,
+            emergency_pause_admin,
+        ),
         &e.current_contract_address(),
         &token_wasm_hash,
         tokens,
@@ -165,10 +182,22 @@ fn init_stableswap_pool(
     let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(e);
+
+    // privileged users
     let admin = access_control.get_role(Role::Admin);
-    let operator = access_control
+    let rewards_admin = access_control
         .get_role_safe(Role::RewardsAdmin)
         .unwrap_or(admin.clone());
+    let operations_admin = access_control
+        .get_role_safe(Role::OperationsAdmin)
+        .unwrap_or(admin.clone());
+    let pause_admin = access_control
+        .get_role_safe(Role::PauseAdmin)
+        .unwrap_or(admin.clone());
+    let emergency_pause_admin = access_control
+        .get_role_safe(Role::EmergencyPauseAdmin)
+        .unwrap_or(admin.clone());
+
     let plane = get_pool_plane(e);
     e.invoke_contract::<()>(
         pool_contract_id,
@@ -177,7 +206,13 @@ fn init_stableswap_pool(
             e,
             [
                 admin.into_val(e),
-                operator.into_val(e),
+                (
+                    rewards_admin,
+                    operations_admin,
+                    pause_admin,
+                    emergency_pause_admin,
+                )
+                    .into_val(e),
                 e.current_contract_address().to_val(),
                 token_wasm_hash.into_val(e),
                 tokens.clone().into_val(e),

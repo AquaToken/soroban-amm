@@ -2,12 +2,26 @@
 extern crate std;
 
 use crate::{contract::Token, TokenClient};
-use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
+use access_control::constants::ADMIN_ACTIONS_DELAY;
+use soroban_sdk::testutils::{Ledger, LedgerInfo, MockAuth, MockAuthInvoke};
 use soroban_sdk::{
     contract, contractimpl, symbol_short,
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
     Address, Env, IntoVal, Symbol, Vec,
 };
+
+fn jump(e: &Env, time: u64) {
+    e.ledger().set(LedgerInfo {
+        timestamp: e.ledger().timestamp().saturating_add(time),
+        protocol_version: e.ledger().protocol_version(),
+        sequence_number: e.ledger().sequence(),
+        network_id: Default::default(),
+        base_reserve: 10,
+        min_temp_entry_ttl: 999999,
+        min_persistent_entry_ttl: 999999,
+        max_entry_ttl: u32::MAX,
+    });
+}
 
 fn create_token<'a>(e: &Env, admin: &Address) -> TokenClient<'a> {
     let token = TokenClient::new(e, &e.register_contract(None, Token {}));
@@ -115,7 +129,7 @@ fn test() {
     assert_eq!(token.balance(&user1), 500);
     assert_eq!(token.balance(&user3), 300);
 
-    token.set_admin(&admin2);
+    token.commit_transfer_ownership(&admin1, &admin2);
     assert_eq!(
         e.auths(),
         std::vec![(
@@ -123,8 +137,24 @@ fn test() {
             AuthorizedInvocation {
                 function: AuthorizedFunction::Contract((
                     token.address.clone(),
-                    symbol_short!("set_admin"),
-                    (&admin2,).into_val(&e),
+                    Symbol::new(&e, "commit_transfer_ownership"),
+                    (&admin1, &admin2,).into_val(&e),
+                )),
+                sub_invocations: std::vec![]
+            }
+        )]
+    );
+    jump(&e, ADMIN_ACTIONS_DELAY + 1);
+    token.apply_transfer_ownership(&admin1);
+    assert_eq!(
+        e.auths(),
+        std::vec![(
+            admin1.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    token.address.clone(),
+                    Symbol::new(&e, "apply_transfer_ownership"),
+                    (&admin1,).into_val(&e),
                 )),
                 sub_invocations: std::vec![]
             }
