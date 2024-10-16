@@ -41,12 +41,11 @@ tasks:
       - for: { var: SUBDIRS }
         cmd: task -d {{ .ITEM }} clean || exit 1
 
-  check_bindings:
+  _check_bindings:
     vars:
       WASMS:
         sh: find ./target/wasm32-unknown-unknown/release/ -maxdepth 1 -type f -name '*.wasm'
     cmds:
-      - task: build
       - for: { var: WASMS }
         cmd:
           echo "Checking bindings for {{ .ITEM }}" &&
@@ -54,3 +53,8 @@ tasks:
           soroban contract inspect --wasm {{ .ITEM }} | grep apply_transfer_ownership && 
           soroban contract inspect --wasm {{ .ITEM }} | grep upgrade 
           || exit 1
+
+  check_bindings:
+    cmds:
+      - task build
+      - task _check_bindings
