@@ -5,7 +5,7 @@ pub trait LiquidityPoolCrunch {
     fn initialize_all(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address),
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -23,7 +23,7 @@ pub trait LiquidityPoolTrait {
     fn initialize(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address),
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -90,11 +90,11 @@ pub trait AdminInterfaceTrait {
         rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admin: Address,
+        emergency_pause_admins: Vec<Address>,
     );
 
     // Get map of privileged roles
-    fn get_privileged_addrs(e: Env) -> Map<Symbol, Option<Address>>;
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);
@@ -117,11 +117,12 @@ pub trait UpgradeableContractTrait {
     fn version() -> u32;
 
     // Upgrade contract with new wasm code
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
+    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>);
 }
 
 pub trait UpgradeableLPTokenTrait {
     fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>);
+    fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>);
 }
 
 pub trait RewardsTrait {

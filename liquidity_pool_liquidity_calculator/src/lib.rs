@@ -1,7 +1,5 @@
 #![no_std]
 
-// extern crate alloc;
-
 mod calculator;
 mod constants;
 mod contract;

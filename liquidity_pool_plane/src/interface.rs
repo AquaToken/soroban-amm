@@ -16,5 +16,5 @@ pub trait UpgradeableContract {
     fn version() -> u32;
 
     // Upgrade contract with new wasm code
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
+    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>);
 }

@@ -9,7 +9,7 @@ pub enum DataKey {
     Operator,        // rewards admin - configure rewards. legacy name cannot be changed
     OperationsAdmin, // operations admin - add/remove pools, ramp A, set fees, etc
     PauseAdmin,      // pause admin - pause/unpause pools
-    EmPauseAdmin,    // emergency pause admin - pause pools in emergency
+    EmPauseAdmins,   // emergency pause admin - pause pools in emergency
 
     TransferOwnershipDeadline,
 }

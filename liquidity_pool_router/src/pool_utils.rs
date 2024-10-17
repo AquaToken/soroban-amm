@@ -148,9 +148,7 @@ fn init_standard_pool(
     let pause_admin = access_control
         .get_role_safe(Role::PauseAdmin)
         .unwrap_or(admin.clone());
-    let emergency_pause_admin = access_control
-        .get_role_safe(Role::EmergencyPauseAdmin)
-        .unwrap_or(admin.clone());
+    let emergency_pause_admins = access_control.get_role_addresses(Role::EmergencyPauseAdmin);
 
     let liq_pool_client = StandardLiquidityPoolClient::new(e, pool_contract_id);
     let plane = get_pool_plane(e);
@@ -160,7 +158,7 @@ fn init_standard_pool(
             rewards_admin,
             operations_admin,
             pause_admin,
-            emergency_pause_admin,
+            emergency_pause_admins,
         ),
         &e.current_contract_address(),
         &token_wasm_hash,
@@ -194,9 +192,7 @@ fn init_stableswap_pool(
     let pause_admin = access_control
         .get_role_safe(Role::PauseAdmin)
         .unwrap_or(admin.clone());
-    let emergency_pause_admin = access_control
-        .get_role_safe(Role::EmergencyPauseAdmin)
-        .unwrap_or(admin.clone());
+    let emergency_pause_admins = access_control.get_role_addresses(Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
     e.invoke_contract::<()>(
@@ -210,7 +206,7 @@ fn init_stableswap_pool(
                     rewards_admin,
                     operations_admin,
                     pause_admin,
-                    emergency_pause_admin,
+                    emergency_pause_admins,
                 )
                     .into_val(e),
                 e.current_contract_address().to_val(),

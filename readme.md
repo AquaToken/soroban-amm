@@ -121,6 +121,32 @@ check the Soroban documentation: https://soroban.stellar.org/docs/reference/rpc
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
+<!-- Privileged actions -->
+## Privileged actions
+### Emergency Pause Admin
+    - Pause pool deposits
+    - Pause pool swaps
+    - Pause pool claims
+### Pause Admin
+    - All the available for Emergency Pause Admin
+    - Unpause pool deposits
+    - Unpause pool swaps
+    - Unpause pool claims
+### Operations Admin
+    - Remove pool from router
+    - Stableswap pool: Ramp A, stop ramping, set fee 
+### Rewards Admin
+    - Set rewards rate
+    - Distribute outstanding reward among pools
+### Owner (Admin)
+    - All the available for roles above
+    - Upgrade code
+    - Transfer ownership
+    - Privileged address management
+    - Manage internal contracts addresses: Plane, Liquidity Calculator
+    - Change pools & token wasm hash for pools factory
+    - Update reward token address
+
 
 <!-- CONTRIBUTING -->
 ## Contributing

@@ -45,7 +45,12 @@ fn create_liqpool_contract<'a>(
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize_all(
         admin,
-        &(admin.clone(), admin.clone(), admin.clone(), admin.clone()),
+        &(
+            admin.clone(),
+            admin.clone(),
+            admin.clone(),
+            Vec::from_array(&e, [admin.clone()]),
+        ),
         router,
         token_wasm_hash,
         coins,

@@ -1,7 +1,7 @@
 use crate::constants::ADMIN_ACTIONS_DELAY;
 use crate::errors::AccessControlError;
 use crate::storage::{get_transfer_ownership_deadline, put_transfer_ownership_deadline, DataKey};
-use soroban_sdk::{panic_with_error, Address, Env, Symbol};
+use soroban_sdk::{panic_with_error, Address, Env, Symbol, Vec};
 use utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
 
@@ -46,16 +46,34 @@ impl AccessControl {
             Role::RewardsAdmin => DataKey::Operator,
             Role::OperationsAdmin => DataKey::OperationsAdmin,
             Role::PauseAdmin => DataKey::PauseAdmin,
-            Role::EmergencyPauseAdmin => DataKey::EmPauseAdmin,
+            Role::EmergencyPauseAdmin => DataKey::EmPauseAdmins,
         }
     }
 }
 
+fn role_has_many_users(role: &Role) -> bool {
+    match role {
+        Role::Admin => false,
+        Role::FutureAdmin => false,
+        Role::RewardsAdmin => false,
+        Role::OperationsAdmin => false,
+        Role::PauseAdmin => false,
+        Role::EmergencyPauseAdmin => true,
+    }
+}
+
 pub trait AccessControlTrait {
+    // single address
     fn get_role_safe(&self, role: Role) -> Option<Address>;
     fn get_role(&self, role: Role) -> Address;
     fn set_role_address(&self, role: Role, address: &Address);
-    fn address_has_role(&self, role: Role, address: &Address) -> bool;
+
+    // multiple addresses
+    fn get_role_addresses(&self, role: Role) -> Vec<Address>;
+    fn set_role_addresses(&self, role: Role, addresses: &Vec<Address>);
+
+    // check role
+    fn address_has_role(&self, address: &Address, role: Role) -> bool;
     fn assert_address_has_role(&self, address: &Address, role: Role);
 }
 
@@ -67,12 +85,28 @@ pub trait TransferOwnershipTrait {
 
 impl AccessControlTrait for AccessControl {
     fn get_role_safe(&self, role: Role) -> Option<Address> {
+        if role_has_many_users(&role) {
+            panic_with_error!(&self.0, AccessControlError::BadRoleUsage);
+        }
+
         let key = self.get_key(role);
         bump_instance(&self.0);
         self.0.storage().instance().get(&key)
     }
 
     fn get_role(&self, role: Role) -> Address {
+        match role {
+            Role::Admin => {}
+            _ => {
+                // only admin is guaranteed, use `get_role_safe` for other roles
+                panic_with_error!(&self.0, AccessControlError::BadRoleUsage);
+            }
+        }
+
+        if role_has_many_users(&role) {
+            panic_with_error!(&self.0, AccessControlError::BadRoleUsage);
+        }
+
         match self.get_role_safe(role) {
             Some(address) => address,
             None => panic_with_error!(&self.0, AccessControlError::RoleNotFound),
@@ -80,20 +114,52 @@ impl AccessControlTrait for AccessControl {
     }
 
     fn set_role_address(&self, role: Role, address: &Address) {
+        if role_has_many_users(&role) {
+            panic_with_error!(&self.0, AccessControlError::BadRoleUsage);
+        }
+
         let key = self.get_key(role);
         bump_instance(&self.0);
         self.0.storage().instance().set(&key, address);
     }
 
-    fn address_has_role(&self, role: Role, address: &Address) -> bool {
-        match self.get_role_safe(role) {
-            Some(role_address) => address == &role_address,
-            None => false,
+    fn get_role_addresses(&self, role: Role) -> Vec<Address> {
+        if !role_has_many_users(&role) {
+            panic_with_error!(&self.0, AccessControlError::BadRoleUsage);
+        }
+
+        let key = self.get_key(role);
+        bump_instance(&self.0);
+        self.0
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or(Vec::new(&self.0))
+    }
+
+    fn set_role_addresses(&self, role: Role, addresses: &Vec<Address>) {
+        if !role_has_many_users(&role) {
+            panic_with_error!(&self.0, AccessControlError::BadRoleUsage);
+        }
+
+        let key = self.get_key(role);
+        bump_instance(&self.0);
+        self.0.storage().instance().set(&key, addresses);
+    }
+
+    fn address_has_role(&self, address: &Address, role: Role) -> bool {
+        if role_has_many_users(&role) {
+            self.get_role_addresses(role).contains(address)
+        } else {
+            match self.get_role_safe(role) {
+                Some(role_address) => address == &role_address,
+                None => false,
+            }
         }
     }
 
     fn assert_address_has_role(&self, address: &Address, role: Role) {
-        if !self.address_has_role(role, address) {
+        if !self.address_has_role(address, role) {
             panic_with_error!(&self.0, AccessControlError::Unauthorized);
         }
     }
