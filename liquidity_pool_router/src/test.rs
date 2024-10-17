@@ -3,7 +3,8 @@ extern crate std;
 
 use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_POOLS};
 use crate::testutils;
-use crate::testutils::{create_plane_contract, setup, test_token};
+use crate::testutils::{create_plane_contract, jump, setup, test_token};
+use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
     AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
 };
@@ -2518,4 +2519,73 @@ fn test_privileged_users() {
         privileged_addrs,
         testutils::stableswap_pool::Client::new(&e, &stable_address).get_privileged_addrs()
     );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2908)")]
+fn test_transfer_ownership_too_early() {
+    let setup = setup();
+    let router = setup.router;
+    let admin_original = setup.admin;
+    let admin_new = Address::generate(&setup.e);
+
+    router.commit_transfer_ownership(&admin_original, &admin_new);
+    // check admin by calling protected method
+    router.set_pools_plane(&admin_original, &router.get_plane());
+    jump(&setup.e, ADMIN_ACTIONS_DELAY - 1);
+    router.apply_transfer_ownership(&admin_original);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2906)")]
+fn test_transfer_ownership_twice() {
+    let setup = setup();
+    let router = setup.router;
+    let admin_original = setup.admin;
+    let admin_new = Address::generate(&setup.e);
+
+    router.commit_transfer_ownership(&admin_original, &admin_new);
+    router.commit_transfer_ownership(&admin_original, &admin_new);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2907)")]
+fn test_transfer_ownership_not_committed() {
+    let setup = setup();
+    let router = setup.router;
+    let admin_original = setup.admin;
+
+    jump(&setup.e, ADMIN_ACTIONS_DELAY + 1);
+    router.apply_transfer_ownership(&admin_original);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2907)")]
+fn test_transfer_ownership_reverted() {
+    let setup = setup();
+    let router = setup.router;
+    let admin_original = setup.admin;
+    let admin_new = Address::generate(&setup.e);
+
+    router.commit_transfer_ownership(&admin_original, &admin_new);
+    // check admin by calling protected method
+    router.set_pools_plane(&admin_original, &router.get_plane());
+    jump(&setup.e, ADMIN_ACTIONS_DELAY + 1);
+    router.revert_transfer_ownership(&admin_original);
+    router.apply_transfer_ownership(&admin_original);
+}
+
+#[test]
+fn test_transfer_ownership() {
+    let setup = setup();
+    let router = setup.router;
+    let admin_original = setup.admin;
+    let admin_new = Address::generate(&setup.e);
+
+    router.commit_transfer_ownership(&admin_original, &admin_new);
+    // check admin by calling protected method
+    router.set_pools_plane(&admin_original, &router.get_plane());
+    jump(&setup.e, ADMIN_ACTIONS_DELAY + 1);
+    router.apply_transfer_ownership(&admin_original);
+    router.set_pools_plane(&admin_new, &router.get_plane());
 }

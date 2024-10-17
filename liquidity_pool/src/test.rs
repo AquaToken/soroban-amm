@@ -5,6 +5,7 @@ use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
     install_token_wasm, jump, Setup, TestConfig,
 };
+use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -1935,4 +1936,202 @@ fn test_drain_reserves() {
     );
     assert_eq!(token1.balance(&liq_pool.address), 1_300_000_0000001); // 1 token left on balance because of rounding
     assert_eq!(token2.balance(&liq_pool.address), 1_300_000_0000000);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2908)")]
+fn test_transfer_ownership_too_early() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+    let pool_admin_new = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &token_reward.address,
+        10,
+        &plane.address,
+    );
+
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    // check admin by calling protected method
+    liqpool.set_privileged_addrs(
+        &pool_admin_original,
+        &pool_admin_original.clone(),
+        &pool_admin_original.clone(),
+        &pool_admin_original.clone(),
+        &Vec::from_array(&e, [pool_admin_original.clone()]),
+    );
+    jump(&e, ADMIN_ACTIONS_DELAY - 1);
+    liqpool.apply_transfer_ownership(&pool_admin_original);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2906)")]
+fn test_transfer_ownership_twice() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+    let pool_admin_new = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &token_reward.address,
+        10,
+        &plane.address,
+    );
+
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2907)")]
+fn test_transfer_ownership_not_committed() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &token_reward.address,
+        10,
+        &plane.address,
+    );
+
+    jump(&e, ADMIN_ACTIONS_DELAY + 1);
+    liqpool.apply_transfer_ownership(&pool_admin_original);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2907)")]
+fn test_transfer_ownership_reverted() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+    let pool_admin_new = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &token_reward.address,
+        10,
+        &plane.address,
+    );
+
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    // check admin by calling protected method
+    liqpool.set_privileged_addrs(
+        &pool_admin_original,
+        &pool_admin_original.clone(),
+        &pool_admin_original.clone(),
+        &pool_admin_original.clone(),
+        &Vec::from_array(&e, [pool_admin_original.clone()]),
+    );
+    jump(&e, ADMIN_ACTIONS_DELAY + 1);
+    liqpool.revert_transfer_ownership(&pool_admin_original);
+    liqpool.apply_transfer_ownership(&pool_admin_original);
+}
+
+#[test]
+fn test_transfer_ownership() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token_reward = create_token_contract(&e, &admin1);
+
+    let pool_admin_original = Address::generate(&e);
+    let pool_admin_new = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &pool_admin_original,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        &token_reward.address,
+        10,
+        &plane.address,
+    );
+
+    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    // check admin by calling protected method
+    liqpool.set_privileged_addrs(
+        &pool_admin_original,
+        &pool_admin_new.clone(),
+        &pool_admin_new.clone(),
+        &pool_admin_new.clone(),
+        &Vec::from_array(&e, [pool_admin_new.clone()]),
+    );
+    jump(&e, ADMIN_ACTIONS_DELAY + 1);
+    liqpool.apply_transfer_ownership(&pool_admin_original);
+    liqpool.set_privileged_addrs(
+        &pool_admin_new,
+        &pool_admin_new.clone(),
+        &pool_admin_new.clone(),
+        &pool_admin_new.clone(),
+        &Vec::from_array(&e, [pool_admin_new.clone()]),
+    );
 }
