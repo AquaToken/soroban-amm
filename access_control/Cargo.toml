@@ -13,3 +13,6 @@ doctest = false
 soroban-sdk = { workspace = true }
 utils = { workspace = true }
 liquidity-pool-validation-errors = { workspace = true }
+
+[dev-dependencies]
+utils = { workspace = true, features = ["testutils"] }

@@ -1,47 +1,14 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::testutils::{create_dummy_pool, create_token};
 use crate::{contract::Token, TokenClient};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use soroban_sdk::testutils::{Ledger, LedgerInfo, MockAuth, MockAuthInvoke};
-use soroban_sdk::{
-    contract, contractimpl, symbol_short,
-    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
-    Address, Env, IntoVal, Symbol, Vec,
+use soroban_sdk::testutils::{
+    Address as _, AuthorizedFunction, AuthorizedInvocation, MockAuth, MockAuthInvoke,
 };
-
-fn jump(e: &Env, time: u64) {
-    e.ledger().set(LedgerInfo {
-        timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: e.ledger().protocol_version(),
-        sequence_number: e.ledger().sequence(),
-        network_id: Default::default(),
-        base_reserve: 10,
-        min_temp_entry_ttl: 999999,
-        min_persistent_entry_ttl: 999999,
-        max_entry_ttl: u32::MAX,
-    });
-}
-
-fn create_token<'a>(e: &Env, admin: &Address) -> TokenClient<'a> {
-    let token = TokenClient::new(e, &e.register_contract(None, Token {}));
-    token.initialize(admin, &7, &"name".into_val(e), &"symbol".into_val(e));
-    token
-}
-
-#[contract]
-pub struct DummyPool;
-
-#[contractimpl]
-impl DummyPool {
-    pub fn checkpoint_reward(_e: Env, token_contract: Address, _user: Address, _user_shares: u128) {
-        token_contract.require_auth();
-    }
-}
-
-fn create_dummy_pool<'a>(e: &Env) -> DummyPoolClient<'a> {
-    DummyPoolClient::new(e, &e.register_contract(None, DummyPool {}))
-}
+use soroban_sdk::{symbol_short, Address, Env, IntoVal, Symbol, Vec};
+use utils::test_utils::jump;
 
 #[test]
 fn test() {

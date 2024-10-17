@@ -2,7 +2,7 @@
 extern crate std;
 
 use crate::LiquidityPoolRouterClient;
-use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 pub(crate) mod test_token {
@@ -78,21 +78,8 @@ pub fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator
     )
 }
 
-pub fn jump(e: &Env, time: u64) {
-    e.ledger().set(LedgerInfo {
-        timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: e.ledger().protocol_version(),
-        sequence_number: e.ledger().sequence(),
-        network_id: Default::default(),
-        base_reserve: 10,
-        min_temp_entry_ttl: 999999,
-        min_persistent_entry_ttl: 999999,
-        max_entry_ttl: u32::MAX,
-    });
-}
-
 pub(crate) struct Setup<'a> {
-    pub(crate) e: Env,
+    pub(crate) env: Env,
 
     pub(crate) admin: Address,
 
@@ -107,77 +94,80 @@ pub(crate) struct Setup<'a> {
     pub(crate) emergency_pause_admin: Address,
 }
 
-pub(crate) fn setup<'a>() -> Setup<'a> {
-    let e = Env::default();
-    e.mock_all_auths();
-    e.budget().reset_unlimited();
+impl Default for Setup<'_> {
+    // Create setup from default config and mint tokens for all users & set rewards config
+    fn default() -> Self {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.budget().reset_unlimited();
 
-    let admin = Address::generate(&e);
+        let admin = Address::generate(&env);
 
-    let mut tokens = std::vec![
-        create_token_contract(&e, &admin).address,
-        create_token_contract(&e, &admin).address,
-        create_token_contract(&e, &admin).address,
-        create_token_contract(&e, &admin).address,
-    ];
-    tokens.sort();
-    let tokens = [
-        test_token::Client::new(&e, &tokens[0]),
-        test_token::Client::new(&e, &tokens[1]),
-        test_token::Client::new(&e, &tokens[2]),
-        test_token::Client::new(&e, &tokens[3]),
-    ];
+        let mut tokens = std::vec![
+            create_token_contract(&env, &admin).address,
+            create_token_contract(&env, &admin).address,
+            create_token_contract(&env, &admin).address,
+            create_token_contract(&env, &admin).address,
+        ];
+        tokens.sort();
+        let tokens = [
+            test_token::Client::new(&env, &tokens[0]),
+            test_token::Client::new(&env, &tokens[1]),
+            test_token::Client::new(&env, &tokens[2]),
+            test_token::Client::new(&env, &tokens[3]),
+        ];
 
-    let reward_admin = Address::generate(&e);
-    let admin = Address::generate(&e);
-    let payment_for_creation_address = Address::generate(&e);
+        let reward_admin = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let payment_for_creation_address = Address::generate(&env);
 
-    let reward_token = create_token_contract(&e, &reward_admin);
+        let reward_token = create_token_contract(&env, &reward_admin);
 
-    let pool_hash = install_liq_pool_hash(&e);
-    let token_hash = install_token_wasm(&e);
-    let router = create_liqpool_router_contract(&e);
-    router.init_admin(&admin);
-    let rewards_admin = soroban_sdk::Address::generate(&e);
-    let operations_admin = soroban_sdk::Address::generate(&e);
-    let pause_admin = soroban_sdk::Address::generate(&e);
-    let emergency_pause_admin = soroban_sdk::Address::generate(&e);
-    router.set_privileged_addrs(
-        &admin,
-        &rewards_admin,
-        &operations_admin,
-        &pause_admin,
-        &Vec::from_array(&e, [emergency_pause_admin.clone()]),
-    );
-    router.set_pool_hash(&admin, &pool_hash);
-    router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&e));
-    router.set_token_hash(&admin, &token_hash);
-    router.set_reward_token(&admin, &reward_token.address);
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &1_0000000,
-        &1_0000000,
-        &payment_for_creation_address,
-    );
+        let pool_hash = install_liq_pool_hash(&env);
+        let token_hash = install_token_wasm(&env);
+        let router = create_liqpool_router_contract(&env);
+        router.init_admin(&admin);
+        let rewards_admin = soroban_sdk::Address::generate(&env);
+        let operations_admin = soroban_sdk::Address::generate(&env);
+        let pause_admin = soroban_sdk::Address::generate(&env);
+        let emergency_pause_admin = soroban_sdk::Address::generate(&env);
+        router.set_privileged_addrs(
+            &admin,
+            &rewards_admin,
+            &operations_admin,
+            &pause_admin,
+            &Vec::from_array(&env, [emergency_pause_admin.clone()]),
+        );
+        router.set_pool_hash(&admin, &pool_hash);
+        router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&env));
+        router.set_token_hash(&admin, &token_hash);
+        router.set_reward_token(&admin, &reward_token.address);
+        router.configure_init_pool_payment(
+            &admin,
+            &reward_token.address,
+            &1_0000000,
+            &1_0000000,
+            &payment_for_creation_address,
+        );
 
-    let plane = create_plane_contract(&e);
-    router.set_pools_plane(&admin, &plane.address);
+        let plane = create_plane_contract(&env);
+        router.set_pools_plane(&admin, &plane.address);
 
-    let liquidity_calculator = create_liquidity_calculator_contract(&e);
-    liquidity_calculator.init_admin(&admin);
-    liquidity_calculator.set_pools_plane(&admin, &plane.address);
-    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+        let liquidity_calculator = create_liquidity_calculator_contract(&env);
+        liquidity_calculator.init_admin(&admin);
+        liquidity_calculator.set_pools_plane(&admin, &plane.address);
+        router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
-    Setup {
-        e,
-        admin,
-        tokens,
-        reward_token,
-        router,
-        rewards_admin,
-        operations_admin,
-        pause_admin,
-        emergency_pause_admin,
+        Setup {
+            env,
+            admin,
+            tokens,
+            reward_token,
+            router,
+            rewards_admin,
+            operations_admin,
+            pause_admin,
+            emergency_pause_admin,
+        }
     }
 }

@@ -568,7 +568,7 @@ impl AdminInterface for LiquidityPoolRouter {
         to: Address,
     ) {
         admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
 
         set_init_pool_payment_token(&e, &token);
         set_init_stable_pool_payment_amount(&e, &stable_pool_amount);

@@ -3,8 +3,7 @@ extern crate std;
 
 use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_POOLS};
 use crate::testutils;
-use crate::testutils::{create_plane_contract, jump, setup, test_token};
-use access_control::constants::ADMIN_ACTIONS_DELAY;
+use crate::testutils::{create_plane_contract, test_token, Setup};
 use soroban_sdk::testutils::{
     AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
 };
@@ -12,19 +11,19 @@ use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, FromVal, IntoVal, Map, Symbol, Val, Vec,
     U256,
 };
-use utils::test_utils::{assert_approx_eq_abs, assert_approx_eq_abs_u256};
+use utils::test_utils::{assert_approx_eq_abs, assert_approx_eq_abs_u256, jump};
 
 #[test]
 #[should_panic(expected = "Error(Contract, #103)")]
 fn test_init_admin_twice() {
-    let setup = setup();
+    let setup = Setup::default();
     setup.router.init_admin(&setup.admin);
 }
 
 #[test]
 fn test_total_liquidity() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let user1 = Address::generate(&e);
     setup.reward_token.mint(&user1, &10_0000000);
     let [token1, token2, _, _] = setup.tokens;
@@ -83,8 +82,8 @@ fn test_total_liquidity() {
 
 #[test]
 fn test_constant_product_pool() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, token2, _, _] = setup.tokens;
 
@@ -179,8 +178,8 @@ fn test_constant_product_pool() {
 
 #[test]
 fn test_add_pool_after_removal() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, token2, _, _] = setup.tokens;
 
@@ -202,8 +201,8 @@ fn test_add_pool_after_removal() {
 #[test]
 #[should_panic(expected = "Error(Contract, #306)")]
 fn test_stableswap_pools_amount_over_max() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let admin = setup.admin;
     let router = setup.router;
     let [token1, token2, _, _] = setup.tokens;
@@ -238,8 +237,8 @@ fn test_stableswap_pools_amount_over_max() {
 
 #[test]
 fn test_stableswap_pools_amount_ok() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let admin = setup.admin;
     let router = setup.router;
     let [token1, token2, _, _] = setup.tokens;
@@ -275,8 +274,8 @@ fn test_stableswap_pools_amount_ok() {
 #[test]
 #[should_panic(expected = "zero balance is not sufficient to spend")]
 fn test_stableswap_pool_no_balance() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let admin = setup.admin;
     let router = setup.router;
     let [token1, token2, _, _] = setup.tokens;
@@ -303,8 +302,8 @@ fn test_stableswap_pool_no_balance() {
 
 #[test]
 fn test_stableswap_pool() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let admin = setup.admin;
     let router = setup.router;
     let [token1, token2, _, _] = setup.tokens;
@@ -424,8 +423,8 @@ fn test_stableswap_pool() {
 
 #[test]
 fn test_stableswap_3_pool() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, token2, token3, _] = setup.tokens;
     let reward_token = setup.reward_token;
@@ -556,8 +555,8 @@ fn test_stableswap_3_pool() {
 
 #[test]
 fn test_init_pool_twice() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, token2, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
@@ -588,8 +587,8 @@ fn test_init_pool_twice() {
 #[should_panic(expected = "Error(WasmVm, MissingValue)")]
 #[test]
 fn test_init_pool_bad_tokens() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, _, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
@@ -611,8 +610,8 @@ fn test_init_pool_bad_tokens() {
 #[should_panic(expected = "Error(WasmVm, MissingValue)")]
 #[test]
 fn test_init_standard_pool_bad_tokens() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, _, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
@@ -634,8 +633,8 @@ fn test_init_standard_pool_bad_tokens() {
 #[should_panic(expected = "Error(WasmVm, MissingValue)")]
 #[test]
 fn test_init_stable_pool_bad_tokens() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, _, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
@@ -656,8 +655,8 @@ fn test_init_stable_pool_bad_tokens() {
 
 #[test]
 fn test_simple_ongoing_reward() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -725,7 +724,7 @@ fn test_simple_ongoing_reward() {
     );
 
     // 10 seconds passed since config, user depositing
-    testutils::jump(&e, 10);
+    jump(&e, 10);
     router.deposit(
         &user1,
         &tokens,
@@ -806,7 +805,7 @@ fn test_simple_ongoing_reward() {
 
     assert_eq!(reward_token.balance(&user1), 0);
     // 30 seconds passed, half of the reward is available for the user
-    testutils::jump(&e, 30);
+    jump(&e, 30);
 
     assert_eq!(
         router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
@@ -921,7 +920,7 @@ fn test_simple_ongoing_reward() {
         total_reward_1 / 2,
         100,
     );
-    testutils::jump(&e, 60);
+    jump(&e, 60);
     router.claim(&user1, &tokens, &standard_pool_hash);
     router.claim(&user1, &tokens, &stable_pool_hash);
     assert_approx_eq_abs(reward_token.balance(&user1) as u128, total_reward_1, 100);
@@ -954,8 +953,8 @@ fn test_simple_ongoing_reward() {
 
 #[test]
 fn test_rewards_distribution() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1009,7 +1008,7 @@ fn test_rewards_distribution() {
     );
 
     // 10 seconds passed since config, user depositing
-    testutils::jump(&e, 10);
+    jump(&e, 10);
     router.deposit(
         &user1,
         &tokens1,
@@ -1080,7 +1079,7 @@ fn test_rewards_distribution() {
 
     assert_eq!(reward_token.balance(&user1), 0);
     // 30 seconds passed, half of the reward is available for the user
-    testutils::jump(&e, 30);
+    jump(&e, 30);
 
     assert_eq!(
         router.get_total_accumulated_reward(&tokens1, &standard_pool_hash1),
@@ -1268,8 +1267,8 @@ fn test_rewards_distribution() {
 
 #[test]
 fn test_rewards_distribution_as_operator() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1301,7 +1300,7 @@ fn test_rewards_distribution_as_operator() {
     token2.mint(&user1, &2000);
 
     // 10 seconds passed since config, user depositing
-    testutils::jump(&e, 10);
+    jump(&e, 10);
     router.deposit(
         &user1,
         &tokens,
@@ -1329,7 +1328,7 @@ fn test_rewards_distribution_as_operator() {
     let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
 
     // 30 seconds passed, half of the reward is available for the user
-    testutils::jump(&e, 30);
+    jump(&e, 30);
 
     // operator not set yet. admin should be able to distribute rewards but no one else should
     let operator = Address::generate(&e);
@@ -1371,8 +1370,8 @@ fn test_rewards_distribution_as_operator() {
 
 #[test]
 fn test_rewards_distribution_override() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1405,7 +1404,7 @@ fn test_rewards_distribution_override() {
     token2.mint(&user1, &2000);
 
     // 10 seconds passed since config, user depositing
-    testutils::jump(&e, 10);
+    jump(&e, 10);
     router.deposit(
         &user1,
         &tokens,
@@ -1433,7 +1432,7 @@ fn test_rewards_distribution_override() {
     let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
 
     // 30 seconds passed, half of the reward is available
-    testutils::jump(&e, 30);
+    jump(&e, 30);
 
     // tps * 60 configured in total & outstanding since there were no claims
     assert_eq!(
@@ -1533,8 +1532,8 @@ fn test_rewards_distribution_override() {
 #[test]
 #[should_panic(expected = "Error(Contract, #309)")]
 fn test_liqidity_not_filled() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1577,8 +1576,8 @@ fn test_liqidity_not_filled() {
 #[test]
 #[should_panic(expected = "Error(Contract, #310)")]
 fn test_fill_liqidity_reentrancy() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1622,8 +1621,8 @@ fn test_fill_liqidity_reentrancy() {
 #[test]
 #[should_panic(expected = "Error(Contract, #314)")]
 fn test_config_pool_rewards_reentrancy() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1667,8 +1666,8 @@ fn test_config_pool_rewards_reentrancy() {
 
 #[test]
 fn test_config_pool_rewards_after_new_global_config() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1708,7 +1707,7 @@ fn test_config_pool_rewards_after_new_global_config() {
     router.fill_liquidity(&tokens);
     assert_eq!(router.config_pool_rewards(&tokens, &standard_pool_hash), 1);
 
-    testutils::jump(&e, 300);
+    jump(&e, 300);
     router.config_global_rewards(
         &admin,
         &1,
@@ -1723,8 +1722,8 @@ fn test_config_pool_rewards_after_new_global_config() {
 fn test_config_pool_after_liquidity_fill() {
     // if pool is created after liquidity filled for tokens, it may be configured, but should receive no rewards
 
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1786,8 +1785,8 @@ fn test_config_pool_after_liquidity_fill() {
 #[test]
 #[should_panic(expected = "Error(Contract, #313)")]
 fn test_fill_liquidity_no_config() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1823,8 +1822,8 @@ fn test_fill_liquidity_no_config() {
 #[test]
 #[should_panic(expected = "Error(Contract, #102)")]
 fn test_config_rewards_not_admin() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1858,8 +1857,8 @@ fn test_config_rewards_not_admin() {
 #[test]
 #[should_panic(expected = "Error(Contract, #315)")]
 fn test_config_rewards_duplicated_tokens() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1899,8 +1898,8 @@ fn test_config_rewards_duplicated_tokens() {
 #[test]
 #[should_panic(expected = "Error(Contract, #2002)")]
 fn test_config_rewards_tokens_not_sorted() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1939,8 +1938,8 @@ fn test_config_rewards_tokens_not_sorted() {
 
 #[test]
 fn test_config_rewards_no_pools_for_tokens() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -1983,8 +1982,8 @@ fn test_config_rewards_no_pools_for_tokens() {
 #[test]
 #[should_panic(expected = "Error(Contract, #302)")]
 fn test_unexpected_fee() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, token2, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
@@ -2000,8 +1999,8 @@ fn test_unexpected_fee() {
 
 #[test]
 fn test_event_correct() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -2091,7 +2090,7 @@ fn test_event_correct() {
     assert_eq!(token2.balance(&user1), 1000);
 
     // 10 seconds passed since config, user depositing
-    testutils::jump(&e, 10);
+    jump(&e, 10);
 
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
@@ -2169,8 +2168,8 @@ fn test_event_correct() {
 #[test]
 #[should_panic(expected = "Error(Contract, #302)")]
 fn test_stableswap_validation_fee_out_of_bounds() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, token2, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
@@ -2187,8 +2186,8 @@ fn test_stableswap_validation_fee_out_of_bounds() {
 
 #[test]
 fn test_tokens_storage() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let [token1, token2, token3, _] = setup.tokens;
     let reward_token = setup.reward_token;
@@ -2241,8 +2240,8 @@ fn test_tokens_storage() {
 
 #[test]
 fn test_chained_swap() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, token3, _] = setup.tokens;
@@ -2388,8 +2387,8 @@ fn test_chained_swap() {
 #[test]
 #[should_panic(expected = "Error(Contract, #2006)")]
 fn test_chained_swap_min_not_met() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, token3, _] = setup.tokens;
@@ -2444,8 +2443,8 @@ fn test_chained_swap_min_not_met() {
 
 #[test]
 fn test_create_pool_payment() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
     let [token1, token2, _, _] = setup.tokens;
@@ -2474,8 +2473,8 @@ fn test_create_pool_payment() {
 
 #[test]
 fn test_privileged_users() {
-    let setup = setup();
-    let e = setup.e;
+    let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
 
     let [token1, token2, _, _] = setup.tokens;
@@ -2519,73 +2518,4 @@ fn test_privileged_users() {
         privileged_addrs,
         testutils::stableswap_pool::Client::new(&e, &stable_address).get_privileged_addrs()
     );
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #2908)")]
-fn test_transfer_ownership_too_early() {
-    let setup = setup();
-    let router = setup.router;
-    let admin_original = setup.admin;
-    let admin_new = Address::generate(&setup.e);
-
-    router.commit_transfer_ownership(&admin_original, &admin_new);
-    // check admin by calling protected method
-    router.set_pools_plane(&admin_original, &router.get_plane());
-    jump(&setup.e, ADMIN_ACTIONS_DELAY - 1);
-    router.apply_transfer_ownership(&admin_original);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #2906)")]
-fn test_transfer_ownership_twice() {
-    let setup = setup();
-    let router = setup.router;
-    let admin_original = setup.admin;
-    let admin_new = Address::generate(&setup.e);
-
-    router.commit_transfer_ownership(&admin_original, &admin_new);
-    router.commit_transfer_ownership(&admin_original, &admin_new);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #2907)")]
-fn test_transfer_ownership_not_committed() {
-    let setup = setup();
-    let router = setup.router;
-    let admin_original = setup.admin;
-
-    jump(&setup.e, ADMIN_ACTIONS_DELAY + 1);
-    router.apply_transfer_ownership(&admin_original);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #2907)")]
-fn test_transfer_ownership_reverted() {
-    let setup = setup();
-    let router = setup.router;
-    let admin_original = setup.admin;
-    let admin_new = Address::generate(&setup.e);
-
-    router.commit_transfer_ownership(&admin_original, &admin_new);
-    // check admin by calling protected method
-    router.set_pools_plane(&admin_original, &router.get_plane());
-    jump(&setup.e, ADMIN_ACTIONS_DELAY + 1);
-    router.revert_transfer_ownership(&admin_original);
-    router.apply_transfer_ownership(&admin_original);
-}
-
-#[test]
-fn test_transfer_ownership() {
-    let setup = setup();
-    let router = setup.router;
-    let admin_original = setup.admin;
-    let admin_new = Address::generate(&setup.e);
-
-    router.commit_transfer_ownership(&admin_original, &admin_new);
-    // check admin by calling protected method
-    router.set_pools_plane(&admin_original, &router.get_plane());
-    jump(&setup.e, ADMIN_ACTIONS_DELAY + 1);
-    router.apply_transfer_ownership(&admin_original);
-    router.set_pools_plane(&admin_new, &router.get_plane());
 }

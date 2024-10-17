@@ -146,6 +146,7 @@ check the Soroban documentation: https://soroban.stellar.org/docs/reference/rpc
     - Manage internal contracts addresses: Plane, Liquidity Calculator
     - Change pools & token wasm hash for pools factory
     - Update reward token address
+    - Configure pool creation fee
 
 
 <!-- CONTRIBUTING -->

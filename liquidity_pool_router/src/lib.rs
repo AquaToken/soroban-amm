@@ -12,6 +12,7 @@ mod rewards;
 mod router_interface;
 mod storage;
 mod test;
+mod test_permissions;
 mod testutils;
 
 pub use contract::{LiquidityPoolRouter, LiquidityPoolRouterClient};

@@ -1,90 +1,21 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::LiquidityPoolClient;
-
-use crate::plane::{pool_plane, PoolPlaneClient};
 use crate::pool_constants::MIN_RAMP_TIME;
 use rewards::utils::test_utils::assert_approx_eq_abs;
-use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
-use soroban_sdk::{
-    testutils::Address as _, vec, Address, BytesN, Env, Error, IntoVal, Symbol, Val, Vec,
-};
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{vec, Address, Env, Error, IntoVal, Symbol, Val, Vec};
 use token_share::Client as ShareTokenClient;
 
+use crate::testutils::{
+    create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
+    install_token_wasm,
+};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-
-pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(
-        e,
-        &e.register_stellar_asset_contract_v2(admin.clone())
-            .address(),
-    )
-}
-
-pub(crate) fn get_token_admin_client<'a>(
-    e: &'a Env,
-    address: &'a Address,
-) -> SorobanTokenAdminClient<'a> {
-    SorobanTokenAdminClient::new(e, address)
-}
-fn create_liqpool_contract<'a>(
-    e: &Env,
-    admin: &Address,
-    router: &Address,
-    token_wasm_hash: &BytesN<32>,
-    coins: &Vec<Address>,
-    a: u128,
-    fee: u32,
-    token_reward: &Address,
-    plane: &Address,
-) -> LiquidityPoolClient<'a> {
-    let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
-    liqpool.initialize_all(
-        admin,
-        &(
-            admin.clone(),
-            admin.clone(),
-            admin.clone(),
-            Vec::from_array(&e, [admin.clone()]),
-        ),
-        router,
-        token_wasm_hash,
-        coins,
-        &a,
-        &fee,
-        token_reward,
-        plane,
-    );
-    liqpool
-}
-
-fn install_token_wasm(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
-    );
-    e.deployer().upload_contract_wasm(WASM)
-}
-
-fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
-    PoolPlaneClient::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
-}
-
-fn jump(e: &Env, time: u64) {
-    e.ledger().set(LedgerInfo {
-        timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: e.ledger().protocol_version(),
-        sequence_number: e.ledger().sequence(),
-        network_id: Default::default(),
-        base_reserve: 10,
-        min_temp_entry_ttl: 999999,
-        min_persistent_entry_ttl: 999999,
-        max_entry_ttl: u32::MAX,
-    });
-}
+use utils::test_utils::jump;
 
 #[test]
 #[should_panic(expected = "Error(Contract, #2010)")]
