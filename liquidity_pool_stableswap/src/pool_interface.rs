@@ -95,10 +95,6 @@ pub trait UpgradeableContractTrait {
 
 pub trait UpgradeableLPTokenTrait {
     fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>);
-    fn set_future_share_id(e: Env, admin: Address, contract: Address);
-    fn migrate_share_balances(e: Env, operator: Address, users: Vec<Address>);
-    fn get_future_share_id(e: Env) -> Address;
-    fn commit_future_share_id(e: Env, admin: Address);
 }
 
 pub trait RewardsTrait {

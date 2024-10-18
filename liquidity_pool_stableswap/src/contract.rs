@@ -17,9 +17,8 @@ use crate::storage::{
 };
 use crate::token::create_contract;
 use token_share::{
-    burn_shares, commit_future_token_share, get_future_token_share, get_token_share,
-    get_total_shares, get_user_balance_shares, mint_shares, put_future_token_share,
-    put_token_share, replicate_token_share_balance_to_future, Client as LPToken,
+    burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
+    put_token_share, Client as LPToken,
 };
 
 use crate::errors::LiquidityPoolError;
@@ -330,9 +329,6 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
-
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
 
         let mut amounts: Vec<u128> = Vec::new(&e);
         for token_idx in 0..coins.len() {
@@ -1193,9 +1189,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
-
         PoolEvents::new(&e).deposit_liquidity(tokens, amounts.clone(), mint_amount);
 
         (amounts, mint_amount)
@@ -1270,9 +1263,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
-
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
 
         PoolEvents::new(&e).trade(user, input_coin, token_out, in_amount, dy, dy_fee);
 
@@ -1352,9 +1342,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
-
         PoolEvents::new(&e).withdraw_liquidity(tokens, amounts.clone(), share_amount);
 
         amounts
@@ -1412,38 +1399,6 @@ impl UpgradeableLPTokenTrait for LiquidityPool {
 
         let share_contract = get_token_share(&e);
         token_share::Client::new(&e, &share_contract).upgrade(&new_token_wasm);
-    }
-
-    fn set_future_share_id(e: Env, admin: Address, contract: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
-
-        put_future_token_share(&e, contract);
-    }
-
-    fn migrate_share_balances(e: Env, operator: Address, users: Vec<Address>) {
-        operator.require_auth();
-        AccessControl::new(&e).check_operator(&operator);
-
-        for user in users {
-            replicate_token_share_balance_to_future(&e, &user);
-        }
-    }
-
-    // Returns the future share token address.
-    fn get_future_share_id(e: Env) -> Address {
-        match get_future_token_share(&e) {
-            Some(address) => address,
-            None => panic_with_error!(e, LiquidityPoolError::FutureShareIdNotSet),
-        }
-    }
-
-    // Applies the future share token instead of the current one.
-    fn commit_future_share_id(e: Env, admin: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
-
-        commit_future_token_share(&e);
     }
 }
 

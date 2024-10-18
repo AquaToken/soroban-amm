@@ -29,9 +29,8 @@ use soroban_sdk::{
     IntoVal, Map, Symbol, Val, Vec, U256,
 };
 use token_share::{
-    burn_shares, commit_future_token_share, get_future_token_share, get_token_share,
-    get_total_shares, get_user_balance_shares, mint_shares, put_future_token_share,
-    put_token_share, replicate_token_share_balance_to_future, Client as LPTokenClient,
+    burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
+    put_token_share, Client as LPTokenClient,
 };
 use utils::u256_math::ExtraMath;
 
@@ -291,9 +290,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
-
         let amounts_vec = Vec::from_array(&e, [amounts.0, amounts.1]);
         PoolEvents::new(&e).deposit_liquidity(
             Self::get_tokens(e.clone()),
@@ -420,9 +416,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
-
         PoolEvents::new(&e).trade(
             user,
             sell_token,
@@ -519,9 +512,6 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
-
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
 
         let withdraw_amounts = Vec::from_array(&e, [out_a, out_b]);
         PoolEvents::new(&e).withdraw_liquidity(
@@ -725,38 +715,6 @@ impl UpgradeableLPTokenTrait for LiquidityPool {
 
         let share_contract = get_token_share(&e);
         token_share::Client::new(&e, &share_contract).upgrade(&new_token_wasm);
-    }
-
-    fn set_future_share_id(e: Env, admin: Address, contract: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
-
-        put_future_token_share(&e, contract);
-    }
-
-    fn migrate_share_balances(e: Env, operator: Address, users: Vec<Address>) {
-        operator.require_auth();
-        AccessControl::new(&e).check_operator(&operator);
-
-        for user in users {
-            replicate_token_share_balance_to_future(&e, &user);
-        }
-    }
-
-    // Returns the future share token address.
-    fn get_future_share_id(e: Env) -> Address {
-        match get_future_token_share(&e) {
-            Some(address) => address,
-            None => panic_with_error!(e, LiquidityPoolError::FutureShareIdNotSet),
-        }
-    }
-
-    // Applies the future share token instead of the current one.
-    fn commit_future_share_id(e: Env, admin: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
-
-        commit_future_token_share(&e);
     }
 }
 
