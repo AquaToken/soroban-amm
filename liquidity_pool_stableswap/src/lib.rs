@@ -8,6 +8,7 @@ mod test;
 mod token;
 
 pub mod errors;
+mod normalize;
 mod plane;
 mod plane_interface;
 mod rewards;

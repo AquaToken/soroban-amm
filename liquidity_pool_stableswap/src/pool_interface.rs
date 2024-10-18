@@ -47,6 +47,9 @@ pub trait LiquidityPoolInterfaceTrait {
     // Getter for the array of swappable coins within the pool.
     fn get_tokens(e: Env) -> Vec<Address>;
 
+    // Getter for array of tokens decimals in the pool.
+    fn get_decimals(e: Env) -> Vec<u32>;
+
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
@@ -175,20 +178,12 @@ pub trait AdminInterfaceTrait {
     fn get_is_killed_claim(e: Env) -> bool;
 }
 
-pub trait InternalInterfaceTrait {
-    fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128;
-    fn get_y(e: Env, i: u32, j: u32, x: u128, xp_: Vec<u128>) -> u128;
-    fn get_y_d(e: Env, a: u128, i: u32, xp: Vec<u128>, d: u128) -> u128;
-    fn internal_calc_withdraw_one_coin(e: Env, share_amount: u128, i: u32) -> (u128, u128);
-}
-
 pub trait LiquidityPoolTrait:
     LiquidityPoolInterfaceTrait
     + UpgradeableContractTrait
     + UpgradeableLPTokenTrait
     + RewardsTrait
     + AdminInterfaceTrait
-    + InternalInterfaceTrait
 {
     // The amplification coefficient for the pool.
     fn a(e: Env) -> u128;
