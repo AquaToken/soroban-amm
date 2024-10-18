@@ -2472,6 +2472,93 @@ fn test_create_pool_payment() {
 }
 
 #[test]
+fn test_rewards_distribution_without_outstanding_rewards() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let router = setup.router;
+
+    let [token1, token2, token3, _] = setup.tokens;
+    let reward_token = setup.reward_token;
+
+    let tokens = Vec::from_array(&e, [
+        token1.address.clone(),
+        token2.address.clone(),
+        token3.address.clone(),
+    ]);
+
+    let token = test_token::Client::new(&e, &tokens[1]);
+    let reward_token = test_token::Client::new(&e, &tokens[2]);
+    let tokens = Vec::from_array(&e, [token.address.clone(), reward_token.address.clone()]);
+    let user = Address::generate(&e);
+
+    let pool_hash = install_liq_pool_hash(&e);
+    let token_hash = install_token_wasm(&e);
+    let plane = create_plane_contract(&e);
+    let router = create_liqpool_router_contract(&e);
+    let liquidity_calculator = create_liquidity_calculator_contract(&e);
+    liquidity_calculator.init_admin(&admin);
+    liquidity_calculator.set_pools_plane(&admin, &plane.address);
+    router.init_admin(&admin);
+    router.set_pool_hash(&pool_hash);
+    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&token_hash);
+    router.set_reward_token(&reward_token.address);
+    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
+    router.set_pools_plane(&admin, &plane.address);
+    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
+    reward_token.mint(&user, &200000_0000000);
+    reward_token.mint(&router.address, &20_000_000_0000000);
+
+    let (standard_pool_hash1, standard_pool_address1) =
+        router.init_standard_pool(&user, &tokens, &30);
+
+    let reward_tps = 1_5000000_u128;
+
+    token.mint(&user, &(i128::MAX / 100));
+    reward_token.mint(&user, &(i128::MAX / 100));
+
+    // 10 seconds passed since config, user depositing
+    jump(&e, 10);
+    router.deposit(
+        &user,
+        &tokens,
+        &standard_pool_hash1,
+        &Vec::from_array(&e, [30399483, 2420176738]),
+        &0,
+    );
+
+    reward_token.mint(&standard_pool_address1, &(3888205486 - 2420176738));
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+    router.config_global_rewards(
+        &admin,
+        &reward_tps,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
+
+    router.fill_liquidity(&tokens);
+    router.config_pool_rewards(&tokens, &standard_pool_hash1);
+
+    // check that we don't need to add rewards to pool
+    assert_eq!(
+        router.get_total_outstanding_reward(&tokens, &standard_pool_hash1),
+        0
+    );
+
+    // check that it works without panicking
+    assert_eq!(
+        router.distribute_outstanding_reward(
+            &admin,
+            &router.address,
+            &tokens,
+            &standard_pool_hash1
+        ),
+        0
+    );
+}
+
+#[test]
 fn test_privileged_users() {
     let setup = Setup::default();
     let e = setup.env;
