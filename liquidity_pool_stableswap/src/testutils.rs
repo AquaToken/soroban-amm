@@ -8,7 +8,7 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{Address, BytesN, Env, Vec};
+use soroban_sdk::{Address, BytesN, Env, IntoVal, Vec};
 use token_share::token_contract::Client as ShareTokenClient;
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
@@ -62,6 +62,18 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
         file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
+}
+
+pub fn install_token_wasm_with_decimal<'a>(
+    e: &Env,
+    admin: &Address,
+    decimal: u32,
+) -> ShareTokenClient<'a> {
+    soroban_sdk::contractimport!(file = "../contracts/soroban_token.wasm");
+
+    let token_client = ShareTokenClient::new(e, &e.register_contract_wasm(None, WASM));
+    token_client.initialize(admin, &decimal, &"Token 1".into_val(e), &"TOK".into_val(e));
+    token_client
 }
 
 pub fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {

@@ -9,25 +9,13 @@ use token_share::Client as ShareTokenClient;
 
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
-    install_token_wasm,
+    install_token_wasm, install_token_wasm_with_decimal,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use utils::test_utils::jump;
-
-fn install_token_wasm_with_decimal<'a>(
-    e: &Env,
-    admin: &Address,
-    decimal: u32,
-) -> ShareTokenClient<'a> {
-    soroban_sdk::contractimport!(file = "../contracts/soroban_token.wasm");
-
-    let token_client = ShareTokenClient::new(e, &e.register_contract_wasm(None, WASM));
-    token_client.initialize(admin, &decimal, &"Token 1".into_val(e), &"TOK".into_val(e));
-    token_client
-}
 
 #[test]
 #[should_panic(expected = "Error(Contract, #2010)")]
@@ -190,7 +178,6 @@ fn test_happy_flow_different_decimals() {
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
-        &user1,
         &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
@@ -748,7 +735,6 @@ fn test_pool_imbalance_draw_tokens_different_decimals() {
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
-        &user1,
         &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
@@ -1375,7 +1361,6 @@ fn test_withdraw_one_token_different_decimals() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
-        &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token18.address.clone(), token7.address.clone()]),
@@ -1537,7 +1522,6 @@ fn test_deposit_inequal_different_decimals() {
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
-        &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token7.address.clone(), token18.address.clone()]),
@@ -1638,7 +1622,6 @@ fn test_remove_liquidity_imbalance_different_decimals() {
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
-        &user1,
         &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
@@ -1755,7 +1738,6 @@ fn test_simple_ongoing_reward_different_decimals() {
     let plane = create_plane_contract(&e);
     let liqpool = create_liqpool_contract(
         &e,
-        &user1,
         &user1,
         &Address::generate(&e),
         &install_token_wasm(&e),
@@ -3195,7 +3177,6 @@ fn test_decimals_in_swap_pool() {
     // we compare two pools to check swap in both directions
     let liq_pool1 = create_liqpool_contract(
         &e,
-        &admin,
         &admin,
         &router,
         &install_token_wasm(&e),
