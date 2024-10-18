@@ -4,6 +4,7 @@ use soroban_sdk::Env;
 
 mod constants;
 pub mod errors;
+pub mod events;
 pub mod manager;
 pub mod storage;
 

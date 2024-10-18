@@ -27,6 +27,7 @@ use access_control::access::{
     AccessControl, AccessControlTrait, Role, SymbolRepresentation, TransferOwnershipTrait,
 };
 use access_control::errors::AccessControlError;
+use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use access_control::utils::{require_operations_admin_or_owner, require_rewards_admin_or_owner};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -480,6 +481,12 @@ impl AdminInterface for LiquidityPoolRouter {
         access_control.set_role_address(Role::OperationsAdmin, &operations_admin);
         access_control.set_role_address(Role::PauseAdmin, &pause_admin);
         access_control.set_role_addresses(Role::EmergencyPauseAdmin, &emergency_pause_admins);
+        AccessControlEvents::new(&e).set_privileged_addrs(
+            rewards_admin,
+            operations_admin,
+            pause_admin,
+            emergency_pause_admins,
+        );
     }
 
     // Returns a map of privileged roles.
@@ -1482,7 +1489,8 @@ impl TransferableContract for LiquidityPoolRouter {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, Role::Admin);
-        access_control.commit_transfer_ownership(new_admin);
+        access_control.commit_transfer_ownership(new_admin.clone());
+        AccessControlEvents::new(&e).commit_transfer_ownership(new_admin);
     }
 
     // Applies the committed ownership transfer.
@@ -1494,7 +1502,8 @@ impl TransferableContract for LiquidityPoolRouter {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, Role::Admin);
-        access_control.apply_transfer_ownership();
+        let new_admin = access_control.apply_transfer_ownership();
+        AccessControlEvents::new(&e).apply_transfer_ownership(new_admin);
     }
 
     // Reverts the committed ownership transfer.
@@ -1507,5 +1516,6 @@ impl TransferableContract for LiquidityPoolRouter {
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, Role::Admin);
         access_control.revert_transfer_ownership();
+        AccessControlEvents::new(&e).revert_transfer_ownership();
     }
 }

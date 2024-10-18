@@ -19,6 +19,7 @@ use token_share::{
 };
 
 use crate::errors::LiquidityPoolError;
+use crate::events::Events;
 use crate::normalize::xp;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
@@ -28,6 +29,7 @@ use access_control::access::{
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use access_control::errors::AccessControlError;
+use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use access_control::utils::{
     require_operations_admin_or_owner, require_pause_admin_or_owner,
@@ -36,6 +38,7 @@ use access_control::utils::{
 use cast::i128 as to_i128;
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
+use rewards::events::Events as RewardEvents;
 use rewards::storage::RewardsStorageTrait;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -661,6 +664,12 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.set_role_address(Role::OperationsAdmin, &operations_admin);
         access_control.set_role_address(Role::PauseAdmin, &pause_admin);
         access_control.set_role_addresses(Role::EmergencyPauseAdmin, &emergency_pause_admins);
+        AccessControlEvents::new(&e).set_privileged_addrs(
+            rewards_admin,
+            operations_admin,
+            pause_admin,
+            emergency_pause_admins,
+        );
     }
 
     // Returns a map of privileged roles.
@@ -733,6 +742,8 @@ impl AdminInterfaceTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        Events::new(&e).ramp_a(future_a, future_time);
     }
 
     // Stops ramping A.
@@ -754,6 +765,8 @@ impl AdminInterfaceTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        Events::new(&e).stop_ramp_a(current_a);
     }
 
     // Sets a new fee to be applied in the future.
@@ -776,6 +789,8 @@ impl AdminInterfaceTrait for LiquidityPool {
         let deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
         put_admin_actions_deadline(&e, &deadline);
         put_future_fee(&e, &new_fee);
+
+        Events::new(&e).commit_new_fee(new_fee);
     }
 
     // Applies the committed fee.
@@ -800,6 +815,8 @@ impl AdminInterfaceTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        Events::new(&e).apply_new_fee(fee);
     }
 
     // Reverts the committed parameters to their current values.
@@ -812,6 +829,8 @@ impl AdminInterfaceTrait for LiquidityPool {
         require_operations_admin_or_owner(&e, &admin);
 
         put_admin_actions_deadline(&e, &0);
+
+        Events::new(&e).revert_new_parameters();
     }
 
     // Stops the pool deposits instantly.
@@ -1503,6 +1522,7 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .set_reward_config(total_shares, expired_at, tps);
+        RewardEvents::new(&e).set_rewards_config(expired_at, tps);
     }
 
     // Get difference between the actual balance and the total unclaimed reward minus the reserves
@@ -1776,7 +1796,8 @@ impl TransferableContract for LiquidityPool {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, Role::Admin);
-        access_control.commit_transfer_ownership(new_admin);
+        access_control.commit_transfer_ownership(new_admin.clone());
+        AccessControlEvents::new(&e).commit_transfer_ownership(new_admin);
     }
 
     // Applies the committed ownership transfer.
@@ -1788,7 +1809,8 @@ impl TransferableContract for LiquidityPool {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, Role::Admin);
-        access_control.apply_transfer_ownership();
+        let new_admin = access_control.apply_transfer_ownership();
+        AccessControlEvents::new(&e).apply_transfer_ownership(new_admin);
     }
 
     // Reverts the committed ownership transfer.
@@ -1801,5 +1823,6 @@ impl TransferableContract for LiquidityPool {
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, Role::Admin);
         access_control.revert_transfer_ownership();
+        AccessControlEvents::new(&e).revert_transfer_ownership();
     }
 }

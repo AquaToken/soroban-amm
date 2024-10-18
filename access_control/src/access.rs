@@ -79,7 +79,7 @@ pub trait AccessControlTrait {
 
 pub trait TransferOwnershipTrait {
     fn commit_transfer_ownership(&self, new_admin: Address);
-    fn apply_transfer_ownership(&self);
+    fn apply_transfer_ownership(&self) -> Address;
     fn revert_transfer_ownership(&self);
 }
 
@@ -176,7 +176,7 @@ impl TransferOwnershipTrait for AccessControl {
         self.set_role_address(Role::FutureAdmin, &new_admin);
     }
 
-    fn apply_transfer_ownership(&self) {
+    fn apply_transfer_ownership(&self) -> Address {
         if self.0.ledger().timestamp() < get_transfer_ownership_deadline(&self.0) {
             panic_with_error!(&self.0, AccessControlError::ActionNotReadyYet);
         }
@@ -190,6 +190,7 @@ impl TransferOwnershipTrait for AccessControl {
             None => panic_with_error!(&self.0, StorageError::ValueNotInitialized),
         };
         self.set_role_address(Role::Admin, &future_admin);
+        future_admin
     }
 
     fn revert_transfer_ownership(&self) {

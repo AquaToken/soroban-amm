@@ -5,6 +5,7 @@ use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
     install_token_wasm, Setup, TestConfig,
 };
+use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -1834,4 +1835,226 @@ fn test_return_unused_reward_reward_token_in_pool() {
     assert_eq!(setup.token_reward.balance(&router), 0);
     assert_eq!(liq_pool.return_unused_reward(&admin), 1_0000000 * 30);
     assert_eq!(setup.token_reward.balance(&router), 1_0000000 * 30);
+}
+
+#[test]
+fn test_kill_deposit_event() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+
+    pool.kill_deposit(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "kill_deposit"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_kill_swap_event() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+
+    pool.kill_swap(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "kill_swap"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_kill_claim_event() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+
+    pool.kill_claim(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "kill_claim"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_unkill_deposit_event() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+
+    pool.unkill_deposit(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "unkill_deposit"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_unkill_swap_event() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+
+    pool.unkill_swap(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "unkill_swap"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_unkill_claim_event() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+
+    pool.unkill_claim(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "unkill_claim"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_set_privileged_addresses_event() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+
+    pool.set_privileged_addrs(
+        &setup.admin.clone(),
+        &setup.rewards_admin.clone(),
+        &setup.operations_admin.clone(),
+        &setup.pause_admin.clone(),
+        &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+    );
+
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "set_privileged_addrs"),).into_val(&setup.env),
+                (
+                    setup.rewards_admin,
+                    setup.operations_admin,
+                    setup.pause_admin,
+                    Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
+                )
+                    .into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_set_rewards_config() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+
+    pool.set_rewards_config(
+        &setup.admin.clone(),
+        &setup.env.ledger().timestamp().saturating_add(100),
+        &1_0000000,
+    );
+
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "set_rewards_config"),).into_val(&setup.env),
+                (
+                    setup.env.ledger().timestamp().saturating_add(100),
+                    1_0000000_u128,
+                )
+                    .into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_transfer_ownership_events() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+    let new_admin = Address::generate(&setup.env);
+
+    pool.commit_transfer_ownership(&setup.admin, &new_admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
+    );
+
+    pool.revert_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+
+    pool.commit_transfer_ownership(&setup.admin, &new_admin);
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    pool.apply_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
+    );
 }
