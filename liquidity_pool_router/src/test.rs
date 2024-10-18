@@ -2476,36 +2476,13 @@ fn test_rewards_distribution_without_outstanding_rewards() {
     let setup = Setup::default();
     let e = setup.env;
     let router = setup.router;
+    let admin = setup.admin;
 
-    let [token1, token2, token3, _] = setup.tokens;
+    let [token, _, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
 
-    let tokens = Vec::from_array(&e, [
-        token1.address.clone(),
-        token2.address.clone(),
-        token3.address.clone(),
-    ]);
-
-    let token = test_token::Client::new(&e, &tokens[1]);
-    let reward_token = test_token::Client::new(&e, &tokens[2]);
     let tokens = Vec::from_array(&e, [token.address.clone(), reward_token.address.clone()]);
     let user = Address::generate(&e);
-
-    let pool_hash = install_liq_pool_hash(&e);
-    let token_hash = install_token_wasm(&e);
-    let plane = create_plane_contract(&e);
-    let router = create_liqpool_router_contract(&e);
-    let liquidity_calculator = create_liquidity_calculator_contract(&e);
-    liquidity_calculator.init_admin(&admin);
-    liquidity_calculator.set_pools_plane(&admin, &plane.address);
-    router.init_admin(&admin);
-    router.set_pool_hash(&pool_hash);
-    router.set_stableswap_pool_hash(&install_stableswap_liq_pool_hash(&e));
-    router.set_token_hash(&token_hash);
-    router.set_reward_token(&reward_token.address);
-    router.configure_init_pool_payment(&reward_token.address, &0, &1000_0000000, &router.address);
-    router.set_pools_plane(&admin, &plane.address);
-    router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
     reward_token.mint(&user, &200000_0000000);
     reward_token.mint(&router.address, &20_000_000_0000000);
