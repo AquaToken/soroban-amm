@@ -43,8 +43,6 @@ use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
     IntoVal, Map, Symbol, Val, Vec, U256,
 };
-use utils::math_errors::MathError;
-use utils::storage_errors::StorageError;
 
 contractmeta!(
     key = "Description",
