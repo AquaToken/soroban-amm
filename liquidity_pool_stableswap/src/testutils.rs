@@ -83,6 +83,7 @@ pub fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 pub(crate) struct TestConfig {
     pub(crate) a: u128,
     pub(crate) liq_pool_fee: u32,
+    pub(crate) reward_token_in_pool: bool,
 }
 
 impl Default for TestConfig {
@@ -90,6 +91,7 @@ impl Default for TestConfig {
         TestConfig {
             a: 85,
             liq_pool_fee: 30,
+            reward_token_in_pool: false,
         }
     }
 }
@@ -134,23 +136,23 @@ impl Setup<'_> {
         env.mock_all_auths();
         env.budget().reset_unlimited();
 
-        let mut token_admin1 = Address::generate(&env);
-        let mut token_admin2 = Address::generate(&env);
+        let admin = Address::generate(&env);
 
-        let mut token1 = create_token_contract(&env, &token_admin1);
-        let mut token2 = create_token_contract(&env, &token_admin2);
-        let token_reward = create_token_contract(&env, &token_admin1);
+        let mut token1 = create_token_contract(&env, &admin);
+        let mut token2 = create_token_contract(&env, &admin);
+        let token_reward = if config.reward_token_in_pool {
+            SorobanTokenClient::new(&env, &token1.address.clone())
+        } else {
+            create_token_contract(&env, &admin)
+        };
 
         let plane = create_plane_contract(&env);
 
         if &token2.address < &token1.address {
             std::mem::swap(&mut token1, &mut token2);
-            std::mem::swap(&mut token_admin1, &mut token_admin2);
         }
 
         let router = Address::generate(&env);
-
-        let admin = Address::generate(&env);
         let liq_pool = create_liqpool_contract(
             &env,
             &admin,

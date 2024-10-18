@@ -15,6 +15,7 @@ pub(crate) struct TestConfig {
     pub(crate) rewards_count: i128,
     pub(crate) liq_pool_fee: u32,
     pub(crate) reward_tps: u128,
+    pub(crate) reward_token_in_pool: bool,
 }
 
 impl Default for TestConfig {
@@ -25,6 +26,7 @@ impl Default for TestConfig {
             rewards_count: 1_000_000_0000000,
             liq_pool_fee: 30,
             reward_tps: 10_5000000_u128,
+            reward_token_in_pool: false,
         }
     }
 }
@@ -76,19 +78,20 @@ impl Setup<'_> {
         e.budget().reset_unlimited();
 
         let users = Self::generate_random_users(&e, config.users_count);
+        let admin = users[0].clone();
 
-        let mut token_admin1 = Address::generate(&e);
-        let mut token_admin2 = Address::generate(&e);
-
-        let mut token1 = create_token_contract(&e, &token_admin1);
-        let mut token2 = create_token_contract(&e, &token_admin2);
-        let token_reward = create_token_contract(&e, &token_admin1);
+        let mut token1 = create_token_contract(&e, &admin);
+        let mut token2 = create_token_contract(&e, &admin);
+        let token_reward = if config.reward_token_in_pool {
+            SorobanTokenClient::new(&e, &token1.address.clone())
+        } else {
+            create_token_contract(&e, &admin)
+        };
 
         let plane = create_plane_contract(&e);
 
         if &token2.address < &token1.address {
             std::mem::swap(&mut token1, &mut token2);
-            std::mem::swap(&mut token_admin1, &mut token_admin2);
         }
         let token1_admin_client = get_token_admin_client(&e, &token1.address.clone());
         let token2_admin_client = get_token_admin_client(&e, &token2.address.clone());
@@ -96,7 +99,6 @@ impl Setup<'_> {
 
         let router = Address::generate(&e);
 
-        let admin = users[0].clone();
         let liq_pool = create_liqpool_contract(
             &e,
             &admin,
@@ -233,6 +235,7 @@ fn test() {
         rewards_count: 1_000_000_0000000,
         liq_pool_fee: 30,
         reward_tps: 10_5000000_u128,
+        reward_token_in_pool: false,
     };
     let _setup = Setup::new_with_config(&config);
 }

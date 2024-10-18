@@ -830,6 +830,54 @@ impl RewardsTrait for LiquidityPool {
             .set_reward_config(total_shares, expired_at, tps);
     }
 
+    // Get difference between the actual balance and the total unclaimed reward minus the reserves
+    fn get_unused_reward(e: Env) -> u128 {
+        let rewards = get_rewards_manager(&e);
+        let mut rewards_manager = rewards.manager();
+        let total_shares = get_total_shares(&e);
+        let mut reward_balance_to_keep = rewards_manager.get_total_configured_reward(total_shares)
+            - rewards_manager.get_total_claimed_reward(total_shares);
+
+        let reward_token = rewards.storage().get_reward_token();
+        let reward_balance = SorobanTokenClient::new(&e, &reward_token)
+            .balance(&e.current_contract_address()) as u128;
+
+        match Self::get_tokens(e.clone()).first_index_of(reward_token) {
+            Some(idx) => {
+                // since reward token is in the reserves, we need to keep also the reserves value
+                reward_balance_to_keep += Self::get_reserves(e.clone()).get(idx).unwrap();
+            }
+            None => {}
+        };
+
+        if reward_balance > reward_balance_to_keep {
+            reward_balance - reward_balance_to_keep
+        } else {
+            // balance is not sufficient, no surplus
+            0
+        }
+    }
+
+    // Return reward token above the configured amount back to router
+    fn return_unused_reward(e: Env, admin: Address) -> u128 {
+        admin.require_auth();
+        require_rewards_admin_or_owner(&e, &admin);
+
+        let unused_reward = Self::get_unused_reward(e.clone());
+
+        if unused_reward == 0 {
+            return 0;
+        }
+
+        let reward_token = get_rewards_manager(&e).storage().get_reward_token();
+        SorobanTokenClient::new(&e, &reward_token).transfer(
+            &e.current_contract_address(),
+            &get_router(&e),
+            &(unused_reward as i128),
+        );
+        unused_reward
+    }
+
     // Returns the rewards information:
     //     tps, total accumulated amount for user, expiration, amount available to claim, debug info.
     //
