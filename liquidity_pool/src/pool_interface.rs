@@ -134,6 +134,12 @@ pub trait RewardsTrait {
     // after expired_at timestamp distribution ends
     fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128);
 
+    // Calculate reward token surplus
+    fn get_unused_reward(e: Env) -> u128;
+
+    // Return reward token above the configured amount back to the router
+    fn return_unused_reward(e: Env, admin: Address) -> u128;
+
     // Get rewards status for the pool,
     // including amount available for the user
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;

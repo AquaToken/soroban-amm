@@ -9,7 +9,7 @@ use token_share::Client as ShareTokenClient;
 
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
-    install_token_wasm, install_token_wasm_with_decimal,
+    install_token_wasm, install_token_wasm_with_decimal, Setup, TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::token::{
@@ -3428,4 +3428,146 @@ fn test_drain_reserves() {
     );
     assert_eq!(token1.balance(&liq_pool.address), 1_300_000_0000001); // 1 token left on balance because of rounding
     assert_eq!(token2.balance(&liq_pool.address), 1_300_000_0000000);
+}
+
+#[test]
+fn test_return_unused_reward() {
+    let setup = Setup::new_with_config(&TestConfig {
+        reward_token_in_pool: false,
+        ..TestConfig::default()
+    });
+    assert_ne!(setup.token1.address, setup.token_reward.address);
+    let e = setup.env;
+    let admin = setup.admin;
+    let liq_pool = setup.liq_pool;
+    let router = setup.router;
+    let token_1_admin_client = SorobanTokenAdminClient::new(&e, &setup.token1.address.clone());
+    let token_2_admin_client = SorobanTokenAdminClient::new(&e, &setup.token2.address.clone());
+    let token_reward_admin_client =
+        SorobanTokenAdminClient::new(&e, &setup.token_reward.address.clone());
+    let user = Address::generate(&e);
+
+    token_1_admin_client.mint(&user, &1000_0000000);
+    token_2_admin_client.mint(&user, &1000_0000000);
+    liq_pool.deposit(
+        &user,
+        &Vec::from_array(&e, [1000_0000000, 1000_0000000]),
+        &0,
+    );
+
+    liq_pool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(60),
+        &1_0000000,
+    );
+    // pool has configured rewards, but not minted
+    assert_eq!(liq_pool.get_unused_reward(), 0);
+
+    token_reward_admin_client.mint(&liq_pool.address, &(1_0000000 * 100));
+
+    // we've configured rewards for 60 seconds, but minted for 100. 40 surplus
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 40);
+
+    // 10 seconds passed
+    jump(&e, 10);
+    liq_pool.claim(&user);
+
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 40);
+    assert_eq!(setup.token_reward.balance(&router), 0);
+    jump(&e, 10);
+
+    // pool stops rewards on new iteration
+    liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(0), &0);
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 80);
+
+    jump(&e, 10);
+    // new config iteration. pool got 50 seconds of rewards. 100 - 20 - 50 = 30 unused
+    liq_pool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(50),
+        &1_0000000,
+    );
+
+    // neither time nor claim should affect unused rewards
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
+    jump(&e, 10);
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
+    liq_pool.claim(&user);
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
+    jump(&e, 10);
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
+    assert_eq!(setup.token_reward.balance(&router), 0);
+    assert_eq!(liq_pool.return_unused_reward(&admin), 1_0000000 * 30);
+    assert_eq!(setup.token_reward.balance(&router), 1_0000000 * 30);
+}
+
+#[test]
+fn test_return_unused_reward_reward_token_in_pool() {
+    let setup = Setup::new_with_config(&TestConfig {
+        reward_token_in_pool: true,
+        ..TestConfig::default()
+    });
+    assert_eq!(setup.token1.address, setup.token_reward.address);
+    let e = setup.env;
+    let admin = setup.admin;
+    let liq_pool = setup.liq_pool;
+    let router = setup.router;
+    let token_1_admin_client = SorobanTokenAdminClient::new(&e, &setup.token1.address.clone());
+    let token_2_admin_client = SorobanTokenAdminClient::new(&e, &setup.token2.address.clone());
+    let token_reward_admin_client =
+        SorobanTokenAdminClient::new(&e, &setup.token_reward.address.clone());
+    let user = Address::generate(&e);
+
+    token_1_admin_client.mint(&user, &1000_0000000);
+    token_2_admin_client.mint(&user, &1000_0000000);
+    liq_pool.deposit(
+        &user,
+        &Vec::from_array(&e, [1000_0000000, 1000_0000000]),
+        &0,
+    );
+
+    liq_pool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(60),
+        &1_0000000,
+    );
+    // pool has configured rewards, but not minted
+    assert_eq!(liq_pool.get_unused_reward(), 0);
+
+    token_reward_admin_client.mint(&liq_pool.address, &(1_0000000 * 100));
+
+    // we've configured rewards for 60 seconds, but minted for 100. 40 surplus
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 40);
+
+    // 10 seconds passed
+    jump(&e, 10);
+    liq_pool.claim(&user);
+
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 40);
+    assert_eq!(setup.token_reward.balance(&router), 0);
+    jump(&e, 10);
+
+    // pool stops rewards on new iteration
+    liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(0), &0);
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 80);
+
+    jump(&e, 10);
+    // new config iteration. pool got 50 seconds of rewards. 100 - 20 - 50 = 30 unused
+    liq_pool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(50),
+        &1_0000000,
+    );
+
+    // neither time nor claim should affect unused rewards
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
+    jump(&e, 10);
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
+    liq_pool.claim(&user);
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
+    jump(&e, 10);
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
+    assert_eq!(setup.token_reward.balance(&router), 0);
+    assert_eq!(liq_pool.return_unused_reward(&admin), 1_0000000 * 30);
+    assert_eq!(setup.token_reward.balance(&router), 1_0000000 * 30);
 }
