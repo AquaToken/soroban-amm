@@ -3,7 +3,7 @@ extern crate std;
 
 use crate::testutils::jump;
 use crate::{contract::LiquidityPoolLiquidityCalculator, LiquidityPoolLiquidityCalculatorClient};
-use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{symbol_short, Address, Bytes, Env, Vec, U256};
 
 fn create_contract<'a>(e: &Env) -> LiquidityPoolLiquidityCalculatorClient<'a> {
