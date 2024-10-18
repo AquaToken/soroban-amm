@@ -1,10 +1,11 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::jump;
+use crate::testutils::{jump, Setup};
 use crate::{contract::LiquidityPoolLiquidityCalculator, LiquidityPoolLiquidityCalculatorClient};
-use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{symbol_short, Address, Bytes, Env, Vec, U256};
+use access_control::constants::ADMIN_ACTIONS_DELAY;
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{symbol_short, vec, Address, Bytes, Env, IntoVal, Symbol, Vec, U256};
 
 fn create_contract<'a>(e: &Env) -> LiquidityPoolLiquidityCalculatorClient<'a> {
     let client = LiquidityPoolLiquidityCalculatorClient::new(
@@ -727,5 +728,53 @@ fn test_bad_address() {
     assert_eq!(
         results,
         Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)])
+    );
+}
+
+#[test]
+fn test_transfer_ownership_events() {
+    let setup = Setup::default();
+    let calculator = setup.calculator;
+    let new_admin = Address::generate(&setup.env);
+
+    calculator.commit_transfer_ownership(&setup.admin, &new_admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                calculator.address.clone(),
+                (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
+    );
+
+    calculator.revert_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                calculator.address.clone(),
+                (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+
+    calculator.commit_transfer_ownership(&setup.admin, &new_admin);
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    calculator.apply_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                calculator.address.clone(),
+                (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
     );
 }

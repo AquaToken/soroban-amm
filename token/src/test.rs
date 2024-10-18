@@ -1,13 +1,13 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::{create_dummy_pool, create_token};
+use crate::testutils::{create_dummy_pool, create_token, Setup};
 use crate::{contract::Token, TokenClient};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
-    Address as _, AuthorizedFunction, AuthorizedInvocation, MockAuth, MockAuthInvoke,
+    Address as _, AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
 };
-use soroban_sdk::{symbol_short, Address, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol, Vec};
 use utils::test_utils::jump;
 
 #[test]
@@ -276,5 +276,53 @@ fn decimal_is_over_max() {
         &(u32::from(u8::MAX) + 1),
         &"name".into_val(&e),
         &"symbol".into_val(&e),
+    );
+}
+
+#[test]
+fn test_transfer_ownership_events() {
+    let setup = Setup::default();
+    let token = setup.token;
+    let new_admin = Address::generate(&setup.env);
+
+    token.commit_transfer_ownership(&setup.admin, &new_admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                token.address.clone(),
+                (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
+    );
+
+    token.revert_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                token.address.clone(),
+                (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+
+    token.commit_transfer_ownership(&setup.admin, &new_admin);
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    token.apply_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                token.address.clone(),
+                (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
     );
 }

@@ -3,6 +3,7 @@ use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
 use access_control::access::{AccessControl, AccessControlTrait, Role, TransferOwnershipTrait};
+use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol, Vec, U256};
 
@@ -137,7 +138,8 @@ impl TransferableContract for LiquidityPoolLiquidityCalculator {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, Role::Admin);
-        access_control.commit_transfer_ownership(new_admin);
+        access_control.commit_transfer_ownership(new_admin.clone());
+        AccessControlEvents::new(&e).commit_transfer_ownership(new_admin);
     }
 
     // Applies the committed ownership transfer.
@@ -149,7 +151,8 @@ impl TransferableContract for LiquidityPoolLiquidityCalculator {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, Role::Admin);
-        access_control.apply_transfer_ownership();
+        let new_admin = access_control.apply_transfer_ownership();
+        AccessControlEvents::new(&e).apply_transfer_ownership(new_admin);
     }
 
     // Reverts the committed ownership transfer.
@@ -162,5 +165,6 @@ impl TransferableContract for LiquidityPoolLiquidityCalculator {
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, Role::Admin);
         access_control.revert_transfer_ownership();
+        AccessControlEvents::new(&e).revert_transfer_ownership();
     }
 }

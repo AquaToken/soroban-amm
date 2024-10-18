@@ -1,9 +1,11 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::testutils::{jump, Setup};
 use crate::{contract::LiquidityPoolPlane, LiquidityPoolPlaneClient};
-use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{symbol_short, Address, Env, Vec};
+use access_control::constants::ADMIN_ACTIONS_DELAY;
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol, Vec};
 
 fn create_plane_contract<'a>(e: &Env) -> LiquidityPoolPlaneClient<'a> {
     let client =
@@ -61,4 +63,52 @@ fn test_init_admin_twice() {
     let plane = create_plane_contract(&e);
     plane.init_admin(&admin);
     plane.init_admin(&admin);
+}
+
+#[test]
+fn test_transfer_ownership_events() {
+    let setup = Setup::default();
+    let plane = setup.plane;
+    let new_admin = Address::generate(&setup.env);
+
+    plane.commit_transfer_ownership(&setup.admin, &new_admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                plane.address.clone(),
+                (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
+    );
+
+    plane.revert_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                plane.address.clone(),
+                (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+
+    plane.commit_transfer_ownership(&setup.admin, &new_admin);
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    plane.apply_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                plane.address.clone(),
+                (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
+    );
 }
