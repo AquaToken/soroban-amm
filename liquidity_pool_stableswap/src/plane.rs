@@ -7,6 +7,7 @@ pub mod pool_plane {
 
 pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
+use crate::normalize::xp;
 use crate::storage::{
     get_fee, get_future_a, get_future_a_time, get_initial_a, get_initial_a_time, get_plane,
     get_reserves,
@@ -25,7 +26,7 @@ fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
                 get_future_a_time(e) as u128,
             ],
         ),
-        get_reserves(e),
+        xp(e, &get_reserves(e)), // save reserves in normalized form
     )
 }
 

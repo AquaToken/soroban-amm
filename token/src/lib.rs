@@ -9,5 +9,7 @@ mod interface;
 mod metadata;
 mod pool;
 mod test;
+mod test_permissions;
+mod testutils;
 
 pub use crate::contract::TokenClient;
