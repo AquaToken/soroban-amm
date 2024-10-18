@@ -1,33 +1,14 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::testutils::{create_dummy_pool, create_token};
 use crate::{contract::Token, TokenClient};
-use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
-use soroban_sdk::{
-    contract, contractimpl, symbol_short,
-    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
-    Address, Env, IntoVal, Symbol, Vec,
+use access_control::constants::ADMIN_ACTIONS_DELAY;
+use soroban_sdk::testutils::{
+    Address as _, AuthorizedFunction, AuthorizedInvocation, MockAuth, MockAuthInvoke,
 };
-
-fn create_token<'a>(e: &Env, admin: &Address) -> TokenClient<'a> {
-    let token = TokenClient::new(e, &e.register_contract(None, Token {}));
-    token.initialize(admin, &7, &"name".into_val(e), &"symbol".into_val(e));
-    token
-}
-
-#[contract]
-pub struct DummyPool;
-
-#[contractimpl]
-impl DummyPool {
-    pub fn checkpoint_reward(_e: Env, token_contract: Address, _user: Address, _user_shares: u128) {
-        token_contract.require_auth();
-    }
-}
-
-fn create_dummy_pool<'a>(e: &Env) -> DummyPoolClient<'a> {
-    DummyPoolClient::new(e, &e.register_contract(None, DummyPool {}))
-}
+use soroban_sdk::{symbol_short, Address, Env, IntoVal, Symbol, Vec};
+use utils::test_utils::jump;
 
 #[test]
 fn test() {
@@ -115,7 +96,7 @@ fn test() {
     assert_eq!(token.balance(&user1), 500);
     assert_eq!(token.balance(&user3), 300);
 
-    token.set_admin(&admin2);
+    token.commit_transfer_ownership(&admin1, &admin2);
     assert_eq!(
         e.auths(),
         std::vec![(
@@ -123,8 +104,24 @@ fn test() {
             AuthorizedInvocation {
                 function: AuthorizedFunction::Contract((
                     token.address.clone(),
-                    symbol_short!("set_admin"),
-                    (&admin2,).into_val(&e),
+                    Symbol::new(&e, "commit_transfer_ownership"),
+                    (&admin1, &admin2,).into_val(&e),
+                )),
+                sub_invocations: std::vec![]
+            }
+        )]
+    );
+    jump(&e, ADMIN_ACTIONS_DELAY + 1);
+    token.apply_transfer_ownership(&admin1);
+    assert_eq!(
+        e.auths(),
+        std::vec![(
+            admin1.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    token.address.clone(),
+                    Symbol::new(&e, "apply_transfer_ownership"),
+                    (&admin1,).into_val(&e),
                 )),
                 sub_invocations: std::vec![]
             }

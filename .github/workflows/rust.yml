@@ -22,5 +22,7 @@ jobs:
       run: cargo install --locked --version 21.3.0 soroban-cli --features opt
     - name: Check code formatting
       run: task fmt && git diff --exit-code
+    - name: Check all the necessary bindings are implemented
+      run: task check_bindings
     - name: Run tests
       run: task test

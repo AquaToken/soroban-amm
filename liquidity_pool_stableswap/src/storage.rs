@@ -24,7 +24,6 @@ enum DataKey {
     AdminFee,
     FutureAdminFee,
     AdminActionsDeadline,
-    TransferOwnershipDeadline,
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledClaim,
@@ -193,26 +192,6 @@ pub fn put_admin_actions_deadline(e: &Env, value: &u64) {
     e.storage()
         .instance()
         .set(&DataKey::AdminActionsDeadline, value);
-}
-
-// transfer_ownership_deadline
-pub fn get_transfer_ownership_deadline(e: &Env) -> u64 {
-    bump_instance(e);
-    match e
-        .storage()
-        .instance()
-        .get(&DataKey::TransferOwnershipDeadline)
-    {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_transfer_ownership_deadline(e: &Env, value: &u64) {
-    bump_instance(e);
-    e.storage()
-        .instance()
-        .set(&DataKey::TransferOwnershipDeadline, value);
 }
 
 // pool plane

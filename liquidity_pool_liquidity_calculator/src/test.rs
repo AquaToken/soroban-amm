@@ -1,8 +1,9 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::testutils::jump;
 use crate::{contract::LiquidityPoolLiquidityCalculator, LiquidityPoolLiquidityCalculatorClient};
-use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{symbol_short, Address, Bytes, Env, Vec, U256};
 
 fn create_contract<'a>(e: &Env) -> LiquidityPoolLiquidityCalculatorClient<'a> {
@@ -22,19 +23,6 @@ mod pool_plane {
 
 fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
     pool_plane::Client::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
-}
-
-fn jump(e: &Env, time: u64) {
-    e.ledger().set(LedgerInfo {
-        timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: e.ledger().protocol_version(),
-        sequence_number: e.ledger().sequence(),
-        network_id: Default::default(),
-        base_reserve: 10,
-        min_temp_entry_ttl: 999999,
-        min_persistent_entry_ttl: 999999,
-        max_entry_ttl: u32::MAX,
-    });
 }
 
 #[test]

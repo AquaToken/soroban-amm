@@ -3,7 +3,7 @@ extern crate std;
 
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
-    install_token_wasm, jump, Setup, TestConfig,
+    install_token_wasm, Setup, TestConfig,
 };
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
@@ -11,28 +11,21 @@ use soroban_sdk::token::{
 };
 use soroban_sdk::{testutils::Address as _, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec};
 use token_share::Client as ShareTokenClient;
-use utils::test_utils::assert_approx_eq_abs;
+use utils::test_utils::{assert_approx_eq_abs, jump};
 
 #[test]
 fn test() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1,
-        token1_admin_client: _token1_admin_client,
-        token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         mint_to_user: i128::MAX,
         ..TestConfig::default()
     });
-    let user1 = users[0].clone();
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token1 = setup.token1;
+    let token2 = setup.token2;
+    let token_reward = setup.token_reward;
+    let token_share = setup.token_share;
+    let user1 = setup.users[0].clone();
     let reward_1_tps = 10_5000000_u128;
     let reward_2_tps = 20_0000000_u128;
     let reward_3_tps = 6_0000000_u128;
@@ -256,24 +249,15 @@ fn test() {
 
 #[test]
 fn test_events() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1,
-        token1_admin_client: _token1_admin_client,
-        token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         mint_to_user: i128::MAX,
         ..TestConfig::default()
     });
-    let user1 = users[0].clone();
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token1 = setup.token1;
+    let token2 = setup.token2;
+    let user1 = setup.users[0].clone();
     let amount_to_deposit = 100_0000000;
     let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
 
@@ -348,73 +332,41 @@ fn test_events() {
 #[test]
 #[should_panic(expected = "Error(Contract, #2006)")]
 fn test_deposit_min_mint() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         mint_to_user: i128::MAX,
         ..TestConfig::default()
     });
-    let user1 = users[0].clone();
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
 
     liq_pool.deposit(
         &user1,
-        &Vec::from_array(&e, [1_000_000_000_000_0000000, 1_000_000_000_000_0000000]),
+        &Vec::from_array(
+            &setup.env,
+            [1_000_000_000_000_0000000, 1_000_000_000_000_0000000],
+        ),
         &0,
     );
-    liq_pool.deposit(&user1, &Vec::from_array(&e, [1, 1]), &10);
+    liq_pool.deposit(&user1, &Vec::from_array(&setup.env, [1, 1]), &10);
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #2004)")]
 fn test_zero_initial_deposit() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::default();
-    let user1 = users[0].clone();
-    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 0]), &0);
+    let setup = Setup::default();
+    let user1 = setup.users[0].clone();
+    setup
+        .liq_pool
+        .deposit(&user1, &Vec::from_array(&setup.env, [100, 0]), &0);
 }
 
 #[test]
 fn test_zero_deposit_ok() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::default();
-    let user1 = users[0].clone();
-    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 100]), &0);
-    liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 0]), &0);
+    let setup = Setup::default();
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    liq_pool.deposit(&user1, &Vec::from_array(&setup.env, [100, 100]), &0);
+    liq_pool.deposit(&user1, &Vec::from_array(&setup.env, [100, 0]), &0);
 }
 
 #[test]
@@ -428,7 +380,12 @@ fn initialize_already_initialized() {
 
     setup.liq_pool.initialize(
         &users[0],
-        &users[0],
+        &(
+            users[0].clone(),
+            users[0].clone(),
+            users[0].clone(),
+            Vec::from_array(&setup.env, [users[0].clone()]),
+        ),
         &users[0],
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
@@ -447,7 +404,12 @@ fn initialize_already_initialized_plane() {
 
     setup.liq_pool.initialize_all(
         &users[0],
-        &users[0],
+        &(
+            users[0].clone(),
+            users[0].clone(),
+            users[0].clone(),
+            Vec::new(&setup.env),
+        ),
         &users[0],
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
@@ -479,7 +441,6 @@ fn test_custom_fee() {
         let liqpool = create_liqpool_contract(
             &setup.env,
             &Address::generate(&setup.env),
-            &Address::generate(&setup.env),
             &setup.users[0],
             &install_token_wasm(&setup.env),
             &Vec::from_array(
@@ -505,20 +466,11 @@ fn test_custom_fee() {
 
 #[test]
 fn test_simple_ongoing_reward() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::default();
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let users = setup.users;
     let total_reward_1 = TestConfig::default().reward_tps * 60;
     assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
     assert_eq!(liq_pool.get_total_accumulated_reward(), 0);
@@ -587,20 +539,11 @@ fn test_simple_ongoing_reward() {
 
 #[test]
 fn test_estimate_ongoing_reward() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::default();
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let users = setup.users;
 
     // 10 seconds passed since config, user depositing
     jump(&env, 10);
@@ -618,20 +561,10 @@ fn test_estimate_ongoing_reward() {
 fn test_simple_reward() {
     let setup = Setup::setup(&TestConfig::default());
     setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = setup;
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let users = setup.users;
 
     // 10 seconds. user depositing
     jump(&env, 10);
@@ -666,20 +599,11 @@ fn test_simple_reward() {
 
 #[test]
 fn test_two_users_rewards() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::default();
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let users = setup.users;
 
     let total_reward_1 = &TestConfig::default().reward_tps * 60;
 
@@ -701,20 +625,11 @@ fn test_two_users_rewards() {
 
 #[test]
 fn test_lazy_user_rewards() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::default();
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let users = setup.users;
 
     let total_reward_1 = &TestConfig::default().reward_tps * 60;
 
@@ -737,24 +652,14 @@ fn test_lazy_user_rewards() {
 
 #[test]
 fn test_rewards_disable_before_expiration() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         users_count: 3,
         reward_tps: 0,
         ..TestConfig::default()
     });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
 
     // user 1 has 10% of total reward
     liq_pool.deposit(&users[0], &Vec::from_array(&env, [900, 900]), &0);
@@ -788,23 +693,13 @@ fn test_rewards_disable_before_expiration() {
 
 #[test]
 fn test_rewards_disable_after_expiration() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         reward_tps: 0,
         ..TestConfig::default()
     });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
 
     // user 1 has 10% of total reward
     liq_pool.deposit(&users[0], &Vec::from_array(&env, [900, 900]), &0);
@@ -825,23 +720,13 @@ fn test_rewards_disable_after_expiration() {
 
 #[test]
 fn test_rewards_set_new_after_expiration() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         reward_tps: 0,
         ..TestConfig::default()
     });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
 
     // user 1 has 10% of total reward
     liq_pool.deposit(&users[0], &Vec::from_array(&env, [900, 900]), &0);
@@ -875,20 +760,10 @@ fn test_rewards_set_new_after_expiration() {
 #[test]
 #[should_panic(expected = "Error(Contract, #702)")]
 fn test_rewards_same_expiration_time() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::default();
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
 
     jump(&env, 10);
     liq_pool.set_rewards_config(&users[0], &env.ledger().timestamp().saturating_add(100), &1);
@@ -899,20 +774,10 @@ fn test_rewards_same_expiration_time() {
 #[test]
 #[should_panic(expected = "Error(Contract, #701)")]
 fn test_rewards_past() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::default();
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
 
     jump(&env, 10);
     let original_expiration_time = env.ledger().timestamp().saturating_add(100);
@@ -926,23 +791,16 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     //  many users come
     //  user does withdraw
 
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client,
-        token2: _token2,
-        token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         users_count: 100,
         ..TestConfig::default()
     });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
+    let token1_admin_client = setup.token1_admin_client;
+    let token2_admin_client = setup.token2_admin_client;
+    let token_reward_admin_client = setup.token_reward_admin_client;
 
     let admin = users[0].clone();
     let first_user = Address::generate(&env);
@@ -1000,21 +858,12 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
 
 #[test]
 fn test_deposit_inequal_return_change() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1,
-        token1_admin_client: _token1_admin_client,
-        token2,
-        token2_admin_client: _token2_admin_client,
-
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::default();
+    let setup = Setup::default();
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token1 = setup.token1;
+    let token2 = setup.token2;
+    let users = setup.users;
     let user1 = users[0].clone();
     liq_pool.deposit(&user1, &Vec::from_array(&e, [100, 100]), &0);
     assert_eq!(token1.balance(&liq_pool.address), 100);
@@ -1040,20 +889,9 @@ fn test_rewards_50k() {
 fn test_config_rewards_not_admin() {
     let setup = Setup::setup(&TestConfig::default());
     setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = setup;
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
 
     liq_pool.set_rewards_config(
         &users[1],
@@ -1066,20 +904,9 @@ fn test_config_rewards_not_admin() {
 fn test_config_rewards_router() {
     let setup = Setup::setup(&TestConfig::default());
     setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
-    let Setup {
-        env,
-        router,
-        users: _users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = setup;
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let router = setup.router;
 
     liq_pool.set_rewards_config(
         &router,
@@ -1092,20 +919,10 @@ fn test_config_rewards_router() {
 fn test_config_rewards_override() {
     let setup = Setup::setup(&TestConfig::default());
     setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
-    let Setup {
-        env,
-        router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = setup;
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
+    let router = setup.router;
 
     liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
 
@@ -1131,23 +948,13 @@ fn test_config_rewards_override() {
 #[should_panic(expected = "Error(Contract, #2018)")]
 #[test]
 fn test_zero_swap() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         mint_to_user: i128::MAX,
         ..TestConfig::default()
     });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
     let user1 = users[0].clone();
     let amount_to_deposit = 1_0000000;
     let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
@@ -1158,23 +965,16 @@ fn test_zero_swap() {
 
 #[test]
 fn test_large_numbers() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1,
-        token1_admin_client: _token1_admin_client,
-        token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         mint_to_user: i128::MAX,
         ..TestConfig::default()
     });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token1 = setup.token1;
+    let token2 = setup.token2;
+    let token_share = setup.token_share;
+    let users = setup.users;
     let user1 = users[0].clone();
     let amount_to_deposit = u128::MAX / 1_000_000;
     let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
@@ -1243,23 +1043,13 @@ fn test_large_numbers() {
 
 #[test]
 fn test_swap_killed() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         mint_to_user: i128::MAX,
         ..TestConfig::default()
     });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
 
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_swap(), false);
@@ -1315,23 +1105,13 @@ fn test_swap_killed() {
 
 #[test]
 fn test_deposit_killed() {
-    let Setup {
-        env: e,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         mint_to_user: i128::MAX,
         ..TestConfig::default()
     });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
 
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_swap(), false);
@@ -1389,20 +1169,9 @@ fn test_deposit_killed() {
 fn test_claim_killed() {
     let setup = Setup::setup(&TestConfig::default());
     setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share: _token_share,
-        liq_pool,
-        plane: _plane,
-    } = setup;
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_swap(), false);
     assert_eq!(liq_pool.get_is_killed_claim(), false);
@@ -1491,7 +1260,6 @@ fn test_withdraw_rewards() {
 
     let liq_pool = create_liqpool_contract(
         &e,
-        &admin,
         &admin,
         &router,
         &install_token_wasm(&e),
@@ -1590,7 +1358,6 @@ fn test_deposit_rewards() {
     let liq_pool = create_liqpool_contract(
         &e,
         &admin,
-        &admin,
         &router,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
@@ -1649,7 +1416,6 @@ fn test_swap_rewards() {
     let liq_pool1 = create_liqpool_contract(
         &e,
         &admin,
-        &admin,
         &router,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
@@ -1659,7 +1425,6 @@ fn test_swap_rewards() {
     );
     let liq_pool2 = create_liqpool_contract(
         &e,
-        &admin,
         &admin,
         &router,
         &install_token_wasm(&e),
@@ -1760,7 +1525,6 @@ fn test_claim_rewards() {
     let liq_pool = create_liqpool_contract(
         &e,
         &admin,
-        &admin,
         &router,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
@@ -1787,26 +1551,17 @@ fn test_claim_rewards() {
 
 #[test]
 fn test_drain_reward() {
-    let Setup {
-        env,
-        router: _router,
-        users,
-        token1: _token1,
-        token1_admin_client: _token1_admin_client,
-        token2: _token2,
-        token2_admin_client: _token2_admin_client,
-        token_reward: _token_reward,
-        token_reward_admin_client: _token_reward_admin_client,
-        token_share,
-        liq_pool,
-        plane: _plane,
-    } = Setup::new_with_config(&TestConfig {
+    let setup = Setup::new_with_config(&TestConfig {
         users_count: 5,
         reward_tps: 10_5000000,
         rewards_count: 10_5000000 * 60,
         mint_to_user: 1000_0000000,
         ..TestConfig::default()
     });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_share = setup.token_share;
+    let users = setup.users;
 
     // 10 seconds passed since config, user depositing
     jump(&env, 10);
@@ -1870,7 +1625,6 @@ fn test_drain_reserves() {
 
     let liq_pool = create_liqpool_contract(
         &e,
-        &admin,
         &admin,
         &router,
         &install_token_wasm(&e),

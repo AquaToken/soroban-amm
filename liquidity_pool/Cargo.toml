@@ -23,6 +23,7 @@ paste = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+utils = { workspace = true, features = ["testutils"] }
 
 [features]
 default = []

@@ -5,7 +5,7 @@ pub trait ManagedLiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
@@ -24,7 +24,7 @@ pub trait LiquidityPoolInterfaceTrait {
     fn initialize(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -93,11 +93,12 @@ pub trait UpgradeableContractTrait {
     fn version() -> u32;
 
     // Upgrade contract with new wasm code
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
+    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>);
 }
 
 pub trait UpgradeableLPTokenTrait {
     fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>);
+    fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>);
 }
 
 pub trait RewardsTrait {
@@ -133,11 +134,18 @@ pub trait RewardsTrait {
 }
 
 pub trait AdminInterfaceTrait {
-    // Set operator address which can perform some restricted actions
-    fn set_operator(e: Env, admin: Address, operator: Address);
+    // Set privileged addresses
+    fn set_privileged_addrs(
+        e: Env,
+        admin: Address,
+        rewards_admin: Address,
+        operations_admin: Address,
+        pause_admin: Address,
+        emergency_pause_admins: Vec<Address>,
+    );
 
-    // Get operator address or panic if doesn't set
-    fn get_operator(e: Env) -> Address;
+    // Get map of privileged roles
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 
     // Start ramping A to target value in future timestamp
     fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64);
@@ -153,15 +161,6 @@ pub trait AdminInterfaceTrait {
 
     // Revert committed parameters to current values
     fn revert_new_parameters(e: Env, admin: Address);
-
-    // Commit ownership transfer
-    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address);
-
-    // Apply committed transfer ownership
-    fn apply_transfer_ownership(e: Env, admin: Address);
-
-    // Revert committed ownership transfer
-    fn revert_transfer_ownership(e: Env, admin: Address);
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);

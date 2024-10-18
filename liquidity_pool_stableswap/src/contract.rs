@@ -1,6 +1,4 @@
-use crate::pool_constants::{
-    ADMIN_ACTIONS_DELAY, FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MAX_FEE, MIN_RAMP_TIME,
-};
+use crate::pool_constants::{FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MAX_FEE, MIN_RAMP_TIME};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait, ManagedLiquidityPool,
     RewardsTrait, UpgradeableContractTrait, UpgradeableLPTokenTrait,
@@ -9,10 +7,10 @@ use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
     get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
     get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_rates, get_reserves,
-    get_router, get_tokens, get_transfer_ownership_deadline, has_plane, put_admin_actions_deadline,
-    put_decimals, put_fee, put_future_a, put_future_a_time, put_future_fee, put_initial_a,
-    put_initial_a_time, put_reserves, put_tokens, put_transfer_ownership_deadline,
-    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
+    get_router, get_tokens, has_plane, put_admin_actions_deadline, put_decimals, put_fee,
+    put_future_a, put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time,
+    put_reserves, put_tokens, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
+    set_plane, set_router,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -25,8 +23,16 @@ use crate::normalize::xp;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
-use access_control::access::{AccessControl, AccessControlTrait, OperatorAccessTrait};
+use access_control::access::{
+    AccessControl, AccessControlTrait, Role, SymbolRepresentation, TransferOwnershipTrait,
+};
+use access_control::constants::ADMIN_ACTIONS_DELAY;
 use access_control::errors::AccessControlError;
+use access_control::interface::TransferableContract;
+use access_control::utils::{
+    require_operations_admin_or_owner, require_pause_admin_or_owner,
+    require_pause_or_emergency_pause_admin_or_owner, require_rewards_admin_or_owner,
+};
 use cast::i128 as to_i128;
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -37,7 +43,6 @@ use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
     IntoVal, Map, Symbol, Val, Vec, U256,
 };
-use utils::storage_errors::StorageError;
 
 contractmeta!(
     key = "Description",
@@ -631,28 +636,67 @@ impl LiquidityPool {
 
 #[contractimpl]
 impl AdminInterfaceTrait for LiquidityPool {
-    // Set operator address which can perform some restricted actions
+    // Sets the privileged addresses.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    // * `operator` - The address of the operator.
-    fn set_operator(e: Env, admin: Address, operator: Address) {
+    // * `rewards_admin` - The address of the rewards admin.
+    // * `operations_admin` - The address of the operations admin.
+    // * `pause_admin` - The address of the pause admin.
+    // * `emergency_pause_admin` - The addresses of the emergency pause admins.
+    fn set_privileged_addrs(
+        e: Env,
+        admin: Address,
+        rewards_admin: Address,
+        operations_admin: Address,
+        pause_admin: Address,
+        emergency_pause_admins: Vec<Address>,
+    ) {
+        admin.require_auth();
         let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
-        access_control.set_operator(&operator);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+
+        access_control.set_role_address(Role::RewardsAdmin, &rewards_admin);
+        access_control.set_role_address(Role::OperationsAdmin, &operations_admin);
+        access_control.set_role_address(Role::PauseAdmin, &pause_admin);
+        access_control.set_role_addresses(Role::EmergencyPauseAdmin, &emergency_pause_admins);
     }
 
-    // Returns the operator address.
+    // Returns a map of privileged roles.
     //
     // # Returns
     //
-    // The operator address.
-    fn get_operator(e: Env) -> Address {
-        match AccessControl::new(&e).get_operator() {
-            Some(address) => address,
-            None => panic_with_error!(e, AccessControlError::RoleNotFound),
+    // A map of privileged roles to their respective addresses.
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>> {
+        let access_control = AccessControl::new(&e);
+        let mut result = Map::new(&e);
+        match access_control.get_role_safe(Role::RewardsAdmin) {
+            Some(v) => {
+                result.set(Role::RewardsAdmin.as_symbol(&e), Vec::from_array(&e, [v]));
+            }
+            None => {}
         }
+        match access_control.get_role_safe(Role::OperationsAdmin) {
+            Some(v) => {
+                result.set(
+                    Role::OperationsAdmin.as_symbol(&e),
+                    Vec::from_array(&e, [v]),
+                );
+            }
+            None => {}
+        }
+        match access_control.get_role_safe(Role::PauseAdmin) {
+            Some(v) => {
+                result.set(Role::PauseAdmin.as_symbol(&e), Vec::from_array(&e, [v]));
+            }
+            None => {}
+        }
+        result.set(
+            Role::EmergencyPauseAdmin.as_symbol(&e),
+            access_control.get_role_addresses(Role::EmergencyPauseAdmin),
+        );
+        result
     }
 
     // Starts ramping A to target value in future timestamp.
@@ -664,8 +708,8 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `future_time` - The future timestamp when the target value should be reached.
     fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_operations_admin_or_owner(&e, &admin);
+
         if e.ledger().timestamp() < get_initial_a_time(&e) + MIN_RAMP_TIME {
             panic_with_error!(&e, LiquidityPoolError::RampTooEarly);
         };
@@ -698,8 +742,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn stop_ramp_a(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_operations_admin_or_owner(&e, &admin);
 
         let current_a = Self::a(e.clone());
         put_initial_a(&e, &current_a);
@@ -721,8 +764,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `new_fee` - The new fee to be applied.
     fn commit_new_fee(e: Env, admin: Address, new_fee: u32) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_operations_admin_or_owner(&e, &admin);
 
         if get_admin_actions_deadline(&e) != 0 {
             panic_with_error!(&e, LiquidityPoolError::AnotherActionActive);
@@ -743,8 +785,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn apply_new_fee(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_operations_admin_or_owner(&e, &admin);
 
         if e.ledger().timestamp() < get_admin_actions_deadline(&e) {
             panic_with_error!(&e, LiquidityPoolError::ActionNotReadyYet);
@@ -768,68 +809,9 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn revert_new_parameters(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_operations_admin_or_owner(&e, &admin);
 
         put_admin_actions_deadline(&e, &0);
-    }
-
-    // Commits an ownership transfer.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `new_admin` - The address of the new admin.
-    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
-
-        if get_transfer_ownership_deadline(&e) != 0 {
-            panic_with_error!(&e, LiquidityPoolError::AnotherActionActive);
-        }
-
-        let deadline = e.ledger().timestamp() + ADMIN_ACTIONS_DELAY;
-        put_transfer_ownership_deadline(&e, &deadline);
-        access_control.set_future_admin(&new_admin);
-    }
-
-    // Applies the committed ownership transfer.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    fn apply_transfer_ownership(e: Env, admin: Address) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
-
-        if e.ledger().timestamp() < get_transfer_ownership_deadline(&e) {
-            panic_with_error!(&e, LiquidityPoolError::ActionNotReadyYet);
-        }
-        if get_transfer_ownership_deadline(&e) == 0 {
-            panic_with_error!(&e, LiquidityPoolError::NoActionActive);
-        }
-
-        put_transfer_ownership_deadline(&e, &0);
-        let future_admin = match access_control.get_future_admin() {
-            Some(v) => v,
-            None => panic_with_error!(&e, StorageError::ValueNotInitialized),
-        };
-        access_control.set_admin(&future_admin);
-    }
-
-    // Reverts the committed ownership transfer.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    fn revert_transfer_ownership(e: Env, admin: Address) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
-
-        put_transfer_ownership_deadline(&e, &0);
     }
 
     // Stops the pool deposits instantly.
@@ -839,8 +821,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn kill_deposit(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_deposit(&e, &true);
         PoolEvents::new(&e).kill_deposit();
@@ -853,8 +834,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn kill_swap(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_swap(&e, &true);
         PoolEvents::new(&e).kill_swap();
@@ -867,8 +847,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn kill_claim(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_claim(&e, &true);
         PoolEvents::new(&e).kill_claim();
@@ -881,8 +860,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn unkill_deposit(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_deposit(&e, &false);
         PoolEvents::new(&e).unkill_deposit();
@@ -895,8 +873,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn unkill_swap(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_swap(&e, &false);
         PoolEvents::new(&e).unkill_swap();
@@ -909,8 +886,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn unkill_claim(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_claim(&e, &false);
         PoolEvents::new(&e).unkill_claim();
@@ -939,6 +915,12 @@ impl ManagedLiquidityPool for LiquidityPool {
     // # Arguments
     //
     // * `admin` - The address of the admin.
+    // * `privileged_addrs` - (
+    //      rewards admin,
+    //      operations admin,
+    //      pause admin,
+    //      emergency pause admins
+    //  ).
     // * `router` - The address of the router.
     // * `token_wasm_hash` - The hash of the token's WASM code.
     // * `coins` - The addresses of the coins.
@@ -949,7 +931,7 @@ impl ManagedLiquidityPool for LiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
@@ -964,7 +946,7 @@ impl ManagedLiquidityPool for LiquidityPool {
         Self::initialize(
             e.clone(),
             admin,
-            operator,
+            privileged_addrs,
             router,
             token_wasm_hash,
             coins,
@@ -991,6 +973,12 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // # Arguments
     //
     // * `admin` - The address of the admin.
+    // * `privileged_addrs` - (
+    //      rewards admin,
+    //      operations admin,
+    //      pause admin,
+    //      emergency pause admins
+    //  ).
     // * `router` - The address of the router.
     // * `token_wasm_hash` - The hash of the token's WASM code.
     // * `tokens` - The addresses of the coins.
@@ -999,7 +987,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     fn initialize(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -1007,12 +995,16 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         fee: u32,
     ) {
         let access_control = AccessControl::new(&e);
-        if access_control.has_admin() {
+        if access_control.get_role_safe(Role::Admin).is_some() {
             panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
         }
 
-        access_control.set_admin(&admin);
-        access_control.set_operator(&operator);
+        access_control.set_role_address(Role::Admin, &admin);
+        access_control.set_role_address(Role::RewardsAdmin, &privileged_addrs.0);
+        access_control.set_role_address(Role::OperationsAdmin, &privileged_addrs.1);
+        access_control.set_role_address(Role::PauseAdmin, &privileged_addrs.2);
+        access_control.set_role_addresses(Role::EmergencyPauseAdmin, &privileged_addrs.3);
+
         set_router(&e, &router);
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
@@ -1056,7 +1048,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_future_a(&e, &a);
         put_future_a_time(&e, &e.ledger().timestamp());
         put_admin_actions_deadline(&e, &0);
-        put_transfer_ownership_deadline(&e, &0);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1433,7 +1424,7 @@ impl UpgradeableContractTrait for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        120
+        130
     }
 
     // Upgrades the contract to a new version.
@@ -1442,9 +1433,9 @@ impl UpgradeableContractTrait for LiquidityPool {
     //
     // * `e` - The environment.
     // * `new_wasm_hash` - The hash of the new contract version.
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
         e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }
@@ -1453,10 +1444,20 @@ impl UpgradeableContractTrait for LiquidityPool {
 impl UpgradeableLPTokenTrait for LiquidityPool {
     fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
         admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        token_share::Client::new(&e, &get_token_share(&e))
+            .upgrade(&e.current_contract_address(), &new_token_wasm);
+    }
 
-        let share_contract = get_token_share(&e);
-        token_share::Client::new(&e, &share_contract).upgrade(&new_token_wasm);
+    fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+
+        e.invoke_contract::<()>(
+            &get_token_share(&e),
+            &symbol_short!("upgrade"),
+            Vec::from_array(&e, [new_token_wasm.to_val()]),
+        );
     }
 }
 
@@ -1492,9 +1493,9 @@ impl RewardsTrait for LiquidityPool {
     ) {
         admin.require_auth();
 
-        // either admin or router can set the rewards config
+        // either rewards admin or router can set the rewards config
         if admin != get_router(&e) {
-            AccessControl::new(&e).check_admin(&admin);
+            require_rewards_admin_or_owner(&e, &admin);
         }
 
         let rewards = get_rewards_manager(&e);
@@ -1689,9 +1690,8 @@ impl Plane for LiquidityPool {
     }
 
     fn set_pools_plane(e: Env, admin: Address, plane: Address) {
-        let access_control = AccessControl::new(&e);
         admin.require_auth();
-        access_control.check_admin(&admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
 
         set_plane(&e, &plane);
     }
@@ -1712,5 +1712,46 @@ impl Plane for LiquidityPool {
     // Updates the plane data in case the plane contract was updated.
     fn backfill_plane_data(e: Env) {
         update_plane(&e);
+    }
+}
+
+// The `TransferableContract` trait provides the interface for transferring ownership of the contract.
+#[contractimpl]
+impl TransferableContract for LiquidityPool {
+    // Commits an ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `new_admin` - The address of the new admin.
+    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.commit_transfer_ownership(new_admin);
+    }
+
+    // Applies the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn apply_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.apply_transfer_ownership();
+    }
+
+    // Reverts the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn revert_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.revert_transfer_ownership();
     }
 }

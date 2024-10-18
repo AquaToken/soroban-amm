@@ -1,4 +1,3 @@
-use crate::access_utils::require_admin_or_operator;
 use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_MAX_FEE};
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
@@ -24,8 +23,12 @@ use crate::storage::{
     set_reward_tokens, set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash,
     set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
-use access_control::access::{AccessControl, AccessControlTrait, OperatorAccessTrait};
+use access_control::access::{
+    AccessControl, AccessControlTrait, Role, SymbolRepresentation, TransferOwnershipTrait,
+};
 use access_control::errors::AccessControlError;
+use access_control::interface::TransferableContract;
+use access_control::utils::{require_operations_admin_or_owner, require_rewards_admin_or_owner};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
@@ -404,9 +407,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     // * `admin` - The address of the admin user.
     // * `calculator` - The address of the liquidity calculator.
     fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
-        let access_control = AccessControl::new(&e);
         admin.require_auth();
-        access_control.check_admin(&admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
 
         set_liquidity_calculator(&e, &calculator);
     }
@@ -421,7 +423,7 @@ impl UpgradeableContract for LiquidityPoolRouter {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        120
+        130
     }
 
     // Upgrades the contract to a new version.
@@ -430,9 +432,9 @@ impl UpgradeableContract for LiquidityPoolRouter {
     //
     // * `e` - The environment.
     // * `new_wasm_hash` - The hash of the new contract version.
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
         e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }
@@ -447,21 +449,73 @@ impl AdminInterface for LiquidityPoolRouter {
     // * `account` - The address of the admin user.
     fn init_admin(e: Env, account: Address) {
         let access_control = AccessControl::new(&e);
-        if access_control.has_admin() {
+        if access_control.get_role_safe(Role::Admin).is_some() {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
         }
-        access_control.set_admin(&account);
+        access_control.set_role_address(Role::Admin, &account);
     }
 
-    // Set operator address which can perform some restricted actions
+    // Sets the privileged addresses.
     //
     // # Arguments
     //
-    // * `account` - The address of the operator user.
-    fn set_operator(e: Env, operator: Address) {
+    // * `admin` - The address of the admin.
+    // * `rewards_admin` - The address of the rewards admin.
+    // * `operations_admin` - The address of the operations admin.
+    // * `pause_admin` - The address of the pause admin.
+    // * `emergency_pause_admin` - The addresses of the emergency pause admins.
+    fn set_privileged_addrs(
+        e: Env,
+        admin: Address,
+        rewards_admin: Address,
+        operations_admin: Address,
+        pause_admin: Address,
+        emergency_pause_admins: Vec<Address>,
+    ) {
+        admin.require_auth();
         let access_control = AccessControl::new(&e);
-        access_control.require_admin();
-        access_control.set_operator(&operator);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+
+        access_control.set_role_address(Role::RewardsAdmin, &rewards_admin);
+        access_control.set_role_address(Role::OperationsAdmin, &operations_admin);
+        access_control.set_role_address(Role::PauseAdmin, &pause_admin);
+        access_control.set_role_addresses(Role::EmergencyPauseAdmin, &emergency_pause_admins);
+    }
+
+    // Returns a map of privileged roles.
+    //
+    // # Returns
+    //
+    // A map of privileged roles to their respective addresses.
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>> {
+        let access_control = AccessControl::new(&e);
+        let mut result = Map::new(&e);
+        match access_control.get_role_safe(Role::RewardsAdmin) {
+            Some(v) => {
+                result.set(Role::RewardsAdmin.as_symbol(&e), Vec::from_array(&e, [v]));
+            }
+            None => {}
+        }
+        match access_control.get_role_safe(Role::OperationsAdmin) {
+            Some(v) => {
+                result.set(
+                    Role::OperationsAdmin.as_symbol(&e),
+                    Vec::from_array(&e, [v]),
+                );
+            }
+            None => {}
+        }
+        match access_control.get_role_safe(Role::PauseAdmin) {
+            Some(v) => {
+                result.set(Role::PauseAdmin.as_symbol(&e), Vec::from_array(&e, [v]));
+            }
+            None => {}
+        }
+        result.set(
+            Role::EmergencyPauseAdmin.as_symbol(&e),
+            access_control.get_role_addresses(Role::EmergencyPauseAdmin),
+        );
+        result
     }
 
     // Sets the liquidity pool share token wasm hash.
@@ -469,9 +523,9 @@ impl AdminInterface for LiquidityPoolRouter {
     // # Arguments
     //
     // * `new_hash` - The token wasm hash.
-    fn set_token_hash(e: Env, new_hash: BytesN<32>) {
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+    fn set_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
         set_token_hash(&e, &new_hash);
     }
 
@@ -480,9 +534,9 @@ impl AdminInterface for LiquidityPoolRouter {
     // # Arguments
     //
     // * `new_hash` - The standard pool wasm hash.
-    fn set_pool_hash(e: Env, new_hash: BytesN<32>) {
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+    fn set_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
         set_constant_product_pool_hash(&e, &new_hash);
     }
 
@@ -491,9 +545,9 @@ impl AdminInterface for LiquidityPoolRouter {
     // # Arguments
     //
     // * `new_hash` - The new stableswap pool wasm hash.
-    fn set_stableswap_pool_hash(e: Env, new_hash: BytesN<32>) {
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+    fn set_stableswap_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
         set_stableswap_pool_hash(&e, &new_hash);
     }
 
@@ -501,18 +555,21 @@ impl AdminInterface for LiquidityPoolRouter {
     //
     // # Arguments
     //
+    // * `admin` - The address of the admin.
     // * `token` - The address of the token.
     // * `amount` - The amount of the token.
     // * `to` - The address to send the payment to.
     fn configure_init_pool_payment(
         e: Env,
+        admin: Address,
         token: Address,
         standard_pool_amount: u128,
         stable_pool_amount: u128,
         to: Address,
     ) {
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+
         set_init_pool_payment_token(&e, &token);
         set_init_stable_pool_payment_amount(&e, &stable_pool_amount);
         set_init_standard_pool_payment_amount(&e, &standard_pool_amount);
@@ -541,23 +598,12 @@ impl AdminInterface for LiquidityPoolRouter {
     // # Arguments
     //
     // * `reward_token` - The address of the reward token.
-    fn set_reward_token(e: Env, reward_token: Address) {
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
-        let rewards = get_rewards_manager(&e);
-        rewards.storage().put_reward_token(reward_token);
-    }
-
-    // Returns the operator address.
-    //
-    // # Returns
-    //
-    // The operator address.
-    fn get_operator(e: Env) -> Address {
-        match AccessControl::new(&e).get_operator() {
-            Some(address) => address,
-            None => panic_with_error!(e, AccessControlError::RoleNotFound),
-        }
+    fn set_reward_token(e: Env, admin: Address, reward_token: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        get_rewards_manager(&e)
+            .storage()
+            .put_reward_token(reward_token);
     }
 }
 
@@ -651,7 +697,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         tokens_votes: Vec<(Vec<Address>, u32)>, // {[token1, token2]: voting_percentage}, voting percentage 0_0000000 .. 1_0000000
     ) {
         user.require_auth();
-        require_admin_or_operator(&e, user);
+        require_rewards_admin_or_owner(&e, &user);
 
         let rewards_config = get_rewards_config(&e);
         let new_rewards_block = rewards_config.current_block + 1;
@@ -1016,7 +1062,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         pool_index: BytesN<32>,
     ) -> u128 {
         user.require_auth();
-        require_admin_or_operator(&e, user);
+        require_rewards_admin_or_owner(&e, &user);
 
         let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
             Ok(v) => v,
@@ -1208,9 +1254,9 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     //
     // A map of pool index hashes to pool addresses.
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>) {
-        let access_control = AccessControl::new(&e);
         user.require_auth();
-        access_control.check_admin(&user);
+        require_operations_admin_or_owner(&e, &user);
+
         let salt = get_tokens_salt(&e, tokens.clone());
         if has_pool(&e, &salt, pool_hash.clone()) {
             remove_pool(&e, &salt, pool_hash)
@@ -1277,9 +1323,8 @@ impl PoolPlaneInterface for LiquidityPoolRouter {
     // * `admin` - The address of the admin user.
     // * `plane` - The address of the plane.
     fn set_pools_plane(e: Env, admin: Address, plane: Address) {
-        let access_control = AccessControl::new(&e);
         admin.require_auth();
-        access_control.check_admin(&admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
 
         set_pool_plane(&e, &plane);
     }
@@ -1421,5 +1466,46 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
         );
 
         last_swap_result
+    }
+}
+
+// The `TransferableContract` trait provides the interface for transferring ownership of the contract.
+#[contractimpl]
+impl TransferableContract for LiquidityPoolRouter {
+    // Commits an ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `new_admin` - The address of the new admin.
+    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.commit_transfer_ownership(new_admin);
+    }
+
+    // Applies the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn apply_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.apply_transfer_ownership();
+    }
+
+    // Reverts the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn revert_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.revert_transfer_ownership();
     }
 }
