@@ -7,3 +7,4 @@ pub mod events;
 pub mod interface;
 mod storage;
 pub mod utils;
+pub mod emergency;

@@ -15,6 +15,7 @@ members = [
     "liquidity_pool_validation_errors",
     "liquidity_pool_events",
     "fees_collector",
+    "upgrade",
 ]
 
 [workspace.package]
@@ -32,6 +33,7 @@ utils = { path = "utils" }
 access_control = { path = "access_control" }
 token_share = { path = "token_share" }
 rewards = { path = "rewards" }
+upgrade = { path = "upgrade"}
 liquidity-pool-validation-errors = { path = "liquidity_pool_validation_errors" }
 liquidity-pool-events = { path = "liquidity_pool_events" }
 

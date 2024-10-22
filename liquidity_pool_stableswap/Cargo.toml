@@ -19,6 +19,7 @@ paste = { workspace = true }
 liquidity-pool-validation-errors = { workspace = true }
 liquidity-pool-events = { workspace = true }
 soroban-fixed-point-math = { workspace = true }
+upgrade = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

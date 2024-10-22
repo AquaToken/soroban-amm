@@ -1,4 +1,4 @@
-use crate::interface::{Calculator, UpgradeableContractTrait};
+use crate::interface::{Calculator, UpgradeableContract};
 use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
@@ -6,6 +6,8 @@ use access_control::access::{AccessControl, AccessControlTrait, Role, TransferOw
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol, Vec, U256};
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
+use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 
 #[contract]
 pub struct LiquidityPoolLiquidityCalculator;
@@ -102,7 +104,7 @@ impl Calculator for LiquidityPoolLiquidityCalculator {
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
 #[contractimpl]
-impl UpgradeableContractTrait for LiquidityPoolLiquidityCalculator {
+impl UpgradeableContract for LiquidityPoolLiquidityCalculator {
     // Returns the version of the contract.
     //
     // # Returns
@@ -112,17 +114,40 @@ impl UpgradeableContractTrait for LiquidityPoolLiquidityCalculator {
         130
     }
 
-    // Upgrades the contract to a new version.
-    //
-    // # Arguments
-    //
-    // * `e` - The environment.
-    // * `new_wasm_hash` - The hash of the new contract version.
-    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+    fn set_emergency_admin(e: Env, admin: Address, emergency_admin: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        AccessControl::new(&e).set_role_address(Role::EmergencyAdmin, &emergency_admin);
     }
+
+    fn set_emergency_mode(e: Env, admin: Address, value: bool) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::EmergencyAdmin);
+        set_emergency_mode(&e, &value);
+    }
+
+    fn get_emergency_mode(e: Env) -> bool {
+        get_emergency_mode(&e)
+    }
+
+    fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        commit_upgrade(&e, &new_wasm_hash);
+    }
+
+    fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        apply_upgrade(&e)
+    }
+
+    fn revert_upgrade(e: Env, admin: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        revert_upgrade(&e);
+    }
+
 }
 
 // The `TransferableContract` trait provides the interface for transferring ownership of the contract.

@@ -38,6 +38,8 @@ use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, vec, Address, BytesN, Env, IntoVal,
     Map, Symbol, Val, Vec, U256,
 };
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
+use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::storage_errors::StorageError;
 use utils::token_utils::check_vec_ordered;
 
@@ -427,16 +429,38 @@ impl UpgradeableContract for LiquidityPoolRouter {
         130
     }
 
-    // Upgrades the contract to a new version.
-    //
-    // # Arguments
-    //
-    // * `e` - The environment.
-    // * `new_wasm_hash` - The hash of the new contract version.
-    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+    fn set_emergency_admin(e: Env, admin: Address, emergency_admin: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        AccessControl::new(&e).set_role_address(Role::EmergencyAdmin, &emergency_admin);
+    }
+
+    fn set_emergency_mode(e: Env, admin: Address, value: bool) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::EmergencyAdmin);
+        set_emergency_mode(&e, &value);
+    }
+
+    fn get_emergency_mode(e: Env) -> bool {
+        get_emergency_mode(&e)
+    }
+
+    fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        commit_upgrade(&e, &new_wasm_hash);
+    }
+
+    fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        apply_upgrade(&e)
+    }
+
+    fn revert_upgrade(e: Env, admin: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        revert_upgrade(&e);
     }
 }
 

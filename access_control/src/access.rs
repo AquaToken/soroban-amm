@@ -7,6 +7,7 @@ use utils::storage_errors::StorageError;
 
 pub enum Role {
     Admin,
+    EmergencyAdmin,
     FutureAdmin,
     RewardsAdmin,
     OperationsAdmin,
@@ -22,6 +23,7 @@ impl SymbolRepresentation for Role {
     fn as_symbol(&self, e: &Env) -> Symbol {
         match self {
             Role::Admin => Symbol::new(&e, "Admin"),
+            Role::EmergencyAdmin => Symbol::new(&e, "EmergencyAdmin"),
             Role::FutureAdmin => Symbol::new(&e, "FutureAdmin"),
             Role::RewardsAdmin => Symbol::new(&e, "RewardsAdmin"),
             Role::OperationsAdmin => Symbol::new(&e, "OperationsAdmin"),
@@ -42,6 +44,7 @@ impl AccessControl {
     fn get_key(&self, role: Role) -> DataKey {
         match role {
             Role::Admin => DataKey::Admin,
+            Role::EmergencyAdmin => DataKey::EmergencyAdmin,
             Role::FutureAdmin => DataKey::FutureAdmin,
             Role::RewardsAdmin => DataKey::Operator,
             Role::OperationsAdmin => DataKey::OperationsAdmin,
@@ -54,6 +57,7 @@ impl AccessControl {
 fn role_has_many_users(role: &Role) -> bool {
     match role {
         Role::Admin => false,
+        Role::EmergencyAdmin => false,
         Role::FutureAdmin => false,
         Role::RewardsAdmin => false,
         Role::OperationsAdmin => false,

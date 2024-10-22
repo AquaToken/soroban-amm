@@ -3,13 +3,16 @@ use utils::bump::bump_instance;
 
 #[derive(Clone)]
 #[contracttype]
-pub enum DataKey {
+pub(crate) enum DataKey {
     Admin,           // owner - upgrade, set privileged roles
+    EmergencyAdmin,  // emergency admin - put system into emergency mode, allowing instant upgrade
     FutureAdmin,     // pending owner
     Operator,        // rewards admin - configure rewards. legacy name cannot be changed
     OperationsAdmin, // operations admin - add/remove pools, ramp A, set fees, etc
     PauseAdmin,      // pause admin - pause/unpause pools
     EmPauseAdmins,   // emergency pause admin - pause pools in emergency
+
+    EmergencyMode,
 
     TransferOwnershipDeadline,
 }

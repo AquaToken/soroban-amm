@@ -112,16 +112,33 @@ pub trait AdminInterfaceTrait {
     fn get_is_killed_claim(e: Env) -> bool;
 }
 
-pub trait UpgradeableContractTrait {
+pub trait UpgradeableContract {
     // Get contract version
     fn version() -> u32;
 
     // Upgrade contract with new wasm code
-    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>);
+    fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32> );
+    fn apply_upgrade(e: Env, admin: Address) -> BytesN<32>;
+    fn revert_upgrade(e: Env, admin: Address);
+
+    // Emergency mode - bypass upgrade deadline
+    fn set_emergency_admin(e: Env, admin: Address, emergency_admin: Address);
+    fn set_emergency_mode(e: Env, admin: Address, value: bool);
+    fn get_emergency_mode(e: Env) -> bool;
 }
 
+
 pub trait UpgradeableLPTokenTrait {
-    fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>);
+    // Upgrade contract with new wasm code
+    fn token_commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32> );
+    fn token_apply_upgrade(e: Env, admin: Address) -> BytesN<32>;
+    fn token_revert_upgrade(e: Env, admin: Address);
+
+    // Emergency mode - bypass upgrade deadline
+    fn token_set_emergency_admin(e: Env, admin: Address, emergency_admin: Address);
+    fn token_set_emergency_mode(e: Env, admin: Address, value: bool);
+
+    // legacy method to upgrade token contract
     fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>);
 }
 

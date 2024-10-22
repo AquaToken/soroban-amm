@@ -6,7 +6,7 @@ use crate::pool;
 use crate::pool::get_amount_out;
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait,
-    UpgradeableContractTrait, UpgradeableLPTokenTrait,
+    UpgradeableContract, UpgradeableLPTokenTrait,
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
@@ -37,10 +37,12 @@ use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
     IntoVal, Map, Symbol, Val, Vec, U256,
 };
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use token_share::{
     burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
     put_token_share, Client as LPTokenClient,
 };
+use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::u256_math::ExtraMath;
 
 // Metadata that is added on to the WASM custom section
@@ -747,7 +749,7 @@ impl AdminInterfaceTrait for LiquidityPool {
 }
 
 #[contractimpl]
-impl UpgradeableContractTrait for LiquidityPool {
+impl UpgradeableContract for LiquidityPool {
     // Returns the version of the contract.
     //
     // # Returns
@@ -757,30 +759,84 @@ impl UpgradeableContractTrait for LiquidityPool {
         130
     }
 
-    // Upgrades the contract to a new version.
-    //
-    // # Arguments
-    //
-    // * `e` - The environment.
-    // * `new_wasm_hash` - The hash of the new contract version.
-    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+    fn set_emergency_admin(e: Env, admin: Address, emergency_admin: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        AccessControl::new(&e).set_role_address(Role::EmergencyAdmin, &emergency_admin);
     }
+
+    fn set_emergency_mode(e: Env, admin: Address, value: bool) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::EmergencyAdmin);
+        set_emergency_mode(&e, &value);
+    }
+
+    fn get_emergency_mode(e: Env) -> bool {
+        get_emergency_mode(&e)
+    }
+
+    fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        commit_upgrade(&e, &new_wasm_hash);
+    }
+
+    fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        apply_upgrade(&e)
+    }
+
+    fn revert_upgrade(e: Env, admin: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        revert_upgrade(&e);
+    }
+
 }
 
 #[contractimpl]
 impl UpgradeableLPTokenTrait for LiquidityPool {
-    fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
+    fn token_set_emergency_admin(e: Env, admin: Address, emergency_admin: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+
         token_share::Client::new(&e, &get_token_share(&e))
-            .upgrade(&e.current_contract_address(), &new_token_wasm);
+            .set_emergency_admin(&e.current_contract_address(), &emergency_admin);
     }
 
-    // This function is used to upgrade the token contract from the legacy version (<=120)
-    // legacy version had different function signature, without admin address
+    fn token_set_emergency_mode(e: Env, admin: Address, value: bool) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::EmergencyAdmin);
+
+        token_share::Client::new(&e, &get_token_share(&e))
+            .set_emergency_mode(&e.current_contract_address(), &value);
+    }
+
+    fn token_commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+
+        token_share::Client::new(&e, &get_token_share(&e))
+            .commit_upgrade(&e.current_contract_address(), &new_wasm_hash);
+    }
+
+    fn token_apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+
+        token_share::Client::new(&e, &get_token_share(&e))
+            .apply_upgrade(&e.current_contract_address())
+    }
+
+    fn token_revert_upgrade(e: Env, admin: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+
+        token_share::Client::new(&e, &get_token_share(&e))
+            .revert_upgrade(&e.current_contract_address());
+    }
+
     fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
