@@ -221,16 +221,12 @@ pub fn has_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) -> bool {
     get_pools(e, salt).contains_key(pool_index)
 }
 
-pub fn get_pool(
-    e: &Env,
-    tokens: Vec<Address>,
-    pool_index: BytesN<32>,
-) -> Result<Address, PoolError> {
+pub fn get_pool(e: &Env, tokens: &Vec<Address>, pool_index: BytesN<32>) -> Address {
     let salt = get_tokens_salt(e, tokens);
     let pools = get_pools(e, &salt);
-    match pools.contains_key(pool_index.clone()) {
-        true => Ok(pools.get(pool_index).unwrap().address),
-        false => Err(PoolError::PoolNotFound),
+    match pools.get(pool_index) {
+        Some(data) => data.address,
+        None => panic_with_error!(&e, PoolError::PoolNotFound),
     }
 }
 
@@ -270,7 +266,7 @@ pub fn add_pool(
 
 // remember unique tokens set
 pub fn add_tokens_set(e: &Env, tokens: &Vec<Address>) {
-    let salt = get_tokens_salt(e, tokens.clone());
+    let salt = get_tokens_salt(e, &tokens);
     let pools = get_pools(e, &salt);
     if pools.len() > 0 {
         return;

@@ -1,4 +1,4 @@
-use crate::pool_constants::{FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MAX_FEE, MIN_RAMP_TIME};
+use crate::pool_constants::{FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MIN_RAMP_TIME};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait, ManagedLiquidityPool,
     RewardsTrait, UpgradeableContractTrait, UpgradeableLPTokenTrait,
@@ -782,7 +782,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         if get_admin_actions_deadline(&e) != 0 {
             panic_with_error!(&e, LiquidityPoolError::AnotherActionActive);
         }
-        if new_fee > MAX_FEE {
+        if new_fee > FEE_DENOMINATOR - 1 {
             panic_with_error!(e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
 
@@ -1027,7 +1027,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         set_router(&e, &router);
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
-        if fee > MAX_FEE {
+        if fee > FEE_DENOMINATOR - 1 {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
 
@@ -1147,7 +1147,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let tokens = get_tokens(&e);
         let n_coins = tokens.len();
 
-        if amounts.len() != n_coins as u32 {
+        if amounts.len() != n_coins {
             panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
