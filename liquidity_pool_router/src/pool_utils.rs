@@ -71,7 +71,7 @@ pub fn deploy_standard_pool(
     add_tokens_set(e, tokens);
     add_pool(
         e,
-        &tokens_salt,
+        tokens_salt,
         subpool_salt.clone(),
         LiquidityPoolType::ConstantProduct,
         pool_contract_id.clone(),
@@ -109,7 +109,7 @@ pub fn deploy_stableswap_pool(
     add_tokens_set(e, tokens);
     add_pool(
         e,
-        &tokens_salt,
+        tokens_salt,
         subpool_salt.clone(),
         LiquidityPoolType::StableSwap,
         pool_contract_id.clone(),
@@ -255,7 +255,7 @@ pub fn get_total_liquidity(
     calculator: Address,
 ) -> (Map<BytesN<32>, U256>, U256) {
     let tokens_salt = get_tokens_salt(e, tokens);
-    let pools = get_pools_plain(&e, &tokens_salt);
+    let pools = get_pools_plain(&e, tokens_salt);
     let pools_count = pools.len();
     let mut pools_map: Map<BytesN<32>, U256> = Map::new(&e);
 

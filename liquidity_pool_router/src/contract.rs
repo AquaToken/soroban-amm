@@ -641,7 +641,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256 {
         assert_tokens_sorted(&e, &tokens);
         let tokens_salt = get_tokens_salt(&e, &tokens);
-        let pools = get_pools_plain(&e, &tokens_salt);
+        let pools = get_pools_plain(&e, tokens_salt);
 
         let calculator = get_liquidity_calculator(&e);
         let mut pools_vec: Vec<Address> = Vec::new(&e);
@@ -1112,7 +1112,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
 
         let salt = get_tokens_salt(&e, &tokens);
-        let pools = get_pools_plain(&e, &salt);
+        let pools = get_pools_plain(&e, salt);
         let pool_index = get_standard_pool_salt(&e, &fee_fraction);
 
         match pools.get(pool_index.clone()) {
@@ -1163,7 +1163,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
 
         let salt = get_tokens_salt(&e, &tokens);
-        let pools = get_pools_plain(&e, &salt);
+        let pools = get_pools_plain(&e, salt);
         let pool_index = get_stableswap_pool_salt(&e);
 
         match pools.get(pool_index.clone()) {
@@ -1198,7 +1198,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address> {
         assert_tokens_sorted(&e, &tokens);
         let salt = get_tokens_salt(&e, &tokens);
-        get_pools_plain(&e, &salt)
+        get_pools_plain(&e, salt)
     }
 
     // Returns a map of pools for given set of tokens.
@@ -1216,8 +1216,8 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         assert_tokens_sorted(&e, &tokens);
 
         let salt = get_tokens_salt(&e, &tokens);
-        if has_pool(&e, &salt, pool_hash.clone()) {
-            remove_pool(&e, &salt, pool_hash)
+        if has_pool(&e, salt.clone(), pool_hash.clone()) {
+            remove_pool(&e, salt, pool_hash)
         }
     }
 
