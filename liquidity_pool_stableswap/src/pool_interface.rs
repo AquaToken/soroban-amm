@@ -5,13 +5,12 @@ pub trait ManagedLiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
         a: u128,
         fee: u32,
-        admin_fee: u32,
         reward_token: Address,
         plane: Address,
     );
@@ -25,20 +24,16 @@ pub trait LiquidityPoolInterfaceTrait {
     fn initialize(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         a: u128,
         fee_fraction: u32,
-        admin_fee: u32,
     );
 
     // The pool swap fee, as an integer with 1e4 precision. 0.01% = 1; 0.3% = 30; 1% = 100;
     fn get_fee_fraction(e: Env) -> u32;
-
-    // The percentage of the swap fee that is taken as an admin fee, as an integer with with 1e4 precision.
-    fn get_admin_fee(e: Env) -> u32;
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
@@ -51,6 +46,9 @@ pub trait LiquidityPoolInterfaceTrait {
 
     // Getter for the array of swappable coins within the pool.
     fn get_tokens(e: Env) -> Vec<Address>;
+
+    // Getter for array of tokens decimals in the pool.
+    fn get_decimals(e: Env) -> Vec<u32>;
 
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
@@ -95,15 +93,12 @@ pub trait UpgradeableContractTrait {
     fn version() -> u32;
 
     // Upgrade contract with new wasm code
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>);
+    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>);
 }
 
 pub trait UpgradeableLPTokenTrait {
     fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>);
-    fn set_future_share_id(e: Env, admin: Address, contract: Address);
-    fn migrate_share_balances(e: Env, operator: Address, users: Vec<Address>);
-    fn get_future_share_id(e: Env) -> Address;
-    fn commit_future_share_id(e: Env, admin: Address);
+    fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>);
 }
 
 pub trait RewardsTrait {
@@ -114,6 +109,12 @@ pub trait RewardsTrait {
     // being distributed across all liquidity providers
     // after expired_at timestamp distribution ends
     fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128);
+
+    // Calculate reward token surplus
+    fn get_unused_reward(e: Env) -> u128;
+
+    // Return reward token above the configured amount back to the router
+    fn return_unused_reward(e: Env, admin: Address) -> u128;
 
     // Get rewards status for the pool,
     // including amount available for the user
@@ -139,11 +140,18 @@ pub trait RewardsTrait {
 }
 
 pub trait AdminInterfaceTrait {
-    // Set operator address which can perform some restricted actions
-    fn set_operator(e: Env, admin: Address, operator: Address);
+    // Set privileged addresses
+    fn set_privileged_addrs(
+        e: Env,
+        admin: Address,
+        rewards_admin: Address,
+        operations_admin: Address,
+        pause_admin: Address,
+        emergency_pause_admins: Vec<Address>,
+    );
 
-    // Get operator address or panic if doesn't set
-    fn get_operator(e: Env) -> Address;
+    // Get map of privileged roles
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 
     // Start ramping A to target value in future timestamp
     fn ramp_a(e: Env, admin: Address, future_a: u128, future_time: u64);
@@ -152,31 +160,13 @@ pub trait AdminInterfaceTrait {
     fn stop_ramp_a(e: Env, admin: Address);
 
     // Set new fee to be applied in future
-    fn commit_new_fee(e: Env, admin: Address, new_fee: u32, new_admin_fee: u32);
+    fn commit_new_fee(e: Env, admin: Address, new_fee: u32);
 
     // Apply committed fee
     fn apply_new_fee(e: Env, admin: Address);
 
     // Revert committed parameters to current values
     fn revert_new_parameters(e: Env, admin: Address);
-
-    // Commit ownership transfer
-    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address);
-
-    // Apply committed transfer ownership
-    fn apply_transfer_ownership(e: Env, admin: Address);
-
-    // Revert committed ownership transfer
-    fn revert_transfer_ownership(e: Env, admin: Address);
-
-    // Get amount of collected admin fees
-    fn admin_balances(e: Env, i: u32) -> u128;
-
-    // Withdraw collected admin fee
-    fn withdraw_admin_fees(e: Env, admin: Address);
-
-    // Donate collected admin fee to common fee pool
-    fn donate_admin_fees(e: Env, admin: Address);
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);
@@ -194,20 +184,12 @@ pub trait AdminInterfaceTrait {
     fn get_is_killed_claim(e: Env) -> bool;
 }
 
-pub trait InternalInterfaceTrait {
-    fn get_d(e: Env, xp: Vec<u128>, amp: u128) -> u128;
-    fn get_y(e: Env, i: u32, j: u32, x: u128, xp_: Vec<u128>) -> u128;
-    fn get_y_d(e: Env, a: u128, i: u32, xp: Vec<u128>, d: u128) -> u128;
-    fn internal_calc_withdraw_one_coin(e: Env, share_amount: u128, i: u32) -> (u128, u128);
-}
-
 pub trait LiquidityPoolTrait:
     LiquidityPoolInterfaceTrait
     + UpgradeableContractTrait
     + UpgradeableLPTokenTrait
     + RewardsTrait
     + AdminInterfaceTrait
-    + InternalInterfaceTrait
 {
     // The amplification coefficient for the pool.
     fn a(e: Env) -> u128;

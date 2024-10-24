@@ -12,3 +12,7 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
+
+[features]
+default = []
+testutils = []

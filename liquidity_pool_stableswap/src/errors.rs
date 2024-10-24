@@ -12,6 +12,8 @@ pub enum LiquidityPoolError {
     PoolSwapKilled = 206,
     PoolClaimKilled = 207,
     FutureShareIdNotSet = 208,
+    // solution did not converge
+    MaxIterationsReached = 209,
 
     // pool specific validation errors
     RampTooEarly = 2902,

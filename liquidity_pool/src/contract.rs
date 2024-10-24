@@ -16,11 +16,20 @@ use crate::storage::{
     set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
 };
 use crate::token::{create_contract, transfer_a, transfer_b};
-use access_control::access::{AccessControl, AccessControlTrait, OperatorAccessTrait};
+use access_control::access::{
+    AccessControl, AccessControlTrait, Role, SymbolRepresentation, TransferOwnershipTrait,
+};
 use access_control::errors::AccessControlError;
+use access_control::events::Events as AccessControlEvents;
+use access_control::interface::TransferableContract;
+use access_control::utils::{
+    require_pause_admin_or_owner, require_pause_or_emergency_pause_admin_or_owner,
+    require_rewards_admin_or_owner,
+};
 use liquidity_pool_events::Events as PoolEvents;
 use liquidity_pool_events::LiquidityPoolEvents;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
+use rewards::events::Events as RewardEvents;
 use rewards::storage::RewardsStorageTrait;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
@@ -29,9 +38,8 @@ use soroban_sdk::{
     IntoVal, Map, Symbol, Val, Vec, U256,
 };
 use token_share::{
-    burn_shares, commit_future_token_share, get_future_token_share, get_token_share,
-    get_total_shares, get_user_balance_shares, mint_shares, put_future_token_share,
-    put_token_share, replicate_token_share_balance_to_future, Client as LPTokenClient,
+    burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
+    put_token_share, Client as LPTokenClient,
 };
 use utils::u256_math::ExtraMath;
 
@@ -51,7 +59,12 @@ impl LiquidityPoolCrunch for LiquidityPool {
     // # Arguments
     //
     // * `admin` - The address of the admin user.
-    // * `operator` - The address of the operator.
+    // * `privileged_addrs` - (
+    //      rewards admin,
+    //      operations admin,
+    //      pause admin,
+    //      emergency pause admins
+    //  ).
     // * `router` - The address of the router.
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
     // * `tokens` - A vector of token addresses.
@@ -61,7 +74,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -75,7 +88,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
         Self::initialize(
             e.clone(),
             admin,
-            operator,
+            privileged_addrs,
             router,
             lp_token_wasm_hash,
             tokens,
@@ -101,6 +114,12 @@ impl LiquidityPoolTrait for LiquidityPool {
     // # Arguments
     //
     // * `admin` - The address of the admin user.
+    // * `privileged_addrs` - (
+    //      rewards admin,
+    //      operations admin,
+    //      pause admin,
+    //      emergency pause admins
+    //  ).
     // * `router` - The address of the router.
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
     // * `tokens` - A vector of token addresses.
@@ -108,18 +127,22 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn initialize(
         e: Env,
         admin: Address,
-        operator: Address,
+        privileged_addrs: (Address, Address, Address, Vec<Address>),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
     ) {
         let access_control = AccessControl::new(&e);
-        if access_control.has_admin() {
+        if access_control.get_role_safe(Role::Admin).is_some() {
             panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
         }
-        access_control.set_admin(&admin);
-        access_control.set_operator(&operator);
+        access_control.set_role_address(Role::Admin, &admin);
+        access_control.set_role_address(Role::RewardsAdmin, &privileged_addrs.0);
+        access_control.set_role_address(Role::OperationsAdmin, &privileged_addrs.1);
+        access_control.set_role_address(Role::PauseAdmin, &privileged_addrs.2);
+        access_control.set_role_addresses(Role::EmergencyPauseAdmin, &privileged_addrs.3);
+
         set_router(&e, &router);
 
         if tokens.len() != 2 {
@@ -128,10 +151,6 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let token_a = tokens.get(0).unwrap();
         let token_b = tokens.get(1).unwrap();
-
-        if token_a >= token_b {
-            panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
-        }
 
         let share_contract = create_contract(&e, lp_token_wasm_hash, &token_a, &token_b);
         LPTokenClient::new(&e, &share_contract).initialize(
@@ -142,7 +161,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         );
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
-        if fee_fraction > 9999 {
+        if fee_fraction as u128 > FEE_MULTIPLIER - 1 {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
         put_fee_fraction(&e, fee_fraction);
@@ -291,9 +310,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
-
         let amounts_vec = Vec::from_array(&e, [amounts.0, amounts.1]);
         PoolEvents::new(&e).deposit_liquidity(
             Self::get_tokens(e.clone()),
@@ -420,9 +436,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
-
         PoolEvents::new(&e).trade(
             user,
             sell_token,
@@ -520,9 +533,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        // migrate user shares if future token share contract is available
-        replicate_token_share_balance_to_future(&e, &user);
-
         let withdraw_amounts = Vec::from_array(&e, [out_a, out_b]);
         PoolEvents::new(&e).withdraw_liquidity(
             Self::get_tokens(e.clone()),
@@ -569,28 +579,73 @@ impl LiquidityPoolTrait for LiquidityPool {
 
 #[contractimpl]
 impl AdminInterfaceTrait for LiquidityPool {
-    // Set operator address which can perform some restricted actions
+    // Sets the privileged addresses.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    // * `operator` - The address of the operator.
-    fn set_operator(e: Env, admin: Address, operator: Address) {
+    // * `rewards_admin` - The address of the rewards admin.
+    // * `operations_admin` - The address of the operations admin.
+    // * `pause_admin` - The address of the pause admin.
+    // * `emergency_pause_admin` - The addresses of the emergency pause admins.
+    fn set_privileged_addrs(
+        e: Env,
+        admin: Address,
+        rewards_admin: Address,
+        operations_admin: Address,
+        pause_admin: Address,
+        emergency_pause_admins: Vec<Address>,
+    ) {
+        admin.require_auth();
         let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
-        access_control.set_operator(&operator);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+
+        access_control.set_role_address(Role::RewardsAdmin, &rewards_admin);
+        access_control.set_role_address(Role::OperationsAdmin, &operations_admin);
+        access_control.set_role_address(Role::PauseAdmin, &pause_admin);
+        access_control.set_role_addresses(Role::EmergencyPauseAdmin, &emergency_pause_admins);
+        AccessControlEvents::new(&e).set_privileged_addrs(
+            rewards_admin,
+            operations_admin,
+            pause_admin,
+            emergency_pause_admins,
+        );
     }
 
-    // Returns the operator address.
+    // Returns a map of privileged roles.
     //
     // # Returns
     //
-    // The operator address.
-    fn get_operator(e: Env) -> Address {
-        match AccessControl::new(&e).get_operator() {
-            Some(address) => address,
-            None => panic_with_error!(e, AccessControlError::RoleNotFound),
+    // A map of privileged roles to their respective addresses.
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>> {
+        let access_control = AccessControl::new(&e);
+        let mut result = Map::new(&e);
+        match access_control.get_role_safe(Role::RewardsAdmin) {
+            Some(v) => {
+                result.set(Role::RewardsAdmin.as_symbol(&e), Vec::from_array(&e, [v]));
+            }
+            None => {}
         }
+        match access_control.get_role_safe(Role::OperationsAdmin) {
+            Some(v) => {
+                result.set(
+                    Role::OperationsAdmin.as_symbol(&e),
+                    Vec::from_array(&e, [v]),
+                );
+            }
+            None => {}
+        }
+        match access_control.get_role_safe(Role::PauseAdmin) {
+            Some(v) => {
+                result.set(Role::PauseAdmin.as_symbol(&e), Vec::from_array(&e, [v]));
+            }
+            None => {}
+        }
+        result.set(
+            Role::EmergencyPauseAdmin.as_symbol(&e),
+            access_control.get_role_addresses(Role::EmergencyPauseAdmin),
+        );
+        result
     }
 
     // Stops the pool deposits instantly.
@@ -600,8 +655,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn kill_deposit(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_deposit(&e, &true);
         PoolEvents::new(&e).kill_deposit();
@@ -614,8 +668,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn kill_swap(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_swap(&e, &true);
         PoolEvents::new(&e).kill_swap();
@@ -628,8 +681,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn kill_claim(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_claim(&e, &true);
         PoolEvents::new(&e).kill_claim();
@@ -642,8 +694,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn unkill_deposit(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_deposit(&e, &false);
         PoolEvents::new(&e).unkill_deposit();
@@ -656,8 +707,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn unkill_swap(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_swap(&e, &false);
         PoolEvents::new(&e).unkill_swap();
@@ -670,8 +720,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `admin` - The address of the admin.
     fn unkill_claim(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.check_admin(&admin);
+        require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_claim(&e, &false);
         PoolEvents::new(&e).unkill_claim();
@@ -701,7 +750,7 @@ impl UpgradeableContractTrait for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        120
+        130
     }
 
     // Upgrades the contract to a new version.
@@ -710,9 +759,9 @@ impl UpgradeableContractTrait for LiquidityPool {
     //
     // * `e` - The environment.
     // * `new_wasm_hash` - The hash of the new contract version.
-    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
-        let access_control = AccessControl::new(&e);
-        access_control.require_admin();
+    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
         e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }
@@ -721,42 +770,22 @@ impl UpgradeableContractTrait for LiquidityPool {
 impl UpgradeableLPTokenTrait for LiquidityPool {
     fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
         admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
-
-        let share_contract = get_token_share(&e);
-        token_share::Client::new(&e, &share_contract).upgrade(&new_token_wasm);
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        token_share::Client::new(&e, &get_token_share(&e))
+            .upgrade(&e.current_contract_address(), &new_token_wasm);
     }
 
-    fn set_future_share_id(e: Env, admin: Address, contract: Address) {
+    // This function is used to upgrade the token contract from the legacy version (<=120)
+    // legacy version had different function signature, without admin address
+    fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
         admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
 
-        put_future_token_share(&e, contract);
-    }
-
-    fn migrate_share_balances(e: Env, operator: Address, users: Vec<Address>) {
-        operator.require_auth();
-        AccessControl::new(&e).check_operator(&operator);
-
-        for user in users {
-            replicate_token_share_balance_to_future(&e, &user);
-        }
-    }
-
-    // Returns the future share token address.
-    fn get_future_share_id(e: Env) -> Address {
-        match get_future_token_share(&e) {
-            Some(address) => address,
-            None => panic_with_error!(e, LiquidityPoolError::FutureShareIdNotSet),
-        }
-    }
-
-    // Applies the future share token instead of the current one.
-    fn commit_future_share_id(e: Env, admin: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).check_admin(&admin);
-
-        commit_future_token_share(&e);
+        e.invoke_contract::<()>(
+            &get_token_share(&e),
+            &symbol_short!("upgrade"),
+            Vec::from_array(&e, [new_token_wasm.to_val()]),
+        );
     }
 }
 
@@ -793,9 +822,9 @@ impl RewardsTrait for LiquidityPool {
     ) {
         admin.require_auth();
 
-        // either admin or router can set the rewards config
+        // rewards admin, owner and router are privileged to set the rewards config
         if admin != get_router(&e) {
-            AccessControl::new(&e).check_admin(&admin);
+            require_rewards_admin_or_owner(&e, &admin);
         }
 
         let rewards = get_rewards_manager(&e);
@@ -803,6 +832,55 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .set_reward_config(total_shares, expired_at, tps);
+        RewardEvents::new(&e).set_rewards_config(expired_at, tps);
+    }
+
+    // Get difference between the actual balance and the total unclaimed reward minus the reserves
+    fn get_unused_reward(e: Env) -> u128 {
+        let rewards = get_rewards_manager(&e);
+        let mut rewards_manager = rewards.manager();
+        let total_shares = get_total_shares(&e);
+        let mut reward_balance_to_keep = rewards_manager.get_total_configured_reward(total_shares)
+            - rewards_manager.get_total_claimed_reward(total_shares);
+
+        let reward_token = rewards.storage().get_reward_token();
+        let reward_balance = SorobanTokenClient::new(&e, &reward_token)
+            .balance(&e.current_contract_address()) as u128;
+
+        match Self::get_tokens(e.clone()).first_index_of(reward_token) {
+            Some(idx) => {
+                // since reward token is in the reserves, we need to keep also the reserves value
+                reward_balance_to_keep += Self::get_reserves(e.clone()).get(idx).unwrap();
+            }
+            None => {}
+        };
+
+        if reward_balance > reward_balance_to_keep {
+            reward_balance - reward_balance_to_keep
+        } else {
+            // balance is not sufficient, no surplus
+            0
+        }
+    }
+
+    // Return reward token above the configured amount back to router
+    fn return_unused_reward(e: Env, admin: Address) -> u128 {
+        admin.require_auth();
+        require_rewards_admin_or_owner(&e, &admin);
+
+        let unused_reward = Self::get_unused_reward(e.clone());
+
+        if unused_reward == 0 {
+            return 0;
+        }
+
+        let reward_token = get_rewards_manager(&e).storage().get_reward_token();
+        SorobanTokenClient::new(&e, &reward_token).transfer(
+            &e.current_contract_address(),
+            &get_router(&e),
+            &(unused_reward as i128),
+        );
+        unused_reward
     }
 
     // Returns the rewards information:
@@ -984,9 +1062,8 @@ impl Plane for LiquidityPool {
     }
 
     fn set_pools_plane(e: Env, admin: Address, plane: Address) {
-        let access_control = AccessControl::new(&e);
         admin.require_auth();
-        access_control.check_admin(&admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
 
         set_plane(&e, &plane);
     }
@@ -1007,5 +1084,49 @@ impl Plane for LiquidityPool {
     // Updates the plane data in case the plane contract was updated.
     fn backfill_plane_data(e: Env) {
         update_plane(&e);
+    }
+}
+
+// The `TransferableContract` trait provides the interface for transferring ownership of the contract.
+#[contractimpl]
+impl TransferableContract for LiquidityPool {
+    // Commits an ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `new_admin` - The address of the new admin.
+    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.commit_transfer_ownership(new_admin.clone());
+        AccessControlEvents::new(&e).commit_transfer_ownership(new_admin);
+    }
+
+    // Applies the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn apply_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        let new_admin = access_control.apply_transfer_ownership();
+        AccessControlEvents::new(&e).apply_transfer_ownership(new_admin);
+    }
+
+    // Reverts the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn revert_transfer_ownership(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.revert_transfer_ownership();
+        AccessControlEvents::new(&e).revert_transfer_ownership();
     }
 }

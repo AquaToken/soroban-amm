@@ -1,9 +1,11 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::testutils::{jump, Setup};
 use crate::{contract::LiquidityPoolLiquidityCalculator, LiquidityPoolLiquidityCalculatorClient};
-use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::{symbol_short, Address, Bytes, Env, Vec, U256};
+use access_control::constants::ADMIN_ACTIONS_DELAY;
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{symbol_short, vec, Address, Bytes, Env, IntoVal, Symbol, Vec, U256};
 
 fn create_contract<'a>(e: &Env) -> LiquidityPoolLiquidityCalculatorClient<'a> {
     let client = LiquidityPoolLiquidityCalculatorClient::new(
@@ -22,19 +24,6 @@ mod pool_plane {
 
 fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
     pool_plane::Client::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
-}
-
-fn jump(e: &Env, time: u64) {
-    e.ledger().set(LedgerInfo {
-        timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: e.ledger().protocol_version(),
-        sequence_number: e.ledger().sequence(),
-        network_id: Default::default(),
-        base_reserve: 10,
-        min_temp_entry_ttl: 999999,
-        min_persistent_entry_ttl: 999999,
-        max_entry_ttl: u32::MAX,
-    });
 }
 
 #[test]
@@ -739,5 +728,53 @@ fn test_bad_address() {
     assert_eq!(
         results,
         Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)])
+    );
+}
+
+#[test]
+fn test_transfer_ownership_events() {
+    let setup = Setup::default();
+    let calculator = setup.calculator;
+    let new_admin = Address::generate(&setup.env);
+
+    calculator.commit_transfer_ownership(&setup.admin, &new_admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                calculator.address.clone(),
+                (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
+    );
+
+    calculator.revert_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                calculator.address.clone(),
+                (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+
+    calculator.commit_transfer_ownership(&setup.admin, &new_admin);
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    calculator.apply_transfer_ownership(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                calculator.address.clone(),
+                (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            ),
+        ]
     );
 }

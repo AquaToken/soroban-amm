@@ -1,6 +1,7 @@
 use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
 
+use crate::normalize;
 use rewards::utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
 use utils::{
@@ -12,6 +13,7 @@ use utils::{
 #[contracttype]
 enum DataKey {
     Tokens,
+    Decimals,
     Reserves,
     InitialA,
     InitialATime,
@@ -22,12 +24,16 @@ enum DataKey {
     AdminFee,
     FutureAdminFee,
     AdminActionsDeadline,
-    TransferOwnershipDeadline,
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledClaim,
     Plane,
     Router,
+
+    // Tokens precision
+    Precision, // target precision for internal calculations. It's the maximum precision of all tokens.
+    PrecisionMul, // Scales raw token amounts to match `Precision`, accounting for decimal differences.
+    Rates,        // adjust token amounts for decimal differences
 }
 
 generate_instance_storage_getter_and_setter_with_default!(
@@ -57,6 +63,14 @@ pub fn get_tokens(e: &Env) -> Vec<Address> {
     }
 }
 
+pub fn get_decimals(e: &Env) -> Vec<u32> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::Decimals) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
+}
+
 pub fn get_reserves(e: &Env) -> Vec<u128> {
     bump_instance(e);
     match e.storage().instance().get(&DataKey::Reserves) {
@@ -68,6 +82,11 @@ pub fn get_reserves(e: &Env) -> Vec<u128> {
 pub fn put_tokens(e: &Env, contracts: &Vec<Address>) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::Tokens, contracts);
+}
+
+pub fn put_decimals(e: &Env, decimals: &Vec<u32>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::Decimals, decimals);
 }
 
 pub fn put_reserves(e: &Env, amounts: &Vec<u128>) {
@@ -145,20 +164,6 @@ pub fn put_fee(e: &Env, value: &u32) {
     e.storage().instance().set(&DataKey::Fee, value);
 }
 
-// admin_fee
-pub fn get_admin_fee(e: &Env) -> u32 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::AdminFee) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_admin_fee(e: &Env, value: &u32) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::AdminFee, value);
-}
-
 // future_fee
 pub fn get_future_fee(e: &Env) -> u32 {
     bump_instance(e);
@@ -171,20 +176,6 @@ pub fn get_future_fee(e: &Env) -> u32 {
 pub fn put_future_fee(e: &Env, value: &u32) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::FutureFee, value);
-}
-
-// future_admin_fee
-pub fn get_future_admin_fee(e: &Env) -> u32 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::FutureAdminFee) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_future_admin_fee(e: &Env, value: &u32) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::FutureAdminFee, value);
 }
 
 // admin_actions_deadline
@@ -201,26 +192,6 @@ pub fn put_admin_actions_deadline(e: &Env, value: &u64) {
     e.storage()
         .instance()
         .set(&DataKey::AdminActionsDeadline, value);
-}
-
-// transfer_ownership_deadline
-pub fn get_transfer_ownership_deadline(e: &Env) -> u64 {
-    bump_instance(e);
-    match e
-        .storage()
-        .instance()
-        .get(&DataKey::TransferOwnershipDeadline)
-    {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_transfer_ownership_deadline(e: &Env, value: &u64) {
-    bump_instance(e);
-    e.storage()
-        .instance()
-        .set(&DataKey::TransferOwnershipDeadline, value);
 }
 
 // pool plane
@@ -254,5 +225,60 @@ pub(crate) fn get_router(e: &Env) -> Address {
     match e.storage().instance().get(&key) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
+}
+
+// Tokens precision
+// Precision - target precision for internal calculations. It's the maximum precision of all tokens.
+pub fn set_precision(e: &Env, value: &u128) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::Precision, value);
+}
+
+pub fn get_precision(e: &Env) -> u128 {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::Precision) {
+        Some(v) => v,
+        None => {
+            let precision = normalize::get_precision(&get_decimals(e));
+            set_precision(e, &precision);
+            precision
+        }
+    }
+}
+
+// Precision mul - Scales raw token amounts to match `Precision`, accounting for decimal differences.
+pub fn set_precision_mul(e: &Env, value: &Vec<u128>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::PrecisionMul, value);
+}
+
+pub fn get_precision_mul(e: &Env) -> Vec<u128> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::PrecisionMul) {
+        Some(v) => v,
+        None => {
+            let precision_mul = normalize::get_precision_mul(e, &get_decimals(e));
+            set_precision_mul(e, &precision_mul);
+            precision_mul
+        }
+    }
+}
+
+// Rates - adjust token amounts for decimal differences
+pub fn set_rates(e: &Env, value: &Vec<u128>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::Rates, value);
+}
+
+pub fn get_rates(e: &Env) -> Vec<u128> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::Rates) {
+        Some(v) => v,
+        None => {
+            let rates = normalize::get_rates(e, &get_decimals(e));
+            set_rates(e, &rates);
+            rates
+        }
     }
 }

@@ -5,10 +5,7 @@ use crate::LiquidityPoolClient;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{
-    testutils::{Address as _, Ledger, LedgerInfo},
-    Address, BytesN, Env, Vec,
-};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 use std::vec;
 use token_share::token_contract::{Client as ShareTokenClient, WASM};
 
@@ -18,6 +15,7 @@ pub(crate) struct TestConfig {
     pub(crate) rewards_count: i128,
     pub(crate) liq_pool_fee: u32,
     pub(crate) reward_tps: u128,
+    pub(crate) reward_token_in_pool: bool,
 }
 
 impl Default for TestConfig {
@@ -28,6 +26,7 @@ impl Default for TestConfig {
             rewards_count: 1_000_000_0000000,
             liq_pool_fee: 30,
             reward_tps: 10_5000000_u128,
+            reward_token_in_pool: false,
         }
     }
 }
@@ -45,6 +44,12 @@ pub(crate) struct Setup<'a> {
     pub(crate) token_share: ShareTokenClient<'a>,
     pub(crate) liq_pool: LiquidityPoolClient<'a>,
     pub(crate) plane: PoolPlaneClient<'a>,
+
+    pub(crate) admin: Address,
+    pub(crate) rewards_admin: Address,
+    pub(crate) operations_admin: Address,
+    pub(crate) pause_admin: Address,
+    pub(crate) emergency_pause_admin: Address,
 }
 
 impl Default for Setup<'_> {
@@ -73,19 +78,20 @@ impl Setup<'_> {
         e.budget().reset_unlimited();
 
         let users = Self::generate_random_users(&e, config.users_count);
+        let admin = users[0].clone();
 
-        let mut token_admin1 = Address::generate(&e);
-        let mut token_admin2 = Address::generate(&e);
-
-        let mut token1 = create_token_contract(&e, &token_admin1);
-        let mut token2 = create_token_contract(&e, &token_admin2);
-        let token_reward = create_token_contract(&e, &token_admin1);
+        let mut token1 = create_token_contract(&e, &admin);
+        let mut token2 = create_token_contract(&e, &admin);
+        let token_reward = if config.reward_token_in_pool {
+            SorobanTokenClient::new(&e, &token1.address.clone())
+        } else {
+            create_token_contract(&e, &admin)
+        };
 
         let plane = create_plane_contract(&e);
 
         if &token2.address < &token1.address {
             std::mem::swap(&mut token1, &mut token2);
-            std::mem::swap(&mut token_admin1, &mut token_admin2);
         }
         let token1_admin_client = get_token_admin_client(&e, &token1.address.clone());
         let token2_admin_client = get_token_admin_client(&e, &token2.address.clone());
@@ -95,8 +101,7 @@ impl Setup<'_> {
 
         let liq_pool = create_liqpool_contract(
             &e,
-            &users[0],
-            &users[0],
+            &admin,
             &router,
             &install_token_wasm(&e),
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
@@ -105,6 +110,18 @@ impl Setup<'_> {
             &plane.address,
         );
         token_reward_admin_client.mint(&liq_pool.address, &config.rewards_count);
+
+        let rewards_admin = Address::generate(&e);
+        let operations_admin = Address::generate(&e);
+        let pause_admin = Address::generate(&e);
+        let emergency_pause_admin = Address::generate(&e);
+        liq_pool.set_privileged_addrs(
+            &admin,
+            &rewards_admin.clone(),
+            &operations_admin.clone(),
+            &pause_admin.clone(),
+            &Vec::from_array(&e, [emergency_pause_admin.clone()]),
+        );
 
         let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
@@ -119,8 +136,13 @@ impl Setup<'_> {
             token_reward,
             token_reward_admin_client,
             token_share,
-            liq_pool,
+            liq_pool: liq_pool,
             plane,
+            admin,
+            rewards_admin,
+            operations_admin,
+            pause_admin,
+            emergency_pause_admin,
         }
     }
 
@@ -175,7 +197,6 @@ pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 pub fn create_liqpool_contract<'a>(
     e: &Env,
     admin: &Address,
-    operator: &Address,
     router: &Address,
     token_wasm_hash: &BytesN<32>,
     tokens: &Vec<Address>,
@@ -185,8 +206,13 @@ pub fn create_liqpool_contract<'a>(
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
     liqpool.initialize_all(
-        admin,
-        operator,
+        &admin,
+        &(
+            admin.clone(),
+            admin.clone(),
+            admin.clone(),
+            Vec::from_array(e, [admin.clone()]),
+        ),
         router,
         token_wasm_hash,
         tokens,
@@ -201,19 +227,6 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(WASM)
 }
 
-pub fn jump(e: &Env, time: u64) {
-    e.ledger().set(LedgerInfo {
-        timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: e.ledger().protocol_version(),
-        sequence_number: e.ledger().sequence(),
-        network_id: Default::default(),
-        base_reserve: 10,
-        min_temp_entry_ttl: 999999,
-        min_persistent_entry_ttl: 999999,
-        max_entry_ttl: u32::MAX,
-    });
-}
-
 #[test]
 fn test() {
     let config = TestConfig {
@@ -222,6 +235,7 @@ fn test() {
         rewards_count: 1_000_000_0000000,
         liq_pool_fee: 30,
         reward_tps: 10_5000000_u128,
+        reward_token_in_pool: false,
     };
     let _setup = Setup::new_with_config(&config);
 }
