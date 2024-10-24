@@ -18,4 +18,7 @@ pub enum LiquidityPoolRouterError {
     RewardsNotConfigured = 313, // unable to find rewards tokens. please run `config_rewards` first
     RewardsAlreadyConfigured = 314,
     DuplicatesNotAllowed = 315,
+    InvalidPoolType = 316,
+
+    TokensNotSorted = 2002,
 }

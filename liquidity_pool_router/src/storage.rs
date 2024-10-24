@@ -75,8 +75,8 @@ pub enum PoolError {
     PoolNotFound = 404,
 }
 
-fn get_pools(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
-    let key = DataKey::TokensSetPools(salt.clone());
+fn get_pools(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
+    let key = DataKey::TokensSetPools(salt);
     match e.storage().persistent().get(&key) {
         Some(value) => {
             bump_persistent(e, &key);
@@ -202,7 +202,7 @@ pub fn set_stableswap_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
         .set(&DataKey::StableSwapPoolHash, pool_hash)
 }
 
-pub fn get_pools_plain(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, Address> {
+pub fn get_pools_plain(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, Address> {
     let pools = get_pools(e, salt);
     let mut pools_plain = Map::new(e);
     for (key, value) in pools {
@@ -211,37 +211,33 @@ pub fn get_pools_plain(e: &Env, salt: &BytesN<32>) -> Map<BytesN<32>, Address> {
     pools_plain
 }
 
-pub fn put_pools(e: &Env, salt: &BytesN<32>, pools: &Map<BytesN<32>, LiquidityPoolData>) {
-    let key = DataKey::TokensSetPools(salt.clone());
+pub fn put_pools(e: &Env, salt: BytesN<32>, pools: &Map<BytesN<32>, LiquidityPoolData>) {
+    let key = DataKey::TokensSetPools(salt);
     e.storage().persistent().set(&key, pools);
     bump_persistent(e, &key);
 }
 
-pub fn has_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) -> bool {
+pub fn has_pool(e: &Env, salt: BytesN<32>, pool_index: BytesN<32>) -> bool {
     get_pools(e, salt).contains_key(pool_index)
 }
 
-pub fn get_pool(
-    e: &Env,
-    tokens: Vec<Address>,
-    pool_index: BytesN<32>,
-) -> Result<Address, PoolError> {
+pub fn get_pool(e: &Env, tokens: &Vec<Address>, pool_index: BytesN<32>) -> Address {
     let salt = get_tokens_salt(e, tokens);
-    let pools = get_pools(e, &salt);
-    match pools.contains_key(pool_index.clone()) {
-        true => Ok(pools.get(pool_index).unwrap().address),
-        false => Err(PoolError::PoolNotFound),
+    let pools = get_pools(e, salt);
+    match pools.get(pool_index) {
+        Some(data) => data.address,
+        None => panic_with_error!(&e, PoolError::PoolNotFound),
     }
 }
 
 pub fn add_pool(
     e: &Env,
-    salt: &BytesN<32>,
+    salt: BytesN<32>,
     pool_index: BytesN<32>,
     pool_type: LiquidityPoolType,
     pool_address: Address,
 ) {
-    let mut pools = get_pools(e, salt);
+    let mut pools = get_pools(e, salt.clone());
     pools.set(
         pool_index,
         LiquidityPoolData {
@@ -252,7 +248,7 @@ pub fn add_pool(
 
     if pool_type == LiquidityPoolType::StableSwap {
         let mut stableswap_pools_amt = 0;
-        for (_key, value) in pools.clone() {
+        for (_key, value) in pools.iter() {
             if value.pool_type == LiquidityPoolType::StableSwap {
                 stableswap_pools_amt += 1;
             }
@@ -270,8 +266,8 @@ pub fn add_pool(
 
 // remember unique tokens set
 pub fn add_tokens_set(e: &Env, tokens: &Vec<Address>) {
-    let salt = get_tokens_salt(e, tokens.clone());
-    let pools = get_pools(e, &salt);
+    let salt = get_tokens_salt(e, &tokens);
+    let pools = get_pools(e, salt);
     if pools.len() > 0 {
         return;
     }
@@ -281,8 +277,8 @@ pub fn add_tokens_set(e: &Env, tokens: &Vec<Address>) {
     set_tokens_set_count(e, &(tokens_set_count + 1));
 }
 
-pub fn remove_pool(e: &Env, salt: &BytesN<32>, pool_index: BytesN<32>) {
-    let mut pools = get_pools(e, salt);
+pub fn remove_pool(e: &Env, salt: BytesN<32>, pool_index: BytesN<32>) {
+    let mut pools = get_pools(e, salt.clone());
     pools.remove(pool_index);
     put_pools(e, salt, &pools);
 }

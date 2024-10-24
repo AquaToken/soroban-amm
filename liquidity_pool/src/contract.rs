@@ -152,10 +152,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         let token_a = tokens.get(0).unwrap();
         let token_b = tokens.get(1).unwrap();
 
-        if token_a >= token_b {
-            panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
-        }
-
         let share_contract = create_contract(&e, lp_token_wasm_hash, &token_a, &token_b);
         LPTokenClient::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
