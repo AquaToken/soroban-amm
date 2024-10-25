@@ -1,6 +1,20 @@
 use crate::storage::get_decimals;
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{Env, Vec};
+use soroban_sdk::token::Client as SorobanTokenClient;
+use soroban_sdk::{Address, Env, Vec};
+
+// Get decimals for all pool tokens
+pub fn read_decimals(e: &Env, tokens: &Vec<Address>) -> Vec<u32> {
+    let mut decimals: Vec<u32> = Vec::new(&e);
+
+    for token in tokens.iter() {
+        // get coin decimals
+        let token_client = SorobanTokenClient::new(&e, &token);
+        let decimal = token_client.decimals();
+        decimals.push_back(decimal);
+    }
+    decimals
+}
 
 // Target precision for internal calculations. It's the maximum precision of all tokens.
 pub fn get_precision(decimals: &Vec<u32>) -> u128 {

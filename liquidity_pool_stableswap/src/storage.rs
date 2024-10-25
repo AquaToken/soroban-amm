@@ -67,7 +67,11 @@ pub fn get_decimals(e: &Env) -> Vec<u32> {
     bump_instance(e);
     match e.storage().instance().get(&DataKey::Decimals) {
         Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+        None => {
+            let decimals = normalize::read_decimals(e, &get_tokens(e));
+            put_decimals(e, &decimals);
+            decimals
+        }
     }
 }
 

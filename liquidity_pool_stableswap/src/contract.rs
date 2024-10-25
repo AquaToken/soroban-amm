@@ -20,7 +20,7 @@ use token_share::{
 
 use crate::errors::LiquidityPoolError;
 use crate::events::Events;
-use crate::normalize::xp;
+use crate::normalize::{read_decimals, xp};
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
@@ -1034,17 +1034,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_fee(&e, &fee);
 
         put_tokens(&e, &tokens);
-
-        let mut decimals: Vec<u32> = Vec::new(&e);
-
-        for token in tokens.iter() {
-            // get coin decimals
-            let token_client = SorobanTokenClient::new(&e, &token);
-            let decimal = token_client.decimals();
-            decimals.push_back(decimal);
-        }
-
-        put_decimals(&e, &decimals);
+        put_decimals(&e, &read_decimals(&e, &tokens));
 
         // LP token
         let share_contract = create_contract(&e, token_wasm_hash, &tokens);
