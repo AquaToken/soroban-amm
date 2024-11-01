@@ -1,4 +1,4 @@
-use crate::pool_constants::{FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MAX_FEE, MIN_RAMP_TIME};
+use crate::pool_constants::{FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MIN_RAMP_TIME};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait, ManagedLiquidityPool,
     RewardsTrait, UpgradeableContract, UpgradeableLPTokenTrait,
@@ -20,7 +20,7 @@ use token_share::{
 
 use crate::errors::LiquidityPoolError;
 use crate::events::Events;
-use crate::normalize::xp;
+use crate::normalize::{read_decimals, xp};
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::rewards::get_rewards_manager;
@@ -784,7 +784,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         if get_admin_actions_deadline(&e) != 0 {
             panic_with_error!(&e, LiquidityPoolError::AnotherActionActive);
         }
-        if new_fee > MAX_FEE {
+        if new_fee > FEE_DENOMINATOR - 1 {
             panic_with_error!(e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
 
@@ -1029,24 +1029,14 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         set_router(&e, &router);
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
-        if fee > MAX_FEE {
+        if fee > FEE_DENOMINATOR - 1 {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
 
         put_fee(&e, &fee);
 
         put_tokens(&e, &tokens);
-
-        let mut decimals: Vec<u32> = Vec::new(&e);
-
-        for token in tokens.iter() {
-            // get coin decimals
-            let token_client = SorobanTokenClient::new(&e, &token);
-            let decimal = token_client.decimals();
-            decimals.push_back(decimal);
-        }
-
-        put_decimals(&e, &decimals);
+        put_decimals(&e, &read_decimals(&e, &tokens));
 
         // LP token
         let share_contract = create_contract(&e, token_wasm_hash, &tokens);
@@ -1149,7 +1139,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let tokens = get_tokens(&e);
         let n_coins = tokens.len();
 
-        if amounts.len() != n_coins as u32 {
+        if amounts.len() != n_coins {
             panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 

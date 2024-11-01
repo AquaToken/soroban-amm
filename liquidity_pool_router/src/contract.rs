@@ -7,8 +7,8 @@ use crate::pool_interface::{
     RewardsInterfaceTrait,
 };
 use crate::pool_utils::{
-    deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt, get_standard_pool_salt,
-    get_tokens_salt, get_total_liquidity, validate_tokens,
+    assert_tokens_sorted, deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt,
+    get_standard_pool_salt, get_tokens_salt, get_total_liquidity, validate_tokens_contracts,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::{AdminInterface, UpgradeableContract};
@@ -30,7 +30,6 @@ use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use access_control::utils::{require_operations_admin_or_owner, require_rewards_admin_or_owner};
-use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -41,7 +40,6 @@ use soroban_sdk::{
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::storage_errors::StorageError;
-use utils::token_utils::check_vec_ordered;
 
 #[contract]
 pub struct LiquidityPoolRouter;
@@ -61,10 +59,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     //
     // The type of the pool as a Symbol.
     fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "pool_type"), Vec::new(&e))
     }
 
@@ -80,10 +76,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     //
     // A map of Symbols to Vals representing the pool's information.
     fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val> {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_info"), Vec::new(&e))
     }
 
@@ -99,10 +93,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     //
     // The address of the pool.
     fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
-        match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        }
+        assert_tokens_sorted(&e, &tokens);
+        get_pool(&e, &tokens, pool_index)
     }
 
     // Returns the pool's share token address.
@@ -117,10 +109,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     //
     // The pool's share token as an Address.
     fn share_id(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "share_id"), Vec::new(&e))
     }
 
@@ -136,10 +126,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     //
     // The total shares of the pool as a u128.
     fn get_total_shares(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_total_shares"), Vec::new(&e))
     }
 
@@ -155,10 +143,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     //
     // A vector of u128s representing the pool's reserves.
     fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128> {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
     }
 
@@ -185,11 +171,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         min_shares: u128,
     ) -> (Vec<u128>, u128) {
         user.require_auth();
+        assert_tokens_sorted(&e, &tokens);
 
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         let (amounts, share_amount): (Vec<u128>, u128) = e.invoke_contract(
             &pool_id,
@@ -234,13 +218,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
-        if !check_vec_ordered(&tokens) {
-            panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
-        }
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         let out_amt = e.invoke_contract(
             &pool_id,
@@ -291,10 +270,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         pool_index: BytesN<32>,
         in_amount: u128,
     ) -> u128 {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
@@ -339,11 +316,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         min_amounts: Vec<u128>,
     ) -> Vec<u128> {
         user.require_auth();
+        assert_tokens_sorted(&e, &tokens);
 
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         let amounts: Vec<u128> = e.invoke_contract(
             &pool_id,
@@ -374,10 +349,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     //
     // The total liquidity of the pool as a U256.
     fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256 {
-        let pool_id = match get_pool(&e, tokens, pool_index) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         let calculator = get_liquidity_calculator(&e);
         match LiquidityCalculatorClient::new(&e, &calculator)
@@ -690,11 +663,9 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     //
     // A `U256` value representing the total liquidity for the given set of tokens.
     fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256 {
-        if !check_vec_ordered(&tokens) {
-            panic_with_error!(e, LiquidityPoolValidationError::TokensNotSorted);
-        }
-        let tokens_salt = get_tokens_salt(&e, tokens.clone());
-        let pools = get_pools_plain(&e, &tokens_salt);
+        assert_tokens_sorted(&e, &tokens);
+        let tokens_salt = get_tokens_salt(&e, &tokens);
+        let pools = get_pools_plain(&e, tokens_salt);
 
         let calculator = get_liquidity_calculator(&e);
         let mut pools_vec: Vec<Address> = Vec::new(&e);
@@ -735,16 +706,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
         let mut tokens_with_liquidity = Map::new(&e);
         for (tokens, voting_share) in tokens_votes {
-            // since we expect tokens to be sorted, we can safely compare neighbors
-            for i in 0..tokens.len() - 1 {
-                if tokens.get_unchecked(i) == tokens.get_unchecked(i + 1) {
-                    panic_with_error!(&e, LiquidityPoolRouterError::DuplicatesNotAllowed);
-                }
-            }
-
-            if !check_vec_ordered(&tokens) {
-                panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
-            }
+            assert_tokens_sorted(&e, &tokens);
 
             tokens_with_liquidity.set(
                 tokens,
@@ -780,10 +742,11 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     //
     // * `tokens` - A vector of token addresses for which to fill the liquidity.
     fn fill_liquidity(e: Env, tokens: Vec<Address>) {
+        assert_tokens_sorted(&e, &tokens);
         let rewards_config = get_rewards_config(&e);
-        let tokens_salt = get_tokens_salt(&e, tokens.clone());
+        let tokens_salt = get_tokens_salt(&e, &tokens);
         let calculator = get_liquidity_calculator(&e);
-        let (pools, total_liquidity) = get_total_liquidity(&e, tokens.clone(), calculator);
+        let (pools, total_liquidity) = get_total_liquidity(&e, &tokens, calculator);
 
         let mut pools_with_processed_info = Map::new(&e);
         for (key, value) in pools {
@@ -832,13 +795,11 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     // * The tokens are not found in the current rewards configuration.
     // * The liquidity for the tokens has not been filled.
     fn config_pool_rewards(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index.clone());
 
         let rewards_config = get_rewards_config(&e);
-        let tokens_salt = get_tokens_salt(&e, tokens.clone());
+        let tokens_salt = get_tokens_salt(&e, &tokens);
         let mut tokens_detailed =
             get_reward_tokens_detailed(&e, rewards_config.current_block, tokens_salt.clone());
         let tokens_reward = get_reward_tokens(&e, rewards_config.current_block);
@@ -929,10 +890,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
     ) -> Map<Symbol, i128> {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
@@ -959,10 +918,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
     ) -> u128 {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
@@ -983,10 +940,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     //
     // The total accumulated reward as a u128.
     fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
@@ -1007,10 +962,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     //
     // The total configured reward as a u128.
     fn get_total_configured_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
@@ -1031,10 +984,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     //
     // The total claimed reward as a u128.
     fn get_total_claimed_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
@@ -1046,10 +997,8 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     // Calculate difference between total configured reward and total claimed reward.
     // Helps to estimate the amount of missing reward tokens pool has configured to distribute
     fn get_total_outstanding_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         let configured_reward: u128 = e.invoke_contract(
             &pool_id,
@@ -1094,11 +1043,9 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     ) -> u128 {
         user.require_auth();
         require_rewards_admin_or_owner(&e, &user);
+        assert_tokens_sorted(&e, &tokens);
 
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let pool_id = get_pool(&e, &tokens, pool_index.clone());
 
         let outstanding_reward =
             Self::get_total_outstanding_reward(e.clone(), tokens.clone(), pool_index.clone());
@@ -1136,11 +1083,9 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     // The amount of tokens rewarded to the user as a u128.
     fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         user.require_auth();
+        assert_tokens_sorted(&e, &tokens);
 
-        let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         let amount = e.invoke_contract(
             &pool_id,
@@ -1183,13 +1128,15 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         fee_fraction: u32,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
-        validate_tokens(&e, &tokens);
+        validate_tokens_contracts(&e, &tokens);
+        assert_tokens_sorted(&e, &tokens);
+
         if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
             panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
         }
 
-        let salt = get_tokens_salt(&e, tokens.clone());
-        let pools = get_pools_plain(&e, &salt);
+        let salt = get_tokens_salt(&e, &tokens);
+        let pools = get_pools_plain(&e, salt);
         let pool_index = get_standard_pool_salt(&e, &fee_fraction);
 
         match pools.get(pool_index.clone()) {
@@ -1207,7 +1154,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
                     );
                 }
 
-                deploy_standard_pool(&e, tokens, fee_fraction)
+                deploy_standard_pool(&e, &tokens, fee_fraction)
             }
         }
     }
@@ -1232,13 +1179,15 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         fee_fraction: u32,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
-        validate_tokens(&e, &tokens);
+        validate_tokens_contracts(&e, &tokens);
+        assert_tokens_sorted(&e, &tokens);
+
         if fee_fraction > STABLESWAP_MAX_FEE {
             panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
         }
 
-        let salt = get_tokens_salt(&e, tokens.clone());
-        let pools = get_pools_plain(&e, &salt);
+        let salt = get_tokens_salt(&e, &tokens);
+        let pools = get_pools_plain(&e, salt);
         let pool_index = get_stableswap_pool_salt(&e);
 
         match pools.get(pool_index.clone()) {
@@ -1256,7 +1205,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
                     );
                 }
 
-                deploy_stableswap_pool(&e, tokens, STABLESWAP_DEFAULT_A, fee_fraction)
+                deploy_stableswap_pool(&e, &tokens, STABLESWAP_DEFAULT_A, fee_fraction)
             }
         }
     }
@@ -1271,8 +1220,9 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     //
     // A map of pool index hashes to pool addresses.
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address> {
-        let salt = get_tokens_salt(&e, tokens);
-        get_pools_plain(&e, &salt)
+        assert_tokens_sorted(&e, &tokens);
+        let salt = get_tokens_salt(&e, &tokens);
+        get_pools_plain(&e, salt)
     }
 
     // Returns a map of pools for given set of tokens.
@@ -1287,10 +1237,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>) {
         user.require_auth();
         require_operations_admin_or_owner(&e, &user);
+        assert_tokens_sorted(&e, &tokens);
 
-        let salt = get_tokens_salt(&e, tokens.clone());
-        if has_pool(&e, &salt, pool_hash.clone()) {
-            remove_pool(&e, &salt, pool_hash)
+        let salt = get_tokens_salt(&e, &tokens);
+        if has_pool(&e, salt.clone(), pool_hash.clone()) {
+            remove_pool(&e, salt, pool_hash)
         }
     }
 
@@ -1408,14 +1359,9 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
 
         for i in 0..swaps_chain.len() {
             let (tokens, pool_index, token_out) = swaps_chain.get(i).unwrap();
-            if !check_vec_ordered(&tokens) {
-                panic_with_error!(&e, LiquidityPoolValidationError::TokensNotSorted);
-            }
+            assert_tokens_sorted(&e, &tokens);
 
-            let pool_id = match get_pool(&e, tokens.clone(), pool_index.clone()) {
-                Ok(v) => v,
-                Err(err) => panic_with_error!(&e, err),
-            };
+            let pool_id = get_pool(&e, &tokens, pool_index);
 
             let mut out_min_local = 0;
             let token_in_local;

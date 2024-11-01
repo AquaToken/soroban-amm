@@ -7,7 +7,6 @@ use soroban_sdk::contracterror;
 #[repr(u32)]
 pub enum LiquidityPoolValidationError {
     WrongInputVecSize = 2001,
-    TokensNotSorted = 2002,
     FeeOutOfBounds = 2003,
     AllCoinsRequired = 2004,
     InMinNotSatisfied = 2005,
