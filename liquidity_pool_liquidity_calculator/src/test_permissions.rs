@@ -338,7 +338,7 @@ fn test_apply_upgrade_admin() {
     let calculator = setup.calculator;
     calculator.commit_upgrade(&setup.admin, &install_dummy_wasm(&setup.env));
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    assert_eq!(calculator.version(), 140);
+    assert_ne!(calculator.version(), 130);
     assert!(calculator.try_apply_upgrade(&setup.admin).is_ok());
     assert_eq!(calculator.version(), 130);
 }

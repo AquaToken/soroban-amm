@@ -17,22 +17,31 @@ impl Events {
 
     pub fn commit_transfer_ownership(&self, role: Role, new_address: Address) {
         self.env().events().publish(
-            (Symbol::new(self.env(), "commit_transfer_ownership"),),
-            (role.as_symbol(self.env()), new_address),
+            (
+                Symbol::new(self.env(), "commit_transfer_ownership"),
+                role.as_symbol(self.env()),
+            ),
+            (new_address,),
         )
     }
 
     pub fn apply_transfer_ownership(&self, role: Role, new_owner: Address) {
         self.env().events().publish(
-            (Symbol::new(self.env(), "apply_transfer_ownership"),),
-            (role.as_symbol(self.env()), new_owner),
+            (
+                Symbol::new(self.env(), "apply_transfer_ownership"),
+                role.as_symbol(self.env()),
+            ),
+            (new_owner,),
         )
     }
 
     pub fn revert_transfer_ownership(&self, role: Role) {
         self.env().events().publish(
-            (Symbol::new(self.env(), "revert_transfer_ownership"),),
-            (role.as_symbol(self.env()),),
+            (
+                Symbol::new(self.env(), "revert_transfer_ownership"),
+                role.as_symbol(self.env()),
+            ),
+            (),
         )
     }
 
@@ -51,6 +60,16 @@ impl Events {
                 pause_admin,
                 emergency_pause_admins,
             ),
+        )
+    }
+
+    pub fn set_emergency_mode(&self, emergency_mode: bool) {
+        self.env().events().publish(
+            match emergency_mode {
+                true => (Symbol::new(self.env(), "enable_emergency_mode"),),
+                false => (Symbol::new(self.env(), "disable_emergency_mode"),),
+            },
+            (),
         )
     }
 }

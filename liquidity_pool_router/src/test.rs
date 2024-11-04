@@ -12,7 +12,9 @@ use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, FromVal, IntoVal, Map, Symbol, Val, Vec,
     U256,
 };
-use utils::test_utils::{assert_approx_eq_abs, assert_approx_eq_abs_u256, jump};
+use utils::test_utils::{
+    assert_approx_eq_abs, assert_approx_eq_abs_u256, install_dummy_wasm, jump,
+};
 
 #[test]
 #[should_panic(expected = "Error(Contract, #103)")]
@@ -2635,8 +2637,12 @@ fn test_transfer_ownership_events() {
             &setup.env,
             (
                 router.address.clone(),
-                (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
-                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
+                (
+                    Symbol::new(&setup.env, "commit_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
@@ -2648,8 +2654,12 @@ fn test_transfer_ownership_events() {
             &setup.env,
             (
                 router.address.clone(),
-                (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
-                (symbol_short!("Admin"),).into_val(&setup.env),
+                (
+                    Symbol::new(&setup.env, "revert_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                ().into_val(&setup.env),
             ),
         ]
     );
@@ -2663,9 +2673,125 @@ fn test_transfer_ownership_events() {
             &setup.env,
             (
                 router.address.clone(),
-                (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
-                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
+                (
+                    Symbol::new(&setup.env, "apply_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
+}
+
+#[test]
+fn test_upgrade_events() {
+    let setup = Setup::default();
+    let contract = setup.router;
+    let new_wasm_hash = install_dummy_wasm(&setup.env);
+
+    contract.commit_upgrade(&setup.admin, &new_wasm_hash);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(),).into_val(&setup.env),
+            ),
+        ]
+    );
+
+    contract.revert_upgrade(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+
+    contract.commit_upgrade(&setup.admin, &new_wasm_hash);
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    contract.apply_upgrade(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(),).into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_emergency_mode_events() {
+    let setup = Setup::default();
+    let contract = setup.router;
+
+    contract.set_emergency_mode(&setup.emergency_admin, &true);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+    contract.set_emergency_mode(&setup.emergency_admin, &false);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_emergency_upgrade() {
+    let setup = Setup::default();
+    let contract = setup.router;
+    let new_wasm = install_dummy_wasm(&setup.env);
+
+    assert_eq!(contract.get_emergency_mode(), false);
+    assert_ne!(contract.version(), 130);
+    contract.set_emergency_mode(&setup.emergency_admin, &true);
+
+    contract.commit_upgrade(&setup.admin, &new_wasm);
+    contract.apply_upgrade(&setup.admin);
+
+    assert_eq!(contract.version(), 130)
+}
+
+#[test]
+fn test_regular_upgrade() {
+    let setup = Setup::default();
+    let contract = setup.router;
+    let new_wasm = install_dummy_wasm(&setup.env);
+
+    assert_eq!(contract.get_emergency_mode(), false);
+    assert_ne!(contract.version(), 130);
+
+    contract.commit_upgrade(&setup.admin, &new_wasm);
+    assert!(contract.try_apply_upgrade(&setup.admin).is_err());
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    contract.apply_upgrade(&setup.admin);
+
+    assert_eq!(contract.version(), 130)
 }

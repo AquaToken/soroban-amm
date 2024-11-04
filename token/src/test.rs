@@ -292,8 +292,12 @@ fn test_transfer_ownership_events() {
             &setup.env,
             (
                 token.address.clone(),
-                (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
-                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
+                (
+                    Symbol::new(&setup.env, "commit_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
@@ -305,8 +309,12 @@ fn test_transfer_ownership_events() {
             &setup.env,
             (
                 token.address.clone(),
-                (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
-                (symbol_short!("Admin"),).into_val(&setup.env),
+                (
+                    Symbol::new(&setup.env, "revert_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                ().into_val(&setup.env),
             ),
         ]
     );
@@ -320,8 +328,12 @@ fn test_transfer_ownership_events() {
             &setup.env,
             (
                 token.address.clone(),
-                (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
-                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
+                (
+                    Symbol::new(&setup.env, "apply_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );

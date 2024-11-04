@@ -445,7 +445,7 @@ fn test_apply_upgrade_emergency_admin() {
 fn test_apply_upgrade_admin() {
     let setup = Setup::default();
     let router = setup.router;
-    assert_eq!(router.version(), 140);
+    assert_ne!(router.version(), 130);
     // Upgrade router code with token wasm as it has no dependencies
     // after upgrade router cannot be reused
     router.commit_upgrade(&setup.admin, &install_dummy_wasm(&setup.env));

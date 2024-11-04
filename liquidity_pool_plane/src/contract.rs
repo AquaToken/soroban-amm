@@ -9,6 +9,7 @@ use access_control::management::SingleAddressManagementTrait;
 use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec};
+use upgrade::events::Events as UpgradeEvents;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 
 #[contract]
@@ -94,6 +95,7 @@ impl UpgradeableContract for LiquidityPoolPlane {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         commit_upgrade(&e, &new_wasm_hash);
+        UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
     }
 
     // Applies the committed upgrade.
@@ -104,7 +106,9 @@ impl UpgradeableContract for LiquidityPoolPlane {
     fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        apply_upgrade(&e)
+        let new_wasm_hash = apply_upgrade(&e);
+        UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
+        new_wasm_hash
     }
 
     // Reverts the committed upgrade.
@@ -119,6 +123,7 @@ impl UpgradeableContract for LiquidityPoolPlane {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         revert_upgrade(&e);
+        UpgradeEvents::new(&e).revert_upgrade();
     }
 
     // Sets the emergency mode.
@@ -135,6 +140,7 @@ impl UpgradeableContract for LiquidityPoolPlane {
         emergency_admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&emergency_admin, &Role::EmergencyAdmin);
         set_emergency_mode(&e, &value);
+        AccessControlEvents::new(&e).set_emergency_mode(value);
     }
 
     // Returns the emergency mode flag value.

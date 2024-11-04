@@ -14,7 +14,7 @@ use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
-use utils::test_utils::{assert_approx_eq_abs, jump};
+use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump};
 
 #[test]
 fn test() {
@@ -2028,8 +2028,12 @@ fn test_transfer_ownership_events() {
             &setup.env,
             (
                 pool.address.clone(),
-                (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
-                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
+                (
+                    Symbol::new(&setup.env, "commit_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
@@ -2041,8 +2045,12 @@ fn test_transfer_ownership_events() {
             &setup.env,
             (
                 pool.address.clone(),
-                (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
-                (symbol_short!("Admin"),).into_val(&setup.env),
+                (
+                    Symbol::new(&setup.env, "revert_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                ().into_val(&setup.env),
             ),
         ]
     );
@@ -2056,9 +2064,169 @@ fn test_transfer_ownership_events() {
             &setup.env,
             (
                 pool.address.clone(),
-                (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
-                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
+                (
+                    Symbol::new(&setup.env, "apply_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
+}
+
+#[test]
+fn test_upgrade_events() {
+    let setup = Setup::default();
+    let contract = setup.liq_pool;
+    let new_wasm_hash = install_dummy_wasm(&setup.env);
+    let token_new_wasm_hash = install_dummy_wasm(&setup.env);
+
+    contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(), token_new_wasm_hash.clone()).into_val(&setup.env),
+            ),
+        ]
+    );
+
+    contract.revert_upgrade(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+
+    contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    contract.apply_upgrade(&setup.admin);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(), token_new_wasm_hash.clone()).into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_emergency_mode_events() {
+    let setup = Setup::default();
+    let contract = setup.liq_pool;
+
+    contract.set_emergency_mode(&setup.emergency_admin, &true);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+    contract.set_emergency_mode(&setup.emergency_admin, &false);
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_emergency_upgrade() {
+    let setup = Setup::default();
+    let contract = setup.liq_pool;
+    let token = ShareTokenClient::new(&setup.env, &contract.share_id());
+
+    let new_wasm = install_dummy_wasm(&setup.env);
+    let new_token_wasm = install_dummy_wasm(&setup.env);
+
+    assert_eq!(contract.get_emergency_mode(), false);
+    assert_ne!(contract.version(), 130);
+    assert_ne!(token.version(), 130);
+    contract.set_emergency_mode(&setup.emergency_admin, &true);
+
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    contract.apply_upgrade(&setup.admin);
+
+    assert_eq!(contract.version(), 130);
+    assert_eq!(token.version(), 130);
+}
+
+#[test]
+fn test_regular_upgrade_token() {
+    let setup = Setup::default();
+    let contract = setup.liq_pool;
+    let token = ShareTokenClient::new(&setup.env, &contract.share_id());
+
+    let token_wasm = setup
+        .env
+        .deployer()
+        .upload_contract_wasm(token_share::token::WASM);
+    let new_wasm = install_dummy_wasm(&setup.env);
+
+    // dummy wasm has version 130, everything else has greater version
+    assert_eq!(contract.get_emergency_mode(), false);
+    assert_ne!(contract.version(), 130);
+    assert_ne!(token.version(), 130);
+
+    contract.commit_upgrade(&setup.admin, &new_wasm, &token_wasm);
+    assert!(contract.try_apply_upgrade(&setup.admin).is_err());
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    assert_eq!(
+        contract.apply_upgrade(&setup.admin),
+        (new_wasm.clone(), token_wasm.clone())
+    );
+
+    assert_eq!(contract.version(), 130);
+    assert_ne!(token.version(), 130);
+}
+
+#[test]
+fn test_regular_upgrade_pool() {
+    let setup = Setup::default();
+    let contract = setup.liq_pool;
+    let token = ShareTokenClient::new(&setup.env, &contract.share_id());
+
+    let new_wasm = install_dummy_wasm(&setup.env);
+    let new_token_wasm = install_dummy_wasm(&setup.env);
+
+    // dummy wasm has version 130, everything else has greater version
+    assert_eq!(contract.get_emergency_mode(), false);
+    assert_ne!(contract.version(), 130);
+    assert_ne!(token.version(), 130);
+
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    assert!(contract.try_apply_upgrade(&setup.admin).is_err());
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    assert_eq!(
+        contract.apply_upgrade(&setup.admin),
+        (new_wasm.clone(), new_token_wasm.clone())
+    );
+
+    assert_eq!(contract.version(), 130);
+    assert_eq!(token.version(), 130);
 }

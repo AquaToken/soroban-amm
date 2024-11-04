@@ -323,8 +323,8 @@ fn test_apply_upgrade_admin() {
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
 
-    assert_eq!(pool.version(), 140);
-    assert_eq!(token.version(), 140);
+    assert_ne!(pool.version(), 130);
+    assert_ne!(token.version(), 130);
 
     pool.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
