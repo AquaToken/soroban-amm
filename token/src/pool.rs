@@ -1,10 +1,12 @@
 use crate::balance::read_balance;
-use access_control::access::{AccessControl, AccessControlTrait, Role};
+use access_control::access::AccessControl;
+use access_control::management::SingleAddressManagementTrait;
+use access_control::role::Role;
 use soroban_sdk::{Address, Env, IntoVal, Symbol, Vec};
 
 pub fn checkpoint_user_rewards(e: &Env, user: Address) {
     let access_control = AccessControl::new(&e);
-    let pool_address = access_control.get_role(Role::Admin);
+    let pool_address = access_control.get_role(&Role::Admin);
 
     if user == pool_address {
         // no need to checkpoint the pool itself

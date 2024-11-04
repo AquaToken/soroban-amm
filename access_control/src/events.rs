@@ -1,3 +1,4 @@
+use crate::role::{Role, SymbolRepresentation};
 use soroban_sdk::{Address, Env, Symbol, Vec};
 
 #[derive(Clone)]
@@ -14,24 +15,25 @@ impl Events {
         Events(env.clone())
     }
 
-    pub fn commit_transfer_ownership(&self, new_owner: Address) {
+    pub fn commit_transfer_ownership(&self, role: Role, new_address: Address) {
         self.env().events().publish(
             (Symbol::new(self.env(), "commit_transfer_ownership"),),
-            (new_owner,),
+            (role.as_symbol(self.env()), new_address),
         )
     }
 
-    pub fn apply_transfer_ownership(&self, new_owner: Address) {
+    pub fn apply_transfer_ownership(&self, role: Role, new_owner: Address) {
         self.env().events().publish(
             (Symbol::new(self.env(), "apply_transfer_ownership"),),
-            (new_owner,),
+            (role.as_symbol(self.env()), new_owner),
         )
     }
 
-    pub fn revert_transfer_ownership(&self) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "revert_transfer_ownership"),), ())
+    pub fn revert_transfer_ownership(&self, role: Role) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "revert_transfer_ownership"),),
+            (role.as_symbol(self.env()),),
+        )
     }
 
     pub fn set_privileged_addrs(

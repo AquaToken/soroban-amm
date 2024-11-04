@@ -7,7 +7,9 @@ use crate::storage::{
     add_pool, add_tokens_set, get_constant_product_pool_hash, get_pool_next_counter,
     get_pool_plane, get_pools_plain, get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
 };
-use access_control::access::{AccessControl, AccessControlTrait, Role};
+use access_control::access::AccessControl;
+use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
+use access_control::role::Role;
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
@@ -138,23 +140,27 @@ fn init_standard_pool(
     let access_control = AccessControl::new(e);
 
     // privileged users
-    let admin = access_control.get_role(Role::Admin);
+    let admin = access_control.get_role(&Role::Admin);
+    let emergency_admin = access_control
+        .get_role_safe(&Role::EmergencyAdmin)
+        .unwrap_or(admin.clone());
     let rewards_admin = access_control
-        .get_role_safe(Role::RewardsAdmin)
+        .get_role_safe(&Role::RewardsAdmin)
         .unwrap_or(admin.clone());
     let operations_admin = access_control
-        .get_role_safe(Role::OperationsAdmin)
+        .get_role_safe(&Role::OperationsAdmin)
         .unwrap_or(admin.clone());
     let pause_admin = access_control
-        .get_role_safe(Role::PauseAdmin)
+        .get_role_safe(&Role::PauseAdmin)
         .unwrap_or(admin.clone());
-    let emergency_pause_admins = access_control.get_role_addresses(Role::EmergencyPauseAdmin);
+    let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let liq_pool_client = StandardLiquidityPoolClient::new(e, pool_contract_id);
     let plane = get_pool_plane(e);
     liq_pool_client.initialize_all(
         &admin,
         &(
+            emergency_admin,
             rewards_admin,
             operations_admin,
             pause_admin,
@@ -182,17 +188,20 @@ fn init_stableswap_pool(
     let access_control = AccessControl::new(e);
 
     // privileged users
-    let admin = access_control.get_role(Role::Admin);
+    let admin = access_control.get_role(&Role::Admin);
+    let emergency_admin = access_control
+        .get_role_safe(&Role::EmergencyAdmin)
+        .unwrap_or(admin.clone());
     let rewards_admin = access_control
-        .get_role_safe(Role::RewardsAdmin)
+        .get_role_safe(&Role::RewardsAdmin)
         .unwrap_or(admin.clone());
     let operations_admin = access_control
-        .get_role_safe(Role::OperationsAdmin)
+        .get_role_safe(&Role::OperationsAdmin)
         .unwrap_or(admin.clone());
     let pause_admin = access_control
-        .get_role_safe(Role::PauseAdmin)
+        .get_role_safe(&Role::PauseAdmin)
         .unwrap_or(admin.clone());
-    let emergency_pause_admins = access_control.get_role_addresses(Role::EmergencyPauseAdmin);
+    let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
     e.invoke_contract::<()>(
@@ -203,6 +212,7 @@ fn init_stableswap_pool(
             [
                 admin.into_val(e),
                 (
+                    emergency_admin,
                     rewards_admin,
                     operations_admin,
                     pause_admin,

@@ -737,7 +737,7 @@ fn test_transfer_ownership_events() {
     let calculator = setup.calculator;
     let new_admin = Address::generate(&setup.env);
 
-    calculator.commit_transfer_ownership(&setup.admin, &new_admin);
+    calculator.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -745,12 +745,12 @@ fn test_transfer_ownership_events() {
             (
                 calculator.address.clone(),
                 (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
 
-    calculator.revert_transfer_ownership(&setup.admin);
+    calculator.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -758,14 +758,14 @@ fn test_transfer_ownership_events() {
             (
                 calculator.address.clone(),
                 (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
-                ().into_val(&setup.env),
+                (symbol_short!("Admin"),).into_val(&setup.env),
             ),
         ]
     );
 
-    calculator.commit_transfer_ownership(&setup.admin, &new_admin);
+    calculator.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    calculator.apply_transfer_ownership(&setup.admin);
+    calculator.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -773,7 +773,7 @@ fn test_transfer_ownership_events() {
             (
                 calculator.address.clone(),
                 (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );

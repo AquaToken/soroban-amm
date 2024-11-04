@@ -4,7 +4,7 @@ extern crate std;
 use crate::testutils::{create_contract, jump, Setup};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{Address as _, Events};
-use soroban_sdk::{vec, Address, Env, IntoVal, Symbol};
+use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol};
 
 #[test]
 fn test() {
@@ -30,7 +30,7 @@ fn test_transfer_ownership_events() {
     let collector = setup.collector;
     let new_admin = Address::generate(&setup.env);
 
-    collector.commit_transfer_ownership(&setup.admin, &new_admin);
+    collector.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -38,12 +38,12 @@ fn test_transfer_ownership_events() {
             (
                 collector.address.clone(),
                 (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
 
-    collector.revert_transfer_ownership(&setup.admin);
+    collector.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -51,14 +51,14 @@ fn test_transfer_ownership_events() {
             (
                 collector.address.clone(),
                 (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
-                ().into_val(&setup.env),
+                (symbol_short!("Admin"),).into_val(&setup.env),
             ),
         ]
     );
 
-    collector.commit_transfer_ownership(&setup.admin, &new_admin);
+    collector.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    collector.apply_transfer_ownership(&setup.admin);
+    collector.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -66,7 +66,7 @@ fn test_transfer_ownership_events() {
             (
                 collector.address.clone(),
                 (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );

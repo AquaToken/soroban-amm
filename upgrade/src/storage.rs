@@ -19,9 +19,7 @@ pub fn get_upgrade_deadline(e: &Env) -> u64 {
 
 pub fn put_upgrade_deadline(e: &Env, value: &u64) {
     bump_instance(e);
-    e.storage()
-        .instance()
-        .set(&DataKey::UpgradeDeadline, value);
+    e.storage().instance().set(&DataKey::UpgradeDeadline, value);
 }
 
 pub fn get_future_wasm(e: &Env) -> Option<BytesN<32>> {

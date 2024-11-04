@@ -2,12 +2,14 @@
 extern crate std;
 use crate::plane::{pool_plane, PoolPlaneClient};
 use crate::LiquidityPoolClient;
+use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol, Vec};
 use std::vec;
 use token_share::token_contract::{Client as ShareTokenClient, WASM};
+use utils::test_utils::jump;
 
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
@@ -46,6 +48,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) plane: PoolPlaneClient<'a>,
 
     pub(crate) admin: Address,
+    pub(crate) emergency_admin: Address,
     pub(crate) rewards_admin: Address,
     pub(crate) operations_admin: Address,
     pub(crate) pause_admin: Address,
@@ -123,6 +126,15 @@ impl Setup<'_> {
             &Vec::from_array(&e, [emergency_pause_admin.clone()]),
         );
 
+        let emergency_admin = Address::generate(&e);
+        liq_pool.commit_transfer_ownership(
+            &admin,
+            &Symbol::new(&e, "EmergencyAdmin"),
+            &emergency_admin,
+        );
+        jump(&e, ADMIN_ACTIONS_DELAY + 1);
+        liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
+
         let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
         Self {
@@ -139,6 +151,7 @@ impl Setup<'_> {
             liq_pool: liq_pool,
             plane,
             admin,
+            emergency_admin,
             rewards_admin,
             operations_admin,
             pause_admin,
@@ -208,6 +221,7 @@ pub fn create_liqpool_contract<'a>(
     liqpool.initialize_all(
         &admin,
         &(
+            admin.clone(),
             admin.clone(),
             admin.clone(),
             admin.clone(),

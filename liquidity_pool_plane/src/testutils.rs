@@ -1,8 +1,9 @@
 #![cfg(test)]
 
 use crate::LiquidityPoolPlaneClient;
+use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::{Address, BytesN, Env};
+use soroban_sdk::{Address, BytesN, Env, Symbol};
 
 pub fn install_dummy_wasm<'a>(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(file = "../contracts/dummy_contract.wasm");
@@ -34,6 +35,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
     pub(crate) admin: Address,
+    pub(crate) emergency_admin: Address,
     pub(crate) plane: LiquidityPoolPlaneClient<'a>,
 }
 
@@ -47,6 +49,21 @@ impl Default for Setup<'_> {
         let admin = Address::generate(&env);
         let plane = create_plane_contract(&env);
         plane.init_admin(&admin);
-        Setup { env, admin, plane }
+
+        let emergency_admin = Address::generate(&env);
+        plane.commit_transfer_ownership(
+            &admin,
+            &Symbol::new(&env, "EmergencyAdmin"),
+            &emergency_admin,
+        );
+        jump(&env, ADMIN_ACTIONS_DELAY + 1);
+        plane.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
+
+        Setup {
+            env,
+            admin,
+            emergency_admin,
+            plane,
+        }
     }
 }

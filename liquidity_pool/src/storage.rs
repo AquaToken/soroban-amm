@@ -1,5 +1,5 @@
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
 pub use utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
 use utils::{
@@ -20,6 +20,8 @@ enum DataKey {
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledClaim,
+
+    TokenFutureWASM,
 }
 
 generate_instance_storage_getter_and_setter_with_default!(
@@ -134,6 +136,19 @@ pub(crate) fn set_router(e: &Env, plane: &Address) {
 pub(crate) fn get_router(e: &Env) -> Address {
     let key = DataKey::Router;
     match e.storage().instance().get(&key) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
+}
+
+pub(crate) fn set_token_future_wasm(e: &Env, value: &BytesN<32>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::TokenFutureWASM, value)
+}
+
+pub(crate) fn get_token_future_wasm(e: &Env) -> BytesN<32> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::TokenFutureWASM) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
     }

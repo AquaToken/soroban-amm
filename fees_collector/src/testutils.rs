@@ -1,8 +1,9 @@
 #![cfg(test)]
 
 use crate::FeesCollectorClient;
+use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::{Address, BytesN, Env};
+use soroban_sdk::{Address, BytesN, Env, Symbol};
 
 pub fn install_dummy_wasm<'a>(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(file = "../contracts/dummy_contract.wasm");
@@ -34,6 +35,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
     pub(crate) admin: Address,
+    pub(crate) emergency_admin: Address,
     pub(crate) collector: FeesCollectorClient<'a>,
 }
 
@@ -47,9 +49,20 @@ impl Default for Setup<'_> {
         let admin = Address::generate(&env);
         let collector = create_contract(&env);
         collector.init_admin(&admin);
+
+        let emergency_admin = Address::generate(&env);
+        collector.commit_transfer_ownership(
+            &admin,
+            &Symbol::new(&env, "EmergencyAdmin"),
+            &emergency_admin,
+        );
+        jump(&env, ADMIN_ACTIONS_DELAY + 1);
+        collector.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
+
         Setup {
             env,
             admin,
+            emergency_admin,
             collector,
         }
     }

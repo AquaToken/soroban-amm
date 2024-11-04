@@ -4,7 +4,7 @@ extern crate std;
 use crate::pool_constants::MIN_RAMP_TIME;
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Address as _, Events};
-use soroban_sdk::{vec, Address, Env, Error, IntoVal, Symbol, Val, Vec};
+use soroban_sdk::{symbol_short, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec};
 use token_share::Client as ShareTokenClient;
 
 use crate::testutils::{
@@ -2135,11 +2135,15 @@ fn test_transfer_ownership_too_early() {
         &plane.address,
     );
 
-    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    liqpool.commit_transfer_ownership(
+        &pool_admin_original,
+        &symbol_short!("Admin"),
+        &pool_admin_new,
+    );
     // check admin by calling protected method
     liqpool.stop_ramp_a(&pool_admin_original);
     jump(&e, ADMIN_ACTIONS_DELAY - 1);
-    liqpool.apply_transfer_ownership(&pool_admin_original);
+    liqpool.apply_transfer_ownership(&pool_admin_original, &symbol_short!("Admin"));
 }
 
 #[test]
@@ -2172,8 +2176,16 @@ fn test_transfer_ownership_twice() {
         &plane.address,
     );
 
-    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
-    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    liqpool.commit_transfer_ownership(
+        &pool_admin_original,
+        &symbol_short!("Admin"),
+        &pool_admin_new,
+    );
+    liqpool.commit_transfer_ownership(
+        &pool_admin_original,
+        &symbol_short!("Admin"),
+        &pool_admin_new,
+    );
 }
 
 #[test]
@@ -2206,7 +2218,7 @@ fn test_transfer_ownership_not_committed() {
     );
 
     jump(&e, ADMIN_ACTIONS_DELAY + 1);
-    liqpool.apply_transfer_ownership(&pool_admin_original);
+    liqpool.apply_transfer_ownership(&pool_admin_original, &symbol_short!("Admin"));
 }
 
 #[test]
@@ -2239,12 +2251,16 @@ fn test_transfer_ownership_reverted() {
         &plane.address,
     );
 
-    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    liqpool.commit_transfer_ownership(
+        &pool_admin_original,
+        &symbol_short!("Admin"),
+        &pool_admin_new,
+    );
     // check admin by calling protected method
     liqpool.stop_ramp_a(&pool_admin_original);
     jump(&e, ADMIN_ACTIONS_DELAY + 1);
-    liqpool.revert_transfer_ownership(&pool_admin_original);
-    liqpool.apply_transfer_ownership(&pool_admin_original);
+    liqpool.revert_transfer_ownership(&pool_admin_original, &symbol_short!("Admin"));
+    liqpool.apply_transfer_ownership(&pool_admin_original, &symbol_short!("Admin"));
 }
 
 #[test]
@@ -2276,11 +2292,15 @@ fn test_transfer_ownership() {
         &plane.address,
     );
 
-    liqpool.commit_transfer_ownership(&pool_admin_original, &pool_admin_new);
+    liqpool.commit_transfer_ownership(
+        &pool_admin_original,
+        &symbol_short!("Admin"),
+        &pool_admin_new,
+    );
     // check admin by calling protected method
     liqpool.stop_ramp_a(&pool_admin_original);
     jump(&e, ADMIN_ACTIONS_DELAY + 1);
-    liqpool.apply_transfer_ownership(&pool_admin_original);
+    liqpool.apply_transfer_ownership(&pool_admin_original, &symbol_short!("Admin"));
     liqpool.stop_ramp_a(&pool_admin_new);
 }
 
@@ -3752,7 +3772,7 @@ fn test_transfer_ownership_events() {
     let pool = setup.liq_pool;
     let new_admin = Address::generate(&setup.env);
 
-    pool.commit_transfer_ownership(&setup.admin, &new_admin);
+    pool.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -3760,12 +3780,12 @@ fn test_transfer_ownership_events() {
             (
                 pool.address.clone(),
                 (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
 
-    pool.revert_transfer_ownership(&setup.admin);
+    pool.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -3773,14 +3793,14 @@ fn test_transfer_ownership_events() {
             (
                 pool.address.clone(),
                 (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
-                ().into_val(&setup.env),
+                (symbol_short!("Admin"),).into_val(&setup.env),
             ),
         ]
     );
 
-    pool.commit_transfer_ownership(&setup.admin, &new_admin);
+    pool.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    pool.apply_transfer_ownership(&setup.admin);
+    pool.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -3788,7 +3808,7 @@ fn test_transfer_ownership_events() {
             (
                 pool.address.clone(),
                 (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );

@@ -96,7 +96,7 @@ fn test() {
     assert_eq!(token.balance(&user1), 500);
     assert_eq!(token.balance(&user3), 300);
 
-    token.commit_transfer_ownership(&admin1, &admin2);
+    token.commit_transfer_ownership(&admin1, &symbol_short!("Admin"), &admin2);
     assert_eq!(
         e.auths(),
         std::vec![(
@@ -105,14 +105,14 @@ fn test() {
                 function: AuthorizedFunction::Contract((
                     token.address.clone(),
                     Symbol::new(&e, "commit_transfer_ownership"),
-                    (&admin1, &admin2,).into_val(&e),
+                    (&admin1, &symbol_short!("Admin"), &admin2,).into_val(&e),
                 )),
                 sub_invocations: std::vec![]
             }
         )]
     );
     jump(&e, ADMIN_ACTIONS_DELAY + 1);
-    token.apply_transfer_ownership(&admin1);
+    token.apply_transfer_ownership(&admin1, &symbol_short!("Admin"));
     assert_eq!(
         e.auths(),
         std::vec![(
@@ -121,7 +121,7 @@ fn test() {
                 function: AuthorizedFunction::Contract((
                     token.address.clone(),
                     Symbol::new(&e, "apply_transfer_ownership"),
-                    (&admin1,).into_val(&e),
+                    (&admin1, &symbol_short!("Admin")).into_val(&e),
                 )),
                 sub_invocations: std::vec![]
             }
@@ -285,7 +285,7 @@ fn test_transfer_ownership_events() {
     let token = setup.token;
     let new_admin = Address::generate(&setup.env);
 
-    token.commit_transfer_ownership(&setup.admin, &new_admin);
+    token.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -293,12 +293,12 @@ fn test_transfer_ownership_events() {
             (
                 token.address.clone(),
                 (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
 
-    token.revert_transfer_ownership(&setup.admin);
+    token.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -306,14 +306,14 @@ fn test_transfer_ownership_events() {
             (
                 token.address.clone(),
                 (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
-                ().into_val(&setup.env),
+                (symbol_short!("Admin"),).into_val(&setup.env),
             ),
         ]
     );
 
-    token.commit_transfer_ownership(&setup.admin, &new_admin);
+    token.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    token.apply_transfer_ownership(&setup.admin);
+    token.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -321,7 +321,7 @@ fn test_transfer_ownership_events() {
             (
                 token.address.clone(),
                 (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );

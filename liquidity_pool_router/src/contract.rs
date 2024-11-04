@@ -23,12 +23,15 @@ use crate::storage::{
     set_reward_tokens, set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash,
     set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
-use access_control::access::{
-    AccessControl, AccessControlTrait, Role, SymbolRepresentation, TransferOwnershipTrait,
-};
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
+use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
+use access_control::role::Role;
+use access_control::role::SymbolRepresentation;
+use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{require_operations_admin_or_owner, require_rewards_admin_or_owner};
 use rewards::storage::RewardsStorageTrait;
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
@@ -37,7 +40,6 @@ use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, vec, Address, BytesN, Env, IntoVal,
     Map, Symbol, Val, Vec, U256,
 };
-use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::storage_errors::StorageError;
 
@@ -384,7 +386,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
     // * `calculator` - The address of the liquidity calculator.
     fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
         set_liquidity_calculator(&e, &calculator);
     }
@@ -399,41 +401,67 @@ impl UpgradeableContract for LiquidityPoolRouter {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        130
+        140
     }
 
-    fn set_emergency_admin(e: Env, admin: Address, emergency_admin: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
-        AccessControl::new(&e).set_role_address(Role::EmergencyAdmin, &emergency_admin);
-    }
-
-    fn set_emergency_mode(e: Env, admin: Address, value: bool) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::EmergencyAdmin);
-        set_emergency_mode(&e, &value);
-    }
-
-    fn get_emergency_mode(e: Env) -> bool {
-        get_emergency_mode(&e)
-    }
-
+    // Commits a new wasm hash for a future upgrade.
+    // The upgrade will be available through `apply_upgrade` after the standard upgrade delay
+    // unless the system is in emergency mode.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `new_wasm_hash` - The new wasm hash to commit.
     fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         commit_upgrade(&e, &new_wasm_hash);
     }
 
+    // Applies the committed upgrade.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
     fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         apply_upgrade(&e)
     }
 
+    // Reverts the committed upgrade.
+    // This can be used to cancel a previously committed upgrade.
+    // The upgrade will be canceled only if it has not been applied yet.
+    // If the upgrade has already been applied, it cannot be reverted.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
     fn revert_upgrade(e: Env, admin: Address) {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         revert_upgrade(&e);
+    }
+
+    // Sets the emergency mode.
+    // When the emergency mode is set to true, the contract will allow instant upgrades without the delay.
+    // This is useful in case of critical issues that need to be fixed immediately.
+    // When the emergency mode is set to false, the contract will require the standard upgrade delay.
+    // The emergency mode can only be set by the emergency admin.
+    //
+    // # Arguments
+    //
+    // * `emergency_admin` - The address of the emergency admin.
+    // * `value` - The value to set the emergency mode to.
+    fn set_emergency_mode(e: Env, emergency_admin: Address, value: bool) {
+        emergency_admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&emergency_admin, &Role::EmergencyAdmin);
+        set_emergency_mode(&e, &value);
+    }
+
+    // Returns the emergency mode flag value.
+    fn get_emergency_mode(e: Env) -> bool {
+        get_emergency_mode(&e)
     }
 }
 
@@ -447,10 +475,10 @@ impl AdminInterface for LiquidityPoolRouter {
     // * `account` - The address of the admin user.
     fn init_admin(e: Env, account: Address) {
         let access_control = AccessControl::new(&e);
-        if access_control.get_role_safe(Role::Admin).is_some() {
+        if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
         }
-        access_control.set_role_address(Role::Admin, &account);
+        access_control.set_role_address(&Role::Admin, &account);
     }
 
     // Sets the privileged addresses.
@@ -472,12 +500,12 @@ impl AdminInterface for LiquidityPoolRouter {
     ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, Role::Admin);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
 
-        access_control.set_role_address(Role::RewardsAdmin, &rewards_admin);
-        access_control.set_role_address(Role::OperationsAdmin, &operations_admin);
-        access_control.set_role_address(Role::PauseAdmin, &pause_admin);
-        access_control.set_role_addresses(Role::EmergencyPauseAdmin, &emergency_pause_admins);
+        access_control.set_role_address(&Role::RewardsAdmin, &rewards_admin);
+        access_control.set_role_address(&Role::OperationsAdmin, &operations_admin);
+        access_control.set_role_address(&Role::PauseAdmin, &pause_admin);
+        access_control.set_role_addresses(&Role::EmergencyPauseAdmin, &emergency_pause_admins);
         AccessControlEvents::new(&e).set_privileged_addrs(
             rewards_admin,
             operations_admin,
@@ -493,32 +521,28 @@ impl AdminInterface for LiquidityPoolRouter {
     // A map of privileged roles to their respective addresses.
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>> {
         let access_control = AccessControl::new(&e);
-        let mut result = Map::new(&e);
-        match access_control.get_role_safe(Role::RewardsAdmin) {
-            Some(v) => {
-                result.set(Role::RewardsAdmin.as_symbol(&e), Vec::from_array(&e, [v]));
-            }
-            None => {}
+        let mut result: Map<Symbol, Vec<Address>> = Map::new(&e);
+        for role in [
+            Role::Admin,
+            Role::EmergencyAdmin,
+            Role::RewardsAdmin,
+            Role::OperationsAdmin,
+            Role::PauseAdmin,
+        ] {
+            result.set(
+                role.as_symbol(&e),
+                match access_control.get_role_safe(&role) {
+                    Some(v) => Vec::from_array(&e, [v]),
+                    None => Vec::new(&e),
+                },
+            );
         }
-        match access_control.get_role_safe(Role::OperationsAdmin) {
-            Some(v) => {
-                result.set(
-                    Role::OperationsAdmin.as_symbol(&e),
-                    Vec::from_array(&e, [v]),
-                );
-            }
-            None => {}
-        }
-        match access_control.get_role_safe(Role::PauseAdmin) {
-            Some(v) => {
-                result.set(Role::PauseAdmin.as_symbol(&e), Vec::from_array(&e, [v]));
-            }
-            None => {}
-        }
+
         result.set(
             Role::EmergencyPauseAdmin.as_symbol(&e),
-            access_control.get_role_addresses(Role::EmergencyPauseAdmin),
+            access_control.get_role_addresses(&Role::EmergencyPauseAdmin),
         );
+
         result
     }
 
@@ -529,7 +553,7 @@ impl AdminInterface for LiquidityPoolRouter {
     // * `new_hash` - The token wasm hash.
     fn set_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_token_hash(&e, &new_hash);
     }
 
@@ -540,7 +564,7 @@ impl AdminInterface for LiquidityPoolRouter {
     // * `new_hash` - The standard pool wasm hash.
     fn set_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_constant_product_pool_hash(&e, &new_hash);
     }
 
@@ -551,7 +575,7 @@ impl AdminInterface for LiquidityPoolRouter {
     // * `new_hash` - The new stableswap pool wasm hash.
     fn set_stableswap_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_stableswap_pool_hash(&e, &new_hash);
     }
 
@@ -572,7 +596,7 @@ impl AdminInterface for LiquidityPoolRouter {
         to: Address,
     ) {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
         set_init_pool_payment_token(&e, &token);
         set_init_stable_pool_payment_amount(&e, &stable_pool_amount);
@@ -604,7 +628,7 @@ impl AdminInterface for LiquidityPoolRouter {
     // * `reward_token` - The address of the reward token.
     fn set_reward_token(e: Env, admin: Address, reward_token: Address) {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         get_rewards_manager(&e)
             .storage()
             .put_reward_token(reward_token);
@@ -1306,7 +1330,7 @@ impl PoolPlaneInterface for LiquidityPoolRouter {
     // * `plane` - The address of the plane.
     fn set_pools_plane(e: Env, admin: Address, plane: Address) {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, Role::Admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
         set_pool_plane(&e, &plane);
     }
@@ -1454,13 +1478,18 @@ impl TransferableContract for LiquidityPoolRouter {
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    // * `new_admin` - The address of the new admin.
-    fn commit_transfer_ownership(e: Env, admin: Address, new_admin: Address) {
+    // * `role_name` - The name of the role to transfer ownership of. The role must be one of the following:
+    //     * `Admin`
+    //     * `EmergencyAdmin`
+    // * `new_address` - New address for the role
+    fn commit_transfer_ownership(e: Env, admin: Address, role_name: Symbol, new_address: Address) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, Role::Admin);
-        access_control.commit_transfer_ownership(new_admin.clone());
-        AccessControlEvents::new(&e).commit_transfer_ownership(new_admin);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let role = Role::from_symbol(&e, role_name);
+        access_control.commit_transfer_ownership(&role, &new_address);
+        AccessControlEvents::new(&e).commit_transfer_ownership(role, new_address);
     }
 
     // Applies the committed ownership transfer.
@@ -1468,12 +1497,17 @@ impl TransferableContract for LiquidityPoolRouter {
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    fn apply_transfer_ownership(e: Env, admin: Address) {
+    // * `role_name` - The name of the role to transfer ownership of. The role must be one of the following:
+    //     * `Admin`
+    //     * `EmergencyAdmin`
+    fn apply_transfer_ownership(e: Env, admin: Address, role_name: Symbol) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, Role::Admin);
-        let new_admin = access_control.apply_transfer_ownership();
-        AccessControlEvents::new(&e).apply_transfer_ownership(new_admin);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let role = Role::from_symbol(&e, role_name);
+        let new_address = access_control.apply_transfer_ownership(&role);
+        AccessControlEvents::new(&e).apply_transfer_ownership(role, new_address);
     }
 
     // Reverts the committed ownership transfer.
@@ -1481,11 +1515,38 @@ impl TransferableContract for LiquidityPoolRouter {
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    fn revert_transfer_ownership(e: Env, admin: Address) {
+    // * `role_name` - The name of the role to transfer ownership of. The role must be one of the following:
+    //     * `Admin`
+    //     * `EmergencyAdmin`
+    fn revert_transfer_ownership(e: Env, admin: Address, role_name: Symbol) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, Role::Admin);
-        access_control.revert_transfer_ownership();
-        AccessControlEvents::new(&e).revert_transfer_ownership();
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let role = Role::from_symbol(&e, role_name);
+        access_control.revert_transfer_ownership(&role);
+        AccessControlEvents::new(&e).revert_transfer_ownership(role);
+    }
+
+    // Returns the future address for the role.
+    // The future address is the address that the ownership of the role will be transferred to.
+    // The future address is set using the `commit_transfer_ownership` function.
+    // The address will be defaulted to the current address if the transfer is not committed.
+    //
+    // # Arguments
+    //
+    // * `role_name` - The name of the role to get the future address for. The role must be one of the following:
+    //    * `Admin`
+    //    * `EmergencyAdmin`
+    fn get_future_address(e: Env, role_name: Symbol) -> Address {
+        let access_control = AccessControl::new(&e);
+        let role = Role::from_symbol(&e, role_name);
+        match access_control.get_transfer_ownership_deadline(&role) {
+            0 => match access_control.get_role_safe(&role) {
+                Some(address) => address,
+                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+            },
+            _ => access_control.get_future_address(&role),
+        }
     }
 }

@@ -2555,6 +2555,11 @@ fn test_privileged_users() {
     let privileged_addrs: Map<Symbol, Vec<Address>> = Map::from_array(
         &e,
         [
+            (Symbol::new(&e, "Admin"), Vec::from_array(&e, [setup.admin])),
+            (
+                Symbol::new(&e, "EmergencyAdmin"),
+                Vec::from_array(&e, [setup.emergency_admin]),
+            ),
             (
                 Symbol::new(&e, "RewardsAdmin"),
                 Vec::from_array(&e, [setup.rewards_admin]),
@@ -2623,7 +2628,7 @@ fn test_transfer_ownership_events() {
     let router = setup.router;
     let new_admin = Address::generate(&setup.env);
 
-    router.commit_transfer_ownership(&setup.admin, &new_admin);
+    router.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -2631,12 +2636,12 @@ fn test_transfer_ownership_events() {
             (
                 router.address.clone(),
                 (Symbol::new(&setup.env, "commit_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
 
-    router.revert_transfer_ownership(&setup.admin);
+    router.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -2644,14 +2649,14 @@ fn test_transfer_ownership_events() {
             (
                 router.address.clone(),
                 (Symbol::new(&setup.env, "revert_transfer_ownership"),).into_val(&setup.env),
-                ().into_val(&setup.env),
+                (symbol_short!("Admin"),).into_val(&setup.env),
             ),
         ]
     );
 
-    router.commit_transfer_ownership(&setup.admin, &new_admin);
+    router.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    router.apply_transfer_ownership(&setup.admin);
+    router.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -2659,7 +2664,7 @@ fn test_transfer_ownership_events() {
             (
                 router.address.clone(),
                 (Symbol::new(&setup.env, "apply_transfer_ownership"),).into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
+                (symbol_short!("Admin"), new_admin.clone(),).into_val(&setup.env),
             ),
         ]
     );
