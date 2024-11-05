@@ -1,7 +1,6 @@
 #![cfg(test)]
 
 use crate::LiquidityPoolLiquidityCalculatorClient;
-use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::{Address, BytesN, Env, Symbol};
 
@@ -56,7 +55,6 @@ impl Default for Setup<'_> {
             &Symbol::new(&env, "EmergencyAdmin"),
             &emergency_admin,
         );
-        jump(&env, ADMIN_ACTIONS_DELAY + 1);
         calculator.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
 
         Setup {

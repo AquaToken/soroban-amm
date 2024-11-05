@@ -2,10 +2,8 @@
 extern crate std;
 
 use crate::LiquidityPoolRouterClient;
-use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
-use utils::test_utils::jump;
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
@@ -159,7 +157,6 @@ impl Default for Setup<'_> {
             &Symbol::new(&env, "EmergencyAdmin"),
             &emergency_admin,
         );
-        jump(&env, ADMIN_ACTIONS_DELAY + 1);
         router.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
 
         let plane = create_plane_contract(&env);

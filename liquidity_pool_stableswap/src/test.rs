@@ -3831,15 +3831,11 @@ fn test_ramp_a_events() {
     let setup = Setup::default();
     let pool = setup.liq_pool;
 
-    jump(&setup.env, ADMIN_ACTIONS_DELAY);
+    jump(&setup.env, MIN_RAMP_TIME);
     pool.ramp_a(
         &setup.admin,
         &185,
-        &setup
-            .env
-            .ledger()
-            .timestamp()
-            .saturating_add(ADMIN_ACTIONS_DELAY),
+        &setup.env.ledger().timestamp().saturating_add(MIN_RAMP_TIME),
     );
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
@@ -3850,18 +3846,14 @@ fn test_ramp_a_events() {
                 (Symbol::new(&setup.env, "ramp_a"),).into_val(&setup.env),
                 (
                     185_u128,
-                    setup
-                        .env
-                        .ledger()
-                        .timestamp()
-                        .saturating_add(ADMIN_ACTIONS_DELAY)
+                    setup.env.ledger().timestamp().saturating_add(MIN_RAMP_TIME)
                 )
                     .into_val(&setup.env),
             ),
         ]
     );
 
-    jump(&setup.env, ADMIN_ACTIONS_DELAY / 2);
+    jump(&setup.env, MIN_RAMP_TIME / 2);
 
     pool.stop_ramp_a(&setup.admin);
     assert_eq!(pool.a(), 135);

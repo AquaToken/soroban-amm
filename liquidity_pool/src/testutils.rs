@@ -132,7 +132,7 @@ impl Setup<'_> {
             &Symbol::new(&e, "EmergencyAdmin"),
             &emergency_admin,
         );
-        jump(&e, ADMIN_ACTIONS_DELAY + 1);
+        jump(&e, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
         liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
 
         let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
