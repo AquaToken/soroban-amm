@@ -41,7 +41,7 @@ tasks:
       - for: { var: SUBDIRS }
         cmd: task -d {{ .ITEM }} clean || exit 1
 
-  _check_bindings:
+  _check_bindings_tranfer_ownership:
     vars:
       WASMS:
         sh: find ./target/wasm32-unknown-unknown/release/ -maxdepth 1 -type f -name '*.wasm'
@@ -50,11 +50,32 @@ tasks:
         cmd:
           echo "Checking bindings for {{ .ITEM }}" &&
           soroban contract inspect --wasm {{ .ITEM }} | grep commit_transfer_ownership && 
-          soroban contract inspect --wasm {{ .ITEM }} | grep apply_transfer_ownership && 
-          soroban contract inspect --wasm {{ .ITEM }} | grep upgrade 
+          soroban contract inspect --wasm {{ .ITEM }} | grep apply_transfer_ownership
           || exit 1
+
+  _check_bindings_delayed_upgrade:
+    vars:
+      WASMS:
+        sh: find ./target/wasm32-unknown-unknown/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' \)
+    cmds:
+      - for: { var: WASMS }
+        cmd:
+          echo "Checking bindings for {{ .ITEM }}" &&
+          soroban contract inspect --wasm {{ .ITEM }} | grep apply_upgrade && 
+          soroban contract inspect --wasm {{ .ITEM }} | grep commit_upgrade 
+          || exit 1
+
+  _check_bindings_upgrade:
+    vars:
+      WASM: "./target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
+    cmds:
+      - echo "Checking upgrade bindings for {{ .WASM }}" && 
+        soroban contract inspect --wasm {{ .WASM }} | grep upgrade 
+        || exit 1
 
   check_bindings:
     cmds:
       - task build
-      - task _check_bindings
+      - task _check_bindings_tranfer_ownership
+      - task _check_bindings_delayed_upgrade
+      - task _check_bindings_upgrade

@@ -1,5 +1,5 @@
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
+use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Vec};
 
 use crate::normalize;
 use rewards::utils::bump::bump_instance;
@@ -29,6 +29,7 @@ enum DataKey {
     IsKilledClaim,
     Plane,
     Router,
+    TokenFutureWASM,
 
     // Tokens precision
     Precision, // target precision for internal calculations. It's the maximum precision of all tokens.
@@ -284,5 +285,18 @@ pub fn get_rates(e: &Env) -> Vec<u128> {
             set_rates(e, &rates);
             rates
         }
+    }
+}
+
+pub(crate) fn set_token_future_wasm(e: &Env, value: &BytesN<32>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::TokenFutureWASM, value)
+}
+
+pub(crate) fn get_token_future_wasm(e: &Env) -> BytesN<32> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::TokenFutureWASM) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
     }
 }

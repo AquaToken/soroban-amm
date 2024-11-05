@@ -3,7 +3,7 @@ extern crate std;
 
 use crate::LiquidityPoolRouterClient;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, BytesN, Env, Vec};
+use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
@@ -88,6 +88,7 @@ pub(crate) struct Setup<'a> {
 
     pub(crate) router: LiquidityPoolRouterClient<'a>,
 
+    pub(crate) emergency_admin: Address,
     pub(crate) rewards_admin: Address,
     pub(crate) operations_admin: Address,
     pub(crate) pause_admin: Address,
@@ -150,6 +151,14 @@ impl Default for Setup<'_> {
             &payment_for_creation_address,
         );
 
+        let emergency_admin = Address::generate(&env);
+        router.commit_transfer_ownership(
+            &admin,
+            &Symbol::new(&env, "EmergencyAdmin"),
+            &emergency_admin,
+        );
+        router.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
+
         let plane = create_plane_contract(&env);
         router.set_pools_plane(&admin, &plane.address);
 
@@ -164,6 +173,7 @@ impl Default for Setup<'_> {
             tokens,
             reward_token,
             router,
+            emergency_admin,
             rewards_admin,
             operations_admin,
             pause_admin,

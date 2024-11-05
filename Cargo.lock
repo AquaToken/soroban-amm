@@ -1086,6 +1086,7 @@ version = "1.2.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
+ "upgrade",
 ]
 
 [[package]]
@@ -1124,6 +1125,7 @@ dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
+ "upgrade",
  "utils",
 ]
 
@@ -1134,6 +1136,7 @@ dependencies = [
  "access_control",
  "soroban-fixed-point-math",
  "soroban-sdk",
+ "upgrade",
 ]
 
 [[package]]
@@ -1142,6 +1145,7 @@ version = "1.2.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
+ "upgrade",
 ]
 
 [[package]]
@@ -1155,6 +1159,7 @@ dependencies = [
  "rewards",
  "soroban-sdk",
  "token_share",
+ "upgrade",
  "utils",
 ]
 
@@ -1171,6 +1176,7 @@ dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
+ "upgrade",
  "utils",
 ]
 
@@ -1249,6 +1255,7 @@ dependencies = [
  "access_control",
  "soroban-sdk",
  "soroban-token-sdk",
+ "upgrade",
  "utils",
 ]
 
@@ -1414,6 +1421,15 @@ name = "unicode-ident"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
+
+[[package]]
+name = "upgrade"
+version = "1.2.0"
+dependencies = [
+ "access_control",
+ "soroban-sdk",
+ "utils",
+]
 
 [[package]]
 name = "utils"

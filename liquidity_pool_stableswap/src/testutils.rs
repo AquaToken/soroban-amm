@@ -3,13 +3,15 @@
 use crate::plane::pool_plane;
 use crate::plane::pool_plane::Client as PoolPlaneClient;
 use crate::LiquidityPoolClient;
+use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::arbitrary::std;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{Address, BytesN, Env, IntoVal, Vec};
+use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Vec};
 use token_share::token_contract::Client as ShareTokenClient;
+use utils::test_utils::jump;
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
     SorobanTokenClient::new(
@@ -41,6 +43,7 @@ pub fn create_liqpool_contract<'a>(
     liqpool.initialize_all(
         admin,
         &(
+            admin.clone(),
             admin.clone(),
             admin.clone(),
             admin.clone(),
@@ -109,6 +112,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) plane: PoolPlaneClient<'a>,
 
     pub(crate) admin: Address,
+    pub(crate) emergency_admin: Address,
     pub(crate) rewards_admin: Address,
     pub(crate) operations_admin: Address,
     pub(crate) pause_admin: Address,
@@ -177,6 +181,15 @@ impl Setup<'_> {
             &Vec::from_array(&env, [emergency_pause_admin.clone()]),
         );
 
+        let emergency_admin = Address::generate(&env);
+        liq_pool.commit_transfer_ownership(
+            &admin,
+            &Symbol::new(&env, "EmergencyAdmin"),
+            &emergency_admin,
+        );
+        jump(&env, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
+        liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
+
         let token_share = ShareTokenClient::new(&env, &liq_pool.share_id());
 
         Setup {
@@ -189,6 +202,7 @@ impl Setup<'_> {
             router,
             plane,
             admin,
+            emergency_admin,
             rewards_admin,
             operations_admin,
             pause_admin,

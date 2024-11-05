@@ -5,7 +5,7 @@ pub trait ManagedLiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
@@ -24,7 +24,7 @@ pub trait LiquidityPoolInterfaceTrait {
     fn initialize(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -88,16 +88,27 @@ pub trait LiquidityPoolInterfaceTrait {
     fn get_info(e: Env) -> Map<Symbol, Val>;
 }
 
-pub trait UpgradeableContractTrait {
+pub trait UpgradeableContract {
     // Get contract version
     fn version() -> u32;
 
     // Upgrade contract with new wasm code
-    fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>);
+    fn commit_upgrade(
+        e: Env,
+        admin: Address,
+        new_wasm_hash: BytesN<32>,
+        new_token_wasm_hash: BytesN<32>,
+    );
+    fn apply_upgrade(e: Env, admin: Address) -> (BytesN<32>, BytesN<32>);
+    fn revert_upgrade(e: Env, admin: Address);
+
+    // Emergency mode - bypass upgrade deadline
+    fn set_emergency_mode(e: Env, admin: Address, value: bool);
+    fn get_emergency_mode(e: Env) -> bool;
 }
 
 pub trait UpgradeableLPTokenTrait {
-    fn upgrade_token(e: Env, admin: Address, new_token_wasm: BytesN<32>);
+    // legacy methods to upgrade token contract up to version 120. future versions will use commit_upgrade
     fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>);
 }
 
@@ -186,7 +197,7 @@ pub trait AdminInterfaceTrait {
 
 pub trait LiquidityPoolTrait:
     LiquidityPoolInterfaceTrait
-    + UpgradeableContractTrait
+    + UpgradeableContract
     + UpgradeableLPTokenTrait
     + RewardsTrait
     + AdminInterfaceTrait
