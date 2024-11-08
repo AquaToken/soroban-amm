@@ -36,8 +36,6 @@ pub trait LiquidityPoolEvents {
         fee_amount: u128,
     );
 
-    fn claim(&self, user: Address, reward_token: Address, amount: u128);
-
     fn kill_deposit(&self);
 
     fn unkill_deposit(&self);
@@ -136,25 +134,6 @@ impl LiquidityPoolEvents for Events {
         e.events().publish(
             (Symbol::new(e, "trade"), token_in, token_out, user),
             (in_amount as i128, out_amount as i128, fee_amount as i128),
-        );
-    }
-
-    fn claim(&self, user: Address, reward_token: Address, amount: u128) {
-        // topics
-        // [
-        //   "claim_reward": Symbol,           // event identifier
-        //   reward_token: Address,     // Address of token claimed
-        //   claimant: Address          // address of account/contract that initiated the claim
-        // ]
-        // body
-        // [
-        //   amount: i128,              // amount of reward tokens claimed
-        // ]
-
-        let e = self.env();
-        e.events().publish(
-            (Symbol::new(e, "claim_reward"), reward_token, user),
-            (amount as i128,),
         );
     }
 
