@@ -1794,6 +1794,8 @@ impl RewardsTrait for LiquidityPool {
             }
         }
 
+        PoolEvents::new(&e).claim(user, reward_token, reward);
+
         reward
     }
 }
