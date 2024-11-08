@@ -847,7 +847,7 @@ impl UpgradeableContract for LiquidityPool {
 
 #[contractimpl]
 impl UpgradeableLPTokenTrait for LiquidityPool {
-    // legacy upgrade
+    // legacy upgrade. not compatible with token contract version 140+ due to different arguments
     fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
