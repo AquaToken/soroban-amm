@@ -2230,3 +2230,48 @@ fn test_regular_upgrade_pool() {
     assert_eq!(contract.version(), 130);
     assert_eq!(token.version(), 130);
 }
+
+#[test]
+fn test_claim_event() {
+    let setup = Setup::default();
+    let liq_pool = setup.liq_pool;
+    let token_1_admin_client =
+        SorobanTokenAdminClient::new(&setup.env, &setup.token1.address.clone());
+    let token_2_admin_client =
+        SorobanTokenAdminClient::new(&setup.env, &setup.token2.address.clone());
+    let token_reward_admin_client =
+        SorobanTokenAdminClient::new(&setup.env, &setup.token_reward.address.clone());
+
+    let user = Address::generate(&setup.env);
+
+    token_1_admin_client.mint(&user, &1000);
+    token_2_admin_client.mint(&user, &1000);
+    liq_pool.deposit(&user, &Vec::from_array(&setup.env, [1000, 1000]), &0);
+    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 70;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &setup.env.ledger().timestamp().saturating_add(70),
+        &reward_1_tps,
+    );
+    jump(&setup.env, 70);
+    liq_pool.claim(&user);
+
+    assert_eq!(
+        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        vec![
+            &setup.env,
+            (
+                liq_pool.address.clone(),
+                (
+                    Symbol::new(&setup.env, "claim_reward"),
+                    setup.token_reward.address.clone(),
+                    user.clone(),
+                )
+                    .into_val(&setup.env),
+                (total_reward_1 as i128,).into_val(&setup.env),
+            ),
+        ]
+    );
+}

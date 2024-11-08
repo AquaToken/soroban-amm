@@ -1,4 +1,4 @@
-use soroban_sdk::{Env, Symbol};
+use soroban_sdk::{Address, Env, Symbol};
 
 #[derive(Clone)]
 pub struct Events(Env);
@@ -19,5 +19,24 @@ impl Events {
             (Symbol::new(self.env(), "set_rewards_config"),),
             (expired_at, tps),
         )
+    }
+
+    pub fn claim(&self, user: Address, reward_token: Address, amount: u128) {
+        // topics
+        // [
+        //   "claim_reward": Symbol,    // event identifier
+        //   reward_token: Address,     // Address of token claimed
+        //   claimant: Address          // address of account/contract that initiated the claim
+        // ]
+        // body
+        // [
+        //   amount: i128,              // amount of reward tokens claimed
+        // ]
+
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "claim_reward"), reward_token, user),
+            (amount as i128,),
+        );
     }
 }
