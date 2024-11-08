@@ -1345,12 +1345,7 @@ fn test_withdraw_one_token() {
                     token2.address.clone()
                 )
                     .into_val(&e),
-                (
-                    100_0000000_i128,
-                    91_0435607_i128,
-                    0_i128
-                )
-                    .into_val(&e),
+                (100_0000000_i128, 91_0435607_i128, 0_i128).into_val(&e),
             )
         ]
     );
