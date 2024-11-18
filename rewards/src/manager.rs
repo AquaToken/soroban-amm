@@ -341,6 +341,12 @@ impl Manager {
             let current_value = aggregated_page.get(cell_start).unwrap_or(0);
             let increased_value = current_value + value;
             aggregated_page.set(cell_start, increased_value);
+
+            // normalize aggregated page to fixed length =page_size for predictable resource limits
+            for i in aggregated_page.len() as u64..self.config.page_size {
+                aggregated_page.set(cell_start + cell_size * i, 0);
+            }
+
             self.storage
                 .set_reward_inv_data(pow, page_number, aggregated_page);
         }
