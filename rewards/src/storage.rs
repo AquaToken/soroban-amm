@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
 use utils::bump::bump_persistent;
 use utils::storage_errors::StorageError;
 
@@ -34,13 +34,14 @@ enum DataKey {
     PoolRewardData,
     UserRewardData(Address),
     RewardInvData(u32, u64),
+    RewardInvDataV2(u32, u64),
     RewardStorage,
     RewardToken,
 }
 
 pub struct Storage {
     env: Env,
-    inv_cache: Map<DataKey, Map<u64, u128>>,
+    inv_cache: Map<DataKey, Vec<u128>>,
 }
 
 impl Storage {
@@ -63,9 +64,8 @@ pub trait RewardsStorageTrait {
     fn set_user_reward_data(&self, user: &Address, config: &UserRewardData);
     fn bump_user_reward_data(&self, user: &Address);
 
-    fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Map<u64, u128>;
-    fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Map<u64, u128>);
-    fn bump_reward_inv_data(&self, pow: u32, page_number: u64);
+    fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Vec<u128>;
+    fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Vec<u128>);
 
     fn get_reward_token(&self) -> Address;
     fn put_reward_token(&self, contract: Address);
@@ -137,15 +137,32 @@ impl RewardsStorageTrait for Storage {
         bump_persistent(&self.env, &DataKey::UserRewardData(user.clone()))
     }
 
-    fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Map<u64, u128> {
-        let key = DataKey::RewardInvData(pow, page_number);
+    fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Vec<u128> {
+        let key = DataKey::RewardInvDataV2(pow, page_number);
         let cached_value_result = self.inv_cache.get(key.clone());
         match cached_value_result {
             Some(value) => value,
             None => {
-                let value: Map<u64, u128> = match self.env.storage().persistent().get(&key) {
+                let value = match self.env.storage().persistent().get(&key) {
                     Some(v) => v,
-                    None => return Map::new(&self.env),
+                    None => {
+                        // try to find data using the legacy format
+                        let key_old = DataKey::RewardInvData(pow, page_number);
+                        let old_result: Option<Map<u64, u128>> =
+                            self.env.storage().persistent().get(&key_old);
+                        match old_result {
+                            Some(legacy_value) => {
+                                // legacy value exists - migrate Map<u64, u128> into Vec<u128>
+                                let mut new_result = Vec::new(&self.env);
+                                for (_k, local_value) in legacy_value {
+                                    new_result.push_back(local_value);
+                                }
+                                self.set_reward_inv_data(pow, page_number, new_result.clone());
+                                new_result
+                            }
+                            None => return Vec::new(&self.env),
+                        }
+                    }
                 };
                 self.inv_cache.set(key, value.clone());
                 value
@@ -153,15 +170,11 @@ impl RewardsStorageTrait for Storage {
         }
     }
 
-    fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Map<u64, u128>) {
-        let key = DataKey::RewardInvData(pow, page_number);
+    fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, value: Vec<u128>) {
+        let key = DataKey::RewardInvDataV2(pow, page_number);
         self.inv_cache.set(key.clone(), value.clone());
         self.env.storage().persistent().set(&key, &value);
-        self.bump_reward_inv_data(pow, page_number); // when set need bump
-    }
-
-    fn bump_reward_inv_data(&self, pow: u32, page_number: u64) {
-        bump_persistent(&self.env, &DataKey::RewardInvData(pow, page_number))
+        bump_persistent(&self.env, &key)
     }
 
     fn get_reward_token(&self) -> Address {
