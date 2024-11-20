@@ -283,11 +283,13 @@ impl Manager {
     fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Vec<u128> {
         let mut page = self.storage.get_reward_inv_data(pow, page_number);
 
-        // normalize the length
-        // since there are cases when the page is not fully filled: new page or legacy value
-        for _ in page.len() as u64..self.config.page_size {
-            page.push_back(0);
+        if pow == 0 {
+            // normalize the length if it's the first level page for predictable limits calculation
+            for _ in page.len() as u64..self.config.page_size {
+                page.push_back(0);
+            }
         }
+
         page
     }
 
@@ -370,14 +372,19 @@ impl Manager {
 
             let cell_size = self.config.page_size.pow(pow);
             let page_size = self.config.page_size.pow(pow + 1);
-            let cell_idx = block % page_size / cell_size;
+            let cell_idx = (block % page_size / cell_size) as u32;
             let page_start = block - block % page_size;
             let page_number = page_start / page_size;
 
             let mut aggregated_page = self.get_reward_inv_data(pow, page_number);
-            let current_value = aggregated_page.get(cell_idx as u32).unwrap();
-            let increased_value = current_value + value;
-            aggregated_page.set(cell_idx as u32, increased_value);
+            let increased_value = aggregated_page.get(cell_idx).unwrap_or(0) + value;
+            // pow 0 page is fixed length=config.page_size
+            // pow 1+ pages are growable
+            if pow > 0 && cell_idx == aggregated_page.len() {
+                aggregated_page.push_back(increased_value);
+            } else {
+                aggregated_page.set(cell_idx, increased_value);
+            }
             self.set_reward_inv_data(pow, page_number, aggregated_page);
         }
     }
