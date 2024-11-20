@@ -336,12 +336,13 @@ impl Manager {
                 }
             }
 
-            let next_block = block + self.config.page_size.pow(pow);
-            let page_number = block / self.config.page_size.pow(pow + 1);
-            let page = self.get_reward_inv_data(pow, page_number);
-            let page_size = self.config.page_size.pow(pow + 1);
             let cell_size = self.config.page_size.pow(pow);
+            let page_size = cell_size * self.config.page_size;
             let cell_idx = block % page_size / cell_size;
+            let page_number = block / page_size;
+            let next_block = block + cell_size;
+
+            let page = self.get_reward_inv_data(pow, page_number);
             result += match page.get(cell_idx as u32) {
                 Some(v) => v,
                 None => panic_with_error!(self.env, StorageError::ValueMissing),
@@ -371,10 +372,9 @@ impl Manager {
             }
 
             let cell_size = self.config.page_size.pow(pow);
-            let page_size = self.config.page_size.pow(pow + 1);
+            let page_size = cell_size * self.config.page_size;
             let cell_idx = (block % page_size / cell_size) as u32;
-            let page_start = block - block % page_size;
-            let page_number = page_start / page_size;
+            let page_number = block / page_size;
 
             let mut aggregated_page = self.get_reward_inv_data(pow, page_number);
             let increased_value = aggregated_page.get(cell_idx).unwrap_or(0) + value;
