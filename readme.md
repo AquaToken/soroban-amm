@@ -82,6 +82,48 @@ We plan to use Soroban to build Automated Market Maker (AMM) smart contracts and
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
+### Smart Contract Admin Roles
+
+#### Owner
+- **Description**: Can upgrade the code of the underlying smart contracts, remove or add addresses for any of the other roles, etc.
+- **Privileges**:
+    - Upgrade code
+    - Transfer ownership
+    - Privileged address management
+    - Manage internal contracts addresses: Plane, Liquidity Calculator
+    - Change pools & token wasm hash for pools factory
+    - Update reward token address
+    - Configure pool creation fee
+
+#### Pause Admin
+- **Description**: Can pause/unpause the execution of the entire protocol, or of a specific component (router, liquidity pool) within it.
+- **Privileges**:
+    - Pause pool deposits
+    - Pause pool swaps
+    - Pause pool claims
+    - Unpause pool deposits
+    - Unpause pool swaps
+    - Unpause pool claims
+
+#### Operations Admin
+- **Description**: Can add/remove pools, adjust certain parameters (e.g., like A in a stablecoin pool), and collect/donate fees.
+- **Privileges**:
+    - Remove pool from router
+    - Stableswap pool: Ramp A, stop ramping, set fee
+
+#### Rewards Admin
+- **Description**: Configure and distribute global rewards.
+- **Privileges**:
+    - Set rewards rate
+    - Distribute outstanding reward among pools
+
+#### Emergency Pauser
+- **Description**: Can stop the execution of the entire protocol, or of a specific component (router, liquidity pool) within it. More selectively, it can also shutdown specific functions like deposit/withdrawal or swapping.
+- **Privileges**:
+    - Pause pool deposits
+    - Pause pool swaps
+    - Pause pool claims
+- **Security**: There can be multiple addresses which have it, and it can also be given to off-chain monitoring tools or firms.
 
 
 ### Built With
