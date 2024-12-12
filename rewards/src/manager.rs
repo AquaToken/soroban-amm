@@ -5,7 +5,7 @@ use crate::storage::{
 };
 use crate::RewardsConfig;
 use cast::u128 as to_u128;
-use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env};
+use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec};
 use utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
 
@@ -269,6 +269,42 @@ impl Manager {
 
     // private functions
 
+    // Aggregated reward page data getter
+    // normalizes the length of the page up to the page size for predictable limits calculation
+    //
+    // # Arguments
+    //
+    // * `pow` - The power of the page size.
+    // * `page_number` - The number of the page.
+    //
+    // # Returns The aggregated page data.
+    //
+    // * The aggregated page data.
+    fn get_reward_inv_data(&mut self, pow: u32, page_number: u64) -> Vec<u128> {
+        let mut page = self.storage.get_reward_inv_data(pow, page_number);
+
+        if pow == 0 {
+            // normalize the length if it's the first level page for predictable limits calculation
+            for _ in page.len() as u64..self.config.page_size {
+                page.push_back(0);
+            }
+        }
+
+        page
+    }
+
+    // Aggregated reward page data setter
+    //
+    // # Arguments
+    //
+    // * `pow` - The power of the page size.
+    // * `page_number` - The number of the page.
+    // * `aggregated_page` - The aggregated page data.
+    fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, aggregated_page: Vec<u128>) {
+        self.storage
+            .set_reward_inv_data(pow, page_number, aggregated_page);
+    }
+
     // Calculates the total reward between two blocks.
     //
     // This method calculates the total reward from the start block to the end block inclusively
@@ -300,10 +336,14 @@ impl Manager {
                 }
             }
 
-            let next_block = block + self.config.page_size.pow(pow);
-            let page_number = block / self.config.page_size.pow(pow + 1);
-            let page = self.storage.get_reward_inv_data(pow, page_number);
-            result += match page.get(block) {
+            let cell_size = self.config.page_size.pow(pow);
+            let page_size = cell_size * self.config.page_size;
+            let cell_idx = block % page_size / cell_size;
+            let page_number = block / page_size;
+            let next_block = block + cell_size;
+
+            let page = self.get_reward_inv_data(pow, page_number);
+            result += match page.get(cell_idx as u32) {
                 Some(v) => v,
                 None => panic_with_error!(self.env, StorageError::ValueMissing),
             };
@@ -332,17 +372,20 @@ impl Manager {
             }
 
             let cell_size = self.config.page_size.pow(pow);
-            let page_size = self.config.page_size.pow(pow + 1);
-            let cell_start = block - block % cell_size;
-            let page_start = block - block % page_size;
-            let page_number = page_start / page_size;
+            let page_size = cell_size * self.config.page_size;
+            let cell_idx = (block % page_size / cell_size) as u32;
+            let page_number = block / page_size;
 
-            let mut aggregated_page = self.storage.get_reward_inv_data(pow, page_number);
-            let current_value = aggregated_page.get(cell_start).unwrap_or(0);
-            let increased_value = current_value + value;
-            aggregated_page.set(cell_start, increased_value);
-            self.storage
-                .set_reward_inv_data(pow, page_number, aggregated_page);
+            let mut aggregated_page = self.get_reward_inv_data(pow, page_number);
+            let increased_value = aggregated_page.get(cell_idx).unwrap_or(0) + value;
+            // pow 0 page is fixed length=config.page_size
+            // pow 1+ pages are growable
+            if pow > 0 && cell_idx == aggregated_page.len() {
+                aggregated_page.push_back(increased_value);
+            } else {
+                aggregated_page.set(cell_idx, increased_value);
+            }
+            self.set_reward_inv_data(pow, page_number, aggregated_page);
         }
     }
 
