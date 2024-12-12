@@ -62,12 +62,12 @@ pub struct LiquidityPool;
 
 #[contractimpl]
 impl LiquidityPoolTrait for LiquidityPool {
-    // Returns the amplification coefficient `A` in its raw form.
-    // The bigger A is, the more the pool is concentrated around the initial price.
+    // Returns the actual value of amplification coefficient `Amp = A*N**(N-1)`.
+    // The bigger Amp is, the more the pool is concentrated around the initial price.
     //
     // # Returns
     //
-    // * The amplification coefficient `A`.
+    // * The amplification coefficient `Amp`.
     fn a(e: Env) -> u128 {
         // Handle ramping A up or down
         let t1 = get_future_a_time(&e) as u128;
@@ -387,7 +387,7 @@ impl LiquidityPool {
     // # Arguments
     //
     // * `xp` - The balances of each token in the pool.
-    // * `amp` - The amplification coefficient.
+    // * `amp` - The amplification coefficient in the form of A*N**(N-1).
     //
     // # Returns
     //
@@ -512,7 +512,7 @@ impl LiquidityPool {
     //
     // # Arguments
     //
-    // * `a` - The amplification coefficient.
+    // * `amp` - The amplification coefficient `Amp = A*N**(N-1)`.
     // * `i` - The index of the token being swapped.
     // * `xp` - The balances of each token in the pool.
     // * `d` - The invariant `D`.
@@ -520,7 +520,7 @@ impl LiquidityPool {
     // # Returns
     //
     // * The amount of token `j` that will be received.
-    fn _get_y_d(e: &Env, a: u128, in_idx: u32, xp: &Vec<u128>, d: U256) -> u128 {
+    fn _get_y_d(e: &Env, amp: u128, in_idx: u32, xp: &Vec<u128>, d: U256) -> u128 {
         // Calculate x[i] if one reduces D from being calculated for xp to D
         //
         // Done by solving quadratic equation iteratively.
@@ -540,7 +540,7 @@ impl LiquidityPool {
 
         let mut c = d.clone();
         let mut s = U256::from_u32(e, 0);
-        let ann = U256::from_u128(e, a * n_coins as u128);
+        let ann = U256::from_u128(e, amp * n_coins as u128);
         let n_coins_256 = U256::from_u32(e, n_coins);
 
         let mut x;
@@ -947,7 +947,7 @@ impl ManagedLiquidityPool for LiquidityPool {
     // * `router` - The address of the router.
     // * `token_wasm_hash` - The hash of the token's WASM code.
     // * `coins` - The addresses of the coins.
-    // * `a` - The amplification coefficient.
+    // * `amp` - The amplification coefficient. Amp = A*N**(N-1)
     // * `fee` - The fee to be applied.
     // * `reward_token` - The address of the reward token.
     // * `plane` - The address of the plane.
@@ -958,7 +958,7 @@ impl ManagedLiquidityPool for LiquidityPool {
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
-        a: u128,
+        amp: u128,
         fee: u32,
         reward_token: Address,
         plane: Address,
@@ -973,7 +973,7 @@ impl ManagedLiquidityPool for LiquidityPool {
             router,
             token_wasm_hash,
             coins,
-            a,
+            amp,
             fee,
         );
         Self::initialize_rewards_config(e.clone(), reward_token);
@@ -1006,7 +1006,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // * `router` - The address of the router.
     // * `token_wasm_hash` - The hash of the token's WASM code.
     // * `tokens` - The addresses of the coins.
-    // * `a` - The amplification coefficient.
+    // * `amp` - The amplification coefficient. Amp = A*N**(N-1)
     // * `fee` - The fee to be applied.
     fn initialize(
         e: Env,
@@ -1015,7 +1015,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         router: Address,
         token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
-        a: u128,
+        amp: u128,
         fee: u32,
     ) {
         let access_control = AccessControl::new(&e);
@@ -1058,9 +1058,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         put_reserves(&e, &initial_reserves);
 
         // pool config
-        put_initial_a(&e, &a);
+        put_initial_a(&e, &amp);
         put_initial_a_time(&e, &e.ledger().timestamp());
-        put_future_a(&e, &a);
+        put_future_a(&e, &amp);
         put_future_a_time(&e, &e.ledger().timestamp());
         put_admin_actions_deadline(&e, &0);
 

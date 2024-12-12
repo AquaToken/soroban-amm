@@ -1235,7 +1235,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
                     );
                 }
 
-                deploy_stableswap_pool(&e, &tokens, STABLESWAP_DEFAULT_A, fee_fraction)
+                // calculate amplification factor
+                // Amp = A*N**(N-1)
+                let n = tokens.len();
+                let amp = STABLESWAP_DEFAULT_A * (n as u128).pow(n - 1);
+                deploy_stableswap_pool(&e, &tokens, amp, fee_fraction)
             }
         }
     }

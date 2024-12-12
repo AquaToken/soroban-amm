@@ -202,7 +202,7 @@ pub trait LiquidityPoolTrait:
     + RewardsTrait
     + AdminInterfaceTrait
 {
-    // The amplification coefficient for the pool.
+    // The amplification coefficient Amp for the pool. Amp = A*N**(N-1)
     fn a(e: Env) -> u128;
 
     // Returns portfolio virtual price (for calculating profit) scaled up by 1e7
