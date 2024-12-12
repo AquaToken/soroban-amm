@@ -6,11 +6,11 @@ use crate::pool_interface::{
 use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
     get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_rates, get_reserves,
-    get_router, get_token_future_wasm, get_tokens, has_plane, put_admin_actions_deadline,
-    put_decimals, put_fee, put_future_a, put_future_a_time, put_future_fee, put_initial_a,
-    put_initial_a_time, put_reserves, put_tokens, set_is_killed_claim, set_is_killed_deposit,
-    set_is_killed_swap, set_plane, set_router, set_token_future_wasm,
+    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_reserves, get_router,
+    get_token_future_wasm, get_tokens, has_plane, put_admin_actions_deadline, put_decimals,
+    put_fee, put_future_a, put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time,
+    put_reserves, put_tokens, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
+    set_plane, set_router, set_token_future_wasm,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -157,11 +157,10 @@ impl LiquidityPoolTrait for LiquidityPool {
     // * The amount of token `j` that will be received.
     fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128 {
         // dx and dy in c-units
-        let rates = get_rates(&e);
+        let precision_mul = get_precision_mul(&e);
         let xp = Self::_xp(&e, &get_reserves(&e));
 
-        let x =
-            xp.get(i).unwrap() + dx.fixed_mul_floor(&e, &rates.get(i).unwrap(), &get_precision(&e));
+        let x = xp.get(i).unwrap() + dx * precision_mul.get(i).unwrap();
         let y = Self::_get_y(&e, i, j, x, &xp);
 
         if y == 0 {
@@ -169,11 +168,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             return 0;
         }
 
-        let dy = (xp.get(j).unwrap() - y - 1).fixed_mul_floor(
-            &e,
-            &get_precision(&e),
-            &rates.get(j).unwrap(),
-        );
+        let dy = (xp.get(j).unwrap() - y - 1) / precision_mul.get(j).unwrap();
         // The `fixed_mul_ceil` function is used to perform the multiplication
         //  to ensure user cannot exploit rounding errors.
         let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, &dy, &(FEE_DENOMINATOR as u128));
@@ -1285,7 +1280,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
-        let rates = get_rates(&e);
+        let precision_mul = get_precision_mul(&e);
         let old_balances = get_reserves(&e);
         let xp = Self::_xp(&e, &old_balances);
 
@@ -1301,16 +1296,14 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let x = xp.get(in_idx).unwrap()
-            + in_amount.fixed_mul_floor(&e, &rates.get(in_idx).unwrap(), &get_precision(&e));
+        let x = xp.get(in_idx).unwrap() + in_amount * precision_mul.get(in_idx).unwrap();
         let y = Self::_get_y(&e, in_idx, out_idx, x, &xp);
 
         let dy = xp.get(out_idx).unwrap() - y - 1; // -1 just in case there were some rounding errors
         let dy_fee = dy.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
 
         // Convert all to real units
-        let dy =
-            (dy - dy_fee).fixed_mul_floor(&e, &get_precision(&e), &rates.get(out_idx).unwrap());
+        let dy = (dy - dy_fee) / precision_mul.get(out_idx).unwrap();
         if dy < out_min {
             panic_with_error!(e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
