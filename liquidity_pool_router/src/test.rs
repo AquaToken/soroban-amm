@@ -501,7 +501,7 @@ fn test_stableswap_3_pool() {
         Vec::from_array(&e, [100_0000000, 100_0000000, 100_0000000])
     );
 
-     assert_eq!(
+    assert_eq!(
         router.swap(
             &user1,
             &tokens,
