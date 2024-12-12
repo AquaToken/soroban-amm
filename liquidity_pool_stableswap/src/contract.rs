@@ -1609,12 +1609,7 @@ impl RewardsTrait for LiquidityPool {
             None => {}
         };
 
-        if reward_balance > reward_balance_to_keep {
-            reward_balance - reward_balance_to_keep
-        } else {
-            // balance is not sufficient, no surplus
-            0
-        }
+        reward_balance.saturating_sub(reward_balance_to_keep)
     }
 
     // Return reward token above the configured amount back to router
