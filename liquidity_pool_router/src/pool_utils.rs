@@ -93,7 +93,7 @@ pub fn deploy_standard_pool(
 pub fn deploy_stableswap_pool(
     e: &Env,
     tokens: &Vec<Address>,
-    a: u128,
+    amp: u128,
     fee_fraction: u32,
 ) -> (BytesN<32>, Address) {
     let tokens_salt = get_tokens_salt(e, tokens);
@@ -106,7 +106,7 @@ pub fn deploy_stableswap_pool(
         .deployer()
         .with_current_contract(merge_salt(e, tokens_salt.clone(), subpool_salt.clone()))
         .deploy(liquidity_pool_wasm_hash);
-    init_stableswap_pool(e, tokens, &pool_contract_id, a, fee_fraction);
+    init_stableswap_pool(e, tokens, &pool_contract_id, amp, fee_fraction);
 
     add_tokens_set(e, tokens);
     add_pool(
@@ -122,7 +122,7 @@ pub fn deploy_stableswap_pool(
         pool_contract_id.clone(),
         symbol_short!("stable"),
         subpool_salt.clone(),
-        Vec::<Val>::from_array(e, [fee_fraction.into_val(e), a.into_val(e)]),
+        Vec::<Val>::from_array(e, [fee_fraction.into_val(e), amp.into_val(e)]),
     );
 
     (subpool_salt, pool_contract_id)
@@ -179,7 +179,7 @@ fn init_stableswap_pool(
     e: &Env,
     tokens: &Vec<Address>,
     pool_contract_id: &Address,
-    a: u128,
+    amp: u128,
     fee_fraction: u32,
 ) {
     let token_wasm_hash = get_token_hash(e);
@@ -222,7 +222,7 @@ fn init_stableswap_pool(
                 e.current_contract_address().to_val(),
                 token_wasm_hash.into_val(e),
                 tokens.clone().into_val(e),
-                a.into_val(e),
+                amp.into_val(e),
                 fee_fraction.into_val(e),
                 reward_token.into_val(e),
                 plane.into_val(e),
