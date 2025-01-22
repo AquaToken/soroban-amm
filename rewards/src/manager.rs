@@ -24,6 +24,28 @@ impl Manager {
         }
     }
 
+    fn calculate_effective_balance(
+        &self,
+        user: &Address,
+        share_balance: u128,
+        total_share: u128,
+    ) -> u128 {
+        // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
+        let lock_balance = self.storage.get_user_locked_balance(&user);
+        let total_locked = self.storage.get_total_locked();
+        if total_locked == 0 {
+            return share_balance;
+        };
+
+        let max_effective_balance = share_balance * 5 / 2;
+        let adjusted_balance = share_balance + 3 * lock_balance * total_share / total_locked / 2;
+        if adjusted_balance > max_effective_balance {
+            max_effective_balance
+        } else {
+            adjusted_balance
+        }
+    }
+
     // Sets the reward configuration for the pool.
     //
     // # Arguments
@@ -57,8 +79,9 @@ impl Manager {
             return;
         }
 
-        self.update_rewards_data(total_shares);
-        self.snapshot_rewards_data(total_shares);
+        let working_supply = self.get_working_supply(total_shares);
+        self.update_rewards_data(working_supply);
+        self.snapshot_rewards_data(working_supply);
         let config = PoolRewardConfig { tps, expired_at };
 
         bump_instance(&self.env);
@@ -74,7 +97,7 @@ impl Manager {
     // # Returns
     //
     // * The updated `PoolRewardData` instance.
-    pub fn update_rewards_data(&mut self, total_shares: u128) -> PoolRewardData {
+    pub fn update_rewards_data(&mut self, working_supply: u128) -> PoolRewardData {
         let config = self.storage.get_pool_reward_config();
         let mut data = self.storage.get_pool_reward_data();
         let now = self.env.ledger().timestamp();
@@ -84,7 +107,7 @@ impl Manager {
             let generated_tokens = to_u128(now - data.last_time) * to_u128(config.tps);
             self.create_new_rewards_data(
                 generated_tokens,
-                total_shares,
+                working_supply,
                 PoolRewardData {
                     block: data.block + 1,
                     accumulated: data.accumulated + generated_tokens,
@@ -100,7 +123,7 @@ impl Manager {
                     to_u128(config.expired_at - data.last_time) * to_u128(config.tps);
                 data = self.create_new_rewards_data(
                     generated_tokens,
-                    total_shares,
+                    working_supply,
                     PoolRewardData {
                         block: data.block + 1,
                         accumulated: data.accumulated + generated_tokens,
@@ -127,7 +150,7 @@ impl Manager {
     // # Returns
     //
     // * The updated `PoolRewardData` instance.
-    pub fn snapshot_rewards_data(&mut self, total_shares: u128) -> PoolRewardData {
+    pub fn snapshot_rewards_data(&mut self, working_supply: u128) -> PoolRewardData {
         let data = self.storage.get_pool_reward_data();
         let now = self.env.ledger().timestamp();
 
@@ -137,7 +160,7 @@ impl Manager {
         } else {
             self.create_new_rewards_data(
                 0,
-                total_shares,
+                working_supply,
                 PoolRewardData {
                     block: data.block + 1,
                     accumulated: data.accumulated,
@@ -180,6 +203,7 @@ impl Manager {
     // # Returns
     //
     // * The updated `UserRewardData` instance for the user.
+    // todo: make private
     pub fn update_user_reward(
         &mut self,
         pool_data: &PoolRewardData,
@@ -409,11 +433,11 @@ impl Manager {
     fn create_new_rewards_data(
         &mut self,
         generated_tokens: u128,
-        total_shares: u128,
+        working_supply: u128,
         new_data: PoolRewardData,
     ) -> PoolRewardData {
         self.storage.set_pool_reward_data(&new_data);
-        self.update_reward_inv(generated_tokens, total_shares);
+        self.update_reward_inv(generated_tokens, working_supply);
         new_data
     }
 
@@ -432,29 +456,62 @@ impl Manager {
         new_data
     }
 
-    fn user_reward_data(
+    fn get_working_supply(&mut self, total_shares: u128) -> u128 {
+        match self.storage.has_working_supply() {
+            true => self.storage.get_working_supply(),
+            false => {
+                self.storage.set_working_supply(total_shares);
+                total_shares
+            }
+        }
+    }
+
+    fn get_working_balance(&mut self, user: &Address, user_balance_shares: u128) -> u128 {
+        match self.storage.has_working_balance(user) {
+            true => self.storage.get_working_balance(user),
+            false => {
+                self.storage.set_working_balance(user, user_balance_shares);
+                user_balance_shares
+            }
+        }
+    }
+
+    // todo: rename to checkpoint or something
+    pub fn user_reward_data(
         &mut self,
         user: &Address,
         total_shares: u128,
         user_balance_shares: u128,
     ) -> UserRewardData {
-        let rewards_data = self.update_rewards_data(total_shares);
-        self.update_user_reward(&rewards_data, user, user_balance_shares)
+        let prev_working_balance = self.get_working_balance(user, user_balance_shares);
+        let prev_working_supply = self.get_working_supply(total_shares);
+        let working_balance =
+            self.calculate_effective_balance(user, user_balance_shares, total_shares);
+        let new_working_supply = prev_working_supply + working_balance - prev_working_balance;
+        self.storage.set_working_supply(new_working_supply);
+
+        let rewards_data = self.update_rewards_data(new_working_supply);
+        let reward_data = self.update_user_reward(&rewards_data, user, working_balance);
+        self.storage.bump_user_reward_data(&user);
+        reward_data
     }
 
     pub fn get_total_accumulated_reward(&mut self, total_shares: u128) -> u128 {
-        let data = self.update_rewards_data(total_shares);
+        let working_supply = self.get_working_supply(total_shares);
+        let data = self.update_rewards_data(working_supply);
         data.accumulated
     }
 
     pub fn get_total_claimed_reward(&mut self, total_shares: u128) -> u128 {
-        let data = self.update_rewards_data(total_shares);
+        let working_supply = self.get_working_supply(total_shares);
+        let data = self.update_rewards_data(working_supply);
         data.claimed
     }
 
     pub fn get_total_configured_reward(&mut self, total_shares: u128) -> u128 {
         let config = self.storage.get_pool_reward_config();
-        let data = self.update_rewards_data(total_shares);
+        let working_supply = self.get_working_supply(total_shares);
+        let data = self.update_rewards_data(working_supply);
         let rewarded_amount = data.accumulated;
 
         let now = self.env.ledger().timestamp();

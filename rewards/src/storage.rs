@@ -1,5 +1,7 @@
+use crate::locker_feed::LockerFeedClient;
+use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
-use utils::bump::bump_persistent;
+use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
 
 // Rewards configuration for specific pool
@@ -37,6 +39,10 @@ enum DataKey {
     RewardInvDataV2(u32, u64),
     RewardStorage,
     RewardToken,
+    LockedToken,
+    LockerFeed,
+    WorkingBalance(Address),
+    WorkingSupply,
 }
 
 pub struct Storage {
@@ -49,6 +55,103 @@ impl Storage {
         Storage {
             env: e.clone(),
             inv_cache: Map::new(e),
+        }
+    }
+
+    // todo: split onto traits
+    // Token locker
+    pub fn get_locked_token(&self) -> Address {
+        match self.env.storage().instance().get(&DataKey::LockedToken) {
+            Some(v) => v,
+            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+        }
+    }
+
+    pub fn put_locked_token(&self, contract: Address) {
+        bump_instance(&self.env);
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::LockedToken, &contract);
+    }
+
+    fn has_locked_token(&self) -> bool {
+        self.env.storage().instance().has(&DataKey::LockedToken)
+    }
+
+    pub fn get_user_locked_balance(&self, user: &Address) -> u128 {
+        match self.has_locked_token() {
+            true => {
+                SorobanTokenClient::new(&self.env, &self.get_locked_token()).balance(user) as u128
+            }
+            false => 0,
+        }
+    }
+
+    pub fn get_working_balance(&self, user: &Address) -> u128 {
+        self.env
+            .storage()
+            .persistent()
+            .get(&DataKey::WorkingBalance(user.clone()))
+            .unwrap()
+    }
+
+    pub fn has_working_balance(&self, user: &Address) -> bool {
+        self.env
+            .storage()
+            .persistent()
+            .has(&DataKey::WorkingBalance(user.clone()))
+    }
+
+    pub fn set_working_balance(&self, user: &Address, value: u128) {
+        let key = DataKey::WorkingBalance(user.clone());
+        self.env.storage().persistent().set(&key, &value);
+        bump_persistent(&self.env, &key);
+    }
+
+    pub fn get_working_supply(&self) -> u128 {
+        self.env
+            .storage()
+            .instance()
+            .get(&DataKey::WorkingSupply)
+            .unwrap()
+    }
+
+    pub fn set_working_supply(&self, value: u128) {
+        bump_instance(&self.env);
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::WorkingSupply, &value);
+    }
+
+    pub fn has_working_supply(&self) -> bool {
+        self.env.storage().instance().has(&DataKey::WorkingSupply)
+    }
+
+    fn get_locker_feed(&self) -> Address {
+        match self.env.storage().instance().get(&DataKey::LockerFeed) {
+            Some(v) => v,
+            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
+        }
+    }
+
+    pub fn put_locker_feed(&self, contract: Address) {
+        bump_instance(&self.env);
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::LockerFeed, &contract);
+    }
+
+    fn has_locker_feed(&self) -> bool {
+        self.env.storage().instance().has(&DataKey::LockerFeed)
+    }
+
+    pub fn get_total_locked(&self) -> u128 {
+        match self.has_locker_feed() {
+            true => LockerFeedClient::new(&self.env, &self.get_locker_feed()).get_total_locked(),
+            false => 0,
         }
     }
 }

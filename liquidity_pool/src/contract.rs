@@ -246,11 +246,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let pool_data = rewards.manager().update_rewards_data(total_shares);
         rewards
             .manager()
-            .update_user_reward(&pool_data, &user, user_shares);
-        rewards.storage().bump_user_reward_data(&user);
+            .user_reward_data(&user, total_shares, user_shares);
 
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
@@ -512,11 +510,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let pool_data = rewards.manager().update_rewards_data(total_shares);
         rewards
             .manager()
-            .update_user_reward(&pool_data, &user, user_shares);
-        rewards.storage().bump_user_reward_data(&user);
+            .user_reward_data(&user, total_shares, user_shares);
 
         let total_shares = get_total_shares(&e);
         burn_shares(&e, &user, share_amount);
@@ -970,10 +966,10 @@ impl RewardsTrait for LiquidityPool {
         let config = rewards.storage().get_pool_reward_config();
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let pool_data = rewards.manager().update_rewards_data(total_shares);
         let user_data = rewards
             .manager()
-            .update_user_reward(&pool_data, &user, user_shares);
+            .user_reward_data(&user, total_shares, user_shares);
+        let pool_data = rewards.storage().get_pool_reward_data();
         let mut result = Map::new(&e);
         result.set(symbol_short!("tps"), config.tps as i128);
         result.set(symbol_short!("exp_at"), config.expired_at as i128);
@@ -1016,10 +1012,9 @@ impl RewardsTrait for LiquidityPool {
         }
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
-        let rewards_data = rewards.manager().update_rewards_data(total_shares);
         rewards
             .manager()
-            .update_user_reward(&rewards_data, &user, user_shares);
+            .user_reward_data(&user, total_shares, user_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.

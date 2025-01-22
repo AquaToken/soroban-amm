@@ -14,6 +14,7 @@ tasks:
     cmds:
       - task -d ../token build || exit 1
       - task -d ../liquidity_pool_plane build || exit 1
+      - task -d ../locker_feed build || exit 1
       - soroban contract build --package soroban-liquidity-pool-contract
       - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm
       - ls -l ../target/wasm32-unknown-unknown/release/*.wasm
