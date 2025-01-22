@@ -478,13 +478,12 @@ impl Manager {
         }
     }
 
-    // todo: rename to checkpoint or something
-    pub fn user_reward_data(
+    pub fn update_working_balance(
         &mut self,
         user: &Address,
         total_shares: u128,
         user_balance_shares: u128,
-    ) -> UserRewardData {
+    ) -> (u128, u128) {
         let prev_working_balance = self.get_working_balance(user, user_balance_shares);
         let prev_working_supply = self.get_working_supply(total_shares);
         let working_balance =
@@ -492,6 +491,18 @@ impl Manager {
         let new_working_supply = prev_working_supply + working_balance - prev_working_balance;
         self.storage.set_working_supply(new_working_supply);
         self.storage.set_working_balance(user, working_balance);
+        (working_balance, new_working_supply)
+    }
+
+    // todo: rename to checkpoint or something
+    pub fn user_reward_data(
+        &mut self,
+        user: &Address,
+        total_shares: u128,
+        user_balance_shares: u128,
+    ) -> UserRewardData {
+        let (working_balance, new_working_supply) =
+            self.update_working_balance(user, total_shares, user_balance_shares);
 
         let rewards_data = self.update_rewards_data(new_working_supply);
         let reward_data = self.update_user_reward(&rewards_data, user, working_balance);

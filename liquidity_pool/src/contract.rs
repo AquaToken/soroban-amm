@@ -314,6 +314,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_a(&e, new_reserve_a);
         put_reserve_b(&e, new_reserve_b);
 
+        rewards.manager().update_working_balance(
+            &user,
+            new_total_shares,
+            user_shares + shares_to_mint,
+        );
+
         // update plane data for every pool update
         update_plane(&e);
 
@@ -514,7 +520,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             .manager()
             .user_reward_data(&user, total_shares, user_shares);
 
-        let total_shares = get_total_shares(&e);
         burn_shares(&e, &user, share_amount);
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -534,6 +539,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         transfer_b(&e, &user, out_b);
         put_reserve_a(&e, reserve_a - out_a);
         put_reserve_b(&e, reserve_b - out_b);
+
+        rewards.manager().update_working_balance(
+            &user,
+            total_shares - share_amount,
+            user_shares - share_amount,
+        );
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1015,6 +1026,24 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .user_reward_data(&user, total_shares, user_shares);
+    }
+
+    fn checkpoint_working_balance(
+        e: Env,
+        token_contract: Address,
+        user: Address,
+        user_shares: u128,
+    ) {
+        // checkpoint working balance with provided values to avoid re-entrancy issue
+        token_contract.require_auth();
+        if token_contract != get_token_share(&e) {
+            panic_with_error!(&e, AccessControlError::Unauthorized);
+        }
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards
+            .manager()
+            .update_working_balance(&user, total_shares, user_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.

@@ -160,6 +160,13 @@ pub trait RewardsTrait {
 
     fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128);
 
+    fn checkpoint_working_balance(
+        e: Env,
+        token_contract: Address,
+        user: Address,
+        user_shares: u128,
+    );
+
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env) -> u128;
 
