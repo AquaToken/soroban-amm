@@ -140,6 +140,10 @@ pub trait RewardsTrait {
     // Initialize rewards token address
     fn initialize_rewards_config(e: Env, reward_token: Address);
 
+    fn set_locked_token(e: Env, admin: Address, locked_token: Address);
+
+    fn set_locker_feed(e: Env, admin: Address, locker_feed: Address);
+
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers
     // after expired_at timestamp distribution ends

@@ -2,8 +2,8 @@
 extern crate std;
 
 use crate::testutils::{
-    create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
-    install_token_wasm, Setup, TestConfig,
+    create_liqpool_contract, create_locker_feed_contract, create_plane_contract,
+    create_token_contract, get_token_admin_client, install_token_wasm, Setup, TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
@@ -626,6 +626,42 @@ fn test_two_users_rewards() {
         total_reward_1 / 4 * 3
     );
     assert_eq!(token_reward.balance(&users[1]) as u128, total_reward_1 / 4);
+}
+
+#[test]
+fn test_boosted_rewards() {
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let users = setup.users;
+
+    let locked_token = create_token_contract(&env, &setup.admin);
+    let locked_token_admin_client = get_token_admin_client(&env, &locked_token.address.clone());
+    let lock_feed = create_locker_feed_contract(&env);
+    liq_pool.set_locked_token(&setup.admin, &locked_token.address);
+    liq_pool.set_locker_feed(&setup.admin, &lock_feed.address);
+
+    let total_reward_1 = &TestConfig::default().reward_tps * 60;
+
+    // two users make deposit for equal value. second after 30 seconds after rewards start,
+    //  so it gets only 1/4 of total reward
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
+    jump(&env, 30);
+    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
+
+    // instead of simple deposit, second user locks tokens to boost rewards, then deposits
+    locked_token_admin_client.mint(&users[1], &10_000_0000000);
+    lock_feed.set_total_locked(&setup.admin, &10_000_0000000);
+
+    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
+    jump(&env, 100);
+    assert!(liq_pool.claim(&users[0]) < total_reward_1 / 4);
+    assert!(liq_pool.claim(&users[1]) > total_reward_1 / 4);
+    assert_eq!(
+        token_reward.balance(&users[0]) + token_reward.balance(&users[1]),
+        total_reward_1 as i128
+    );
 }
 
 #[test]

@@ -884,6 +884,22 @@ impl RewardsTrait for LiquidityPool {
         rewards.storage().put_reward_token(reward_token);
     }
 
+    fn set_locked_token(e: Env, admin: Address, locked_token: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        let rewards = get_rewards_manager(&e);
+        rewards.storage().put_locked_token(locked_token);
+    }
+
+    fn set_locker_feed(e: Env, admin: Address, locker_feed: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        let rewards = get_rewards_manager(&e);
+        rewards.storage().put_locker_feed(locker_feed);
+    }
+
     // Sets the rewards configuration.
     //
     // # Arguments
