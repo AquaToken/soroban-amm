@@ -33,12 +33,14 @@ impl Manager {
         // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
         let lock_balance = self.storage.get_user_locked_balance(&user);
         let total_locked = self.storage.get_total_locked();
-        if total_locked == 0 {
-            return share_balance;
-        };
 
+        let mut adjusted_balance = share_balance;
+        if total_locked > 0 {
+            adjusted_balance += 3 * lock_balance * total_share / total_locked / 2
+        }
         let max_effective_balance = share_balance * 5 / 2;
-        let adjusted_balance = share_balance + 3 * lock_balance * total_share / total_locked / 2;
+
+        // min(adjusted_balance, max_effective_balance)
         if adjusted_balance > max_effective_balance {
             max_effective_balance
         } else {
@@ -419,9 +421,9 @@ impl Manager {
     //
     // * `accumulated` - The total accumulated reward.
     // * `total_shares` - The total shares in the pool.
-    fn update_reward_inv(&mut self, accumulated: u128, total_shares: u128) {
-        let reward_per_share = if total_shares > 0 {
-            REWARD_PRECISION * accumulated / total_shares
+    fn update_reward_inv(&mut self, accumulated: u128, working_supply: u128) {
+        let reward_per_share = if working_supply > 0 {
+            REWARD_PRECISION * accumulated / working_supply
         } else {
             0
         };
@@ -489,6 +491,7 @@ impl Manager {
             self.calculate_effective_balance(user, user_balance_shares, total_shares);
         let new_working_supply = prev_working_supply + working_balance - prev_working_balance;
         self.storage.set_working_supply(new_working_supply);
+        self.storage.set_working_balance(user, working_balance);
 
         let rewards_data = self.update_rewards_data(new_working_supply);
         let reward_data = self.update_user_reward(&rewards_data, user, working_balance);

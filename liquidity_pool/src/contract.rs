@@ -1083,7 +1083,6 @@ impl RewardsTrait for LiquidityPool {
         let mut rewards_manager = rewards.manager();
         let rewards_storage = rewards.storage();
         let reward = rewards_manager.claim_reward(&user, total_shares, user_shares);
-        rewards_storage.bump_user_reward_data(&user);
 
         // validate reserves after claim - they should be less than or equal to the balance
         let tokens = Self::get_tokens(e.clone());
