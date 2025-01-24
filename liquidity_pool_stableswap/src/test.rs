@@ -8,8 +8,9 @@ use soroban_sdk::{symbol_short, vec, Address, Env, Error, IntoVal, Symbol, Val, 
 use token_share::Client as ShareTokenClient;
 
 use crate::testutils::{
-    create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
-    install_token_wasm, install_token_wasm_with_decimal, Setup, TestConfig,
+    create_liqpool_contract, create_locker_feed_contract, create_plane_contract,
+    create_token_contract, get_token_admin_client, install_token_wasm,
+    install_token_wasm_with_decimal, Setup, TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::token::{
@@ -1935,6 +1936,96 @@ fn test_two_users_rewards() {
     assert_eq!(liqpool.claim(&user2), total_reward_1 / 4);
     assert_eq!(token_reward.balance(&user1) as u128, total_reward_1 / 4 * 3);
     assert_eq!(token_reward.balance(&user2) as u128, total_reward_1 / 4);
+}
+
+#[test]
+fn test_boosted_rewards() {
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+
+    let token1_admin_client = get_token_admin_client(&env, &setup.token1.address);
+    let token2_admin_client = get_token_admin_client(&env, &setup.token2.address);
+    let token_reward_admin_client = get_token_admin_client(&env, &token_reward.address);
+
+    for user in [&user1, &user2, &user3] {
+        token1_admin_client.mint(user, &1000);
+        assert_eq!(setup.token1.balance(user) as u128, 1000);
+
+        token2_admin_client.mint(user, &1000);
+        assert_eq!(setup.token2.balance(user) as u128, 1000);
+    }
+
+    let locked_token = create_token_contract(&env, &setup.admin);
+    let locked_token_address = locked_token.address.clone();
+    let locked_token_admin_client = get_token_admin_client(&env, &locked_token_address);
+    let lock_feed = create_locker_feed_contract(&env);
+    liq_pool.set_locked_token(&setup.admin, &locked_token.address);
+    liq_pool.set_locker_feed(&setup.admin, &lock_feed.address);
+
+    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    liq_pool.set_rewards_config(
+        &setup.rewards_admin,
+        &env.ledger().timestamp().saturating_add(60),
+        &reward_1_tps,
+    );
+
+    // two users make deposit for equal value. second after 30 seconds after rewards start,
+    //  so it gets only 1/4 of total reward
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [100, 100]), &0);
+    jump(&env, 30);
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 2);
+
+    // instead of simple deposit, second user locks tokens to boost rewards, then deposits
+    // second user lock percentage is 50%. this is equilibrium point for 50% shareholder
+    locked_token_admin_client.mint(&user2, &10_000_0000000);
+    lock_feed.set_total_supply(&setup.admin, &20_000_0000000);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [100, 100]), &0);
+
+    jump(&env, 10);
+    // total effective share now 100 + 100 * 2.5 = 350
+    // first user gets ~28% of total reward, second ~72%
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 100 / 350);
+    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 250 / 350);
+
+    // third user joins, depositing 50 tokens. no boost yet
+    liq_pool.deposit(&user3, &Vec::from_array(&env, [50, 50]), &0);
+
+    jump(&env, 10);
+    // total effective share now 100 + 100 * 2.5 + 50 = 400
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 100 / 400);
+    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 250 / 400);
+    assert_eq!(liq_pool.claim(&user3), total_reward_1 / 6 * 50 / 400);
+
+    // third user locks tokens to boost rewards
+    // effective boost is 1.3
+    // effective share balance is 50 * 1.3 = 65
+    locked_token_admin_client.mint(&user3, &1_000_0000000);
+    lock_feed.set_total_supply(&setup.admin, &25_000_0000000);
+    // user checkpoints itself to receive boosted rewards
+    liq_pool.get_user_reward(&user3);
+
+    jump(&env, 10);
+    // total effective share now 100 + 100 * 2.5 + 65 = 415
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 100 / 415);
+    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 250 / 415);
+    assert_eq!(liq_pool.claim(&user3), total_reward_1 / 6 * 65 / 415);
+
+    // total reward is distributed should be distributed to all three users. rounding occurs, so we check with delta
+    assert_approx_eq_abs(
+        token_reward.balance(&user1) as u128
+            + token_reward.balance(&user2) as u128
+            + token_reward.balance(&user3) as u128,
+        total_reward_1,
+        2,
+    );
 }
 
 #[test]

@@ -87,6 +87,8 @@ impl LiquidityPoolCrunch for LiquidityPool {
         tokens: Vec<Address>,
         fee_fraction: u32,
         reward_token: Address,
+        reward_boost_token: Address,
+        reward_boost_feed: Address,
         plane: Address,
     ) {
         // merge whole initialize process into one because lack of caching of VM components
@@ -101,6 +103,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
             tokens,
             fee_fraction,
         );
+        Self::initialize_boost_config(e.clone(), reward_boost_token, reward_boost_feed);
         Self::initialize_rewards_config(e.clone(), reward_token);
     }
 }
@@ -248,7 +251,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let user_shares = get_user_balance_shares(&e, &user);
         rewards
             .manager()
-            .user_reward_data(&user, total_shares, user_shares);
+            .checkpoint_user(&user, total_shares, user_shares);
 
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
@@ -314,6 +317,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_a(&e, new_reserve_a);
         put_reserve_b(&e, new_reserve_b);
 
+        // Checkpoint resulting working balance
         rewards.manager().update_working_balance(
             &user,
             new_total_shares,
@@ -518,7 +522,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let user_shares = get_user_balance_shares(&e, &user);
         rewards
             .manager()
-            .user_reward_data(&user, total_shares, user_shares);
+            .checkpoint_user(&user, total_shares, user_shares);
 
         burn_shares(&e, &user, share_amount);
 
@@ -540,6 +544,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_a(&e, reserve_a - out_a);
         put_reserve_b(&e, reserve_b - out_b);
 
+        // Checkpoint resulting working balance
         rewards.manager().update_working_balance(
             &user,
             total_shares - share_amount,
@@ -884,20 +889,28 @@ impl RewardsTrait for LiquidityPool {
         rewards.storage().put_reward_token(reward_token);
     }
 
-    fn set_locked_token(e: Env, admin: Address, locked_token: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+    fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address) {
+        let rewards_storage = get_rewards_manager(&e).storage();
+        if rewards_storage.has_reward_boost_token() {
+            panic_with_error!(&e, LiquidityPoolError::RewardsAlreadyInitialized);
+        }
 
-        let rewards = get_rewards_manager(&e);
-        rewards.storage().put_locked_token(locked_token);
+        rewards_storage.put_reward_boost_token(reward_boost_token);
+        rewards_storage.put_reward_boost_feed(reward_boost_feed);
     }
 
-    fn set_locker_feed(e: Env, admin: Address, locker_feed: Address) {
+    fn set_boost_config(
+        e: Env,
+        admin: Address,
+        reward_boost_token: Address,
+        reward_boost_feed: Address,
+    ) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
-        let rewards = get_rewards_manager(&e);
-        rewards.storage().put_locker_feed(locker_feed);
+        let rewards_storage = get_rewards_manager(&e).storage();
+        rewards_storage.put_reward_boost_token(reward_boost_token);
+        rewards_storage.put_reward_boost_feed(reward_boost_feed);
     }
 
     // Sets the rewards configuration.
@@ -995,7 +1008,7 @@ impl RewardsTrait for LiquidityPool {
         let user_shares = get_user_balance_shares(&e, &user);
         let user_data = rewards
             .manager()
-            .user_reward_data(&user, total_shares, user_shares);
+            .checkpoint_user(&user, total_shares, user_shares);
         let pool_data = rewards.storage().get_pool_reward_data();
         let mut result = Map::new(&e);
         result.set(symbol_short!("tps"), config.tps as i128);
@@ -1041,7 +1054,7 @@ impl RewardsTrait for LiquidityPool {
         let total_shares = get_total_shares(&e);
         rewards
             .manager()
-            .user_reward_data(&user, total_shares, user_shares);
+            .checkpoint_user(&user, total_shares, user_shares);
     }
 
     fn checkpoint_working_balance(

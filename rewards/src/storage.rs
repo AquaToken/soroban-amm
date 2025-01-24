@@ -39,8 +39,8 @@ enum DataKey {
     RewardInvDataV2(u32, u64),
     RewardStorage,
     RewardToken,
-    LockedToken,
-    LockerFeed,
+    RewardBoostToken,
+    RewardBoostFeed,
     WorkingBalance(Address),
     WorkingSupply,
 }
@@ -60,29 +60,38 @@ impl Storage {
 
     // todo: split onto traits
     // Token locker
-    pub fn get_locked_token(&self) -> Address {
-        match self.env.storage().instance().get(&DataKey::LockedToken) {
+    pub fn get_reward_boost_token(&self) -> Address {
+        match self
+            .env
+            .storage()
+            .instance()
+            .get(&DataKey::RewardBoostToken)
+        {
             Some(v) => v,
             None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
         }
     }
 
-    pub fn put_locked_token(&self, contract: Address) {
+    pub fn put_reward_boost_token(&self, contract: Address) {
         bump_instance(&self.env);
         self.env
             .storage()
             .instance()
-            .set(&DataKey::LockedToken, &contract);
+            .set(&DataKey::RewardBoostToken, &contract);
     }
 
-    fn has_locked_token(&self) -> bool {
-        self.env.storage().instance().has(&DataKey::LockedToken)
+    pub fn has_reward_boost_token(&self) -> bool {
+        self.env
+            .storage()
+            .instance()
+            .has(&DataKey::RewardBoostToken)
     }
 
-    pub fn get_user_locked_balance(&self, user: &Address) -> u128 {
-        match self.has_locked_token() {
+    pub fn get_user_boost_balance(&self, user: &Address) -> u128 {
+        match self.has_reward_boost_token() {
             true => {
-                SorobanTokenClient::new(&self.env, &self.get_locked_token()).balance(user) as u128
+                SorobanTokenClient::new(&self.env, &self.get_reward_boost_token()).balance(user)
+                    as u128
             }
             false => 0,
         }
@@ -129,28 +138,28 @@ impl Storage {
         self.env.storage().instance().has(&DataKey::WorkingSupply)
     }
 
-    fn get_locker_feed(&self) -> Address {
-        match self.env.storage().instance().get(&DataKey::LockerFeed) {
+    pub fn get_reward_boost_feed(&self) -> Address {
+        match self.env.storage().instance().get(&DataKey::RewardBoostFeed) {
             Some(v) => v,
             None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
         }
     }
 
-    pub fn put_locker_feed(&self, contract: Address) {
+    pub fn put_reward_boost_feed(&self, contract: Address) {
         bump_instance(&self.env);
         self.env
             .storage()
             .instance()
-            .set(&DataKey::LockerFeed, &contract);
+            .set(&DataKey::RewardBoostFeed, &contract);
     }
 
-    fn has_locker_feed(&self) -> bool {
-        self.env.storage().instance().has(&DataKey::LockerFeed)
+    fn has_reward_boost_feed(&self) -> bool {
+        self.env.storage().instance().has(&DataKey::RewardBoostFeed)
     }
 
     pub fn get_total_locked(&self) -> u128 {
-        match self.has_locker_feed() {
-            true => LockerFeedClient::new(&self.env, &self.get_locker_feed()).get_total_locked(),
+        match self.has_reward_boost_feed() {
+            true => LockerFeedClient::new(&self.env, &self.get_reward_boost_feed()).total_supply(),
             false => 0,
         }
     }

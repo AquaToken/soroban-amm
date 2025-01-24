@@ -162,8 +162,14 @@ pub trait RewardsTrait {
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
 
+    // Checkpoints the reward for the user.
+    // Useful when user moves funds by itself to avoid re-entrancy issue.
+    // Can be called only by the token contract to notify pool external changes happened.
     fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128);
 
+    // Checkpoints total working balance and the working balance for the user.
+    // Useful when user moves funds by itself to avoid re-entrancy issue.
+    // Can be called only by the token contract to notify pool external changes happened.
     fn checkpoint_working_balance(
         e: Env,
         token_contract: Address,

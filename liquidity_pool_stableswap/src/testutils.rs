@@ -83,6 +83,16 @@ pub fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     PoolPlaneClient::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
 }
 
+mod locker_feed {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32-unknown-unknown/release/soroban_locker_feed_contract.wasm"
+    );
+}
+
+pub(crate) fn create_locker_feed_contract<'a>(e: &Env) -> locker_feed::Client {
+    locker_feed::Client::new(e, &e.register_contract_wasm(None, locker_feed::WASM))
+}
+
 pub(crate) struct TestConfig {
     pub(crate) a: u128,
     pub(crate) liq_pool_fee: u32,

@@ -13,6 +13,7 @@ tasks:
     cmds:
       - soroban contract build --package locker-feed
       - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/locker_feed.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_locker_feed_contract.wasm
+      - rm ../target/wasm32-unknown-unknown/release/locker_feed.wasm
       - ls -l ../target/wasm32-unknown-unknown/release/*.wasm
 
   test:

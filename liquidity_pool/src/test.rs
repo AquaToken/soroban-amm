@@ -656,7 +656,7 @@ fn test_boosted_rewards() {
     // instead of simple deposit, second user locks tokens to boost rewards, then deposits
     // second user lock percentage is 50%. this is equilibrium point for 50% shareholder
     locked_token_admin_client.mint(&users[1], &10_000_0000000);
-    lock_feed.set_total_locked(&setup.admin, &20_000_0000000);
+    lock_feed.set_total_supply(&setup.admin, &20_000_0000000);
     liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
 
     jump(&env, 10);
@@ -678,7 +678,7 @@ fn test_boosted_rewards() {
     // effective boost is 1.3
     // effective share balance is 50 * 1.3 = 65
     locked_token_admin_client.mint(&users[2], &1_000_0000000);
-    lock_feed.set_total_locked(&setup.admin, &25_000_0000000);
+    lock_feed.set_total_supply(&setup.admin, &25_000_0000000);
     // user checkpoints itself to receive boosted rewards
     liq_pool.get_user_reward(&users[2]);
 

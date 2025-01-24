@@ -116,6 +116,10 @@ pub trait RewardsTrait {
     // Initialize rewards token address
     fn initialize_rewards_config(e: Env, reward_token: Address);
 
+    fn set_locked_token(e: Env, admin: Address, locked_token: Address);
+
+    fn set_locker_feed(e: Env, admin: Address, locker_feed: Address);
+
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers
     // after expired_at timestamp distribution ends
@@ -134,7 +138,20 @@ pub trait RewardsTrait {
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
 
+    // Checkpoints the reward for the user.
+    // Useful when user moves funds by itself to avoid re-entrancy issue.
+    // Can be called only by the token contract to notify pool external changes happened.
     fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128);
+
+    // Checkpoints total working balance and the working balance for the user.
+    // Useful when user moves funds by itself to avoid re-entrancy issue.
+    // Can be called only by the token contract to notify pool external changes happened.
+    fn checkpoint_working_balance(
+        e: Env,
+        token_contract: Address,
+        user: Address,
+        user_shares: u128,
+    );
 
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env) -> u128;

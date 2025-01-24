@@ -18,6 +18,15 @@ impl DummyPool {
     pub fn checkpoint_reward(_e: Env, token_contract: Address, _user: Address, _user_shares: u128) {
         token_contract.require_auth();
     }
+
+    pub fn checkpoint_working_balance(
+        _e: Env,
+        token_contract: Address,
+        _user: Address,
+        _user_shares: u128,
+    ) {
+        token_contract.require_auth();
+    }
 }
 
 pub fn create_dummy_pool<'a>(e: &Env) -> DummyPoolClient<'a> {

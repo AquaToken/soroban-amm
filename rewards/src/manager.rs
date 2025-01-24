@@ -31,7 +31,7 @@ impl Manager {
         total_share: u128,
     ) -> u128 {
         // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
-        let lock_balance = self.storage.get_user_locked_balance(&user);
+        let lock_balance = self.storage.get_user_boost_balance(&user);
         let total_locked = self.storage.get_total_locked();
 
         let mut adjusted_balance = share_balance;
@@ -99,7 +99,7 @@ impl Manager {
     // # Returns
     //
     // * The updated `PoolRewardData` instance.
-    pub fn update_rewards_data(&mut self, working_supply: u128) -> PoolRewardData {
+    fn update_rewards_data(&mut self, working_supply: u128) -> PoolRewardData {
         let config = self.storage.get_pool_reward_config();
         let mut data = self.storage.get_pool_reward_data();
         let now = self.env.ledger().timestamp();
@@ -152,7 +152,7 @@ impl Manager {
     // # Returns
     //
     // * The updated `PoolRewardData` instance.
-    pub fn snapshot_rewards_data(&mut self, working_supply: u128) -> PoolRewardData {
+    fn snapshot_rewards_data(&mut self, working_supply: u128) -> PoolRewardData {
         let data = self.storage.get_pool_reward_data();
         let now = self.env.ledger().timestamp();
 
@@ -205,8 +205,7 @@ impl Manager {
     // # Returns
     //
     // * The updated `UserRewardData` instance for the user.
-    // todo: make private
-    pub fn update_user_reward(
+    fn update_user_reward(
         &mut self,
         pool_data: &PoolRewardData,
         user: &Address,
@@ -253,7 +252,7 @@ impl Manager {
         user_balance_shares: u128,
     ) -> u128 {
         // update pool data & calculate reward
-        self.user_reward_data(user, total_shares, user_balance_shares)
+        self.checkpoint_user(user, total_shares, user_balance_shares)
             .to_claim
     }
 
@@ -268,7 +267,7 @@ impl Manager {
             last_block,
             pool_accumulated,
             to_claim: reward_amount,
-        } = self.user_reward_data(user, total_shares, user_balance_shares);
+        } = self.checkpoint_user(user, total_shares, user_balance_shares);
 
         // increase total claimed amount
         let mut pool_data = self.storage.get_pool_reward_data();
@@ -494,8 +493,7 @@ impl Manager {
         (working_balance, new_working_supply)
     }
 
-    // todo: rename to checkpoint or something
-    pub fn user_reward_data(
+    pub fn checkpoint_user(
         &mut self,
         user: &Address,
         total_shares: u128,
