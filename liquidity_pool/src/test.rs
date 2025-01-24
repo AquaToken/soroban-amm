@@ -2,7 +2,7 @@
 extern crate std;
 
 use crate::testutils::{
-    create_liqpool_contract, create_locker_feed_contract, create_plane_contract,
+    create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
     create_token_contract, get_token_admin_client, install_token_wasm, Setup, TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
@@ -641,7 +641,7 @@ fn test_boosted_rewards() {
 
     let locked_token = create_token_contract(&env, &setup.admin);
     let locked_token_admin_client = get_token_admin_client(&env, &locked_token.address.clone());
-    let lock_feed = create_locker_feed_contract(&env);
+    let lock_feed = create_reward_boost_feed_contract(&env);
     liq_pool.set_locked_token(&setup.admin, &locked_token.address);
     liq_pool.set_locker_feed(&setup.admin, &lock_feed.address);
 

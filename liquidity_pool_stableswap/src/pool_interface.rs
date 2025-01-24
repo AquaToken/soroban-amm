@@ -9,9 +9,9 @@ pub trait ManagedLiquidityPool {
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
-        a: u128,
+        amp: u128,
         fee: u32,
-        reward_token: Address,
+        reward_config: (Address, Address, Address),
         plane: Address,
     );
 }
@@ -116,9 +116,14 @@ pub trait RewardsTrait {
     // Initialize rewards token address
     fn initialize_rewards_config(e: Env, reward_token: Address);
 
-    fn set_locked_token(e: Env, admin: Address, locked_token: Address);
+    fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address);
 
-    fn set_locker_feed(e: Env, admin: Address, locker_feed: Address);
+    fn set_reward_boost_config(
+        e: Env,
+        admin: Address,
+        reward_boost_token: Address,
+        reward_boost_feed: Address,
+    );
 
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers

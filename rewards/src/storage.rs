@@ -1,4 +1,4 @@
-use crate::locker_feed::LockerFeedClient;
+use crate::boost_feed::RewardBoostFeedClient;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
 use utils::bump::{bump_instance, bump_persistent};
@@ -159,7 +159,9 @@ impl Storage {
 
     pub fn get_total_locked(&self) -> u128 {
         match self.has_reward_boost_feed() {
-            true => LockerFeedClient::new(&self.env, &self.get_reward_boost_feed()).total_supply(),
+            true => {
+                RewardBoostFeedClient::new(&self.env, &self.get_reward_boost_feed()).total_supply()
+            }
             false => 0,
         }
     }

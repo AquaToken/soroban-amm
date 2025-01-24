@@ -76,7 +76,11 @@ impl LiquidityPoolCrunch for LiquidityPool {
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
     // * `tokens` - A vector of token addresses.
     // * `fee_fraction` - The fee fraction for the pool.
-    // * `reward_token` - The address of the reward token.
+    // * `reward_config` - (
+    // *    `reward_token` - The address of the reward token.
+    // *    `reward_boost_token` - The address of the reward boost token.
+    // *    `reward_boost_feed` - The address of the reward boost feed.
+    // * )
     // * `plane` - The address of the plane.
     fn initialize_all(
         e: Env,
@@ -86,11 +90,11 @@ impl LiquidityPoolCrunch for LiquidityPool {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
-        reward_token: Address,
-        reward_boost_token: Address,
-        reward_boost_feed: Address,
+        reward_config: (Address, Address, Address),
         plane: Address,
     ) {
+        let (reward_token, reward_boost_token, reward_boost_feed) = reward_config;
+
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::init_pools_plane(e.clone(), plane);
@@ -768,7 +772,7 @@ impl UpgradeableContract for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        140
+        150
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -899,7 +903,7 @@ impl RewardsTrait for LiquidityPool {
         rewards_storage.put_reward_boost_feed(reward_boost_feed);
     }
 
-    fn set_boost_config(
+    fn set_reward_boost_config(
         e: Env,
         admin: Address,
         reward_boost_token: Address,

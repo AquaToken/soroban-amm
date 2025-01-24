@@ -36,7 +36,9 @@ pub fn create_liqpool_contract<'a>(
     coins: &Vec<Address>,
     a: u128,
     fee: u32,
-    token_reward: &Address,
+    reward_token: &Address,
+    reward_boost_token: &Address,
+    reward_boost_feed: &Address,
     plane: &Address,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
@@ -54,7 +56,11 @@ pub fn create_liqpool_contract<'a>(
         coins,
         &a,
         &fee,
-        token_reward,
+        &(
+            reward_token.clone(),
+            reward_boost_token.clone(),
+            reward_boost_feed.clone(),
+        ),
         plane,
     );
     liqpool
@@ -83,14 +89,14 @@ pub fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     PoolPlaneClient::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
 }
 
-mod locker_feed {
+mod reward_boost_feed {
     soroban_sdk::contractimport!(
         file = "../target/wasm32-unknown-unknown/release/soroban_locker_feed_contract.wasm"
     );
 }
 
-pub(crate) fn create_locker_feed_contract<'a>(e: &Env) -> locker_feed::Client {
-    locker_feed::Client::new(e, &e.register_contract_wasm(None, locker_feed::WASM))
+pub(crate) fn create_reward_boost_feed_contract<'a>(e: &Env) -> reward_boost_feed::Client {
+    reward_boost_feed::Client::new(e, &e.register_contract_wasm(None, reward_boost_feed::WASM))
 }
 
 pub(crate) struct TestConfig {

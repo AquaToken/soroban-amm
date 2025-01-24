@@ -78,6 +78,16 @@ pub fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator
     )
 }
 
+mod reward_boost_feed {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32-unknown-unknown/release/soroban_locker_feed_contract.wasm"
+    );
+}
+
+pub(crate) fn create_reward_boost_feed_contract<'a>(e: &Env) -> reward_boost_feed::Client {
+    reward_boost_feed::Client::new(e, &e.register_contract_wasm(None, reward_boost_feed::WASM))
+}
+
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
@@ -85,6 +95,8 @@ pub(crate) struct Setup<'a> {
 
     pub(crate) tokens: [test_token::Client<'a>; 4],
     pub(crate) reward_token: test_token::Client<'a>,
+    pub(crate) reward_boost_token: test_token::Client<'a>,
+    pub(crate) reward_boost_feed: reward_boost_feed::Client<'a>,
 
     pub(crate) router: LiquidityPoolRouterClient<'a>,
 
@@ -123,6 +135,8 @@ impl Default for Setup<'_> {
         let payment_for_creation_address = Address::generate(&env);
 
         let reward_token = create_token_contract(&env, &reward_admin);
+        let reward_boost_token = create_token_contract(&env, &reward_admin);
+        let reward_boost_feed = create_reward_boost_feed_contract(&env);
 
         let pool_hash = install_liq_pool_hash(&env);
         let token_hash = install_token_wasm(&env);
@@ -178,6 +192,8 @@ impl Default for Setup<'_> {
             operations_admin,
             pause_admin,
             emergency_pause_admin,
+            reward_boost_token,
+            reward_boost_feed,
         }
     }
 }

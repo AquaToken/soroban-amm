@@ -955,7 +955,11 @@ impl ManagedLiquidityPool for LiquidityPool {
     // * `coins` - The addresses of the coins.
     // * `amp` - The amplification coefficient. Amp = A*N**(N-1)
     // * `fee` - The fee to be applied.
-    // * `reward_token` - The address of the reward token.
+    // * `reward_config` - (
+    // *    `reward_token` - The address of the reward token.
+    // *    `reward_boost_token` - The address of the reward boost token.
+    // *    `reward_boost_feed` - The address of the reward boost feed.
+    // * )
     // * `plane` - The address of the plane.
     fn initialize_all(
         e: Env,
@@ -966,9 +970,11 @@ impl ManagedLiquidityPool for LiquidityPool {
         coins: Vec<Address>,
         amp: u128,
         fee: u32,
-        reward_token: Address,
+        reward_config: (Address, Address, Address),
         plane: Address,
     ) {
+        let (reward_token, reward_boost_token, reward_boost_feed) = reward_config;
+
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::init_pools_plane(e.clone(), plane);
@@ -982,6 +988,7 @@ impl ManagedLiquidityPool for LiquidityPool {
             amp,
             fee,
         );
+        Self::initialize_boost_config(e.clone(), reward_boost_token, reward_boost_feed);
         Self::initialize_rewards_config(e.clone(), reward_token);
     }
 }
@@ -1454,7 +1461,7 @@ impl UpgradeableContract for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        140
+        150
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -1574,20 +1581,28 @@ impl RewardsTrait for LiquidityPool {
         rewards.storage().put_reward_token(reward_token);
     }
 
-    fn set_locked_token(e: Env, admin: Address, locked_token: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+    fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address) {
+        let rewards_storage = get_rewards_manager(&e).storage();
+        if rewards_storage.has_reward_boost_token() {
+            panic_with_error!(&e, LiquidityPoolError::RewardsAlreadyInitialized);
+        }
 
-        let rewards = get_rewards_manager(&e);
-        rewards.storage().put_reward_boost_token(locked_token);
+        rewards_storage.put_reward_boost_token(reward_boost_token);
+        rewards_storage.put_reward_boost_feed(reward_boost_feed);
     }
 
-    fn set_locker_feed(e: Env, admin: Address, locker_feed: Address) {
+    fn set_reward_boost_config(
+        e: Env,
+        admin: Address,
+        reward_boost_token: Address,
+        reward_boost_feed: Address,
+    ) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
-        let rewards = get_rewards_manager(&e);
-        rewards.storage().put_reward_boost_feed(locker_feed);
+        let rewards_storage = get_rewards_manager(&e).storage();
+        rewards_storage.put_reward_boost_token(reward_boost_token);
+        rewards_storage.put_reward_boost_feed(reward_boost_feed);
     }
 
     // Sets the rewards configuration.

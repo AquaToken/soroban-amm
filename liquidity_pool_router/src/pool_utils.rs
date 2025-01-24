@@ -1,7 +1,6 @@
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::liquidity_calculator::LiquidityCalculatorClient;
-use crate::pool_contract::StandardLiquidityPoolClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
     add_pool, add_tokens_set, get_constant_product_pool_hash, get_pool_next_counter,
@@ -137,6 +136,8 @@ fn init_standard_pool(
     let token_wasm_hash = get_token_hash(e);
     let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
+    let reward_boost_token = rewards.storage().get_reward_boost_token();
+    let reward_boost_feed = rewards.storage().get_reward_boost_feed();
     let access_control = AccessControl::new(e);
 
     // privileged users
@@ -155,23 +156,36 @@ fn init_standard_pool(
         .unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
-    let liq_pool_client = StandardLiquidityPoolClient::new(e, pool_contract_id);
     let plane = get_pool_plane(e);
-    liq_pool_client.initialize_all(
-        &admin,
-        &(
-            emergency_admin,
-            rewards_admin,
-            operations_admin,
-            pause_admin,
-            emergency_pause_admins,
+
+    e.invoke_contract::<()>(
+        pool_contract_id,
+        &Symbol::new(e, "initialize_all"),
+        Vec::from_array(
+            e,
+            [
+                admin.into_val(e),
+                (
+                    emergency_admin,
+                    rewards_admin,
+                    operations_admin,
+                    pause_admin,
+                    emergency_pause_admins,
+                )
+                    .into_val(e),
+                e.current_contract_address().to_val(),
+                token_wasm_hash.into_val(e),
+                tokens.clone().into_val(e),
+                fee_fraction.into_val(e),
+                (
+                    reward_token.to_val(),
+                    reward_boost_token.to_val(),
+                    reward_boost_feed.to_val(),
+                )
+                    .into_val(e),
+                plane.into_val(e),
+            ],
         ),
-        &e.current_contract_address(),
-        &token_wasm_hash,
-        tokens,
-        &fee_fraction,
-        &reward_token,
-        &plane,
     );
 }
 
@@ -185,6 +199,8 @@ fn init_stableswap_pool(
     let token_wasm_hash = get_token_hash(e);
     let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
+    let reward_boost_token = rewards.storage().get_reward_boost_token();
+    let reward_boost_feed = rewards.storage().get_reward_boost_feed();
     let access_control = AccessControl::new(e);
 
     // privileged users
@@ -204,6 +220,7 @@ fn init_stableswap_pool(
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
+
     e.invoke_contract::<()>(
         pool_contract_id,
         &Symbol::new(e, "initialize_all"),
@@ -224,7 +241,12 @@ fn init_stableswap_pool(
                 tokens.clone().into_val(e),
                 amp.into_val(e),
                 fee_fraction.into_val(e),
-                reward_token.into_val(e),
+                (
+                    reward_token.to_val(),
+                    reward_boost_token.to_val(),
+                    reward_boost_feed.to_val(),
+                )
+                    .into_val(e),
                 plane.into_val(e),
             ],
         ),

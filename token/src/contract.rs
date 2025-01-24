@@ -171,7 +171,7 @@ impl UpgradeableContract for Token {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        140
+        150
     }
 
     fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
