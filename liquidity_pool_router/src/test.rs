@@ -2025,12 +2025,11 @@ fn test_event_correct() {
     let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1];
 
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &fee);
+    let init_stableswap_pool_event = e.events().all().last().unwrap();
     assert_eq!(
         reward_token.balance(&payment_for_creation_address),
         1000_0000000
     );
-
-    let init_stableswap_pool_event = e.events().all().last().unwrap();
 
     assert_eq!(
         vec![&e, init_stableswap_pool_event],
@@ -2096,11 +2095,10 @@ fn test_event_correct() {
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
     let (amounts, share_amount) = router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
+    let deposit_event = e.events().all().last().unwrap();
     assert_eq!(router.get_total_liquidity(&tokens), U256::from_u32(&e, 2));
 
     let pool_id = router.get_pool(&tokens, &pool_hash);
-
-    let deposit_event = e.events().all().last().unwrap();
 
     assert_eq!(
         vec![&e, deposit_event],

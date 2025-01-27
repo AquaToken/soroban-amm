@@ -44,6 +44,14 @@ fn test_swap_empty_pool() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     assert_eq!(liqpool.estimate_swap(&0, &1, &10_0000000), 0);
@@ -77,6 +85,14 @@ fn test_happy_flow() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -186,6 +202,14 @@ fn test_happy_flow_different_decimals() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -313,6 +337,14 @@ fn test_events_2_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -422,6 +454,14 @@ fn test_events_3_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -554,6 +594,14 @@ fn test_events_4_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -693,6 +741,14 @@ fn test_pool_imbalance_draw_tokens() {
         85,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -751,6 +807,14 @@ fn test_pool_imbalance_draw_tokens_different_decimals() {
         85,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -833,6 +897,14 @@ fn test_pool_zero_swap() {
         85,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -872,6 +944,14 @@ fn test_bad_fee() {
         10,
         10000,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 }
@@ -902,6 +982,14 @@ fn test_zero_initial_deposit() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     token1_admin_client.mint(&user1, &1000_0000000);
@@ -935,6 +1023,14 @@ fn test_zero_deposit_ok() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     token1_admin_client.mint(&user1, &1000_0000000);
@@ -980,6 +1076,14 @@ fn test_happy_flow_3_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1117,6 +1221,14 @@ fn test_happy_flow_4_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1235,6 +1347,14 @@ fn test_withdraw_partial() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1309,6 +1429,14 @@ fn test_withdraw_one_token() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1384,6 +1512,14 @@ fn test_withdraw_one_token_different_decimals() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1470,6 +1606,14 @@ fn test_custom_fee() {
             10,
             fee_config.0,
             &token_reward.address,
+            &create_token_contract(&e, &Address::generate(&e)).address,
+            &create_reward_boost_feed_contract(
+                &e,
+                &Address::generate(&e),
+                &Address::generate(&e),
+                &Address::generate(&e),
+            )
+            .address,
             &plane.address,
         );
         liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
@@ -1503,6 +1647,14 @@ fn test_deposit_inequal() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1545,6 +1697,14 @@ fn test_deposit_inequal_different_decimals() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1595,6 +1755,14 @@ fn test_remove_liquidity_imbalance() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1667,6 +1835,14 @@ fn test_remove_liquidity_imbalance_different_decimals() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1727,6 +1903,14 @@ fn test_simple_ongoing_reward() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1783,6 +1967,14 @@ fn test_simple_ongoing_reward_different_decimals() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1839,6 +2031,14 @@ fn test_simple_reward() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1905,6 +2105,14 @@ fn test_two_users_rewards() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1961,8 +2169,8 @@ fn test_boosted_rewards() {
         assert_eq!(setup.token2.balance(user) as u128, 1000);
     }
 
-    let locked_token_admin_client =
-        get_token_admin_client(&env, &setup.reward_boost_token.address.clone());
+    let reward_boost_token = setup.reward_boost_token.address;
+    let locked_token_admin_client = get_token_admin_client(&env, &reward_boost_token);
 
     token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
     let reward_1_tps = 10_5000000_u128;
@@ -2061,6 +2269,14 @@ fn test_lazy_user_rewards() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2122,6 +2338,14 @@ fn test_config_rewards_not_admin() {
         10,
         0,
         &(create_token_contract(&e, &admin).address),
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &(create_plane_contract(&e).address),
     );
 
@@ -2156,6 +2380,14 @@ fn test_config_rewards_router() {
         10,
         0,
         &(create_token_contract(&e, &admin).address),
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &(create_plane_contract(&e).address),
     );
 
@@ -2188,6 +2420,14 @@ fn test_update_fee_too_early() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2222,6 +2462,14 @@ fn test_update_fee() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2260,6 +2508,14 @@ fn test_transfer_ownership_too_early() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2301,6 +2557,14 @@ fn test_transfer_ownership_twice() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2342,6 +2606,14 @@ fn test_transfer_ownership_not_committed() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2376,6 +2648,14 @@ fn test_transfer_ownership_reverted() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2417,6 +2697,14 @@ fn test_transfer_ownership() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2458,6 +2746,14 @@ fn test_ramp_a_too_early() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2496,6 +2792,14 @@ fn test_ramp_a_too_short() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2534,6 +2838,14 @@ fn test_ramp_a_too_fast() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2571,6 +2883,14 @@ fn test_ramp_a() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2615,6 +2935,14 @@ fn test_deposit_min_mint() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2657,6 +2985,14 @@ fn test_deposit_inequal_ok() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2703,6 +3039,14 @@ fn test_large_numbers() {
         85,
         6,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2803,6 +3147,14 @@ fn test_kill_deposit() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
@@ -2884,6 +3236,14 @@ fn test_kill_swap() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
@@ -2964,6 +3324,14 @@ fn test_kill_claim() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -3070,6 +3438,14 @@ fn test_withdraw_rewards() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
@@ -3168,6 +3544,14 @@ fn test_deposit_rewards() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -3222,6 +3606,14 @@ fn test_swap_rewards() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     let liq_pool2 = create_liqpool_contract(
@@ -3233,6 +3625,14 @@ fn test_swap_rewards() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     token1_admin_client.mint(&user1, &200_0000000);
@@ -3332,6 +3732,14 @@ fn test_decimals_in_swap_pool() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -3377,6 +3785,14 @@ fn test_claim_rewards() {
         10,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -3439,6 +3855,14 @@ fn test_drain_reward() {
         10,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     let token_share = SorobanTokenClient::new(&e, &liq_pool.share_id());
@@ -3521,6 +3945,14 @@ fn test_drain_reserves() {
         10,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -3984,7 +4416,6 @@ fn test_ramp_a_events() {
     jump(&setup.env, MIN_RAMP_TIME / 2);
 
     pool.stop_ramp_a(&setup.admin);
-    assert_eq!(pool.a(), 135);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -3996,6 +4427,7 @@ fn test_ramp_a_events() {
             ),
         ]
     );
+    assert_eq!(pool.a(), 135);
 }
 
 #[test]
