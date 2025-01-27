@@ -21,6 +21,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - run: rustup update
+    - uses: Swatinem/rust-cache@v2
     - name: Install Task
       uses: arduino/setup-task@v1
     - name: Install Soroban
