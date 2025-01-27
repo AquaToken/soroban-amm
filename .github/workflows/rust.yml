@@ -31,4 +31,3 @@ jobs:
       run: task check_bindings
     - name: Run tests
       run: task test
-    - uses: actions/upload-artifact@v4
