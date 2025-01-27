@@ -6,8 +6,12 @@ on:
   pull_request:
     branches: [ "master", "develop", "audit" ]
 
+permissions: {}
+
 env:
   CARGO_TERM_COLOR: always
+  # Disable incremental compilation for faster from-scratch builds
+  CARGO_INCREMENTAL: 0
 
 jobs:
   test:
@@ -15,7 +19,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - run: rustup update
     - name: Install Task
       uses: arduino/setup-task@v1
     - name: Install Soroban
@@ -26,3 +31,4 @@ jobs:
       run: task check_bindings
     - name: Run tests
       run: task test
+    - uses: actions/upload-artifact@v4
