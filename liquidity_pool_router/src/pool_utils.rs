@@ -66,7 +66,7 @@ pub fn deploy_standard_pool(
             merge_salt(e, tokens_salt.clone(), subpool_salt.clone()),
             get_pool_counter_salt(e),
         ))
-        .deploy(liquidity_pool_wasm_hash);
+        .deploy_v2(liquidity_pool_wasm_hash, ());
     init_standard_pool(e, tokens, &pool_contract_id, fee_fraction);
 
     add_tokens_set(e, tokens);
@@ -104,7 +104,7 @@ pub fn deploy_stableswap_pool(
     let pool_contract_id = e
         .deployer()
         .with_current_contract(merge_salt(e, tokens_salt.clone(), subpool_salt.clone()))
-        .deploy(liquidity_pool_wasm_hash);
+        .deploy_v2(liquidity_pool_wasm_hash, ());
     init_stableswap_pool(e, tokens, &pool_contract_id, amp, fee_fraction);
 
     add_tokens_set(e, tokens);

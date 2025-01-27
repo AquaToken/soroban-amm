@@ -11,7 +11,7 @@ use crate::pool_utils::{
     get_standard_pool_salt, get_tokens_salt, get_total_liquidity, validate_tokens_contracts,
 };
 use crate::rewards::get_rewards_manager;
-use crate::router_interface::{AdminInterface, UpgradeableContract};
+use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_init_pool_payment_address, get_init_pool_payment_token,
     get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
@@ -41,6 +41,7 @@ use soroban_sdk::{
     Map, Symbol, Val, Vec, U256,
 };
 use upgrade::events::Events as UpgradeEvents;
+use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::storage_errors::StorageError;
 
