@@ -10,7 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
-num-integer = { workspace = true }
 paste = { workspace = true }
 access_control = { workspace = true }
 utils = { workspace = true }

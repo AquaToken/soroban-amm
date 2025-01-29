@@ -1204,7 +1204,6 @@ dependencies = [
  "access_control",
  "liquidity-pool-events",
  "liquidity-pool-validation-errors",
- "num-integer",
  "paste",
  "rewards",
  "soroban-fixed-point-math",
@@ -1239,7 +1238,6 @@ version = "1.5.0"
 dependencies = [
  "access_control",
  "liquidity-pool-validation-errors",
- "num-integer",
  "paste",
  "rewards",
  "soroban-sdk",
