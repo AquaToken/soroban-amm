@@ -1698,22 +1698,24 @@ impl RewardsTrait for LiquidityPool {
             .checkpoint_user(&user, total_shares, user_shares);
         let pool_data = rewards.storage().get_pool_reward_data();
         let mut result = Map::new(&e);
-        result.set(symbol_short!("tps"), to_i128(config.tps).unwrap());
-        result.set(symbol_short!("exp_at"), to_i128(config.expired_at));
-        result.set(
-            symbol_short!("acc"),
-            to_i128(pool_data.accumulated).unwrap(),
-        );
-        result.set(symbol_short!("last_time"), to_i128(pool_data.last_time));
+        result.set(symbol_short!("tps"), config.tps as i128);
+        result.set(symbol_short!("exp_at"), config.expired_at as i128);
+        result.set(symbol_short!("acc"), pool_data.accumulated as i128);
+        result.set(symbol_short!("last_time"), pool_data.last_time as i128);
         result.set(
             symbol_short!("pool_acc"),
-            to_i128(user_data.pool_accumulated).unwrap(),
+            user_data.pool_accumulated as i128,
         );
-        result.set(symbol_short!("block"), to_i128(pool_data.block));
-        result.set(symbol_short!("usr_block"), to_i128(user_data.last_block));
+        result.set(symbol_short!("block"), pool_data.block as i128);
+        result.set(symbol_short!("usr_block"), user_data.last_block as i128);
+        result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
         result.set(
-            symbol_short!("to_claim"),
-            to_i128(user_data.to_claim).unwrap(),
+            symbol_short!("w_balance"),
+            rewards.manager().get_working_balance(&user, user_shares) as i128,
+        );
+        result.set(
+            symbol_short!("w_supply"),
+            rewards.manager().get_working_supply(total_shares) as i128,
         );
         result
     }

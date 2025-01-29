@@ -457,7 +457,7 @@ impl Manager {
         new_data
     }
 
-    fn get_working_supply(&mut self, total_shares: u128) -> u128 {
+    pub fn get_working_supply(&mut self, total_shares: u128) -> u128 {
         match self.storage.has_working_supply() {
             true => self.storage.get_working_supply(),
             false => {
@@ -467,7 +467,7 @@ impl Manager {
         }
     }
 
-    fn get_working_balance(&mut self, user: &Address, user_balance_shares: u128) -> u128 {
+    pub fn get_working_balance(&mut self, user: &Address, user_balance_shares: u128) -> u128 {
         match self.storage.has_working_balance(user) {
             true => self.storage.get_working_balance(user),
             false => {

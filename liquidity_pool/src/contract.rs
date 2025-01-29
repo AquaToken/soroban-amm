@@ -1026,6 +1026,14 @@ impl RewardsTrait for LiquidityPool {
         result.set(symbol_short!("block"), pool_data.block as i128);
         result.set(symbol_short!("usr_block"), user_data.last_block as i128);
         result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
+        result.set(
+            symbol_short!("w_balance"),
+            rewards.manager().get_working_balance(&user, user_shares) as i128,
+        );
+        result.set(
+            symbol_short!("w_supply"),
+            rewards.manager().get_working_supply(total_shares) as i128,
+        );
         result
     }
 
