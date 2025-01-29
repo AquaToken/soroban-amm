@@ -457,7 +457,7 @@ impl Manager {
         let mut result = 0;
         let mut block = start_block;
 
-        let mut max_pow;
+        let mut max_pow = 0;
         for pow in 1..255 {
             max_pow = pow;
             if start_block + self.config.page_size.pow(pow) - 1 > end_block {
