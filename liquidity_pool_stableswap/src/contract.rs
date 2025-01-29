@@ -38,7 +38,6 @@ use access_control::utils::{
     require_operations_admin_or_owner, require_pause_admin_or_owner,
     require_pause_or_emergency_pause_admin_or_owner, require_rewards_admin_or_owner,
 };
-use cast::i128 as to_i128;
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::events::Events as RewardEvents;
@@ -1690,13 +1689,13 @@ impl RewardsTrait for LiquidityPool {
     // A map of Symbols to i128 representing the rewards information.
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
         let rewards = get_rewards_manager(&e);
-        let config = rewards.storage().get_pool_reward_config();
+        let mut manager = rewards.manager();
+        let storage = rewards.storage();
+        let config = storage.get_pool_reward_config();
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let user_data = rewards
-            .manager()
-            .checkpoint_user(&user, total_shares, user_shares);
-        let pool_data = rewards.storage().get_pool_reward_data();
+        let user_data = manager.checkpoint_user(&user, total_shares, user_shares);
+        let pool_data = storage.get_pool_reward_data();
         let mut result = Map::new(&e);
         result.set(symbol_short!("tps"), config.tps as i128);
         result.set(symbol_short!("exp_at"), config.expired_at as i128);
@@ -1709,13 +1708,22 @@ impl RewardsTrait for LiquidityPool {
         result.set(symbol_short!("block"), pool_data.block as i128);
         result.set(symbol_short!("usr_block"), user_data.last_block as i128);
         result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
+        result.set(symbol_short!("supply"), total_shares as i128);
         result.set(
             symbol_short!("w_balance"),
-            rewards.manager().get_working_balance(&user, user_shares) as i128,
+            manager.get_working_balance(&user, user_shares) as i128,
         );
         result.set(
             symbol_short!("w_supply"),
-            rewards.manager().get_working_supply(total_shares) as i128,
+            manager.get_working_supply(total_shares) as i128,
+        );
+        result.set(
+            symbol_short!("l_balance"),
+            manager.get_user_boost_balance(&user) as i128,
+        );
+        result.set(
+            symbol_short!("l_supply"),
+            manager.get_total_locked() as i128,
         );
         result
     }

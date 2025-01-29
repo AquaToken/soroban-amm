@@ -29,7 +29,6 @@ soroban-token-sdk = { version = "22.0.6" }
 num-integer = { version = "0.1.45", default-features = false, features = ["i128"] }
 soroban-fixed-point-math = { version = "1.3.0"}
 paste = { version = "1.0.15" }
-cast = { version = "0.3.0" }
 utils = { path = "utils" }
 access_control = { path = "access_control" }
 token_share = { path = "token_share" }

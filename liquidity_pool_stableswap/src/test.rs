@@ -2,6 +2,7 @@
 extern crate std;
 
 use crate::pool_constants::MIN_RAMP_TIME;
+use core::cmp::min;
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{symbol_short, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec};
@@ -2196,35 +2197,78 @@ fn test_boosted_rewards() {
     liq_pool.deposit(&user2, &Vec::from_array(&env, [100, 100]), &0);
 
     jump(&env, 10);
-    // total effective share now 100 + 100 * 2.5 = 350
+    // total effective share now 200 + 200 * 2.5 = 700
     // first user gets ~28% of total reward, second ~72%
-    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 100 / 350);
-    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 250 / 350);
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 200 / 700);
+    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 500 / 700);
 
     // third user joins, depositing 50 tokens. no boost yet
     liq_pool.deposit(&user3, &Vec::from_array(&env, [50, 50]), &0);
+    let rewards_info = liq_pool.get_rewards_info(&user3);
+    assert_eq!(rewards_info.get(symbol_short!("w_balance")).unwrap(), 100);
+    assert_eq!(rewards_info.get(symbol_short!("w_supply")).unwrap(), 800);
 
     jump(&env, 10);
-    // total effective share now 100 + 100 * 2.5 + 50 = 400
-    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 100 / 400);
-    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 250 / 400);
-    assert_eq!(liq_pool.claim(&user3), total_reward_1 / 6 * 50 / 400);
+    // total effective share now 200 + 200 * 2.5 + 100 = 800
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 200 / 800);
+    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 500 / 800);
+    assert_eq!(liq_pool.claim(&user3), total_reward_1 / 6 * 100 / 800);
+
+    let user3_tokens_to_lock = 1_000_0000000;
+    let new_locked_supply = 25_000_0000000;
+
+    // pre-calculate expected boosted rewards for the third user
+    let supply = rewards_info.get(symbol_short!("supply")).unwrap() as u128;
+    let old_w_supply = rewards_info.get(symbol_short!("w_supply")).unwrap() as u128;
+    let old_w_balance = rewards_info.get(symbol_short!("w_balance")).unwrap() as u128;
+    let new_w_balance = min(
+        old_w_balance + 3 * user3_tokens_to_lock * supply / new_locked_supply / 2,
+        old_w_balance * 5 / 2,
+    );
+    let new_w_supply = old_w_supply + new_w_balance - old_w_balance;
+    let total_reward_step3 = total_reward_1 / 6; // total reward for 10 seconds
+    let user2_expected_boosted_reward = new_w_balance * total_reward_step3 / new_w_supply;
 
     // third user locks tokens to boost rewards
     // effective boost is 1.3
-    // effective share balance is 50 * 1.3 = 65
-    locked_token_admin_client.mint(&user3, &1_000_0000000);
+    // effective share balance is 100 * 1.3 = 130
+    locked_token_admin_client.mint(&user3, &(user3_tokens_to_lock as i128));
     setup
         .reward_boost_feed
-        .set_total_supply(&setup.operations_admin, &25_000_0000000);
+        .set_total_supply(&setup.operations_admin, &new_locked_supply);
     // user checkpoints itself to receive boosted rewards
     liq_pool.get_user_reward(&user3);
 
+    // rewards info should be updated
+    let new_rewards_info = liq_pool.get_rewards_info(&user3);
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("w_balance")).unwrap() as u128,
+        new_w_balance
+    );
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("w_supply")).unwrap() as u128,
+        new_w_supply
+    );
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("l_balance")).unwrap() as u128,
+        user3_tokens_to_lock
+    );
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("l_supply")).unwrap() as u128,
+        new_locked_supply
+    );
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("supply")).unwrap() as u128,
+        supply
+    );
+
     jump(&env, 10);
-    // total effective share now 100 + 100 * 2.5 + 65 = 415
-    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 100 / 415);
-    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 250 / 415);
-    assert_eq!(liq_pool.claim(&user3), total_reward_1 / 6 * 65 / 415);
+    // total effective share now 200 + 200 * 2.5 + 130 = 830
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 200 / 830);
+    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 500 / 830);
+    let user3_claim = liq_pool.claim(&user3);
+    assert_eq!(user3_claim, total_reward_1 / 6 * 130 / 830);
+    assert_eq!(user3_claim, user2_expected_boosted_reward);
 
     // total reward is distributed should be distributed to all three users. rounding occurs, so we check with delta
     assert_approx_eq_abs(

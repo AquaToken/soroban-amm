@@ -1,5 +1,3 @@
-use crate::boost_feed::RewardBoostFeedClient;
-use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
@@ -87,16 +85,6 @@ impl Storage {
             .has(&DataKey::RewardBoostToken)
     }
 
-    pub fn get_user_boost_balance(&self, user: &Address) -> u128 {
-        match self.has_reward_boost_token() {
-            true => {
-                SorobanTokenClient::new(&self.env, &self.get_reward_boost_token()).balance(user)
-                    as u128
-            }
-            false => 0,
-        }
-    }
-
     pub fn get_working_balance(&self, user: &Address) -> u128 {
         self.env
             .storage()
@@ -153,17 +141,8 @@ impl Storage {
             .set(&DataKey::RewardBoostFeed, &contract);
     }
 
-    fn has_reward_boost_feed(&self) -> bool {
+    pub fn has_reward_boost_feed(&self) -> bool {
         self.env.storage().instance().has(&DataKey::RewardBoostFeed)
-    }
-
-    pub fn get_total_locked(&self) -> u128 {
-        match self.has_reward_boost_feed() {
-            true => {
-                RewardBoostFeedClient::new(&self.env, &self.get_reward_boost_feed()).total_supply()
-            }
-            false => 0,
-        }
     }
 }
 

@@ -1,10 +1,12 @@
+use crate::boost_feed::RewardBoostFeedClient;
 use crate::constants::REWARD_PRECISION;
 use crate::errors::RewardsError;
 use crate::storage::{
     PoolRewardConfig, PoolRewardData, RewardsStorageTrait, Storage, UserRewardData,
 };
 use crate::RewardsConfig;
-use cast::u128 as to_u128;
+use soroban_fixed_point_math::SorobanFixedPoint;
+use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec};
 use utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
@@ -24,6 +26,24 @@ impl Manager {
         }
     }
 
+    pub fn get_user_boost_balance(&self, user: &Address) -> u128 {
+        let storage = &self.storage;
+        match storage.has_reward_boost_token() {
+            true => SorobanTokenClient::new(&self.env, &storage.get_reward_boost_token())
+                .balance(user) as u128,
+            false => 0,
+        }
+    }
+
+    pub fn get_total_locked(&self) -> u128 {
+        let storage = &self.storage;
+        match storage.has_reward_boost_feed() {
+            true => RewardBoostFeedClient::new(&self.env, &storage.get_reward_boost_feed())
+                .total_supply(),
+            false => 0,
+        }
+    }
+
     fn calculate_effective_balance(
         &self,
         user: &Address,
@@ -31,12 +51,13 @@ impl Manager {
         total_share: u128,
     ) -> u128 {
         // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
-        let lock_balance = self.storage.get_user_boost_balance(&user);
-        let total_locked = self.storage.get_total_locked();
+        let lock_balance = self.get_user_boost_balance(&user);
+        let total_locked = self.get_total_locked();
 
         let mut adjusted_balance = share_balance;
         if total_locked > 0 {
-            adjusted_balance += 3 * lock_balance * total_share / total_locked / 2
+            adjusted_balance +=
+                3 * lock_balance.fixed_mul_floor(&self.env, &total_share, &total_locked) / 2;
         }
         let max_effective_balance = share_balance * 5 / 2;
 
@@ -106,7 +127,7 @@ impl Manager {
 
         if now <= config.expired_at {
             // config not expired yet, yield rewards
-            let generated_tokens = to_u128(now - data.last_time) * to_u128(config.tps);
+            let generated_tokens = (now - data.last_time) as u128 * config.tps;
             self.create_new_rewards_data(
                 generated_tokens,
                 working_supply,
@@ -121,8 +142,7 @@ impl Manager {
             // config already expired
             if data.last_time < config.expired_at {
                 // last snapshot was before config expiration - yield up to expiration
-                let generated_tokens =
-                    to_u128(config.expired_at - data.last_time) * to_u128(config.tps);
+                let generated_tokens = (config.expired_at - data.last_time) as u128 * config.tps;
                 data = self.create_new_rewards_data(
                     generated_tokens,
                     working_supply,
