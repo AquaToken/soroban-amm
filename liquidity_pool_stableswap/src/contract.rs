@@ -41,7 +41,9 @@ use access_control::utils::{
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::events::Events as RewardEvents;
-use rewards::storage::RewardsStorageTrait;
+use rewards::storage::{
+    BoostFeedStorageTrait, BoostTokenStorageTrait, PoolRewardsStorageTrait, RewardTokenStorageTrait,
+};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{

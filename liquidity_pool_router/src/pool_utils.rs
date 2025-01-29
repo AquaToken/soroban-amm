@@ -9,7 +9,7 @@ use crate::storage::{
 use access_control::access::AccessControl;
 use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
 use access_control::role::Role;
-use rewards::storage::RewardsStorageTrait;
+use rewards::storage::{BoostFeedStorageTrait, BoostTokenStorageTrait, RewardTokenStorageTrait};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     panic_with_error, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol,
