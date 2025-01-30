@@ -164,9 +164,8 @@ pub fn get_reward_tokens(e: &Env) -> Map<Vec<Address>, LiquidityPoolRewardInfo> 
 
 pub fn set_reward_tokens(e: &Env, value: &Map<Vec<Address>, LiquidityPoolRewardInfo>) {
     let key = DataKey::RewardTokensList;
-    let result = e.storage().temporary().set(&key, value);
+    e.storage().temporary().set(&key, value);
     bump_temporary(e, &key);
-    result
 }
 
 pub fn get_reward_tokens_detailed(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, (U256, bool)> {
