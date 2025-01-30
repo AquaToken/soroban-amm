@@ -38,7 +38,7 @@ impl Manager {
             match SorobanTokenClient::new(&self.env, &self.storage.get_reward_boost_token())
                 .try_balance(user)
             {
-                Ok(balance) => balance as u128,
+                Ok(balance) => balance.unwrap() as u128,
                 // if trustline is not established, return 0
                 Err(_) => 0,
             }
