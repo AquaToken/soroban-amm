@@ -35,8 +35,13 @@ impl Manager {
 
     pub fn get_user_boost_balance(&self, user: &Address) -> u128 {
         if self.storage.has_reward_boost_token() {
-            SorobanTokenClient::new(&self.env, &self.storage.get_reward_boost_token()).balance(user)
-                as u128
+            match SorobanTokenClient::new(&self.env, &self.storage.get_reward_boost_token())
+                .try_balance(user)
+            {
+                Ok(balance) => balance as u128,
+                // if trustline is not established, return 0
+                Err(_) => 0,
+            }
         } else {
             0
         }
