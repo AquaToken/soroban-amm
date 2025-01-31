@@ -34,7 +34,9 @@ use liquidity_pool_events::Events as PoolEvents;
 use liquidity_pool_events::LiquidityPoolEvents;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::events::Events as RewardEvents;
-use rewards::storage::RewardsStorageTrait;
+use rewards::storage::{
+    BoostFeedStorageTrait, BoostTokenStorageTrait, PoolRewardsStorageTrait, RewardTokenStorageTrait,
+};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
@@ -76,7 +78,11 @@ impl LiquidityPoolCrunch for LiquidityPool {
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
     // * `tokens` - A vector of token addresses.
     // * `fee_fraction` - The fee fraction for the pool.
-    // * `reward_token` - The address of the reward token.
+    // * `reward_config` - (
+    // *    `reward_token` - The address of the reward token.
+    // *    `reward_boost_token` - The address of the reward boost token.
+    // *    `reward_boost_feed` - The address of the reward boost feed.
+    // * )
     // * `plane` - The address of the plane.
     fn initialize_all(
         e: Env,
@@ -86,9 +92,11 @@ impl LiquidityPoolCrunch for LiquidityPool {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
-        reward_token: Address,
+        reward_config: (Address, Address, Address),
         plane: Address,
     ) {
+        let (reward_token, reward_boost_token, reward_boost_feed) = reward_config;
+
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::init_pools_plane(e.clone(), plane);
@@ -101,6 +109,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
             tokens,
             fee_fraction,
         );
+        Self::initialize_boost_config(e.clone(), reward_boost_token, reward_boost_feed);
         Self::initialize_rewards_config(e.clone(), reward_token);
     }
 }
@@ -246,11 +255,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let pool_data = rewards.manager().update_rewards_data(total_shares);
         rewards
             .manager()
-            .update_user_reward(&pool_data, &user, user_shares);
-        rewards.storage().bump_user_reward_data(&user);
+            .checkpoint_user(&user, total_shares, user_shares);
 
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
@@ -315,6 +322,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         mint_shares(&e, &user, shares_to_mint as i128);
         put_reserve_a(&e, new_reserve_a);
         put_reserve_b(&e, new_reserve_b);
+
+        // Checkpoint resulting working balance
+        rewards.manager().update_working_balance(
+            &user,
+            new_total_shares,
+            user_shares + shares_to_mint,
+        );
 
         // update plane data for every pool update
         update_plane(&e);
@@ -512,13 +526,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let pool_data = rewards.manager().update_rewards_data(total_shares);
         rewards
             .manager()
-            .update_user_reward(&pool_data, &user, user_shares);
-        rewards.storage().bump_user_reward_data(&user);
+            .checkpoint_user(&user, total_shares, user_shares);
 
-        let total_shares = get_total_shares(&e);
         burn_shares(&e, &user, share_amount);
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -538,6 +549,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         transfer_b(&e, &user, out_b);
         put_reserve_a(&e, reserve_a - out_a);
         put_reserve_b(&e, reserve_b - out_b);
+
+        // Checkpoint resulting working balance
+        rewards.manager().update_working_balance(
+            &user,
+            total_shares - share_amount,
+            user_shares - share_amount,
+        );
 
         // update plane data for every pool update
         update_plane(&e);
@@ -756,7 +774,7 @@ impl UpgradeableContract for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        140
+        150
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -877,6 +895,30 @@ impl RewardsTrait for LiquidityPool {
         rewards.storage().put_reward_token(reward_token);
     }
 
+    fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address) {
+        let rewards_storage = get_rewards_manager(&e).storage();
+        if rewards_storage.has_reward_boost_token() {
+            panic_with_error!(&e, LiquidityPoolError::RewardsAlreadyInitialized);
+        }
+
+        rewards_storage.put_reward_boost_token(reward_boost_token);
+        rewards_storage.put_reward_boost_feed(reward_boost_feed);
+    }
+
+    fn set_reward_boost_config(
+        e: Env,
+        admin: Address,
+        reward_boost_token: Address,
+        reward_boost_feed: Address,
+    ) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        let rewards_storage = get_rewards_manager(&e).storage();
+        rewards_storage.put_reward_boost_token(reward_boost_token);
+        rewards_storage.put_reward_boost_feed(reward_boost_feed);
+    }
+
     // Sets the rewards configuration.
     //
     // # Arguments
@@ -967,13 +1009,13 @@ impl RewardsTrait for LiquidityPool {
     // A map of Symbols to i128 representing the rewards information.
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
         let rewards = get_rewards_manager(&e);
-        let config = rewards.storage().get_pool_reward_config();
+        let mut manager = rewards.manager();
+        let storage = rewards.storage();
+        let config = storage.get_pool_reward_config();
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        let pool_data = rewards.manager().update_rewards_data(total_shares);
-        let user_data = rewards
-            .manager()
-            .update_user_reward(&pool_data, &user, user_shares);
+        let user_data = manager.checkpoint_user(&user, total_shares, user_shares);
+        let pool_data = storage.get_pool_reward_data();
         let mut result = Map::new(&e);
         result.set(symbol_short!("tps"), config.tps as i128);
         result.set(symbol_short!("exp_at"), config.expired_at as i128);
@@ -986,6 +1028,23 @@ impl RewardsTrait for LiquidityPool {
         result.set(symbol_short!("block"), pool_data.block as i128);
         result.set(symbol_short!("usr_block"), user_data.last_block as i128);
         result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
+        result.set(symbol_short!("supply"), total_shares as i128);
+        result.set(
+            symbol_short!("w_balance"),
+            manager.get_working_balance(&user, user_shares) as i128,
+        );
+        result.set(
+            symbol_short!("w_supply"),
+            manager.get_working_supply(total_shares) as i128,
+        );
+        result.set(
+            symbol_short!("l_balance"),
+            manager.get_user_boost_balance(&user) as i128,
+        );
+        result.set(
+            symbol_short!("l_supply"),
+            manager.get_total_locked() as i128,
+        );
         result
     }
 
@@ -1016,10 +1075,27 @@ impl RewardsTrait for LiquidityPool {
         }
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
-        let rewards_data = rewards.manager().update_rewards_data(total_shares);
         rewards
             .manager()
-            .update_user_reward(&rewards_data, &user, user_shares);
+            .checkpoint_user(&user, total_shares, user_shares);
+    }
+
+    fn checkpoint_working_balance(
+        e: Env,
+        token_contract: Address,
+        user: Address,
+        user_shares: u128,
+    ) {
+        // checkpoint working balance with provided values to avoid re-entrancy issue
+        token_contract.require_auth();
+        if token_contract != get_token_share(&e) {
+            panic_with_error!(&e, AccessControlError::Unauthorized);
+        }
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards
+            .manager()
+            .update_working_balance(&user, total_shares, user_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.
@@ -1088,7 +1164,6 @@ impl RewardsTrait for LiquidityPool {
         let mut rewards_manager = rewards.manager();
         let rewards_storage = rewards.storage();
         let reward = rewards_manager.claim_reward(&user, total_shares, user_shares);
-        rewards_storage.bump_user_reward_data(&user);
 
         // validate reserves after claim - they should be less than or equal to the balance
         let tokens = Self::get_tokens(e.clone());

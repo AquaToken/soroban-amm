@@ -1,4 +1,4 @@
-use crate::interface::{Calculator, UpgradeableContract};
+use crate::interface::Calculator;
 use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
 use crate::storage::{get_plane, set_plane};
 use crate::{stableswap_pool, standard_pool};
@@ -14,6 +14,7 @@ use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, Symbol, Vec, U256,
 };
 use upgrade::events::Events as UpgradeEvents;
+use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 
 #[contract]
@@ -118,7 +119,7 @@ impl UpgradeableContract for LiquidityPoolLiquidityCalculator {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        140
+        150
     }
 
     // Commits a new wasm hash for a future upgrade.
