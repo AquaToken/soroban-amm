@@ -11,7 +11,6 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-num-integer = { workspace = true }
 rewards = { workspace = true }
 token_share = { workspace = true }
 access_control = { workspace = true }

@@ -2,10 +2,11 @@
 extern crate std;
 
 use crate::testutils::{
-    create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
-    install_token_wasm, Setup, TestConfig,
+    create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
+    create_token_contract, get_token_admin_client, install_token_wasm, Setup, TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
+use core::cmp::min;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -419,7 +420,11 @@ fn initialize_already_initialized_plane() {
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         &10_u32,
-        &token1.address,
+        &(
+            setup.token_reward.address,
+            setup.reward_boost_token.address,
+            setup.reward_boost_feed.address,
+        ),
         &setup.plane.address,
     );
 }
@@ -453,6 +458,8 @@ fn test_custom_fee() {
                 [setup.token1.address.clone(), setup.token2.address.clone()],
             ),
             &setup.token_reward.address,
+            &setup.reward_boost_token.address,
+            &setup.reward_boost_feed.address,
             fee_config.0, // ten percent
             &setup.plane.address,
         );
@@ -626,6 +633,120 @@ fn test_two_users_rewards() {
         total_reward_1 / 4 * 3
     );
     assert_eq!(token_reward.balance(&users[1]) as u128, total_reward_1 / 4);
+}
+
+#[test]
+fn test_boosted_rewards() {
+    let setup = Setup::new_with_config(&TestConfig {
+        users_count: 3,
+        ..TestConfig::default()
+    });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let users = setup.users;
+
+    let locked_token_admin_client =
+        get_token_admin_client(&env, &setup.reward_boost_token.address.clone());
+
+    let total_reward_1 = &TestConfig::default().reward_tps * 60;
+
+    // two users make deposit for equal value. second after 30 seconds after rewards start,
+    //  so it gets only 1/4 of total reward
+    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
+    jump(&env, 30);
+    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
+
+    // instead of simple deposit, second user locks tokens to boost rewards, then deposits
+    // second user lock percentage is 50%. this is equilibrium point for 50% shareholder
+    locked_token_admin_client.mint(&users[1], &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &20_000_0000000);
+    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
+
+    jump(&env, 10);
+    // total effective share now 100 + 100 * 2.5 = 350
+    // first user gets ~28% of total reward, second ~72%
+    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 6 * 100 / 350);
+    assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 6 * 250 / 350);
+
+    // third user joins, depositing 50 tokens. no boost yet
+    liq_pool.deposit(&users[2], &Vec::from_array(&env, [50, 50]), &0);
+    let rewards_info = liq_pool.get_rewards_info(&users[2]);
+    assert_eq!(rewards_info.get(symbol_short!("w_balance")).unwrap(), 50);
+    assert_eq!(rewards_info.get(symbol_short!("w_supply")).unwrap(), 400);
+
+    jump(&env, 10);
+    // total effective share now 100 + 100 * 2.5 + 50 = 400
+    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 6 * 100 / 400);
+    assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 6 * 250 / 400);
+    assert_eq!(liq_pool.claim(&users[2]), total_reward_1 / 6 * 50 / 400);
+
+    let user3_tokens_to_lock = 1_000_0000000;
+    let new_locked_supply = 25_000_0000000;
+
+    // pre-calculate expected boosted rewards for the third user
+    let supply = rewards_info.get(symbol_short!("supply")).unwrap() as u128;
+    let old_w_supply = rewards_info.get(symbol_short!("w_supply")).unwrap() as u128;
+    let old_w_balance = rewards_info.get(symbol_short!("w_balance")).unwrap() as u128;
+    let new_w_balance = min(
+        old_w_balance + 3 * user3_tokens_to_lock * supply / new_locked_supply / 2,
+        old_w_balance * 5 / 2,
+    );
+    let new_w_supply = old_w_supply + new_w_balance - old_w_balance;
+    let total_reward_step3 = total_reward_1 / 6; // total reward for 10 seconds
+    let user3_expected_boosted_reward = new_w_balance * total_reward_step3 / new_w_supply;
+
+    // third user locks tokens to boost rewards
+    // effective boost is 1.3
+    // effective share balance is 50 * 1.3 = 65
+    locked_token_admin_client.mint(&users[2], &(user3_tokens_to_lock as i128));
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &new_locked_supply);
+    // user checkpoints itself to receive boosted rewards
+    liq_pool.get_user_reward(&users[2]);
+
+    // rewards info should be updated
+    let new_rewards_info = liq_pool.get_rewards_info(&users[2]);
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("w_balance")).unwrap() as u128,
+        new_w_balance
+    );
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("w_supply")).unwrap() as u128,
+        new_w_supply
+    );
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("l_balance")).unwrap() as u128,
+        user3_tokens_to_lock
+    );
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("l_supply")).unwrap() as u128,
+        new_locked_supply
+    );
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("supply")).unwrap() as u128,
+        supply
+    );
+
+    jump(&env, 10);
+    // total effective share now 100 + 100 * 2.5 + 65 = 415
+    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 6 * 100 / 415);
+    assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 6 * 250 / 415);
+    let user3_claim = liq_pool.claim(&users[2]);
+    assert_eq!(user3_claim, total_reward_1 / 6 * 65 / 415);
+    assert_eq!(user3_claim, user3_expected_boosted_reward);
+
+    // total reward is distributed should be distributed to all three users. rounding occurs, so we check with delta
+    assert_approx_eq_abs(
+        token_reward.balance(&users[0]) as u128
+            + token_reward.balance(&users[1]) as u128
+            + token_reward.balance(&users[2]) as u128,
+        total_reward_1,
+        2,
+    );
 }
 
 #[test]
@@ -855,9 +976,9 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     }
 
     jump(&env, 100);
-    env.budget().reset_default();
+    env.cost_estimate().budget().reset_default();
     let user1_claim = liq_pool.claim(&first_user);
-    env.budget().print();
+    env.cost_estimate().budget().print();
     assert_approx_eq_abs(user1_claim, expected_reward, 10000); // small loss because of rounding is fine
 }
 
@@ -1260,6 +1381,8 @@ fn test_withdraw_rewards() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+    let reward_boost_token = create_token_contract(&e, &admin);
+    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1270,6 +1393,8 @@ fn test_withdraw_rewards() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
+        &reward_boost_token.address,
+        &reward_boost_feed.address,
         30,
         &plane.address,
     );
@@ -1357,6 +1482,8 @@ fn test_deposit_rewards() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+    let reward_boost_token = create_token_contract(&e, &admin);
+    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1367,6 +1494,8 @@ fn test_deposit_rewards() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
+        &reward_boost_token.address,
+        &reward_boost_feed.address,
         30,
         &plane.address,
     );
@@ -1414,6 +1543,8 @@ fn test_swap_rewards() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+    let reward_boost_token = create_token_contract(&e, &admin);
+    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1425,6 +1556,8 @@ fn test_swap_rewards() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
+        &reward_boost_token.address,
+        &reward_boost_feed.address,
         30,
         &plane.address,
     );
@@ -1435,6 +1568,8 @@ fn test_swap_rewards() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
+        &reward_boost_token.address,
+        &reward_boost_feed.address,
         30,
         &plane.address,
     );
@@ -1524,6 +1659,8 @@ fn test_claim_rewards() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+    let reward_boost_token = create_token_contract(&e, &admin);
+    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1534,6 +1671,8 @@ fn test_claim_rewards() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
+        &reward_boost_token.address,
+        &reward_boost_feed.address,
         30,
         &plane.address,
     );
@@ -1607,6 +1746,7 @@ fn test_drain_reserves() {
     // test pool reserves are not affected by rewards if reward token is one of pool tokens and presented in pool balance
     let e = Env::default();
     e.mock_all_auths();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
     let user1 = Address::generate(&e);
@@ -1625,6 +1765,8 @@ fn test_drain_reserves() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+    let reward_boost_token = create_token_contract(&e, &admin);
+    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1635,6 +1777,8 @@ fn test_drain_reserves() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
+        &reward_boost_token.address,
+        &reward_boost_feed.address,
         30,
         &plane.address,
     );

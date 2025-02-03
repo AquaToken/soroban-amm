@@ -5,7 +5,7 @@ use paste::paste;
 use soroban_sdk::{
     contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Vec, U256,
 };
-use utils::bump::{bump_instance, bump_persistent};
+use utils::bump::{bump_instance, bump_persistent, bump_temporary};
 use utils::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
@@ -35,7 +35,6 @@ pub struct LiquidityPoolData {
 pub struct GlobalRewardsConfig {
     pub tps: u128,
     pub expired_at: u64,
-    pub current_block: u64,
 }
 
 #[contracttype]
@@ -62,9 +61,11 @@ enum DataKey {
     PoolCounter,
     PoolPlane,
     LiquidityCalculator,
-    RewardsConfig,
-    RewardTokensList(u64),
-    RewardTokensPoolsLiquidity(u64, BytesN<32>),
+
+    // Temporary storage
+    RewardsConfig,                          // Global reward config
+    RewardTokensList,                       // Tokens for reward
+    RewardTokensPoolsLiquidity(BytesN<32>), // Per pool liquidity
 }
 
 #[contracterror]
@@ -130,44 +131,48 @@ generate_instance_storage_getter_and_setter!(
     DataKey::LiquidityCalculator,
     Address
 );
-generate_instance_storage_getter_and_setter_with_default!(
-    rewards_config,
-    DataKey::RewardsConfig,
-    GlobalRewardsConfig,
-    GlobalRewardsConfig {
-        tps: 0,
-        expired_at: 0,
-        current_block: 0,
-    }
-);
 
-pub fn get_reward_tokens(e: &Env, block: u64) -> Map<Vec<Address>, LiquidityPoolRewardInfo> {
-    let key = DataKey::RewardTokensList(block);
-    match e.storage().persistent().get(&key) {
+pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {
+    match e.storage().temporary().get(&DataKey::RewardsConfig) {
         Some(v) => {
-            bump_persistent(e, &key);
+            bump_temporary(e, &DataKey::RewardsConfig);
+            v
+        }
+        None => GlobalRewardsConfig {
+            tps: 0,
+            expired_at: 0,
+        },
+    }
+}
+
+pub fn set_rewards_config(e: &Env, value: &GlobalRewardsConfig) {
+    let key = DataKey::RewardsConfig;
+    e.storage().temporary().set(&key, value);
+    bump_temporary(e, &key);
+}
+
+pub fn get_reward_tokens(e: &Env) -> Map<Vec<Address>, LiquidityPoolRewardInfo> {
+    let key = DataKey::RewardTokensList;
+    match e.storage().temporary().get(&key) {
+        Some(v) => {
+            bump_temporary(e, &key);
             v
         }
         None => panic_with_error!(&e, LiquidityPoolRouterError::RewardsNotConfigured),
     }
 }
 
-pub fn set_reward_tokens(e: &Env, block: u64, value: &Map<Vec<Address>, LiquidityPoolRewardInfo>) {
-    let key = DataKey::RewardTokensList(block);
-    let result = e.storage().persistent().set(&key, value);
-    bump_persistent(e, &key);
-    result
+pub fn set_reward_tokens(e: &Env, value: &Map<Vec<Address>, LiquidityPoolRewardInfo>) {
+    let key = DataKey::RewardTokensList;
+    e.storage().temporary().set(&key, value);
+    bump_temporary(e, &key);
 }
 
-pub fn get_reward_tokens_detailed(
-    e: &Env,
-    block: u64,
-    salt: BytesN<32>,
-) -> Map<BytesN<32>, (U256, bool)> {
-    let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
-    match e.storage().persistent().get(&key) {
+pub fn get_reward_tokens_detailed(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, (U256, bool)> {
+    let key = DataKey::RewardTokensPoolsLiquidity(salt);
+    match e.storage().temporary().get(&key) {
         Some(v) => {
-            bump_persistent(e, &key);
+            bump_temporary(e, &key);
             v
         }
         None => panic_with_error!(&e, LiquidityPoolRouterError::LiquidityNotFilled),
@@ -176,13 +181,12 @@ pub fn get_reward_tokens_detailed(
 
 pub fn set_reward_tokens_detailed(
     e: &Env,
-    block: u64,
     salt: BytesN<32>,
     value: &Map<BytesN<32>, (U256, bool)>,
 ) {
-    let key = DataKey::RewardTokensPoolsLiquidity(block, salt);
-    let result = e.storage().persistent().set(&key, value);
-    bump_persistent(e, &key);
+    let key = DataKey::RewardTokensPoolsLiquidity(salt);
+    let result = e.storage().temporary().set(&key, value);
+    bump_temporary(e, &key);
     result
 }
 

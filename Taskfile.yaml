@@ -49,8 +49,8 @@ tasks:
       - for: { var: WASMS }
         cmd:
           echo "Checking bindings for {{ .ITEM }}" &&
-          soroban contract inspect --wasm {{ .ITEM }} | grep commit_transfer_ownership && 
-          soroban contract inspect --wasm {{ .ITEM }} | grep apply_transfer_ownership
+          soroban contract info interface --wasm {{ .ITEM }} | grep commit_transfer_ownership && 
+          soroban contract info interface --wasm {{ .ITEM }} | grep apply_transfer_ownership
           || exit 1
 
   _check_bindings_delayed_upgrade:
@@ -61,8 +61,8 @@ tasks:
       - for: { var: WASMS }
         cmd:
           echo "Checking bindings for {{ .ITEM }}" &&
-          soroban contract inspect --wasm {{ .ITEM }} | grep apply_upgrade && 
-          soroban contract inspect --wasm {{ .ITEM }} | grep commit_upgrade 
+          soroban contract info interface --wasm {{ .ITEM }} | grep apply_upgrade && 
+          soroban contract info interface --wasm {{ .ITEM }} | grep commit_upgrade 
           || exit 1
 
   _check_bindings_upgrade:
@@ -70,7 +70,7 @@ tasks:
       WASM: "./target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
     cmds:
       - echo "Checking upgrade bindings for {{ .WASM }}" && 
-        soroban contract inspect --wasm {{ .WASM }} | grep upgrade 
+        soroban contract info interface --wasm {{ .WASM }} | grep upgrade 
         || exit 1
 
   check_bindings:

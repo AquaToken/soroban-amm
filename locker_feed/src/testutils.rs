@@ -1,17 +1,28 @@
 #![cfg(test)]
 
-use crate::LiquidityPoolPlaneClient;
+use crate::contract::LockerFeedArgs;
+use crate::{LockerFeed, LockerFeedClient};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::{Address, BytesN, Env, Symbol};
+use soroban_sdk::{Address, BytesN, Env};
 
 pub fn install_dummy_wasm<'a>(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(file = "../contracts/dummy_contract.wasm");
     e.deployer().upload_contract_wasm(WASM)
 }
 
-fn create_plane_contract<'a>(e: &Env) -> LiquidityPoolPlaneClient<'a> {
-    let client =
-        LiquidityPoolPlaneClient::new(e, &e.register(crate::contract::LiquidityPoolPlane {}, ()));
+pub fn create_contract<'a>(
+    e: &Env,
+    admin: &Address,
+    operations_admin: &Address,
+    emergency_admin: &Address,
+) -> LockerFeedClient<'a> {
+    let client = LockerFeedClient::new(
+        e,
+        &e.register(
+            LockerFeed {},
+            LockerFeedArgs::__constructor(admin, operations_admin, emergency_admin),
+        ),
+    );
     client
 }
 
@@ -32,8 +43,9 @@ pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
     pub(crate) admin: Address,
+    pub(crate) operations_admin: Address,
     pub(crate) emergency_admin: Address,
-    pub(crate) plane: LiquidityPoolPlaneClient<'a>,
+    pub(crate) contract: LockerFeedClient<'a>,
 }
 
 impl Default for Setup<'_> {
@@ -44,22 +56,16 @@ impl Default for Setup<'_> {
         env.cost_estimate().budget().reset_unlimited();
 
         let admin = Address::generate(&env);
-        let plane = create_plane_contract(&env);
-        plane.init_admin(&admin);
-
+        let operations_admin = Address::generate(&env);
         let emergency_admin = Address::generate(&env);
-        plane.commit_transfer_ownership(
-            &admin,
-            &Symbol::new(&env, "EmergencyAdmin"),
-            &emergency_admin,
-        );
-        plane.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
+        let contract = create_contract(&env, &admin, &operations_admin, &emergency_admin);
 
         Setup {
             env,
             admin,
             emergency_admin,
-            plane,
+            operations_admin,
+            contract,
         }
     }
 }
