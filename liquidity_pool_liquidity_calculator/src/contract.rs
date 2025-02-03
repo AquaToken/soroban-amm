@@ -98,7 +98,7 @@ impl Calculator for LiquidityPoolLiquidityCalculator {
                     data.future_a,
                     data.future_a_time,
                 );
-                out = stableswap_pool::get_pool_liquidity(&e, data.fee, amp, &data.reserves);
+                out = stableswap_pool::get_pool_liquidity(&e, data.fee, amp, &data.xp);
             } else {
                 panic!("unknown pool type");
             };
