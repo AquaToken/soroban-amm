@@ -84,13 +84,12 @@ pub trait RewardsInterfaceTrait {
     // Retrieves the global rewards configuration and returns it as a `Map`.
     //
     // This function fetches the global rewards configuration from the contract's state.
-    // The configuration includes the rewards per second (`tps`), the expiration timestamp (`expired_at`),
-    // and the current block number (`current_block`).
+    // The configuration includes the rewards per second (`tps`) and the expiration timestamp (`expired_at`)
     //
     // # Returns
     //
     // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
-    // The keys are "tps", "expired_at", and "current_block".
+    // The keys are "tps" and "expired_at".
     fn get_rewards_config(e: Env) -> Map<Symbol, i128>;
 
     // Returns a mapping of token addresses to their respective reward information.
