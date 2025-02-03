@@ -674,8 +674,8 @@ fn test_boosted_rewards() {
     // third user joins, depositing 50 tokens. no boost yet
     liq_pool.deposit(&users[2], &Vec::from_array(&env, [50, 50]), &0);
     let rewards_info = liq_pool.get_rewards_info(&users[2]);
-    assert_eq!(rewards_info.get(symbol_short!("w_balance")).unwrap(), 50);
-    assert_eq!(rewards_info.get(symbol_short!("w_supply")).unwrap(), 400);
+    assert_eq!(rewards_info.get(Symbol::new(&env, "working_balance")).unwrap(), 50);
+    assert_eq!(rewards_info.get(Symbol::new(&env, "working_supply")).unwrap(), 400);
 
     jump(&env, 10);
     // total effective share now 100 + 100 * 2.5 + 50 = 400
@@ -688,8 +688,8 @@ fn test_boosted_rewards() {
 
     // pre-calculate expected boosted rewards for the third user
     let supply = rewards_info.get(symbol_short!("supply")).unwrap() as u128;
-    let old_w_supply = rewards_info.get(symbol_short!("w_supply")).unwrap() as u128;
-    let old_w_balance = rewards_info.get(symbol_short!("w_balance")).unwrap() as u128;
+    let old_w_balance = rewards_info.get(Symbol::new(&env, "working_balance")).unwrap() as u128;
+    let old_w_supply = rewards_info.get(Symbol::new(&env, "working_supply")).unwrap() as u128;
     let new_w_balance = min(
         old_w_balance + 3 * user3_tokens_to_lock * supply / new_locked_supply / 2,
         old_w_balance * 5 / 2,
@@ -705,25 +705,32 @@ fn test_boosted_rewards() {
     setup
         .reward_boost_feed
         .set_total_supply(&setup.operations_admin, &new_locked_supply);
-    // user checkpoints itself to receive boosted rewards
-    liq_pool.get_user_reward(&users[2]);
 
+    // user checkpoints itself to receive boosted rewards by calling get_rewards_info
     // rewards info should be updated
     let new_rewards_info = liq_pool.get_rewards_info(&users[2]);
     assert_eq!(
-        new_rewards_info.get(symbol_short!("w_balance")).unwrap() as u128,
+        new_rewards_info.get(Symbol::new(&env, "working_balance")).unwrap() as u128,
+        old_w_balance
+    );
+    assert_eq!(
+        new_rewards_info.get(Symbol::new(&env, "working_supply")).unwrap() as u128,
+        old_w_supply
+    );
+    assert_eq!(
+        new_rewards_info.get(Symbol::new(&env, "new_working_balance")).unwrap() as u128,
         new_w_balance
     );
     assert_eq!(
-        new_rewards_info.get(symbol_short!("w_supply")).unwrap() as u128,
+        new_rewards_info.get(Symbol::new(&env, "new_working_supply")).unwrap() as u128,
         new_w_supply
     );
     assert_eq!(
-        new_rewards_info.get(symbol_short!("l_balance")).unwrap() as u128,
+        new_rewards_info.get(Symbol::new(&env, "boost_balance")).unwrap() as u128,
         user3_tokens_to_lock
     );
     assert_eq!(
-        new_rewards_info.get(symbol_short!("l_supply")).unwrap() as u128,
+        new_rewards_info.get(Symbol::new(&env, "boost_supply")).unwrap() as u128,
         new_locked_supply
     );
     assert_eq!(
