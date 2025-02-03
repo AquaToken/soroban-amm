@@ -251,7 +251,7 @@ fn test_bad_math_2() {
 fn test_bad_math_big_tokens_value_difference() {
     let e = Env::default();
     e.mock_all_auths();
-    e.cost_estimate().budget().reset_unlimited();
+    e.budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -278,11 +278,11 @@ fn test_bad_math_big_tokens_value_difference() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.cost_estimate().budget().reset_default();
+    e.budget().reset_default();
     let results =
         calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
-    e.cost_estimate().budget().print();
-    e.cost_estimate().budget().reset_unlimited();
+    e.budget().print();
+    e.budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(
