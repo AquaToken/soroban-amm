@@ -48,14 +48,14 @@ fn test_total_liquidity() {
         );
     }
 
-    e.budget().reset_unlimited();
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_unlimited();
+    e.cost_estimate().budget().reset_default();
     assert_eq!(
         setup.router.get_total_liquidity(&tokens),
         U256::from_u32(&e, 3276)
     );
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
 
     for pool_fee in [10, 30, 100] {
         let (pool_hash, _pool_address) = setup
@@ -70,15 +70,15 @@ fn test_total_liquidity() {
         );
     }
 
-    e.budget().reset_unlimited();
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_unlimited();
+    e.cost_estimate().budget().reset_default();
     assert_eq!(
         setup.router.get_total_liquidity(&tokens),
         U256::from_u32(&e, 33648)
     );
-    e.budget().print();
+    e.cost_estimate().budget().print();
     assert!(
-        e.budget().cpu_instruction_cost() < 100_000_000,
+        e.cost_estimate().budget().cpu_instruction_cost() < 100_000_000,
         "budget exceed"
     );
 }
@@ -327,11 +327,11 @@ fn test_stableswap_pool() {
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     reward_token.mint(&user1, &10000000_0000000);
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &30);
-    e.budget().print();
-    assert!(e.budget().cpu_instruction_cost() < 100_000_000);
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    assert!(e.cost_estimate().budget().cpu_instruction_cost() < 100_000_000);
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable")
@@ -780,13 +780,13 @@ fn test_simple_ongoing_reward() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     router.fill_liquidity(&tokens);
-    e.budget().print();
-    e.budget().reset_default();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_default();
     let standard_pool_tps = router.config_pool_rewards(&tokens, &standard_pool_hash);
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
 
     assert_approx_eq_abs_u256(
@@ -2025,12 +2025,11 @@ fn test_event_correct() {
     let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1];
 
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &fee);
+    let init_stableswap_pool_event = e.events().all().last().unwrap();
     assert_eq!(
         reward_token.balance(&payment_for_creation_address),
         1000_0000000
     );
-
-    let init_stableswap_pool_event = e.events().all().last().unwrap();
 
     assert_eq!(
         vec![&e, init_stableswap_pool_event],
@@ -2096,11 +2095,10 @@ fn test_event_correct() {
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
     let (amounts, share_amount) = router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
+    let deposit_event = e.events().all().last().unwrap();
     assert_eq!(router.get_total_liquidity(&tokens), U256::from_u32(&e, 2));
 
     let pool_id = router.get_pool(&tokens, &pool_hash);
-
-    let deposit_event = e.events().all().last().unwrap();
 
     assert_eq!(
         vec![&e, deposit_event],

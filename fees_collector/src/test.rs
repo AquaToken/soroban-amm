@@ -10,7 +10,7 @@ use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol};
 fn test() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
     let collector = create_contract(&e);

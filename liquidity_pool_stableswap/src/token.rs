@@ -10,5 +10,5 @@ pub fn create_contract(e: &Env, token_wasm_hash: BytesN<32>, tokens: &Vec<Addres
     let salt = e.crypto().sha256(&salt);
     e.deployer()
         .with_current_contract(salt)
-        .deploy(token_wasm_hash)
+        .deploy_v2(token_wasm_hash, ())
 }

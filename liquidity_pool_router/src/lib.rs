@@ -5,7 +5,6 @@ mod contract;
 pub mod errors;
 mod events;
 mod liquidity_calculator;
-mod pool_contract;
 mod pool_interface;
 mod pool_utils;
 mod rewards;

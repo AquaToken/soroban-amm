@@ -3,6 +3,7 @@
 mod constants;
 mod errors;
 pub mod events;
+pub mod interface;
 mod storage;
 
 use crate::constants::UPGRADE_DELAY;

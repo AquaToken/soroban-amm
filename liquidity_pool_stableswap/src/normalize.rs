@@ -1,5 +1,4 @@
 use crate::storage::get_decimals;
-use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{Address, Env, Vec};
 
