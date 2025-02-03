@@ -1696,11 +1696,38 @@ impl RewardsTrait for LiquidityPool {
         let config = storage.get_pool_reward_config();
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
+
+        // pre-fill result dict with stored values
+        // or values won't be affected by checkpoint in any way
+        let mut result = Map::from_array(
+            &e,
+            [
+                (symbol_short!("tps"), config.tps as i128),
+                (symbol_short!("exp_at"), config.expired_at as i128),
+                (symbol_short!("supply"), total_shares as i128),
+                (
+                    Symbol::new(&e, "working_balance"),
+                    manager.get_working_balance(&user, user_shares) as i128,
+                ),
+                (
+                    Symbol::new(&e, "working_supply"),
+                    manager.get_working_supply(total_shares) as i128,
+                ),
+                (
+                    Symbol::new(&e, "boost_balance"),
+                    manager.get_user_boost_balance(&user) as i128,
+                ),
+                (
+                    Symbol::new(&e, "boost_supply"),
+                    manager.get_total_locked() as i128,
+                ),
+            ],
+        );
+
+        // display actual values
         let user_data = manager.checkpoint_user(&user, total_shares, user_shares);
         let pool_data = storage.get_pool_reward_data();
-        let mut result = Map::new(&e);
-        result.set(symbol_short!("tps"), config.tps as i128);
-        result.set(symbol_short!("exp_at"), config.expired_at as i128);
+
         result.set(symbol_short!("acc"), pool_data.accumulated as i128);
         result.set(symbol_short!("last_time"), pool_data.last_time as i128);
         result.set(
@@ -1710,22 +1737,17 @@ impl RewardsTrait for LiquidityPool {
         result.set(symbol_short!("block"), pool_data.block as i128);
         result.set(symbol_short!("usr_block"), user_data.last_block as i128);
         result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
-        result.set(symbol_short!("supply"), total_shares as i128);
+
+        // provide updated working balance information. if working_balance_new is bigger
+        // than working_balance, it means that user has locked some tokens
+        // and needs to checkpoint itself for more rewards
         result.set(
-            symbol_short!("w_balance"),
+            Symbol::new(&e, "working_balance_new"),
             manager.get_working_balance(&user, user_shares) as i128,
         );
         result.set(
-            symbol_short!("w_supply"),
+            Symbol::new(&e, "working_supply_new"),
             manager.get_working_supply(total_shares) as i128,
-        );
-        result.set(
-            symbol_short!("l_balance"),
-            manager.get_user_boost_balance(&user) as i128,
-        );
-        result.set(
-            symbol_short!("l_supply"),
-            manager.get_total_locked() as i128,
         );
         result
     }
