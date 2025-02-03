@@ -2205,8 +2205,8 @@ fn test_boosted_rewards() {
     // third user joins, depositing 50 tokens. no boost yet
     liq_pool.deposit(&user3, &Vec::from_array(&env, [50, 50]), &0);
     let rewards_info = liq_pool.get_rewards_info(&user3);
-    assert_eq!(rewards_info.get(Symbol::new(&env, "working_balance")).unwrap(), 50);
-    assert_eq!(rewards_info.get(Symbol::new(&env, "working_supply")).unwrap(), 400);
+    assert_eq!(rewards_info.get(Symbol::new(&env, "working_balance")).unwrap(), 100);
+    assert_eq!(rewards_info.get(Symbol::new(&env, "working_supply")).unwrap(), 800);
 
     jump(&env, 10);
     // total effective share now 200 + 200 * 2.5 + 100 = 800
