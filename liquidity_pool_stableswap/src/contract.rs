@@ -1742,11 +1742,11 @@ impl RewardsTrait for LiquidityPool {
         // than working_balance, it means that user has locked some tokens
         // and needs to checkpoint itself for more rewards
         result.set(
-            Symbol::new(&e, "working_balance_new"),
+            Symbol::new(&e, "new_working_balance"),
             manager.get_working_balance(&user, user_shares) as i128,
         );
         result.set(
-            Symbol::new(&e, "working_supply_new"),
+            Symbol::new(&e, "new_working_supply"),
             manager.get_working_supply(total_shares) as i128,
         );
         result
