@@ -52,7 +52,7 @@ fn test_total_liquidity() {
     e.budget().reset_default();
     assert_eq!(
         setup.router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 3276)
+        U256::from_u32(&e, 3228)
     );
     e.budget().print();
     e.budget().reset_unlimited();
@@ -74,7 +74,7 @@ fn test_total_liquidity() {
     e.budget().reset_default();
     assert_eq!(
         setup.router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 33648)
+        U256::from_u32(&e, 33600)
     );
     e.budget().print();
     assert!(
@@ -734,7 +734,7 @@ fn test_simple_ongoing_reward() {
         &0,
     );
     let standard_liquidity = router.get_total_liquidity(&tokens);
-    assert_eq!(standard_liquidity, U256::from_u32(&e, 36));
+    assert_eq!(standard_liquidity, U256::from_u32(&e, 34));
     router.deposit(
         &user1,
         &tokens,
@@ -745,7 +745,7 @@ fn test_simple_ongoing_reward() {
     let stable_liquidity = router.get_total_liquidity(&tokens).sub(&standard_liquidity);
     assert_eq!(
         standard_liquidity.add(&stable_liquidity),
-        U256::from_u32(&e, 372)
+        U256::from_u32(&e, 370)
     );
 
     assert_eq!(
@@ -1026,8 +1026,8 @@ fn test_rewards_distribution() {
     );
     let standard_liquidity1 = router.get_total_liquidity(&tokens1);
     let standard_liquidity2 = router.get_total_liquidity(&tokens2);
-    assert_eq!(standard_liquidity1, U256::from_u32(&e, 36));
-    assert_eq!(standard_liquidity2, U256::from_u32(&e, 36));
+    assert_eq!(standard_liquidity1, U256::from_u32(&e, 34));
+    assert_eq!(standard_liquidity2, U256::from_u32(&e, 34));
     router.deposit(
         &user1,
         &tokens1,
@@ -1050,11 +1050,11 @@ fn test_rewards_distribution() {
         .sub(&standard_liquidity2);
     assert_eq!(
         standard_liquidity1.add(&stable_liquidity1),
-        U256::from_u32(&e, 372)
+        U256::from_u32(&e, 370)
     );
     assert_eq!(
         standard_liquidity2.add(&stable_liquidity2),
-        U256::from_u32(&e, 372)
+        U256::from_u32(&e, 370)
     );
 
     let rewards = Vec::from_array(

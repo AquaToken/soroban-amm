@@ -34,7 +34,7 @@ pub(crate) fn a(
 // xp size = N_COINS
 fn get_d(e: &Env, n_coins: u32, xp: &Vec<u128>, amp: u128) -> u128 {
     let mut s = 0;
-    for x in xp.clone() {
+    for x in xp.iter() {
         s += x;
     }
     if s == 0 {
@@ -46,7 +46,7 @@ fn get_d(e: &Env, n_coins: u32, xp: &Vec<u128>, amp: u128) -> u128 {
     let ann = amp * n_coins as u128;
     for _i in 0..255 {
         let mut d_p = d.clone();
-        for x1 in xp.clone() {
+        for x1 in xp.iter() {
             d_p = d_p.fixed_mul_floor(&e, &d, &(x1 * n_coins as u128));
         }
         d_prev = d.clone();
@@ -75,7 +75,7 @@ fn get_y(
     in_idx: u32,
     out_idx: u32,
     x: u128,
-    xp: Vec<u128>,
+    xp: &Vec<u128>,
     amp: u128,
 ) -> u128 {
     // x in the input is converted to the same price/precision
@@ -136,7 +136,7 @@ fn get_y(
 fn get_dy(
     e: &Env,
     d: u128,
-    reserves: &Vec<u128>,
+    xp: &Vec<u128>,
     fee_fraction: u128,
     amp: u128,
     i: u32,
@@ -144,10 +144,8 @@ fn get_dy(
     dx: u128,
 ) -> u128 {
     // dx and dy in c-units
-    let xp = reserves.clone();
-
     let x = xp.get(i).unwrap() + dx;
-    let y = get_y(e, d, reserves.len(), i, j, x, xp.clone(), amp);
+    let y = get_y(e, d, xp.len(), i, j, x, xp, amp);
 
     if y == 0 {
         // pool is empty
@@ -166,38 +164,29 @@ fn estimate_swap(
     fee_fraction: u128,
     d: u128,
     amp: u128,
-    reserves: &Vec<u128>,
+    xp: &Vec<u128>,
     in_idx: u32,
     out_idx: u32,
     in_amount: u128,
 ) -> u128 {
-    get_dy(
-        e,
-        d,
-        reserves,
-        fee_fraction,
-        amp,
-        in_idx,
-        out_idx,
-        in_amount,
-    )
+    get_dy(e, d, xp, fee_fraction, amp, in_idx, out_idx, in_amount)
 }
 
 pub fn get_liquidity(
     e: &Env,
     fee_fraction: u128,
     amp: u128,
-    reserves_adj: &Vec<u128>,
-    reserves_norm: &Vec<u128>,
+    xp_adj: &Vec<u128>,
+    xp_norm: &Vec<u128>,
     d_adj: u128,
     d_norm: u128,
     in_idx: u32,
     out_idx: u32,
 ) -> u128 {
-    let reserve_in = reserves_norm.get(in_idx).unwrap();
-    let reserve_out = reserves_norm.get(out_idx).unwrap();
+    let xp_in = xp_norm.get(in_idx).unwrap();
+    let xp_out = xp_norm.get(out_idx).unwrap();
 
-    if reserve_in == 0 || reserve_out == 0 {
+    if xp_in == 0 || xp_out == 0 {
         return 0;
     }
 
@@ -209,7 +198,7 @@ pub fn get_liquidity(
         fee_fraction,
         d_adj,
         amp,
-        &reserves_adj,
+        &xp_adj,
         in_idx,
         out_idx,
         min_amount,
@@ -228,8 +217,8 @@ pub fn get_liquidity(
     let mut first_iteration = true;
     let mut last_iteration = false;
 
-    // euristic. 2x is because of weight function - after 1.6 it affects less than 1%
-    let mut in_amt = get_max_reserve(&reserves_norm) * 2;
+    // heuristic. 2x is because of weight function - after 1.6 it affects less than 1%
+    let mut in_amt = get_max_reserve(&xp_norm) * 2;
 
     while !last_iteration {
         let mut depth = estimate_swap(
@@ -237,7 +226,7 @@ pub fn get_liquidity(
             fee_fraction,
             d_norm,
             amp,
-            &reserves_norm,
+            &xp_norm,
             in_idx,
             out_idx,
             in_amt,
@@ -288,23 +277,18 @@ pub fn get_liquidity(
     result_big / PRECISION
 }
 
-pub(crate) fn get_pool_liquidity(
-    e: &Env,
-    fee_fraction: u128,
-    amp: u128,
-    reserves: &Vec<u128>,
-) -> U256 {
-    let n_tokens = reserves.len();
-    let (reserves_norm, nominator, denominator) = normalize_reserves(reserves);
+pub(crate) fn get_pool_liquidity(e: &Env, fee_fraction: u128, amp: u128, xp: &Vec<u128>) -> U256 {
+    let n_tokens = xp.len();
+    let (xp_norm, nominator, denominator) = normalize_reserves(xp);
 
     let mut result_big = U256::from_u128(e, 0);
-    let mut reserves_adj = Vec::new(e);
+    let mut xp_adj = Vec::new(e);
     for i in 0..n_tokens {
-        reserves_adj.push_back(reserves_norm.get(i).unwrap() * PRECISION);
+        xp_adj.push_back(xp_norm.get(i).unwrap() * PRECISION);
     }
 
-    let d_adj = get_d(e, n_tokens, &reserves_adj, amp);
-    let d_norm = get_d(e, n_tokens, &reserves_norm, amp);
+    let d_adj = get_d(e, n_tokens, &xp_adj, amp);
+    let d_norm = get_d(e, n_tokens, &xp_norm, amp);
 
     for in_idx in 0..n_tokens {
         for out_idx in 0..n_tokens {
@@ -318,8 +302,8 @@ pub(crate) fn get_pool_liquidity(
                     &e,
                     fee_fraction,
                     amp,
-                    &reserves_adj,
-                    &reserves_norm,
+                    &xp_adj,
+                    &xp_norm,
                     d_adj,
                     d_norm,
                     in_idx,
