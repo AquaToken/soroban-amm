@@ -270,18 +270,28 @@ fn test_transfer_ownership_separate_deadlines() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #101)")]
+#[should_panic(expected = "Error(Contract, #2907)")]
 fn test_get_future_address_empty() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&env);
+    let emergency_admin = Address::generate(&env);
     let collector = create_contract(&env);
     collector.init_admin(&admin);
-    collector.get_future_address(&Symbol::new(&env, "EmergencyAdmin"));
+    collector.commit_transfer_ownership(
+        &admin,
+        &Symbol::new(&env, "EmergencyAdmin"),
+        &emergency_admin,
+    );
+    collector.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
+    assert_eq!(
+        collector.get_future_address(&Symbol::new(&env, "EmergencyAdmin")),
+        emergency_admin
+    );
+    collector.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
 }
-
 // upgrade
 #[test]
 fn test_commit_upgrade_third_party_user() {

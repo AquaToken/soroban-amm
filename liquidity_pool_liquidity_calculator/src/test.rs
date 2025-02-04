@@ -10,7 +10,7 @@ use soroban_sdk::{symbol_short, vec, Address, Bytes, Env, IntoVal, Symbol, Vec, 
 fn create_contract<'a>(e: &Env) -> LiquidityPoolLiquidityCalculatorClient<'a> {
     let client = LiquidityPoolLiquidityCalculatorClient::new(
         e,
-        &e.register_contract(None, LiquidityPoolLiquidityCalculator {}),
+        &e.register(LiquidityPoolLiquidityCalculator {}, ()),
     );
     client
 }
@@ -23,14 +23,14 @@ mod pool_plane {
 }
 
 fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
-    pool_plane::Client::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
+    pool_plane::Client::new(e, &e.register(pool_plane::WASM, ()))
 }
 
 #[test]
 fn test() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -83,7 +83,7 @@ fn test() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results = calculator.get_liquidity(&Vec::from_array(
         &e,
         [
@@ -95,8 +95,8 @@ fn test() {
             address6.clone(),
         ],
     ));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(
@@ -117,7 +117,7 @@ fn test() {
 fn test_bad_math() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -172,7 +172,7 @@ fn test_bad_math() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results = calculator.get_liquidity(&Vec::from_array(
         &e,
         [
@@ -184,8 +184,8 @@ fn test_bad_math() {
             address6.clone(),
         ],
     ));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(
@@ -206,7 +206,7 @@ fn test_bad_math() {
 fn test_bad_math_2() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -233,11 +233,11 @@ fn test_bad_math_2() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results =
         calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(
@@ -299,7 +299,7 @@ fn test_bad_math_big_tokens_value_difference() {
 fn test_out_of_fuel() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -320,10 +320,10 @@ fn test_out_of_fuel() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results = calculator.get_liquidity(&Vec::from_array(&e, [address1.clone()]));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(&e, [U256::from_u128(&e, 345242385178),])
@@ -334,7 +334,7 @@ fn test_out_of_fuel() {
 fn test_norm() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -387,7 +387,7 @@ fn test_norm() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results = calculator.get_liquidity(&Vec::from_array(
         &e,
         [
@@ -399,8 +399,8 @@ fn test_norm() {
             address6.clone(),
         ],
     ));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(
@@ -421,7 +421,7 @@ fn test_norm() {
 fn test_small() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -474,7 +474,7 @@ fn test_small() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results = calculator.get_liquidity(&Vec::from_array(
         &e,
         [
@@ -486,7 +486,7 @@ fn test_small() {
             address6.clone(),
         ],
     ));
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(
@@ -507,7 +507,7 @@ fn test_small() {
 fn test_reversed() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -546,7 +546,7 @@ fn test_reversed() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results = calculator.get_liquidity(&Vec::from_array(
         &e,
         [
@@ -556,7 +556,7 @@ fn test_reversed() {
             address4.clone(),
         ],
     ));
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(
@@ -575,7 +575,7 @@ fn test_reversed() {
 fn test_liquidity_overflow() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -600,11 +600,11 @@ fn test_liquidity_overflow() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results =
         calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(
@@ -621,7 +621,7 @@ fn test_liquidity_overflow() {
 fn test_multiple_tokens() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -653,13 +653,13 @@ fn test_multiple_tokens() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results = calculator.get_liquidity(&Vec::from_array(
         &e,
         [address1.clone(), address2.clone(), address3.clone()],
     ));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
 
     for i in [1, 2] {
         assert!(results.get(i).unwrap() > U256::from_u128(&e, u128::MAX));
@@ -712,7 +712,7 @@ fn test_multiple_tokens() {
 fn test_empty_pool() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -737,11 +737,11 @@ fn test_empty_pool() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results =
         calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)])
@@ -752,7 +752,7 @@ fn test_empty_pool() {
 fn test_bad_address() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -771,11 +771,11 @@ fn test_bad_address() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results =
         calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)])

@@ -10,10 +10,7 @@ pub fn install_dummy_wasm<'a>(e: &Env) -> BytesN<32> {
 }
 
 pub fn create_contract<'a>(e: &Env) -> FeesCollectorClient<'a> {
-    let client = FeesCollectorClient::new(
-        e,
-        &e.register_contract(None, crate::contract::FeesCollector {}),
-    );
+    let client = FeesCollectorClient::new(e, &e.register(crate::contract::FeesCollector {}, ()));
     client
 }
 
@@ -43,7 +40,7 @@ impl Default for Setup<'_> {
     fn default() -> Self {
         let env = Env::default();
         env.mock_all_auths();
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_unlimited();
 
         let admin = Address::generate(&env);
         let collector = create_contract(&env);

@@ -36,10 +36,12 @@ pub fn create_liqpool_contract<'a>(
     coins: &Vec<Address>,
     a: u128,
     fee: u32,
-    token_reward: &Address,
+    reward_token: &Address,
+    reward_boost_token: &Address,
+    reward_boost_feed: &Address,
     plane: &Address,
 ) -> LiquidityPoolClient<'a> {
-    let liqpool = LiquidityPoolClient::new(e, &e.register_contract(None, crate::LiquidityPool {}));
+    let liqpool = LiquidityPoolClient::new(e, &e.register(crate::LiquidityPool {}, ()));
     liqpool.initialize_all(
         admin,
         &(
@@ -54,7 +56,11 @@ pub fn create_liqpool_contract<'a>(
         coins,
         &a,
         &fee,
-        token_reward,
+        &(
+            reward_token.clone(),
+            reward_boost_token.clone(),
+            reward_boost_feed.clone(),
+        ),
         plane,
     );
     liqpool
@@ -74,13 +80,34 @@ pub fn install_token_wasm_with_decimal<'a>(
 ) -> ShareTokenClient<'a> {
     soroban_sdk::contractimport!(file = "../contracts/soroban_token.wasm");
 
-    let token_client = ShareTokenClient::new(e, &e.register_contract_wasm(None, WASM));
+    let token_client = ShareTokenClient::new(e, &e.register(WASM, ()));
     token_client.initialize(admin, &decimal, &"Token 1".into_val(e), &"TOK".into_val(e));
     token_client
 }
 
 pub fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
-    PoolPlaneClient::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
+    PoolPlaneClient::new(e, &e.register(pool_plane::WASM, ()))
+}
+
+mod reward_boost_feed {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32-unknown-unknown/release/soroban_locker_feed_contract.wasm"
+    );
+}
+
+pub(crate) fn create_reward_boost_feed_contract<'a>(
+    e: &Env,
+    admin: &Address,
+    operations_admin: &Address,
+    emergency_admin: &Address,
+) -> reward_boost_feed::Client<'a> {
+    reward_boost_feed::Client::new(
+        e,
+        &e.register(
+            reward_boost_feed::WASM,
+            reward_boost_feed::Args::__constructor(admin, operations_admin, emergency_admin),
+        ),
+    )
 }
 
 pub(crate) struct TestConfig {
@@ -106,6 +133,8 @@ pub(crate) struct Setup<'a> {
     pub(crate) token2: SorobanTokenClient<'a>,
     pub(crate) token_reward: SorobanTokenClient<'a>,
     pub(crate) token_share: ShareTokenClient<'a>,
+    pub(crate) reward_boost_token: SorobanTokenClient<'a>,
+    pub(crate) reward_boost_feed: reward_boost_feed::Client<'a>,
 
     pub(crate) liq_pool: LiquidityPoolClient<'a>,
     pub(crate) router: Address,
@@ -138,9 +167,13 @@ impl Setup<'_> {
     pub(crate) fn setup(config: &TestConfig) -> Self {
         let env: Env = Env::default();
         env.mock_all_auths();
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_unlimited();
 
         let admin = Address::generate(&env);
+        let rewards_admin = Address::generate(&env);
+        let operations_admin = Address::generate(&env);
+        let pause_admin = Address::generate(&env);
+        let emergency_pause_admin = Address::generate(&env);
 
         let mut token1 = create_token_contract(&env, &admin);
         let mut token2 = create_token_contract(&env, &admin);
@@ -149,6 +182,13 @@ impl Setup<'_> {
         } else {
             create_token_contract(&env, &admin)
         };
+        let reward_boost_token = create_token_contract(&env, &admin);
+        let reward_boost_feed = create_reward_boost_feed_contract(
+            &env,
+            &admin,
+            &operations_admin,
+            &emergency_pause_admin,
+        );
 
         let plane = create_plane_contract(&env);
 
@@ -166,13 +206,11 @@ impl Setup<'_> {
             config.a,
             config.liq_pool_fee,
             &token_reward.address.clone(),
+            &reward_boost_token.address.clone(),
+            &reward_boost_feed.address.clone(),
             &plane.address,
         );
 
-        let rewards_admin = Address::generate(&env);
-        let operations_admin = Address::generate(&env);
-        let pause_admin = Address::generate(&env);
-        let emergency_pause_admin = Address::generate(&env);
         liq_pool.set_privileged_addrs(
             &admin,
             &rewards_admin.clone(),
@@ -207,6 +245,8 @@ impl Setup<'_> {
             operations_admin,
             pause_admin,
             emergency_pause_admin,
+            reward_boost_token,
+            reward_boost_feed,
         }
     }
 }
