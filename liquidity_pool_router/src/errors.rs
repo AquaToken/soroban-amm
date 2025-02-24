@@ -21,4 +21,5 @@ pub enum LiquidityPoolRouterError {
     InvalidPoolType = 316,
 
     TokensNotSorted = 2002,
+    InMaxNotSatisfied = 2020,
 }
