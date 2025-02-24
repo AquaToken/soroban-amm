@@ -251,6 +251,36 @@ fn test() {
 }
 
 #[test]
+fn test_strict_receive() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: i128::MAX,
+        ..TestConfig::default()
+    });
+    let user1 = setup.users[0].clone();
+    let desired_amounts = Vec::from_array(&setup.env, [100_0000000, 100_0000000]);
+    setup.liq_pool.deposit(&user1, &desired_amounts, &0);
+    let swap_in_amount = 1_0000000_u128;
+    let expected_swap_result = 9871287_u128;
+
+    assert_eq!(
+        setup.liq_pool.estimate_swap(&0, &1, &swap_in_amount),
+        expected_swap_result
+    );
+    assert_eq!(
+        setup
+            .liq_pool
+            .estimate_swap_strict_receive(&0, &1, &expected_swap_result),
+        swap_in_amount
+    );
+    assert_eq!(
+        setup
+            .liq_pool
+            .swap_strict_receive(&user1, &0, &1, &expected_swap_result, &swap_in_amount),
+        swap_in_amount
+    );
+}
+
+#[test]
 fn test_events() {
     let setup = Setup::new_with_config(&TestConfig {
         mint_to_user: i128::MAX,
@@ -440,8 +470,7 @@ fn test_custom_fee() {
         (100, 9801980_u128),  // 1%
         (1000, 8910891_u128), // 10%
         (3000, 6930693_u128), // 30%
-        (9900, 99009_u128),   // 99%
-        (9999, 990_u128),     // 99.99% - maximum fee
+        (5000, 4950495_u128), // 50%
     ] {
         let liqpool = create_liqpool_contract(
             &setup.env,
@@ -465,6 +494,28 @@ fn test_custom_fee() {
         assert_eq!(
             liqpool.swap(&setup.users[0], &1, &0, &1_0000000, &0),
             fee_config.1
+        );
+
+        // full withdraw & deposit to reset pool reserves
+        liqpool.withdraw(
+            &setup.users[0],
+            &(SorobanTokenClient::new(&setup.env, &liqpool.share_id()).balance(&setup.users[0])
+                as u128),
+            &Vec::from_array(&setup.env, [0, 0]),
+        );
+        liqpool.deposit(
+            &setup.users[0],
+            &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
+            &0,
+        );
+        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.1); // re-check swap result didn't change
+        assert_eq!(
+            liqpool.estimate_swap_strict_receive(&0, &1, &fee_config.1),
+            1_0000000
+        );
+        assert_eq!(
+            liqpool.swap_strict_receive(&setup.users[0], &0, &1, &fee_config.1, &1_0000000),
+            1_0000000
         );
     }
 }

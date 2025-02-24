@@ -23,4 +23,5 @@ pub enum LiquidityPoolValidationError {
     CannotComparePools = 2017,
     ZeroAmount = 2018,
     InsufficientBalance = 2019,
+    InMaxNotSatisfied = 2020,
 }

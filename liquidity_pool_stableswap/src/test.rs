@@ -159,6 +159,73 @@ fn test_happy_flow() {
 }
 
 #[test]
+fn test_strict_receive() {
+    // mirror calculations from test_happy_flow to ensure that swap_strict_receive works as expected
+    let setup = Setup::new_with_config(&TestConfig {
+        a: 10,
+        liq_pool_fee: 2000,
+        ..TestConfig::default()
+    });
+
+    let token1_admin_client = get_token_admin_client(&setup.env, &setup.token1.address);
+    let token2_admin_client = get_token_admin_client(&setup.env, &setup.token2.address);
+    let user1 = Address::generate(&setup.env);
+
+    token1_admin_client.mint(&user1, &1000_0000000);
+    token2_admin_client.mint(&user1, &1000_0000000);
+    setup.liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&setup.env, [200_0000000, 200_0000000]),
+        &0,
+    );
+
+    // that's what we expect from test_happy_flow
+    let swap_amount_in = 10_0000000;
+    let swap_amount_out = 7_9637266;
+    assert_eq!(
+        setup.liq_pool.estimate_swap(&0, &1, &swap_amount_in),
+        swap_amount_out
+    );
+
+    // reverse values
+    assert_eq!(
+        setup
+            .liq_pool
+            .estimate_swap_strict_receive(&0, &1, &swap_amount_out),
+        swap_amount_in
+    );
+    assert_eq!(
+        setup
+            .liq_pool
+            .swap_strict_receive(&user1, &0, &1, &swap_amount_out, &swap_amount_in),
+        swap_amount_in
+    );
+    assert_eq!(
+        setup.token1.balance(&setup.liq_pool.address) as u128,
+        200_0000000 + swap_amount_in
+    );
+    assert_eq!(
+        setup.token2.balance(&setup.liq_pool.address) as u128,
+        200_0000000 - swap_amount_out
+    );
+    assert_eq!(
+        setup.liq_pool.get_reserves(),
+        Vec::from_array(
+            &setup.env,
+            [200_0000000 + swap_amount_in, 200_0000000 - swap_amount_out]
+        )
+    );
+    assert_eq!(
+        setup.token1.balance(&user1) as u128,
+        800_0000000 - swap_amount_in
+    );
+    assert_eq!(
+        setup.token2.balance(&user1) as u128,
+        800_0000000 + swap_amount_out
+    );
+}
+
+#[test]
 fn test_happy_flow_different_decimals() {
     // values should not differ from test_happy_flow, only the decimals of the tokens
     let e = Env::default();
@@ -280,6 +347,47 @@ fn test_happy_flow_different_decimals() {
     assert_eq!(token_7.balance(&liqpool.address) as u128, 0);
     assert_eq!(token18.balance(&liqpool.address) as u128, 0);
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
+}
+
+#[test]
+fn test_strict_receive_different_decimals() {
+    // mirror calculations from test_happy_flow_different_decimals to ensure that swap_strict_receive works as expected
+    let setup = Setup::new_with_config(&TestConfig {
+        a: 10,
+        liq_pool_fee: 2000,
+        token_2_decimals: 18,
+        ..TestConfig::default()
+    });
+    let env = setup.env;
+    let liqpool = setup.liq_pool;
+
+    let token7_admin_client = get_token_admin_client(&env, &setup.token1.address);
+    let token18_admin_client = get_token_admin_client(&env, &setup.token2.address);
+    let user1 = Address::generate(&env);
+
+    token7_admin_client.mint(&user1, &1000_0000000);
+    token18_admin_client.mint(&user1, &1000_000000000000000000);
+    liqpool.deposit(
+        &user1,
+        &Vec::from_array(&env, [200_0000000, 200_000000000000000000]),
+        &0,
+    );
+
+    // that's what we expect from test_happy_flow_different_decimals
+    assert_eq!(
+        liqpool.estimate_swap(&0, &1, &10_0000000),
+        7_963726652740971897
+    );
+
+    // reverse values
+    assert_eq!(
+        liqpool.estimate_swap_strict_receive(&0, &1, &7_963726652740971897),
+        10_0000000
+    );
+    assert_eq!(
+        liqpool.swap_strict_receive(&user1, &0, &1, &7_963726652740971897, &10_0000000),
+        10_0000000
+    );
 }
 
 #[test]
@@ -1474,6 +1582,23 @@ fn test_custom_fee() {
         liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
         assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.1);
         assert_eq!(liqpool.swap(&user1, &0, &1, &1_0000000, &0), fee_config.1);
+
+        // full withdraw & deposit to reset pool reserves
+        liqpool.withdraw(
+            &user1,
+            &(SorobanTokenClient::new(&e, &liqpool.share_id()).balance(&user1) as u128),
+            &Vec::from_array(&e, [0, 0]),
+        );
+        liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.1); // re-check swap result didn't change
+        assert_eq!(
+            liqpool.estimate_swap_strict_receive(&0, &1, &fee_config.1),
+            1_0000000
+        );
+        assert_eq!(
+            liqpool.swap_strict_receive(&user1, &0, &1, &fee_config.1, &1_0000000),
+            1_0000000
+        );
     }
 }
 

@@ -78,6 +78,23 @@ pub trait LiquidityPoolInterfaceTrait {
     // Estimate amount of coins to retrieve using swap function
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
 
+    // Perform an exchange between two coins with strict amount to receive.
+    // in_idx: Index value for the coin to send
+    // out_idx: Index value of the coin to receive
+    // out_amount: Amount of out_idx being exchanged
+    // in_max: Maximum amount of in_idx to send
+    fn swap_strict_receive(
+        e: Env,
+        user: Address,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128,
+        in_max: u128,
+    ) -> u128;
+
+    // Estimate amount of coins to retrieve using swap_strict_receive function
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
+
     // Withdraw coins from the pool.
     // share_amount: Quantity of LP tokens to burn in the withdrawal
     // min_amounts: Minimum amounts of underlying coins to receive
@@ -216,6 +233,9 @@ pub trait LiquidityPoolTrait:
 
     // Get the amount of coin j one would receive for swapping dx of coin i.
     fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128;
+
+    // Get the amount of coin i one would send to swap dy of coin j.
+    fn get_dx(e: Env, i: u32, j: u32, dy: u128) -> u128;
 
     // Withdraw coins from the pool in an imbalanced amount.
     // amounts: List of amounts of underlying coins to withdraw

@@ -49,11 +49,11 @@ pub trait LiquidityPoolTrait {
     ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
-    // in_idx: index of token to send
-    // out_idx: index of token to receive
-    // in_amount: Amount of token in being exchanged
-    // out_min: Minimum amount of token out to receive
-    // Returns the actual amount of coin out received
+    // in_idx: Index value for the coin to send
+    // out_idx: Index value of the coin to receive
+    // in_amount: Amount of in_idx being exchanged
+    // out_min: Minimum amount of out_idx to receive
+    // Returns the actual amount of coin out_idx received. Index values can be found via the get_tokens public getter method.
     fn swap(
         e: Env,
         user: Address,
@@ -65,6 +65,23 @@ pub trait LiquidityPoolTrait {
 
     // Estimate amount of coins to retrieve using swap function
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
+
+    // Perform an exchange between two coins with strict amount to receive.
+    // in_idx: Index value for the coin to send
+    // out_idx: Index value of the coin to receive
+    // out_amount: Amount of out_idx being exchanged
+    // in_max: Maximum amount of in_idx to send
+    fn swap_strict_receive(
+        e: Env,
+        user: Address,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128,
+        in_max: u128,
+    ) -> u128;
+
+    // Estimate amount of coins to retrieve using swap_strict_receive function
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
 
     // Transfers share_amount of pool share tokens to this contract,
     // burns all pools share tokens in this contracts, and sends
