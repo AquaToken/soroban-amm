@@ -114,6 +114,8 @@ pub(crate) struct TestConfig {
     pub(crate) a: u128,
     pub(crate) liq_pool_fee: u32,
     pub(crate) reward_token_in_pool: bool,
+    pub(crate) token_1_decimals: u32,
+    pub(crate) token_2_decimals: u32,
 }
 
 impl Default for TestConfig {
@@ -122,6 +124,8 @@ impl Default for TestConfig {
             a: 85,
             liq_pool_fee: 30,
             reward_token_in_pool: false,
+            token_1_decimals: 7,
+            token_2_decimals: 7,
         }
     }
 }
@@ -175,8 +179,14 @@ impl Setup<'_> {
         let pause_admin = Address::generate(&env);
         let emergency_pause_admin = Address::generate(&env);
 
-        let mut token1 = create_token_contract(&env, &admin);
-        let mut token2 = create_token_contract(&env, &admin);
+        let token1 = SorobanTokenClient::new(
+            &env,
+            &install_token_wasm_with_decimal(&env, &admin, config.token_1_decimals).address,
+        );
+        let token2 = SorobanTokenClient::new(
+            &env,
+            &install_token_wasm_with_decimal(&env, &admin, config.token_2_decimals).address,
+        );
         let token_reward = if config.reward_token_in_pool {
             SorobanTokenClient::new(&env, &token1.address.clone())
         } else {
@@ -191,10 +201,6 @@ impl Setup<'_> {
         );
 
         let plane = create_plane_contract(&env);
-
-        if &token2.address < &token1.address {
-            std::mem::swap(&mut token1, &mut token2);
-        }
 
         let router = Address::generate(&env);
         let liq_pool = create_liqpool_contract(

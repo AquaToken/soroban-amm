@@ -176,6 +176,40 @@ impl LiquidityPoolTrait for LiquidityPool {
         dy - fee
     }
 
+    // Calculate the amount of token `i` that will be sent for swapping `dy` of token `j`.
+    //
+    // # Arguments
+    //
+    // * `i` - The index of the token being swapped.
+    // * `j` - The index of the token being received.
+    // * `dy` - The amount of token `j` being swapped.
+    //
+    // # Returns
+    //
+    // * The amount of token `i` that will be swapped.
+    fn get_dx(e: Env, i: u32, j: u32, dy: u128) -> u128 {
+        // dx and dy in c-units
+        let precision_mul = get_precision_mul(&e);
+        let xp = Self::_xp(&e, &get_reserves(&e));
+
+        // apply fee to dy to keep swap symmetrical
+        let dy_w_fee = dy.fixed_mul_ceil(
+            &e,
+            &(FEE_DENOMINATOR as u128),
+            &((FEE_DENOMINATOR - get_fee(&e)) as u128),
+        );
+        let y_w_fee = xp.get(j).unwrap() - dy_w_fee * precision_mul.get(j).unwrap();
+        let x = Self::_get_y(&e, j, i, y_w_fee, &xp);
+
+        if x == 0 {
+            // pool is empty
+            return 0;
+        }
+
+        let dx = (x - xp.get(i).unwrap() + 1) / precision_mul.get(i).unwrap();
+        dx
+    }
+
     // Withdraw coins from the pool in an imbalanced amount.
     //
     // # Arguments
@@ -445,13 +479,18 @@ impl LiquidityPool {
         panic_with_error!(e, LiquidityPoolError::MaxIterationsReached);
     }
 
-    // Calculates the amount of token `j` that will be received for swapping `dx` of token `i`.
+    // Calculate x[out_idx] if one makes x[in_idx] = x
+    // Done by solving quadratic equation iteratively.
+    // x_1**2 + x_1 * (sum' - (A*n**n - 1) * D / (A * n**n)) = D ** (n + 1) / (n ** (2 * n) * prod' * A)
+    // x_1**2 + b*x_1 = c
+    //
+    // x_1 = (x_1**2 + c) / (2*x_1 + b)
     //
     // # Arguments
     //
-    // * `i` - The index of the token being swapped.
-    // * `j` - The index of the token being received.
-    // * `x` - The amount of token `i` being swapped.
+    // * `i` - The index of the updated token with known balance.
+    // * `j` - The index of the updated token with balance to be found.
+    // * `x` - The known balance of token x[i].
     // * `xp_` - The balances of each token in the pool.
     //
     // # Returns
@@ -1345,7 +1384,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        PoolEvents::new(&e).trade(user, input_coin, token_out, in_amount, dy, dy_fee);
+        // since we need fee in amount sent to the pool, calculate it here
+        let dx_fee =
+            in_amount.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
+        PoolEvents::new(&e).trade(user, input_coin, token_out, in_amount, dy, dx_fee);
 
         dy
     }
@@ -1363,6 +1405,118 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // The estimated amount of the output token that would be received.
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
         Self::get_dy(e, in_idx, out_idx, in_amount)
+    }
+
+    // Swaps tokens in the pool, receiving fixed amount of out tokens.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user swapping the tokens.
+    // * `in_idx` - The index of the input token to be swapped.
+    // * `out_idx` - The index of the output token to be received.
+    // * `out_amount` - The amount of the output token to be received.
+    // * `in_max` - The maximum amount of the input token to be sent.
+    //
+    // # Returns
+    //
+    // The amount of the input token sent.
+    fn swap_strict_receive(
+        e: Env,
+        user: Address,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128,
+        in_max: u128,
+    ) -> u128 {
+        user.require_auth();
+        if get_is_killed_swap(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolSwapKilled);
+        }
+
+        if out_amount == 0 {
+            panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
+        }
+
+        let precision_mul = get_precision_mul(&e);
+        let old_balances = get_reserves(&e);
+        let xp = Self::_xp(&e, &old_balances);
+
+        let coins = get_tokens(&e);
+        let input_coin = coins.get(in_idx).unwrap();
+
+        let token_client = SorobanTokenClient::new(&e, &input_coin);
+        token_client.transfer(&user, &e.current_contract_address(), &(in_max as i128));
+
+        let reserve_sell = old_balances.get(in_idx).unwrap();
+        let reserve_buy = old_balances.get(out_idx).unwrap();
+        if reserve_sell == 0 || reserve_buy == 0 {
+            panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
+        }
+
+        // apply fee to dy to keep swap symmetrical
+        // we'll transfer to user the amount he wants to receive, however calculation will be done with fee
+        let dy_w_fee = out_amount.fixed_mul_ceil(
+            &e,
+            &(FEE_DENOMINATOR as u128),
+            &((FEE_DENOMINATOR - get_fee(&e)) as u128),
+        );
+        let y_w_fee = xp.get(out_idx).unwrap() - dy_w_fee * precision_mul.get(out_idx).unwrap();
+        let x = Self::_get_y(&e, out_idx, in_idx, y_w_fee, &xp);
+
+        // +1 just in case there were some rounding errors & convert to real units in place
+        let dx = (x - xp.get(in_idx).unwrap() + 1) / precision_mul.get(in_idx).unwrap();
+        if dx > in_max {
+            panic_with_error!(e, LiquidityPoolValidationError::InMaxNotSatisfied);
+        }
+
+        // return excess input tokens
+        let tokens_to_return = in_max - dx;
+        if tokens_to_return > 0 {
+            token_client.transfer(
+                &e.current_contract_address(),
+                &user,
+                &(tokens_to_return as i128),
+            );
+        }
+
+        // Update reserves
+        let mut reserves = get_reserves(&e);
+        reserves.set(in_idx, old_balances.get(in_idx).unwrap() + dx);
+        reserves.set(out_idx, old_balances.get(out_idx).unwrap() - out_amount);
+        put_reserves(&e, &reserves);
+
+        let token_out = coins.get(out_idx).unwrap();
+        let token_client = SorobanTokenClient::new(&e, &token_out);
+        token_client.transfer(&e.current_contract_address(), &user, &(out_amount as i128));
+
+        // update plane data for every pool update
+        update_plane(&e);
+
+        PoolEvents::new(&e).trade(
+            user,
+            input_coin,
+            token_out,
+            dx,
+            out_amount,
+            dy_w_fee - out_amount,
+        );
+
+        dx
+    }
+
+    // Estimate amount of coins to retrieve using swap_strict_receive function
+    //
+    // # Arguments
+    //
+    // * `in_idx` - The index of the input token to be swapped.
+    // * `out_idx` - The index of the output token to be received.
+    // * `out_amount` - The amount of the output token to be received.
+    //
+    // # Returns
+    //
+    // The estimated amount of the input token that would be sent.
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128 {
+        Self::get_dx(e, in_idx, out_idx, out_amount)
     }
 
     // Withdraws tokens from the pool.
