@@ -3,7 +3,7 @@ use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool;
-use crate::pool::get_amount_out;
+use crate::pool::{get_amount_out, get_amount_out_strict_receive};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait,
     UpgradeableContract, UpgradeableLPTokenTrait,
@@ -488,6 +488,180 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0
+    }
+
+    // Swaps tokens in the pool.
+    // Perform an exchange between two coins with strict amount to receive.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user swapping the tokens.
+    // * `in_idx` - Index value for the coin to send
+    // * `out_idx` - Index value of the coin to receive
+    // * `out_amount` - Amount of out_idx being exchanged
+    // * `in_max` - Maximum amount of in_idx to send
+    //
+    // # Returns
+    //
+    // The amount of the input token sent.
+    fn swap_strict_receive(
+        e: Env,
+        user: Address,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128,
+        in_max: u128,
+    ) -> u128 {
+        user.require_auth();
+
+        if get_is_killed_swap(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolSwapKilled);
+        }
+
+        if in_idx == out_idx {
+            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
+        }
+
+        if in_idx > 1 {
+            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
+        }
+
+        if out_idx > 1 {
+            panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
+        }
+
+        if out_amount == 0 {
+            panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
+        }
+
+        let reserve_a = get_reserve_a(&e);
+        let reserve_b = get_reserve_b(&e);
+        let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
+        let tokens = Self::get_tokens(e.clone());
+
+        let reserve_sell = reserves.get(in_idx).unwrap();
+        let reserve_buy = reserves.get(out_idx).unwrap();
+        if reserve_sell == 0 || reserve_buy == 0 {
+            panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
+        }
+
+        let (in_amount, fee) =
+            get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy);
+
+        if in_amount > in_max {
+            panic_with_error!(&e, LiquidityPoolValidationError::InMaxNotSatisfied);
+        }
+
+        // Transfer the amount being sold to the contract
+        let sell_token = tokens.get(in_idx).unwrap();
+        let sell_token_client = SorobanTokenClient::new(&e, &sell_token);
+        sell_token_client.transfer(&user, &e.current_contract_address(), &(in_max as i128));
+
+        // Return the difference
+        sell_token_client.transfer(
+            &e.current_contract_address(),
+            &user,
+            &((in_max - in_amount) as i128),
+        );
+
+        if in_idx == 0 {
+            put_reserve_a(&e, reserve_a + in_amount);
+        } else {
+            put_reserve_b(&e, reserve_b + in_amount);
+        }
+
+        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+
+        // residue_numerator and residue_denominator are the amount that the invariant considers after
+        // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
+        let residue_numerator = FEE_MULTIPLIER - (get_fee_fraction(&e) as u128);
+        let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
+
+        let new_invariant_factor = |reserve: u128, old_reserve: u128, out: u128| {
+            if reserve - old_reserve > out {
+                residue_denominator
+                    .mul(&U256::from_u128(&e, old_reserve))
+                    .add(
+                        &(U256::from_u128(&e, residue_numerator)
+                            .mul(&U256::from_u128(&e, reserve - old_reserve - out))),
+                    )
+            } else {
+                residue_denominator
+                    .mul(&U256::from_u128(&e, old_reserve))
+                    .add(&residue_denominator.mul(&U256::from_u128(&e, reserve)))
+                    .sub(&(residue_denominator.mul(&U256::from_u128(&e, old_reserve + out))))
+            }
+        };
+
+        let (out_a, out_b) = if out_idx == 0 {
+            (out_amount, 0)
+        } else {
+            (0, out_amount)
+        };
+
+        let new_inv_a = new_invariant_factor(new_reserve_a, reserve_a, out_a);
+        let new_inv_b = new_invariant_factor(new_reserve_b, reserve_b, out_b);
+        let old_inv_a = residue_denominator.mul(&U256::from_u128(&e, reserve_a));
+        let old_inv_b = residue_denominator.mul(&U256::from_u128(&e, reserve_b));
+
+        if new_inv_a.mul(&new_inv_b) < old_inv_a.mul(&old_inv_b) {
+            panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
+        }
+
+        if out_idx == 0 {
+            transfer_a(&e, &user, out_a);
+            put_reserve_a(&e, reserve_a - out_amount);
+        } else {
+            transfer_b(&e, &user, out_b);
+            put_reserve_b(&e, reserve_b - out_amount);
+        }
+
+        // update plane data for every pool update
+        update_plane(&e);
+
+        PoolEvents::new(&e).trade(
+            user,
+            sell_token,
+            tokens.get(out_idx).unwrap(),
+            in_amount,
+            out_amount,
+            fee,
+        );
+
+        in_amount
+    }
+
+    // Estimates the result of a swap_strict_receive operation.
+    //
+    // # Arguments
+    //
+    // * `in_idx` - The index of the input token to be swapped.
+    // * `out_idx` - The index of the output token to be received.
+    // * `out_amount` - The amount of the output token to be received.
+    //
+    // # Returns
+    //
+    // The estimated amount of the output token that would be received.
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128 {
+        if in_idx == out_idx {
+            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
+        }
+
+        if in_idx > 1 {
+            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
+        }
+
+        if out_idx > 1 {
+            panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
+        }
+
+        let reserve_a = get_reserve_a(&e);
+        let reserve_b = get_reserve_b(&e);
+        let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
+        let reserve_sell = reserves.get(in_idx).unwrap();
+        let reserve_buy = reserves.get(out_idx).unwrap();
+
+        get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy).0
     }
 
     // Withdraws tokens from the pool.

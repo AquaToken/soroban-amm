@@ -1,124 +1,82 @@
-use crate::calculator::{get_max_reserve, get_next_in_amt, normalize_reserves, price_weight};
-use crate::constants::{FEE_MULTIPLIER, PRECISION};
+use crate::constants::FEE_MULTIPLIER;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Env, Vec};
 
-fn estimate_swap(
+// Derivation of the closed-form result for the integral:
+//
+//   We start with the integral
+//       w = ∫[p_min,∞] (Y - X/(P*(1-F))) · (p_min/P)^8 dP,
+//   where p_min is defined as
+//       p_min = X/(Y*(1-F)).
+//
+//   The derivation proceeds in the following steps:
+//
+//   1. **Split the Integral**
+//
+//      Write w as the difference of two integrals:
+//        w = Y ∫[p_min,∞] (p_min/P)^8 dP
+//            - (X/(1-F)) ∫[p_min,∞] (p_min/P)^8 · (1/P) dP.
+//
+//   2. **Evaluate the First Integral**
+//
+//      Notice that
+//        (p_min/P)^8 = p_min^8 · P^(−8).
+//
+//      Thus, the first integral becomes:
+//        I₁ = Y · p_min^8 ∫[p_min,∞] P^(−8) dP.
+//
+//      For any n > 1, we have:
+//        ∫[p_min,∞] P^(−n) dP = 1/[(n−1) · p_min^(n−1)].
+//
+//      With n = 8:
+//        ∫[p_min,∞] P^(−8) dP = 1/(7 · p_min^7).
+//
+//      Therefore:
+//        I₁ = Y · p_min^8 · [1/(7 · p_min^7)] = (Y · p_min)/7.
+//
+//   3. **Evaluate the Second Integral**
+//
+//      The second integral is:
+//        I₂ = (X/(1-F)) · p_min^8 ∫[p_min,∞] P^(−9) dP.
+//
+//      For n = 9:
+//        ∫[p_min,∞] P^(−9) dP = 1/(8 · p_min^8).
+//
+//      Thus:
+//        I₂ = (X/(1-F)) · p_min^8 · [1/(8 · p_min^8)] = X/(8*(1-F)).
+//
+//   4. **Combine the Results**
+//
+//      Now, combine I₁ and I₂ to obtain:
+//        w = I₁ - I₂ = (Y · p_min)/7 - X/(8*(1-F)).
+//
+//   5. **Substitute p_min**
+//
+//      Replace p_min with its definition, p_min = X/(Y*(1-F)):
+//
+//        (Y · p_min)/7 = Y/(7) · [X/(Y*(1-F))] = X/(7*(1-F)).
+//
+//      Thus, the expression for w becomes:
+//        w = X/(7*(1-F)) - X/(8*(1-F)).
+//
+//   6. **Simplify the Expression**
+//
+//      Factor out X/(1-F):
+//        w = (X/(1-F)) · (1/7 - 1/8).
+//
+//      Compute the difference:
+//        1/7 - 1/8 = (8 - 7)/56 = 1/56.
+//
+//      Therefore, the neat closed-form result is:
+//        w = X/(56*(1-F)).
+//      which holds for any values of X and Y (with X, Y > 0) as long as the integrand and p_min are defined as above.
+pub fn get_liquidity(
     e: &Env,
     fee_fraction: u128,
     reserves: &Vec<u128>,
     in_idx: u32,
-    out_idx: u32,
-    in_amount: u128,
+    _out_idx: u32,
 ) -> u128 {
-    let reserve_sell = reserves.get(in_idx).unwrap();
-    let reserve_buy = reserves.get(out_idx).unwrap();
-
-    let result = in_amount.fixed_mul_floor(e, &reserve_buy, &(reserve_sell + in_amount));
-    let fee = result.fixed_mul_ceil(e, &fee_fraction, &FEE_MULTIPLIER);
-    result - fee
-}
-
-fn get_min_price(
-    e: &Env,
-    fee_fraction: u128,
-    reserves: Vec<u128>,
-    in_idx: u32,
-    out_idx: u32,
-) -> Option<u128> {
-    let min_amount = PRECISION;
-    let mut reserves_adj = Vec::new(e);
-    for i in 0..reserves.len() {
-        let value = reserves.get(i).unwrap();
-        reserves_adj.push_back(value * PRECISION);
-    }
-
-    let estimate = estimate_swap(e, fee_fraction, &reserves_adj, in_idx, out_idx, min_amount);
-    if estimate == 0 {
-        return None;
-    }
-
-    Some(min_amount.fixed_mul_floor(e, &PRECISION, &estimate))
-}
-
-pub(crate) fn get_liquidity(
-    e: &Env,
-    fee_fraction: u128,
-    reserves: &Vec<u128>,
-    in_idx: u32,
-    out_idx: u32,
-) -> u128 {
-    let reserve_in = reserves.get(0).unwrap();
-    let reserve_out = reserves.get(1).unwrap();
-
-    if reserve_in == 0 || reserve_out == 0 {
-        return 0;
-    }
-
-    let (reserves_norm, nominator, denominator) = normalize_reserves(reserves);
-    let min_price_result = get_min_price(e, fee_fraction, reserves_norm.clone(), in_idx, out_idx);
-    let min_price;
-    if min_price_result.is_none() {
-        return 0;
-    } else {
-        min_price = min_price_result.unwrap();
-    }
-
-    let mut result_big = 0;
-    let mut prev_price = 0;
-    let mut prev_weight = 1;
-    let mut prev_depth = 0;
-
-    let mut first_iteration = true;
-    let mut last_iteration = false;
-
-    // euristic. 2x is because of weight function - after 1.6 it affects less than 1%
-    let mut in_amt = get_max_reserve(&reserves_norm) * 2;
-
-    while !last_iteration {
-        let mut depth = estimate_swap(e, fee_fraction, &reserves_norm, in_idx, out_idx, in_amt);
-        if in_amt == 0 || depth == 0 {
-            // on zero depth price is infinite, on zero in_amt price is zero. both are invalid
-            break;
-        }
-        let mut price = in_amt * PRECISION / depth;
-        let mut weight = price_weight(price, min_price);
-
-        if first_iteration {
-            prev_price = price;
-            prev_depth = depth;
-            prev_weight = weight;
-            first_iteration = false;
-            continue;
-        }
-
-        // stop if rounding affects price
-        // stop if steps are too small
-        //  then integrate up to min price
-        if price > prev_price {
-            // don't go into last iteration since we've already jumped below min price
-            if prev_price < min_price {
-                break;
-            }
-
-            price = min_price;
-            weight = 1;
-            depth = 0;
-            last_iteration = true;
-        }
-
-        let depth_avg = (&depth + &prev_depth) / 2;
-        let weight_avg = (&weight + &prev_weight) / 2;
-        let d_price = &prev_price - &price;
-        let integration_result =
-            depth_avg * PRECISION * weight_avg / PRECISION * d_price / PRECISION;
-
-        result_big += integration_result;
-
-        prev_price = price;
-        prev_weight = weight;
-        prev_depth = depth;
-        in_amt = get_next_in_amt(in_amt);
-    }
-    result_big / PRECISION * nominator / denominator
+    let x = reserves.get(in_idx).unwrap();
+    x.fixed_mul_floor(e, &FEE_MULTIPLIER, &(56 * (FEE_MULTIPLIER - fee_fraction)))
 }

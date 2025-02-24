@@ -19,21 +19,18 @@ pub struct StableSwapPoolData {
     pub(crate) initial_a_time: u128,
     pub(crate) future_a: u128,
     pub(crate) future_a_time: u128,
-    pub(crate) reserves: Vec<u128>,
+    pub(crate) xp: Vec<u128>,
 }
 
 // * `init_args`: [fee, initial_a, initial_a_time, future_a, future_a_time]
-// * `reserves`: pool balances list
-pub(crate) fn parse_stableswap_data(
-    init_args: Vec<u128>,
-    reserves: Vec<u128>,
-) -> StableSwapPoolData {
+// * `xp`: pool balances list in normalized form
+pub(crate) fn parse_stableswap_data(init_args: Vec<u128>, xp: Vec<u128>) -> StableSwapPoolData {
     StableSwapPoolData {
         fee: init_args.get(0).unwrap(),
         initial_a: init_args.get(1).unwrap(),
         initial_a_time: init_args.get(2).unwrap(),
         future_a: init_args.get(3).unwrap(),
         future_a_time: init_args.get(4).unwrap(),
-        reserves,
+        xp,
     }
 }
