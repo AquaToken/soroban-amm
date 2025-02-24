@@ -48,14 +48,14 @@ fn test_total_liquidity() {
         );
     }
 
-    e.budget().reset_unlimited();
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_unlimited();
+    e.cost_estimate().budget().reset_default();
     assert_eq!(
         setup.router.get_total_liquidity(&tokens),
         U256::from_u32(&e, 3228)
     );
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
 
     for pool_fee in [10, 30, 100] {
         let (pool_hash, _pool_address) = setup
@@ -70,15 +70,15 @@ fn test_total_liquidity() {
         );
     }
 
-    e.budget().reset_unlimited();
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_unlimited();
+    e.cost_estimate().budget().reset_default();
     assert_eq!(
         setup.router.get_total_liquidity(&tokens),
         U256::from_u32(&e, 33600)
     );
-    e.budget().print();
+    e.cost_estimate().budget().print();
     assert!(
-        e.budget().cpu_instruction_cost() < 100_000_000,
+        e.cost_estimate().budget().cpu_instruction_cost() < 100_000_000,
         "budget exceed"
     );
 }
@@ -327,11 +327,11 @@ fn test_stableswap_pool() {
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     reward_token.mint(&user1, &10000000_0000000);
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &30);
-    e.budget().print();
-    assert!(e.budget().cpu_instruction_cost() < 100_000_000);
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    assert!(e.cost_estimate().budget().cpu_instruction_cost() < 100_000_000);
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         router.pool_type(&tokens, &pool_hash),
         Symbol::new(&e, "stable")
@@ -780,13 +780,13 @@ fn test_simple_ongoing_reward() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     router.fill_liquidity(&tokens);
-    e.budget().print();
-    e.budget().reset_default();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_default();
     let standard_pool_tps = router.config_pool_rewards(&tokens, &standard_pool_hash);
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
 
     assert_approx_eq_abs_u256(
@@ -2025,12 +2025,11 @@ fn test_event_correct() {
     let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1];
 
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &fee);
+    let init_stableswap_pool_event = e.events().all().last().unwrap();
     assert_eq!(
         reward_token.balance(&payment_for_creation_address),
         1000_0000000
     );
-
-    let init_stableswap_pool_event = e.events().all().last().unwrap();
 
     assert_eq!(
         vec![&e, init_stableswap_pool_event],
@@ -2096,11 +2095,10 @@ fn test_event_correct() {
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
     let (amounts, share_amount) = router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
+    let deposit_event = e.events().all().last().unwrap();
     assert_eq!(router.get_total_liquidity(&tokens), U256::from_u32(&e, 2));
 
     let pool_id = router.get_pool(&tokens, &pool_hash);
-
-    let deposit_event = e.events().all().last().unwrap();
 
     assert_eq!(
         vec![&e, deposit_event],
@@ -2303,7 +2301,7 @@ fn test_chained_swap() {
         .into_val(&e),
         token1.address.clone().clone().to_val(),
         100_u128.into_val(&e),
-        95_u128.into_val(&e),
+        96_u128.into_val(&e),
     ];
 
     assert_eq!(token1.balance(&swapper), 1000);
@@ -2345,7 +2343,7 @@ fn test_chained_swap() {
                 ],
                 &token1.address.clone(),
                 &100,
-                &95,
+                &96,
             ),
         96
     );
@@ -2357,6 +2355,152 @@ fn test_chained_swap() {
                 function: AuthorizedFunction::Contract((
                     router.address.clone(),
                     Symbol::new(&e, "swap_chained"),
+                    swap_root_args.into_val(&e)
+                )),
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token1.address.clone(),
+                        Symbol::new(&e, "transfer"),
+                        Vec::from_array(
+                            &e,
+                            [
+                                swapper.to_val(),
+                                router.address.to_val(),
+                                100_i128.into_val(&e),
+                            ]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                },],
+            }
+        ),]
+    );
+    assert_eq!(token1.balance(&swapper), 900);
+    assert_eq!(token2.balance(&swapper), 0);
+    assert_eq!(token3.balance(&swapper), 96);
+    assert_eq!(token1.balance(&router.address), 0);
+    assert_eq!(token2.balance(&router.address), 0);
+    assert_eq!(token3.balance(&router.address), 0);
+}
+
+#[test]
+fn test_chained_swap_strict_receive() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let router = setup.router;
+    let admin = setup.admin;
+    let [token1, token2, token3, _] = setup.tokens;
+    let reward_token = setup.reward_token;
+
+    let user1 = Address::generate(&e);
+    reward_token.mint(&user1, &10_0000000);
+    e.mock_auths(&[]);
+
+    let tokens1 = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let tokens2 = Vec::from_array(&e, [token2.address.clone(), token3.address.clone()]);
+
+    let swapper = Address::generate(&e);
+
+    router.mock_all_auths().configure_init_pool_payment(
+        &admin,
+        &testutils::create_token_contract(&e, &admin).address,
+        &0,
+        &0,
+        &router.address,
+    );
+
+    let (pool_index1, _pool_address1) = router
+        .mock_all_auths()
+        .init_standard_pool(&swapper, &tokens1, &30);
+    let (pool_index2, _pool_address2) = router
+        .mock_all_auths()
+        .init_standard_pool(&swapper, &tokens2, &30);
+    token1.mock_all_auths().mint(&admin, &10000);
+    token2.mock_all_auths().mint(&admin, &20000);
+    token3.mock_all_auths().mint(&admin, &10000);
+    router.mock_all_auths().deposit(
+        &admin,
+        &tokens1,
+        &pool_index1,
+        &Vec::from_array(&e, [10000, 10000]),
+        &0,
+    );
+    router.mock_all_auths().deposit(
+        &admin,
+        &tokens2,
+        &pool_index2,
+        &Vec::from_array(&e, [10000, 10000]),
+        &0,
+    );
+
+    // swapping token 1 to 3 through combination of 2 pools as we don't have pool (1, 3)
+    token1.mock_all_auths().mint(&swapper, &1000);
+
+    let swap_root_args = vec![
+        &e,
+        swapper.clone().to_val(),
+        vec![
+            &e,
+            (tokens1.clone(), pool_index1.clone(), token2.address.clone()),
+            (tokens2.clone(), pool_index2.clone(), token3.address.clone()),
+        ]
+        .into_val(&e),
+        token1.address.clone().clone().to_val(),
+        96_u128.into_val(&e),
+        100_u128.into_val(&e),
+    ];
+
+    assert_eq!(token1.balance(&swapper), 1000);
+    assert_eq!(token2.balance(&swapper), 0);
+    assert_eq!(token3.balance(&swapper), 0);
+    assert_eq!(token1.balance(&router.address), 0);
+    assert_eq!(token2.balance(&router.address), 0);
+    assert_eq!(token3.balance(&router.address), 0);
+    assert_eq!(
+        router
+            .mock_auths(&[MockAuth {
+                address: &swapper,
+                invoke: &MockAuthInvoke {
+                    contract: &router.address,
+                    fn_name: "swap_chained_strict_receive",
+                    args: swap_root_args.into_val(&e),
+                    sub_invokes: &[MockAuthInvoke {
+                        contract: &token1.address.clone(),
+                        fn_name: "transfer",
+                        args: Vec::from_array(
+                            &e,
+                            [
+                                swapper.to_val(),
+                                router.address.to_val(),
+                                100_i128.into_val(&e),
+                            ]
+                        )
+                        .into_val(&e),
+                        sub_invokes: &[],
+                    }],
+                },
+            }])
+            .swap_chained_strict_receive(
+                &swapper,
+                &vec![
+                    &e,
+                    (tokens1.clone(), pool_index1.clone(), token2.address.clone()),
+                    (tokens2.clone(), pool_index2.clone(), token3.address.clone()),
+                ],
+                &token1.address.clone(),
+                &96,
+                &100,
+            ),
+        100
+    );
+    assert_eq!(
+        e.auths(),
+        std::vec![(
+            swapper.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    router.address.clone(),
+                    Symbol::new(&e, "swap_chained_strict_receive"),
                     swap_root_args.into_val(&e)
                 )),
                 sub_invocations: std::vec![AuthorizedInvocation {

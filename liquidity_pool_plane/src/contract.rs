@@ -1,4 +1,4 @@
-use crate::interface::{PlaneInterface, UpgradeableContract};
+use crate::interface::PlaneInterface;
 use crate::storage::{get, update, PoolPlane};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -10,6 +10,7 @@ use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 use upgrade::events::Events as UpgradeEvents;
+use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 
 #[contract]
@@ -80,7 +81,7 @@ impl UpgradeableContract for LiquidityPoolPlane {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        140
+        150
     }
 
     // Commits a new wasm hash for a future upgrade.

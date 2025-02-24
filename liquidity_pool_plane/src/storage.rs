@@ -1,6 +1,11 @@
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
 const DAY_IN_LEDGERS: u32 = 17280;
+pub const MONTH_IN_LEDGERS: u32 = DAY_IN_LEDGERS * 30;
+
+// Persistent TTL
+pub const MAX_PERSISTENT_TTL: u32 = MONTH_IN_LEDGERS * 6;
+pub const PERSISTENT_TTL_THRESHOLD: u32 = MAX_PERSISTENT_TTL - MONTH_IN_LEDGERS;
 
 #[derive(Clone)]
 #[contracttype]
@@ -17,10 +22,9 @@ pub struct PoolPlane {
 }
 
 fn bump_persistent(e: &Env, key: &DataKey) {
-    let max_ttl = e.storage().max_ttl();
     e.storage()
         .persistent()
-        .extend_ttl(key, max_ttl - DAY_IN_LEDGERS, max_ttl);
+        .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, MAX_PERSISTENT_TTL);
 }
 
 fn get_default_pool(e: &Env) -> PoolPlane {

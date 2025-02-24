@@ -10,7 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
-cast = { workspace = true }
 access_control = { workspace = true }
 rewards = { workspace = true }
 token_share = { workspace = true }
