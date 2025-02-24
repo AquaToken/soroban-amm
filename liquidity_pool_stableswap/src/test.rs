@@ -226,6 +226,45 @@ fn test_strict_receive() {
 }
 
 #[test]
+fn test_strict_receive_over_max() {
+    let setup = Setup::new_with_config(&TestConfig {
+        a: 10,
+        liq_pool_fee: 30,
+        ..TestConfig::default()
+    });
+    let user1 = Address::generate(&setup.env);
+
+    let token1_admin_client = get_token_admin_client(&setup.env, &setup.token1.address);
+    let token2_admin_client = get_token_admin_client(&setup.env, &setup.token2.address);
+    token1_admin_client.mint(&user1, &i128::MAX);
+    token2_admin_client.mint(&user1, &i128::MAX);
+    let desired_amounts = Vec::from_array(&setup.env, [100_0000000, 100_0000000]);
+    setup.liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    assert!(setup
+        .liq_pool
+        .try_estimate_swap_strict_receive(&0, &1, &100_0000000)
+        .is_err());
+    assert!(setup
+        .liq_pool
+        .try_estimate_swap_strict_receive(&0, &1, &99_7000000)
+        .is_err());
+    // maximum we're able to buy is `reserve * (1 - fee) - delta`
+    assert_eq!(
+        setup
+            .liq_pool
+            .estimate_swap_strict_receive(&0, &1, &99_6999999),
+        999995_0045125,
+    );
+    assert_eq!(
+        setup
+            .liq_pool
+            .swap_strict_receive(&user1, &0, &1, &99_6999999, &999995_0045125),
+        999995_0045125
+    );
+}
+
+#[test]
 fn test_happy_flow_different_decimals() {
     // values should not differ from test_happy_flow, only the decimals of the tokens
     let e = Env::default();
