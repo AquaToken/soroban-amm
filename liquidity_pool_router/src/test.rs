@@ -2301,7 +2301,7 @@ fn test_chained_swap() {
         .into_val(&e),
         token1.address.clone().clone().to_val(),
         100_u128.into_val(&e),
-        95_u128.into_val(&e),
+        96_u128.into_val(&e),
     ];
 
     assert_eq!(token1.balance(&swapper), 1000);
@@ -2343,7 +2343,7 @@ fn test_chained_swap() {
                 ],
                 &token1.address.clone(),
                 &100,
-                &95,
+                &96,
             ),
         96
     );
@@ -2355,6 +2355,152 @@ fn test_chained_swap() {
                 function: AuthorizedFunction::Contract((
                     router.address.clone(),
                     Symbol::new(&e, "swap_chained"),
+                    swap_root_args.into_val(&e)
+                )),
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token1.address.clone(),
+                        Symbol::new(&e, "transfer"),
+                        Vec::from_array(
+                            &e,
+                            [
+                                swapper.to_val(),
+                                router.address.to_val(),
+                                100_i128.into_val(&e),
+                            ]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                },],
+            }
+        ),]
+    );
+    assert_eq!(token1.balance(&swapper), 900);
+    assert_eq!(token2.balance(&swapper), 0);
+    assert_eq!(token3.balance(&swapper), 96);
+    assert_eq!(token1.balance(&router.address), 0);
+    assert_eq!(token2.balance(&router.address), 0);
+    assert_eq!(token3.balance(&router.address), 0);
+}
+
+#[test]
+fn test_chained_swap_strict_receive() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let router = setup.router;
+    let admin = setup.admin;
+    let [token1, token2, token3, _] = setup.tokens;
+    let reward_token = setup.reward_token;
+
+    let user1 = Address::generate(&e);
+    reward_token.mint(&user1, &10_0000000);
+    e.mock_auths(&[]);
+
+    let tokens1 = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let tokens2 = Vec::from_array(&e, [token2.address.clone(), token3.address.clone()]);
+
+    let swapper = Address::generate(&e);
+
+    router.mock_all_auths().configure_init_pool_payment(
+        &admin,
+        &testutils::create_token_contract(&e, &admin).address,
+        &0,
+        &0,
+        &router.address,
+    );
+
+    let (pool_index1, _pool_address1) = router
+        .mock_all_auths()
+        .init_standard_pool(&swapper, &tokens1, &30);
+    let (pool_index2, _pool_address2) = router
+        .mock_all_auths()
+        .init_standard_pool(&swapper, &tokens2, &30);
+    token1.mock_all_auths().mint(&admin, &10000);
+    token2.mock_all_auths().mint(&admin, &20000);
+    token3.mock_all_auths().mint(&admin, &10000);
+    router.mock_all_auths().deposit(
+        &admin,
+        &tokens1,
+        &pool_index1,
+        &Vec::from_array(&e, [10000, 10000]),
+        &0,
+    );
+    router.mock_all_auths().deposit(
+        &admin,
+        &tokens2,
+        &pool_index2,
+        &Vec::from_array(&e, [10000, 10000]),
+        &0,
+    );
+
+    // swapping token 1 to 3 through combination of 2 pools as we don't have pool (1, 3)
+    token1.mock_all_auths().mint(&swapper, &1000);
+
+    let swap_root_args = vec![
+        &e,
+        swapper.clone().to_val(),
+        vec![
+            &e,
+            (tokens1.clone(), pool_index1.clone(), token2.address.clone()),
+            (tokens2.clone(), pool_index2.clone(), token3.address.clone()),
+        ]
+        .into_val(&e),
+        token1.address.clone().clone().to_val(),
+        96_u128.into_val(&e),
+        100_u128.into_val(&e),
+    ];
+
+    assert_eq!(token1.balance(&swapper), 1000);
+    assert_eq!(token2.balance(&swapper), 0);
+    assert_eq!(token3.balance(&swapper), 0);
+    assert_eq!(token1.balance(&router.address), 0);
+    assert_eq!(token2.balance(&router.address), 0);
+    assert_eq!(token3.balance(&router.address), 0);
+    assert_eq!(
+        router
+            .mock_auths(&[MockAuth {
+                address: &swapper,
+                invoke: &MockAuthInvoke {
+                    contract: &router.address,
+                    fn_name: "swap_chained_strict_receive",
+                    args: swap_root_args.into_val(&e),
+                    sub_invokes: &[MockAuthInvoke {
+                        contract: &token1.address.clone(),
+                        fn_name: "transfer",
+                        args: Vec::from_array(
+                            &e,
+                            [
+                                swapper.to_val(),
+                                router.address.to_val(),
+                                100_i128.into_val(&e),
+                            ]
+                        )
+                        .into_val(&e),
+                        sub_invokes: &[],
+                    }],
+                },
+            }])
+            .swap_chained_strict_receive(
+                &swapper,
+                &vec![
+                    &e,
+                    (tokens1.clone(), pool_index1.clone(), token2.address.clone()),
+                    (tokens2.clone(), pool_index2.clone(), token3.address.clone()),
+                ],
+                &token1.address.clone(),
+                &96,
+                &100,
+            ),
+        100
+    );
+    assert_eq!(
+        e.auths(),
+        std::vec![(
+            swapper.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    router.address.clone(),
+                    Symbol::new(&e, "swap_chained_strict_receive"),
                     swap_root_args.into_val(&e)
                 )),
                 sub_invocations: std::vec![AuthorizedInvocation {
