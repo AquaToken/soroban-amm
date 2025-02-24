@@ -198,7 +198,14 @@ impl LiquidityPoolTrait for LiquidityPool {
             &(FEE_DENOMINATOR as u128),
             &((FEE_DENOMINATOR - get_fee(&e)) as u128),
         );
-        let y_w_fee = xp.get(j).unwrap() - dy_w_fee * precision_mul.get(j).unwrap();
+        let y_w_fee = match xp
+            .get(j)
+            .unwrap()
+            .checked_sub(dy_w_fee * precision_mul.get(j).unwrap())
+        {
+            Some(y) => y,
+            None => panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance),
+        };
         let x = Self::_get_y(&e, j, i, y_w_fee, &xp);
 
         if x == 0 {
@@ -1460,7 +1467,14 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             &(FEE_DENOMINATOR as u128),
             &((FEE_DENOMINATOR - get_fee(&e)) as u128),
         );
-        let y_w_fee = xp.get(out_idx).unwrap() - dy_w_fee * precision_mul.get(out_idx).unwrap();
+        let y_w_fee = match xp
+            .get(out_idx)
+            .unwrap()
+            .checked_sub(dy_w_fee * precision_mul.get(out_idx).unwrap())
+        {
+            Some(y) => y,
+            None => panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance),
+        };
         let x = Self::_get_y(&e, out_idx, in_idx, y_w_fee, &xp);
 
         // +1 just in case there were some rounding errors & convert to real units in place

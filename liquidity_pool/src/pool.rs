@@ -64,6 +64,10 @@ pub fn get_amount_out_strict_receive(
         &FEE_MULTIPLIER,
         &(FEE_MULTIPLIER - get_fee_fraction(&e) as u128),
     );
+    // if total value including fee is less than the reserve, math can't be done properly
+    if dy_w_fee >= reserve_sell {
+        panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
+    }
     // +1 just in case there were some rounding errors & convert to real units in place
     let result = reserve_buy.fixed_mul_floor(&e, &reserve_sell, &(reserve_buy - dy_w_fee))
         - reserve_sell

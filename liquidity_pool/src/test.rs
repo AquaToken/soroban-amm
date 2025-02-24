@@ -282,6 +282,39 @@ fn test_strict_receive() {
 }
 
 #[test]
+fn test_strict_receive_over_max() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: i128::MAX,
+        ..TestConfig::default()
+    });
+    let user1 = setup.users[0].clone();
+    let desired_amounts = Vec::from_array(&setup.env, [100_0000000, 100_0000000]);
+    setup.liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    assert!(setup
+        .liq_pool
+        .try_estimate_swap_strict_receive(&0, &1, &100_0000000)
+        .is_err());
+    assert!(setup
+        .liq_pool
+        .try_estimate_swap_strict_receive(&0, &1, &99_7000000)
+        .is_err());
+    // maximum we're able to buy is `reserve * (1 - fee) - delta`
+    assert_eq!(
+        setup
+            .liq_pool
+            .estimate_swap_strict_receive(&0, &1, &99_6999999),
+        99999999900_0000001,
+    );
+    assert_eq!(
+        setup
+            .liq_pool
+            .swap_strict_receive(&user1, &0, &1, &99_6999999, &99999999900_0000001),
+        99999999900_0000001
+    );
+}
+
+#[test]
 fn test_events() {
     let setup = Setup::new_with_config(&TestConfig {
         mint_to_user: i128::MAX,
