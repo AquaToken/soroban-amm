@@ -65,7 +65,7 @@ pub fn get_amount_out_strict_receive(
         &(FEE_MULTIPLIER - get_fee_fraction(&e) as u128),
     );
     // if total value including fee is more than the reserve, math can't be done properly
-    if dy_w_fee >= reserve_sell {
+    if dy_w_fee >= reserve_buy {
         panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
     }
     // +1 just in case there were some rounding errors & convert to real units in place
