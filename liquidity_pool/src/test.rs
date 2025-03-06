@@ -297,7 +297,15 @@ fn test_strict_receive_over_max() {
         .is_err());
     assert!(setup
         .liq_pool
+        .try_swap_strict_receive(&user1, &0, &1, &100_0000000, &100_0000000)
+        .is_err());
+    assert!(setup
+        .liq_pool
         .try_estimate_swap_strict_receive(&0, &1, &99_7000000)
+        .is_err());
+    assert!(setup
+        .liq_pool
+        .try_swap_strict_receive(&user1, &0, &1, &99_7000000, &100_0000000)
         .is_err());
     // maximum we're able to buy is `reserve * (1 - fee) - delta`
     assert_eq!(

@@ -191,18 +191,21 @@ impl LiquidityPoolTrait for LiquidityPool {
         // dx and dy in c-units
         let precision_mul = get_precision_mul(&e);
         let xp = Self::_xp(&e, &get_reserves(&e));
+        let xp_buy = xp.get(j).unwrap();
 
         // apply fee to dy to keep swap symmetrical
-        let dy_w_fee = dy.fixed_mul_ceil(
+        let dy_w_fee_scaled = dy.fixed_mul_ceil(
             &e,
             &(FEE_DENOMINATOR as u128),
             &((FEE_DENOMINATOR - get_fee(&e)) as u128),
-        );
-        let y_w_fee = match xp
-            .get(j)
-            .unwrap()
-            .checked_sub(dy_w_fee * precision_mul.get(j).unwrap())
-        {
+        ) * precision_mul.get(j).unwrap();
+
+        // if total value including fee is more than the reserve, math can't be done properly
+        if dy_w_fee_scaled >= xp_buy {
+            panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
+        }
+
+        let y_w_fee = match xp_buy.checked_sub(dy_w_fee_scaled) {
             Some(y) => y,
             None => panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance),
         };
@@ -1467,6 +1470,12 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             &(FEE_DENOMINATOR as u128),
             &((FEE_DENOMINATOR - get_fee(&e)) as u128),
         );
+
+        // if total value including fee is more than the reserve, math can't be done properly
+        if dy_w_fee >= reserve_buy {
+            panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
+        }
+
         let y_w_fee = match xp
             .get(out_idx)
             .unwrap()
