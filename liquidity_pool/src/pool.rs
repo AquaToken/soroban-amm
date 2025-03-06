@@ -64,7 +64,7 @@ pub fn get_amount_out_strict_receive(
         &FEE_MULTIPLIER,
         &(FEE_MULTIPLIER - get_fee_fraction(&e) as u128),
     );
-    // if total value including fee is less than the reserve, math can't be done properly
+    // if total value including fee is more than the reserve, math can't be done properly
     if dy_w_fee >= reserve_sell {
         panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
     }
