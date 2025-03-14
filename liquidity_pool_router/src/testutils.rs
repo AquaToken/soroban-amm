@@ -19,10 +19,7 @@ pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client
 }
 
 pub fn create_liqpool_router_contract<'a>(e: &Env) -> LiquidityPoolRouterClient<'a> {
-    let router = LiquidityPoolRouterClient::new(
-        e,
-        &e.register_contract(None, crate::LiquidityPoolRouter {}),
-    );
+    let router = LiquidityPoolRouterClient::new(e, &e.register(crate::LiquidityPoolRouter {}, ()));
     router
 }
 
@@ -61,7 +58,7 @@ mod pool_plane {
 }
 
 pub fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
-    pool_plane::Client::new(e, &e.register_contract_wasm(None, pool_plane::WASM))
+    pool_plane::Client::new(e, &e.register(pool_plane::WASM, ()))
 }
 
 mod liquidity_calculator {
@@ -72,9 +69,27 @@ mod liquidity_calculator {
 }
 
 pub fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator::Client<'a> {
-    liquidity_calculator::Client::new(
+    liquidity_calculator::Client::new(e, &e.register(liquidity_calculator::WASM, ()))
+}
+
+mod reward_boost_feed {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32-unknown-unknown/release/soroban_locker_feed_contract.wasm"
+    );
+}
+
+pub(crate) fn create_reward_boost_feed_contract<'a>(
+    e: &Env,
+    admin: &Address,
+    operations_admin: &Address,
+    emergency_admin: &Address,
+) -> reward_boost_feed::Client<'a> {
+    reward_boost_feed::Client::new(
         e,
-        &e.register_contract_wasm(None, liquidity_calculator::WASM),
+        &e.register(
+            reward_boost_feed::WASM,
+            reward_boost_feed::Args::__constructor(admin, operations_admin, emergency_admin),
+        ),
     )
 }
 
@@ -85,6 +100,8 @@ pub(crate) struct Setup<'a> {
 
     pub(crate) tokens: [test_token::Client<'a>; 4],
     pub(crate) reward_token: test_token::Client<'a>,
+    pub(crate) reward_boost_token: test_token::Client<'a>,
+    pub(crate) reward_boost_feed: reward_boost_feed::Client<'a>,
 
     pub(crate) router: LiquidityPoolRouterClient<'a>,
 
@@ -100,7 +117,7 @@ impl Default for Setup<'_> {
     fn default() -> Self {
         let env = Env::default();
         env.mock_all_auths();
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_unlimited();
 
         let admin = Address::generate(&env);
 
@@ -123,6 +140,7 @@ impl Default for Setup<'_> {
         let payment_for_creation_address = Address::generate(&env);
 
         let reward_token = create_token_contract(&env, &reward_admin);
+        let reward_boost_token = create_token_contract(&env, &reward_admin);
 
         let pool_hash = install_liq_pool_hash(&env);
         let token_hash = install_token_wasm(&env);
@@ -132,6 +150,12 @@ impl Default for Setup<'_> {
         let operations_admin = soroban_sdk::Address::generate(&env);
         let pause_admin = soroban_sdk::Address::generate(&env);
         let emergency_pause_admin = soroban_sdk::Address::generate(&env);
+        let reward_boost_feed = create_reward_boost_feed_contract(
+            &env,
+            &admin,
+            &operations_admin,
+            &emergency_pause_admin,
+        );
         router.set_privileged_addrs(
             &admin,
             &rewards_admin,
@@ -149,6 +173,11 @@ impl Default for Setup<'_> {
             &1_0000000,
             &1_0000000,
             &payment_for_creation_address,
+        );
+        router.set_reward_boost_config(
+            &admin,
+            &reward_boost_token.address,
+            &reward_boost_feed.address,
         );
 
         let emergency_admin = Address::generate(&env);
@@ -178,6 +207,8 @@ impl Default for Setup<'_> {
             operations_admin,
             pause_admin,
             emergency_pause_admin,
+            reward_boost_token,
+            reward_boost_feed,
         }
     }
 }

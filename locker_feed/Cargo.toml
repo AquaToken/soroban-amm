@@ -1,5 +1,5 @@
 [package]
-name = "soroban-liquidity-pool-router-contract"
+name = "locker-feed"
 version.workspace = true
 edition = "2021"
 publish = false
@@ -10,14 +10,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
-paste = { workspace = true }
 access_control = { workspace = true }
-utils = { workspace = true }
-rewards = { workspace = true }
-token_share = { workspace = true }
-liquidity-pool-validation-errors = { workspace = true }
 upgrade = { workspace = true }
+paste = { workspace = true }
+utils = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-utils = { workspace = true, features = ["testutils"] }

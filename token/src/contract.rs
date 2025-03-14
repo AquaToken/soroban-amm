@@ -4,7 +4,7 @@ use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::errors::TokenError;
 use crate::interface::UpgradeableContract;
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
-use crate::pool::checkpoint_user_rewards;
+use crate::pool::{checkpoint_user_rewards, checkpoint_user_working_balance};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
@@ -98,6 +98,10 @@ impl token::Interface for Token {
 
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
+
+        checkpoint_user_working_balance(&e, from.clone());
+        checkpoint_user_working_balance(&e, to.clone());
+
         TokenUtils::new(&e).events().transfer(from, to, amount);
     }
 
@@ -114,6 +118,10 @@ impl token::Interface for Token {
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
+
+        checkpoint_user_working_balance(&e, from.clone());
+        checkpoint_user_working_balance(&e, to.clone());
+
         TokenUtils::new(&e).events().transfer(from, to, amount)
     }
 
@@ -163,7 +171,7 @@ impl UpgradeableContract for Token {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        140
+        150
     }
 
     fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
