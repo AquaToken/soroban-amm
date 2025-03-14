@@ -270,7 +270,7 @@ fn initialize_already_initialized() {
 fn decimal_is_over_max() {
     let e = Env::default();
     let admin = create_dummy_pool(&e).address;
-    let token = TokenClient::new(&e, &e.register_contract(None, Token {}));
+    let token = TokenClient::new(&e, &e.register(Token {}, ()));
     token.initialize(
         &admin,
         &(u32::from(u8::MAX) + 1),

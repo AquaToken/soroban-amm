@@ -2,14 +2,16 @@
 extern crate std;
 
 use crate::pool_constants::MIN_RAMP_TIME;
+use core::cmp::min;
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{symbol_short, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec};
 use token_share::Client as ShareTokenClient;
 
 use crate::testutils::{
-    create_liqpool_contract, create_plane_contract, create_token_contract, get_token_admin_client,
-    install_token_wasm, install_token_wasm_with_decimal, Setup, TestConfig,
+    create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
+    create_token_contract, get_token_admin_client, install_token_wasm,
+    install_token_wasm_with_decimal, Setup, TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::token::{
@@ -22,7 +24,7 @@ use utils::test_utils::{install_dummy_wasm, jump};
 fn test_swap_empty_pool() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -43,6 +45,14 @@ fn test_swap_empty_pool() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     assert_eq!(liqpool.estimate_swap(&0, &1, &10_0000000), 0);
@@ -54,7 +64,7 @@ fn test_swap_empty_pool() {
 fn test_happy_flow() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -76,6 +86,14 @@ fn test_happy_flow() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -277,7 +295,7 @@ fn test_happy_flow_different_decimals() {
     // values should not differ from test_happy_flow, only the decimals of the tokens
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -299,6 +317,14 @@ fn test_happy_flow_different_decimals() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -441,7 +467,7 @@ fn test_strict_receive_different_decimals() {
 fn test_events_2_tokens() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -467,6 +493,14 @@ fn test_events_2_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -544,7 +578,7 @@ fn test_events_2_tokens() {
 fn test_events_3_tokens() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -576,6 +610,14 @@ fn test_events_3_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -668,7 +710,7 @@ fn test_events_3_tokens() {
 fn test_events_4_tokens() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -708,6 +750,14 @@ fn test_events_4_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -807,7 +857,7 @@ fn test_events_4_tokens() {
 fn test_pool_imbalance_draw_tokens() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -847,6 +897,14 @@ fn test_pool_imbalance_draw_tokens() {
         85,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -866,7 +924,7 @@ fn test_pool_imbalance_draw_tokens() {
 fn test_pool_imbalance_draw_tokens_different_decimals() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -905,6 +963,14 @@ fn test_pool_imbalance_draw_tokens_different_decimals() {
         85,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -947,7 +1013,7 @@ fn test_pool_imbalance_draw_tokens_different_decimals() {
 fn test_pool_zero_swap() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -987,6 +1053,14 @@ fn test_pool_zero_swap() {
         85,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1007,7 +1081,7 @@ fn test_pool_zero_swap() {
 fn test_bad_fee() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1026,6 +1100,14 @@ fn test_bad_fee() {
         10,
         10000,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 }
@@ -1035,7 +1117,7 @@ fn test_bad_fee() {
 fn test_zero_initial_deposit() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1056,6 +1138,14 @@ fn test_zero_initial_deposit() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     token1_admin_client.mint(&user1, &1000_0000000);
@@ -1068,7 +1158,7 @@ fn test_zero_initial_deposit() {
 fn test_zero_deposit_ok() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1089,6 +1179,14 @@ fn test_zero_deposit_ok() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     token1_admin_client.mint(&user1, &1000_0000000);
@@ -1102,7 +1200,7 @@ fn test_zero_deposit_ok() {
 fn test_happy_flow_3_tokens() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1134,6 +1232,14 @@ fn test_happy_flow_3_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1234,7 +1340,7 @@ fn test_happy_flow_3_tokens() {
 fn test_happy_flow_4_tokens() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1271,6 +1377,14 @@ fn test_happy_flow_4_tokens() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1363,7 +1477,7 @@ fn test_happy_flow_4_tokens() {
 fn test_withdraw_partial() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let mut admin1 = Address::generate(&e);
     let mut admin2 = Address::generate(&e);
@@ -1389,6 +1503,14 @@ fn test_withdraw_partial() {
         10,
         fee as u32,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1438,7 +1560,7 @@ fn test_withdraw_partial() {
 fn test_withdraw_one_token() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let mut admin1 = Address::generate(&e);
     let mut admin2 = Address::generate(&e);
@@ -1463,6 +1585,14 @@ fn test_withdraw_one_token() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1517,7 +1647,7 @@ fn test_withdraw_one_token() {
 fn test_withdraw_one_token_different_decimals() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1538,6 +1668,14 @@ fn test_withdraw_one_token_different_decimals() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1586,7 +1724,7 @@ fn test_withdraw_one_token_different_decimals() {
 fn test_custom_fee() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let mut admin1 = Address::generate(&e);
     let mut admin2 = Address::generate(&e);
@@ -1624,6 +1762,14 @@ fn test_custom_fee() {
             10,
             fee_config.0,
             &token_reward.address,
+            &create_token_contract(&e, &Address::generate(&e)).address,
+            &create_reward_boost_feed_contract(
+                &e,
+                &Address::generate(&e),
+                &Address::generate(&e),
+                &Address::generate(&e),
+            )
+            .address,
             &plane.address,
         );
         liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
@@ -1653,7 +1799,7 @@ fn test_custom_fee() {
 fn test_deposit_inequal() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1674,6 +1820,14 @@ fn test_deposit_inequal() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1695,7 +1849,7 @@ fn test_deposit_inequal() {
 fn test_deposit_inequal_different_decimals() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1716,6 +1870,14 @@ fn test_deposit_inequal_different_decimals() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1745,7 +1907,7 @@ fn test_deposit_inequal_different_decimals() {
 fn test_remove_liquidity_imbalance() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1766,6 +1928,14 @@ fn test_remove_liquidity_imbalance() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1817,7 +1987,7 @@ fn test_remove_liquidity_imbalance() {
 fn test_remove_liquidity_imbalance_different_decimals() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1838,6 +2008,14 @@ fn test_remove_liquidity_imbalance_different_decimals() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1875,7 +2053,7 @@ fn test_remove_liquidity_imbalance_different_decimals() {
 fn test_simple_ongoing_reward() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1898,6 +2076,14 @@ fn test_simple_ongoing_reward() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1931,7 +2117,7 @@ fn test_simple_ongoing_reward() {
 fn test_simple_ongoing_reward_different_decimals() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -1954,6 +2140,14 @@ fn test_simple_ongoing_reward_different_decimals() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -1987,7 +2181,7 @@ fn test_simple_ongoing_reward_different_decimals() {
 fn test_simple_reward() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2010,6 +2204,14 @@ fn test_simple_reward() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2051,7 +2253,7 @@ fn test_simple_reward() {
 fn test_two_users_rewards() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2076,6 +2278,14 @@ fn test_two_users_rewards() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2110,6 +2320,172 @@ fn test_two_users_rewards() {
 }
 
 #[test]
+fn test_boosted_rewards() {
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+
+    let token1_admin_client = get_token_admin_client(&env, &setup.token1.address);
+    let token2_admin_client = get_token_admin_client(&env, &setup.token2.address);
+    let token_reward_admin_client = get_token_admin_client(&env, &token_reward.address);
+
+    for user in [&user1, &user2, &user3] {
+        token1_admin_client.mint(user, &1000);
+        assert_eq!(setup.token1.balance(user) as u128, 1000);
+
+        token2_admin_client.mint(user, &1000);
+        assert_eq!(setup.token2.balance(user) as u128, 1000);
+    }
+
+    let reward_boost_token = setup.reward_boost_token.address;
+    let locked_token_admin_client = get_token_admin_client(&env, &reward_boost_token);
+
+    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    liq_pool.set_rewards_config(
+        &setup.rewards_admin,
+        &env.ledger().timestamp().saturating_add(60),
+        &reward_1_tps,
+    );
+
+    // two users make deposit for equal value. second after 30 seconds after rewards start,
+    //  so it gets only 1/4 of total reward
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [100, 100]), &0);
+    jump(&env, 30);
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 2);
+
+    // instead of simple deposit, second user locks tokens to boost rewards, then deposits
+    // second user lock percentage is 50%. this is equilibrium point for 50% shareholder
+    locked_token_admin_client.mint(&user2, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &20_000_0000000);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [100, 100]), &0);
+
+    jump(&env, 10);
+    // total effective share now 200 + 200 * 2.5 = 700
+    // first user gets ~28% of total reward, second ~72%
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 200 / 700);
+    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 500 / 700);
+
+    // third user joins, depositing 50 tokens. no boost yet
+    liq_pool.deposit(&user3, &Vec::from_array(&env, [50, 50]), &0);
+    let rewards_info = liq_pool.get_rewards_info(&user3);
+    assert_eq!(
+        rewards_info
+            .get(Symbol::new(&env, "working_balance"))
+            .unwrap(),
+        100
+    );
+    assert_eq!(
+        rewards_info
+            .get(Symbol::new(&env, "working_supply"))
+            .unwrap(),
+        800
+    );
+
+    jump(&env, 10);
+    // total effective share now 200 + 200 * 2.5 + 100 = 800
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 200 / 800);
+    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 500 / 800);
+    assert_eq!(liq_pool.claim(&user3), total_reward_1 / 6 * 100 / 800);
+
+    let user3_tokens_to_lock = 1_000_0000000;
+    let new_locked_supply = 25_000_0000000;
+
+    // pre-calculate expected boosted rewards for the third user
+    let supply = rewards_info.get(symbol_short!("supply")).unwrap() as u128;
+    let old_w_balance = rewards_info
+        .get(Symbol::new(&env, "working_balance"))
+        .unwrap() as u128;
+    let old_w_supply = rewards_info
+        .get(Symbol::new(&env, "working_supply"))
+        .unwrap() as u128;
+    let new_w_balance = min(
+        old_w_balance + 3 * user3_tokens_to_lock * supply / new_locked_supply / 2,
+        old_w_balance * 5 / 2,
+    );
+    let new_w_supply = old_w_supply + new_w_balance - old_w_balance;
+    let total_reward_step3 = total_reward_1 / 6; // total reward for 10 seconds
+    let user2_expected_boosted_reward = new_w_balance * total_reward_step3 / new_w_supply;
+
+    // third user locks tokens to boost rewards
+    // effective boost is 1.3
+    // effective share balance is 100 * 1.3 = 130
+    locked_token_admin_client.mint(&user3, &(user3_tokens_to_lock as i128));
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &new_locked_supply);
+
+    // user checkpoints itself to receive boosted rewards by calling get_rewards_info
+    // rewards info should be updated
+    let new_rewards_info = liq_pool.get_rewards_info(&user3);
+    assert_eq!(
+        new_rewards_info
+            .get(Symbol::new(&env, "working_balance"))
+            .unwrap() as u128,
+        old_w_balance
+    );
+    assert_eq!(
+        new_rewards_info
+            .get(Symbol::new(&env, "working_supply"))
+            .unwrap() as u128,
+        old_w_supply
+    );
+    assert_eq!(
+        new_rewards_info
+            .get(Symbol::new(&env, "new_working_balance"))
+            .unwrap() as u128,
+        new_w_balance
+    );
+    assert_eq!(
+        new_rewards_info
+            .get(Symbol::new(&env, "new_working_supply"))
+            .unwrap() as u128,
+        new_w_supply
+    );
+    assert_eq!(
+        new_rewards_info
+            .get(Symbol::new(&env, "boost_balance"))
+            .unwrap() as u128,
+        user3_tokens_to_lock
+    );
+    assert_eq!(
+        new_rewards_info
+            .get(Symbol::new(&env, "boost_supply"))
+            .unwrap() as u128,
+        new_locked_supply
+    );
+    assert_eq!(
+        new_rewards_info.get(symbol_short!("supply")).unwrap() as u128,
+        supply
+    );
+
+    jump(&env, 10);
+    // total effective share now 200 + 200 * 2.5 + 130 = 830
+    assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 200 / 830);
+    assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 500 / 830);
+    let user3_claim = liq_pool.claim(&user3);
+    assert_eq!(user3_claim, total_reward_1 / 6 * 130 / 830);
+    assert_eq!(user3_claim, user2_expected_boosted_reward);
+
+    // total reward is distributed should be distributed to all three users. rounding occurs, so we check with delta
+    assert_approx_eq_abs(
+        token_reward.balance(&user1) as u128
+            + token_reward.balance(&user2) as u128
+            + token_reward.balance(&user3) as u128,
+        total_reward_1,
+        2,
+    );
+}
+
+#[test]
 fn test_lazy_user_rewards() {
     // first user comes as initial liquidity provider and expects to get maximum reward
     //  second user comes at the end makes huge deposit
@@ -2117,7 +2493,7 @@ fn test_lazy_user_rewards() {
 
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2142,6 +2518,14 @@ fn test_lazy_user_rewards() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2184,7 +2568,7 @@ fn test_lazy_user_rewards() {
 fn test_config_rewards_not_admin() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -2203,6 +2587,14 @@ fn test_config_rewards_not_admin() {
         10,
         0,
         &(create_token_contract(&e, &admin).address),
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &(create_plane_contract(&e).address),
     );
 
@@ -2217,7 +2609,7 @@ fn test_config_rewards_not_admin() {
 fn test_config_rewards_router() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
     let router = Address::generate(&e);
@@ -2237,6 +2629,14 @@ fn test_config_rewards_router() {
         10,
         0,
         &(create_token_contract(&e, &admin).address),
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &(create_plane_contract(&e).address),
     );
 
@@ -2248,7 +2648,7 @@ fn test_config_rewards_router() {
 fn test_update_fee_too_early() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2269,6 +2669,14 @@ fn test_update_fee_too_early() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2282,7 +2690,7 @@ fn test_update_fee_too_early() {
 fn test_update_fee() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2303,6 +2711,14 @@ fn test_update_fee() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2319,7 +2735,7 @@ fn test_update_fee() {
 fn test_transfer_ownership_too_early() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2341,6 +2757,14 @@ fn test_transfer_ownership_too_early() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2360,7 +2784,7 @@ fn test_transfer_ownership_too_early() {
 fn test_transfer_ownership_twice() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2382,6 +2806,14 @@ fn test_transfer_ownership_twice() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2402,7 +2834,7 @@ fn test_transfer_ownership_twice() {
 fn test_transfer_ownership_not_committed() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2423,6 +2855,14 @@ fn test_transfer_ownership_not_committed() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2435,7 +2875,7 @@ fn test_transfer_ownership_not_committed() {
 fn test_transfer_ownership_reverted() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2457,6 +2897,14 @@ fn test_transfer_ownership_reverted() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2476,7 +2924,7 @@ fn test_transfer_ownership_reverted() {
 fn test_transfer_ownership() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2498,6 +2946,14 @@ fn test_transfer_ownership() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2518,7 +2974,7 @@ fn test_transfer_ownership() {
 fn test_ramp_a_too_early() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2539,6 +2995,14 @@ fn test_ramp_a_too_early() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2556,7 +3020,7 @@ fn test_ramp_a_too_early() {
 fn test_ramp_a_too_short() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2577,6 +3041,14 @@ fn test_ramp_a_too_short() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2594,7 +3066,7 @@ fn test_ramp_a_too_short() {
 fn test_ramp_a_too_fast() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2615,6 +3087,14 @@ fn test_ramp_a_too_fast() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2631,7 +3111,7 @@ fn test_ramp_a_too_fast() {
 fn test_ramp_a() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2652,6 +3132,14 @@ fn test_ramp_a() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2673,7 +3161,7 @@ fn test_ramp_a() {
 fn test_deposit_min_mint() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2696,6 +3184,14 @@ fn test_deposit_min_mint() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2715,7 +3211,7 @@ fn test_deposit_min_mint() {
 fn test_deposit_inequal_ok() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2738,6 +3234,14 @@ fn test_deposit_inequal_ok() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2761,7 +3265,7 @@ fn test_deposit_inequal_ok() {
 fn test_large_numbers() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2784,6 +3288,14 @@ fn test_large_numbers() {
         85,
         6,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -2862,7 +3374,7 @@ fn test_large_numbers() {
 fn test_kill_deposit() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2884,6 +3396,14 @@ fn test_kill_deposit() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
@@ -2943,7 +3463,7 @@ fn test_kill_deposit() {
 fn test_kill_swap() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -2965,6 +3485,14 @@ fn test_kill_swap() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
@@ -3021,7 +3549,7 @@ fn test_kill_swap() {
 fn test_kill_claim() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin1 = Address::generate(&e);
     let admin2 = Address::generate(&e);
@@ -3045,6 +3573,14 @@ fn test_kill_claim() {
         10,
         0,
         &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -3151,6 +3687,14 @@ fn test_withdraw_rewards() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
@@ -3249,6 +3793,14 @@ fn test_deposit_rewards() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -3303,6 +3855,14 @@ fn test_swap_rewards() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     let liq_pool2 = create_liqpool_contract(
@@ -3314,6 +3874,14 @@ fn test_swap_rewards() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     token1_admin_client.mint(&user1, &200_0000000);
@@ -3413,6 +3981,14 @@ fn test_decimals_in_swap_pool() {
         85,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -3458,6 +4034,14 @@ fn test_claim_rewards() {
         10,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -3482,7 +4066,7 @@ fn test_drain_reward() {
     // test pool reserves are not affected by rewards if reward token is one of pool tokens and presented in pool balance
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
     let users = [
@@ -3520,6 +4104,14 @@ fn test_drain_reward() {
         10,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
     let token_share = SorobanTokenClient::new(&e, &liq_pool.share_id());
@@ -3571,7 +4163,7 @@ fn test_drain_reserves() {
     // test pool reserves are not affected by rewards if reward token is one of pool tokens and presented in pool balance
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
     let user1 = Address::generate(&e);
@@ -3602,6 +4194,14 @@ fn test_drain_reserves() {
         10,
         30,
         &token_reward_admin_client.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
         &plane.address,
     );
 
@@ -4065,7 +4665,6 @@ fn test_ramp_a_events() {
     jump(&setup.env, MIN_RAMP_TIME / 2);
 
     pool.stop_ramp_a(&setup.admin);
-    assert_eq!(pool.a(), 135);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -4077,6 +4676,7 @@ fn test_ramp_a_events() {
             ),
         ]
     );
+    assert_eq!(pool.a(), 135);
 }
 
 #[test]
