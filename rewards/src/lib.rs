@@ -2,6 +2,7 @@
 
 use soroban_sdk::Env;
 
+pub mod boost_feed;
 mod constants;
 pub mod errors;
 pub mod events;

@@ -48,3 +48,29 @@ pub fn get_amount_out(
     let fee = result.fixed_mul_ceil(&e, &(fee_fraction as u128), &FEE_MULTIPLIER);
     (result - fee, fee)
 }
+
+pub fn get_amount_out_strict_receive(
+    e: &Env,
+    out_amount: u128,
+    reserve_sell: u128,
+    reserve_buy: u128,
+) -> (u128, u128) {
+    if out_amount == 0 {
+        return (0, 0);
+    }
+
+    let dy_w_fee = out_amount.fixed_mul_ceil(
+        &e,
+        &FEE_MULTIPLIER,
+        &(FEE_MULTIPLIER - get_fee_fraction(&e) as u128),
+    );
+    // if total value including fee is more than the reserve, math can't be done properly
+    if dy_w_fee >= reserve_buy {
+        panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
+    }
+    // +1 just in case there were some rounding errors & convert to real units in place
+    let result = reserve_buy.fixed_mul_floor(&e, &reserve_sell, &(reserve_buy - dy_w_fee))
+        - reserve_sell
+        + 1;
+    (result, dy_w_fee - out_amount)
+}

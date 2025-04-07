@@ -8,8 +8,7 @@ use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol, Vec};
 
 fn create_plane_contract<'a>(e: &Env) -> LiquidityPoolPlaneClient<'a> {
-    let client =
-        LiquidityPoolPlaneClient::new(e, &e.register_contract(None, LiquidityPoolPlane {}));
+    let client = LiquidityPoolPlaneClient::new(e, &e.register(LiquidityPoolPlane {}, ()));
     client
 }
 
@@ -17,7 +16,7 @@ fn create_plane_contract<'a>(e: &Env) -> LiquidityPoolPlaneClient<'a> {
 fn test() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let address1 = Address::generate(&e);
     let address2 = Address::generate(&e);
@@ -57,7 +56,7 @@ fn test() {
 fn test_init_admin_twice() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
     let plane = create_plane_contract(&e);

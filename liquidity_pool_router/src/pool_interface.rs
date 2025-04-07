@@ -84,13 +84,12 @@ pub trait RewardsInterfaceTrait {
     // Retrieves the global rewards configuration and returns it as a `Map`.
     //
     // This function fetches the global rewards configuration from the contract's state.
-    // The configuration includes the rewards per second (`tps`), the expiration timestamp (`expired_at`),
-    // and the current block number (`current_block`).
+    // The configuration includes the rewards per second (`tps`) and the expiration timestamp (`expired_at`)
     //
     // # Returns
     //
     // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
-    // The keys are "tps", "expired_at", and "current_block".
+    // The keys are "tps" and "expired_at".
     fn get_rewards_config(e: Env) -> Map<Symbol, i128>;
 
     // Returns a mapping of token addresses to their respective reward information.
@@ -277,5 +276,30 @@ pub trait CombinedSwapInterface {
         token_in: Address,
         in_amount: u128,
         out_min: u128,
+    ) -> u128;
+
+    // Executes a chain of token swaps to exchange an input token for an output token.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user executing the swaps.
+    // * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
+    //   - A vector of token addresses liquidity pool belongs to
+    //   - Pool index hash
+    //   - The token to obtain
+    // * `token_in` - The address of the input token to be swapped.
+    // * `out_amount` - The amount of the output token to be received.
+    // * `in_max` - The max amount of the input token to spend.
+    //
+    // # Returns
+    //
+    // The amount of the input token spent after all swaps have been executed.
+    fn swap_chained_strict_receive(
+        e: Env,
+        user: Address,
+        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
+        token_in: Address,
+        out_amount: u128,
+        in_max: u128,
     ) -> u128;
 }

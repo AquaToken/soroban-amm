@@ -6,8 +6,12 @@ on:
   pull_request:
     branches: [ "master", "develop", "audit" ]
 
+permissions: {}
+
 env:
   CARGO_TERM_COLOR: always
+  # Disable incremental compilation for faster from-scratch builds
+  CARGO_INCREMENTAL: 0
 
 jobs:
   test:
@@ -15,11 +19,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: Swatinem/rust-cache@v2
     - name: Install Task
       uses: arduino/setup-task@v1
-    - name: Install Soroban
-      run: cargo install --locked --version 21.3.0 soroban-cli --features opt
+    - name: Install soroban-cli
+      uses: baptiste0928/cargo-install@v3
+      with:
+        crate: soroban-cli
+        version: 22.2.0
+        features: opt
+        locked: true
     - name: Check code formatting
       run: task fmt && git diff --exit-code
     - name: Check all the necessary bindings are implemented

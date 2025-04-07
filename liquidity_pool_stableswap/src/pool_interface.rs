@@ -9,9 +9,9 @@ pub trait ManagedLiquidityPool {
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
-        a: u128,
+        amp: u128,
         fee: u32,
-        reward_token: Address,
+        reward_config: (Address, Address, Address),
         plane: Address,
     );
 }
@@ -78,6 +78,23 @@ pub trait LiquidityPoolInterfaceTrait {
     // Estimate amount of coins to retrieve using swap function
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
 
+    // Perform an exchange between two coins with strict amount to receive.
+    // in_idx: Index value for the coin to send
+    // out_idx: Index value of the coin to receive
+    // out_amount: Amount of out_idx being exchanged
+    // in_max: Maximum amount of in_idx to send
+    fn swap_strict_receive(
+        e: Env,
+        user: Address,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128,
+        in_max: u128,
+    ) -> u128;
+
+    // Estimate amount of coins to retrieve using swap_strict_receive function
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
+
     // Withdraw coins from the pool.
     // share_amount: Quantity of LP tokens to burn in the withdrawal
     // min_amounts: Minimum amounts of underlying coins to receive
@@ -116,6 +133,15 @@ pub trait RewardsTrait {
     // Initialize rewards token address
     fn initialize_rewards_config(e: Env, reward_token: Address);
 
+    fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address);
+
+    fn set_reward_boost_config(
+        e: Env,
+        admin: Address,
+        reward_boost_token: Address,
+        reward_boost_feed: Address,
+    );
+
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers
     // after expired_at timestamp distribution ends
@@ -134,7 +160,20 @@ pub trait RewardsTrait {
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
 
+    // Checkpoints the reward for the user.
+    // Useful when user moves funds by itself to avoid re-entrancy issue.
+    // Can be called only by the token contract to notify pool external changes happened.
     fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128);
+
+    // Checkpoints total working balance and the working balance for the user.
+    // Useful when user moves funds by itself to avoid re-entrancy issue.
+    // Can be called only by the token contract to notify pool external changes happened.
+    fn checkpoint_working_balance(
+        e: Env,
+        token_contract: Address,
+        user: Address,
+        user_shares: u128,
+    );
 
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env) -> u128;
@@ -216,6 +255,9 @@ pub trait LiquidityPoolTrait:
 
     // Get the amount of coin j one would receive for swapping dx of coin i.
     fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128;
+
+    // Get the amount of coin i one would send to swap dy of coin j.
+    fn get_dx(e: Env, i: u32, j: u32, dy: u128) -> u128;
 
     // Withdraw coins from the pool in an imbalanced amount.
     // amounts: List of amounts of underlying coins to withdraw
