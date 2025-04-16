@@ -19,6 +19,8 @@ tasks:
   build:
     cmds:
       - task -d liquidity_pool_router build || exit 1
+      - task -d liquidity_pool_provider_swap_fee build || exit 1
+      - task -d liquidity_pool_provider_swap_fee_factory build || exit 1
       - task -d fees_collector build || exit 1
 
   test:
