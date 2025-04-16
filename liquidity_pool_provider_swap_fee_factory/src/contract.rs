@@ -1,5 +1,8 @@
 use crate::events::{Events, FactoryConfigEvents, FactoryEvents};
-use crate::storage::{get_fee_contract_wasm, get_router, set_fee_contract_wasm, set_router};
+use crate::storage::{
+    get_contract_sequence, get_fee_contract_wasm, get_router, set_contract_sequence,
+    set_fee_contract_wasm, set_router,
+};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
@@ -73,9 +76,11 @@ impl ProviderSwapFeeFactory {
     pub fn deploy_swap_fee_contract(e: Env, operator: Address, swap_fee_fraction: u32) -> Address {
         operator.require_auth();
 
+        let sequence = get_contract_sequence(&e, operator.clone());
+        set_contract_sequence(&e, operator.clone(), sequence + 1);
         let mut salt = Bytes::new(&e);
         salt.append(&operator.clone().to_xdr(&e));
-        salt.append(&e.ledger().sequence().to_xdr(&e));
+        salt.append(&sequence.to_xdr(&e));
         let address = e
             .deployer()
             .with_current_contract(e.crypto().sha256(&salt))

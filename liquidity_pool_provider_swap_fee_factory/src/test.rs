@@ -42,7 +42,6 @@ fn test_deploy_multiple_times() {
 
     let operator = Address::generate(&setup.env);
     let swap_fee_collector_1 = setup.contract.deploy_swap_fee_contract(&operator, &100);
-    jump_sequence(&setup.env, 1);
     let swap_fee_collector_2 = setup.contract.deploy_swap_fee_contract(&operator, &100);
     assert_ne!(swap_fee_collector_1, swap_fee_collector_2,);
 }
