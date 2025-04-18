@@ -8,4 +8,5 @@ pub enum Error {
     PathIsEmpty = 307,
     OutMinNotSatisfied = 2006,
     InMaxNotSatisfied = 2020,
+    FeeFractionTooHigh = 2904,
 }

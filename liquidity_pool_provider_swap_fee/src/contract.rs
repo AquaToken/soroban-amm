@@ -3,8 +3,8 @@ use crate::errors::Error;
 use crate::events::{Events, ProviderFeeEvents};
 use crate::interface::ProviderSwapFeeInterface;
 use crate::storage::{
-    get_operator, get_router, get_swap_fee_fraction, set_operator, set_router,
-    set_swap_fee_fraction,
+    get_fee_destination, get_max_swap_fee_fraction, get_operator, get_router, set_fee_destination,
+    set_max_swap_fee_fraction, set_operator, set_router,
 };
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -23,24 +23,32 @@ impl ProviderSwapFeeCollector {
     // Arguments:
     //   - e: The Soroban environment.
     //   - router: The address of the swap router contract.
-    //   - operator: The address authorized to update fees and claim funds.
-    //   - swap_fee_fraction: The fee in basis points (bps).
-    pub fn __constructor(e: Env, router: Address, operator: Address, swap_fee_fraction: u32) {
+    //   - operator: The address authorized to claim funds.
+    //   - fee_destination: The address where fees are sent.
+    //   - max_swap_fee_fraction: The maximum fee in basis points (bps).
+    pub fn __constructor(
+        e: Env,
+        router: Address,
+        operator: Address,
+        fee_destination: Address,
+        max_swap_fee_fraction: u32,
+    ) {
         set_router(&e, &router);
         set_operator(&e, &operator);
-        set_swap_fee_fraction(&e, &swap_fee_fraction);
+        set_fee_destination(&e, &fee_destination);
+        set_max_swap_fee_fraction(&e, &max_swap_fee_fraction);
     }
 
-    // get_swap_fee_fraction
-    // Returns the current swap fee in basis points.
+    // get_max_swap_fee_fraction
+    // Returns the maximum swap fee in basis points.
     //
     // Arguments:
     //   - e: The Soroban environment.
     //
     // Returns:
-    //   - A u32 value representing the fee in basis points.
-    pub fn get_swap_fee_fraction(e: Env) -> u32 {
-        get_swap_fee_fraction(&e)
+    //   - A u32 value representing the maximum fee in basis points.
+    pub fn get_max_swap_fee_fraction(e: Env) -> u32 {
+        get_max_swap_fee_fraction(&e)
     }
 
     // get_router
@@ -55,20 +63,16 @@ impl ProviderSwapFeeCollector {
         get_router(&e)
     }
 
-    // set_swap_fee_fraction
-    // Updates the swap fee in basis points. Only the operator may call this.
+    // get_fee_destination
+    // Returns the address where fees are sent.
     //
     // Arguments:
     //   - e: The Soroban environment.
-    //   - operator: The address initiating the call (must match the stored operator).
-    //   - swap_fee_fraction: The new swap fee (in basis points).
-    pub fn set_swap_fee_fraction(e: Env, operator: Address, swap_fee_fraction: u32) {
-        operator.require_auth();
-        if operator != get_operator(&e) {
-            panic_with_error!(&e, Error::Unauthorized)
-        }
-        set_swap_fee_fraction(&e, &swap_fee_fraction);
-        Events::new(&e).set_swap_fee_fraction(swap_fee_fraction);
+    //
+    // Returns:
+    //   - An Address representing the fee destination.
+    pub fn get_fee_destination(e: Env) -> Address {
+        get_fee_destination(&e)
     }
 
     // claim_fees
@@ -78,18 +82,21 @@ impl ProviderSwapFeeCollector {
     //   - e: The Soroban environment.
     //   - operator: The address calling for fee claiming (must match the stored operator).
     //   - token: The token contract address for which fees are claimed.
-    //   - to: The destination address for the transfer.
     //
     // Returns:
     //   - A u128 value representing the claimed token amount.
-    pub fn claim_fees(e: Env, operator: Address, token: Address, to: Address) -> u128 {
+    pub fn claim_fees(e: Env, operator: Address, token: Address) -> u128 {
         operator.require_auth();
         if operator != get_operator(&e) {
             panic_with_error!(&e, Error::Unauthorized)
         }
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address());
-        token_client.transfer(&e.current_contract_address(), &to, &amount);
+        token_client.transfer(
+            &e.current_contract_address(),
+            &get_fee_destination(&e),
+            &amount,
+        );
         Events::new(&e).claim_fee(token.clone(), amount as u128, token, amount as u128);
         amount as u128
     }
@@ -113,7 +120,6 @@ impl ProviderSwapFeeCollector {
         swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
         token: Address,
         out_min: u128,
-        to: Address,
     ) -> u128 {
         operator.require_auth();
         if operator != get_operator(&e) {
@@ -154,7 +160,7 @@ impl ProviderSwapFeeCollector {
         );
         SorobanTokenClient::new(&e, &token_out).transfer(
             &e.current_contract_address(),
-            &to,
+            &get_fee_destination(&e),
             &(out_amount as i128),
         );
         Events::new(&e).claim_fee(token, amount, token_out, out_amount);
@@ -174,6 +180,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
     //   - token_in: The input token address.
     //   - in_amount: The amount of token_in provided by the user.
     //   - out_min: The minimum acceptable output token amount (after fee deduction).
+    //   - fee_fraction: The provider fee fraction in basis points (bps).
     //
     // Returns:
     //   - A u128 value representing the net output tokens transferred to the user.
@@ -184,8 +191,14 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
         token_in: Address,
         in_amount: u128,
         out_min: u128,
+        fee_fraction: u32,
     ) -> u128 {
         user.require_auth();
+
+        if fee_fraction > get_max_swap_fee_fraction(&e) {
+            panic_with_error!(&e, Error::FeeFractionTooHigh);
+        }
+
         let (_, _, token_out) = match swaps_chain.last() {
             Some(v) => v,
             None => panic_with_error!(&e, Error::PathIsEmpty),
@@ -226,7 +239,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
                 ],
             ),
         );
-        let fee_amount = amount_out * get_swap_fee_fraction(&e) as u128 / FEE_DENOMINATOR as u128;
+        let fee_amount = amount_out * fee_fraction as u128 / FEE_DENOMINATOR as u128;
         let amount_out_w_fee = amount_out - fee_amount;
         if amount_out_w_fee < out_min {
             panic_with_error!(&e, Error::OutMinNotSatisfied);
@@ -250,6 +263,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
     //   - token_in: The input token address.
     //   - out_amount: The exact target output amount.
     //   - in_max: The maximum amount of token_in the user is willing to spend.
+    //   - fee_fraction: The provider fee fraction in basis points (bps).
     //
     // Returns:
     //   - A u128 value representing the total input amount (including fees) required.
@@ -260,8 +274,14 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
         token_in: Address,
         out_amount: u128,
         in_max: u128,
+        fee_fraction: u32,
     ) -> u128 {
         user.require_auth();
+
+        if fee_fraction > get_max_swap_fee_fraction(&e) {
+            panic_with_error!(&e, Error::FeeFractionTooHigh);
+        }
+
         SorobanTokenClient::new(&e, &token_in).transfer(
             &user,
             &e.current_contract_address(),
@@ -294,7 +314,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
                 ],
             ),
         );
-        let fee_amount = amount_in * get_swap_fee_fraction(&e) as u128 / FEE_DENOMINATOR as u128;
+        let fee_amount = amount_in * fee_fraction as u128 / FEE_DENOMINATOR as u128;
         let amount_in_with_fee = amount_in + fee_amount;
         if amount_in_with_fee > in_max {
             panic_with_error!(&e, Error::InMaxNotSatisfied);

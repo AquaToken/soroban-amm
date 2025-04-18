@@ -1,22 +1,20 @@
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 pub trait ProviderSwapFeeInterface {
-    // Executes a chain of token swaps to exchange an input token for an output token.
+    // swap_chained
+    // Executes a multi-hop token swap with fee deduction.
     //
-    // # Arguments
+    // Arguments:
+    //   - e: The Soroban environment.
+    //   - user: The user initiating the swap (must be authorized).
+    //   - swaps_chain: A vector describing the swap path.
+    //   - token_in: The input token address.
+    //   - in_amount: The amount of token_in provided by the user.
+    //   - out_min: The minimum acceptable output token amount (after fee deduction).
+    //   - fee_fraction: The provider fee fraction in basis points (bps).
     //
-    // * `user` - The address of the user executing the swaps.
-    // * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
-    //   - A vector of token addresses liquidity pool belongs to
-    //   - Pool index hash
-    //   - The token to obtain
-    // * `token_in` - The address of the input token to be swapped.
-    // * `in_amount` - The amount of the input token to be swapped.
-    // * `out_min` - The minimum amount of the output token to be received.
-    //
-    // # Returns
-    //
-    // The amount of the output token received after all swaps have been executed.
+    // Returns:
+    //   - A u128 value representing the net output tokens transferred to the user.
     fn swap_chained(
         e: Env,
         user: Address,
@@ -24,24 +22,23 @@ pub trait ProviderSwapFeeInterface {
         token_in: Address,
         in_amount: u128,
         out_min: u128,
+        fee_fraction: u32,
     ) -> u128;
 
-    // Executes a chain of token swaps to exchange an input token for an output token.
+    // swap_chained_strict_receive
+    // Executes a multi-hop swap ensuring a specific output amount by adjusting the input and fee.
     //
-    // # Arguments
+    // Arguments:
+    //   - e: The Soroban environment.
+    //   - user: The user initiating the swap (must be authorized).
+    //   - swaps_chain: A vector defining the swap path.
+    //   - token_in: The input token address.
+    //   - out_amount: The exact target output amount.
+    //   - in_max: The maximum amount of token_in the user is willing to spend.
+    //   - fee_fraction: The provider fee fraction in basis points (bps).
     //
-    // * `user` - The address of the user executing the swaps.
-    // * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
-    //   - A vector of token addresses liquidity pool belongs to
-    //   - Pool index hash
-    //   - The token to obtain
-    // * `token_in` - The address of the input token to be swapped.
-    // * `out_amount` - The amount of the output token to be received.
-    // * `in_max` - The max amount of the input token to spend.
-    //
-    // # Returns
-    //
-    // The amount of the input token spent after all swaps have been executed.
+    // Returns:
+    //   - A u128 value representing the total input amount (including fees) required.
     fn swap_chained_strict_receive(
         e: Env,
         user: Address,
@@ -49,5 +46,6 @@ pub trait ProviderSwapFeeInterface {
         token_in: Address,
         out_amount: u128,
         in_max: u128,
+        fee_fraction: u32,
     ) -> u128;
 }

@@ -69,11 +69,17 @@ impl ProviderSwapFeeFactory {
     // Arguments:
     //   - e: The Soroban environment.
     //   - operator: The address of the operator (must be authorized).
-    //   - swap_fee_fraction: The fee in basis points to be set in the new contract.
+    //   - fee_destination: The address where fees are sent.
+    //   - max_swap_fee_fraction: The fee in basis points to be set in the new contract.
     //
     // Returns:
     //   - The address of the newly deployed swap fee contract.
-    pub fn deploy_swap_fee_contract(e: Env, operator: Address, swap_fee_fraction: u32) -> Address {
+    pub fn deploy_swap_fee_contract(
+        e: Env,
+        operator: Address,
+        fee_destination: Address,
+        max_max_swap_fee_fraction: u32,
+    ) -> Address {
         operator.require_auth();
 
         let sequence = get_contract_sequence(&e, operator.clone());
@@ -86,9 +92,19 @@ impl ProviderSwapFeeFactory {
             .with_current_contract(e.crypto().sha256(&salt))
             .deploy_v2(
                 get_fee_contract_wasm(&e),
-                (get_router(&e), operator.clone(), swap_fee_fraction),
+                (
+                    get_router(&e),
+                    operator.clone(),
+                    fee_destination.clone(),
+                    max_max_swap_fee_fraction,
+                ),
             );
-        Events::new(&e).deploy(operator, swap_fee_fraction, address.clone());
+        Events::new(&e).deploy(
+            operator,
+            fee_destination,
+            max_max_swap_fee_fraction,
+            address.clone(),
+        );
         address
     }
 }

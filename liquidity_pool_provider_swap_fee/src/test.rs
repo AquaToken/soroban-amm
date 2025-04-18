@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::{Setup, TestConfig};
+use crate::testutils::Setup;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Vec};
 
@@ -26,6 +26,7 @@ fn test_strict_send() {
         &setup.token_a.address,
         &1_0000000,
         &9870300,
+        &100,
     );
     assert_eq!(result, 9870300); // (10000000 - .3%) - 1%
 }
@@ -51,8 +52,61 @@ fn test_strict_receive() {
         &setup.token_a.address,
         &1_0000000,
         &1_2000000,
+        &100,
     );
     assert_eq!(result, 10130392); // ~ (10000000 + .3%) + 1%
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2904)")]
+fn test_strict_send_fee_over_max() {
+    let setup = Setup::default();
+
+    let tokens = Vec::from_array(
+        &setup.env,
+        [setup.token_a.address.clone(), setup.token_b.address.clone()],
+    );
+    let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
+
+    let user = Address::generate(&setup.env);
+    setup.token_a_admin_client.mint(&user, &1_0000000);
+    setup.contract.swap_chained(
+        &user,
+        &Vec::from_array(
+            &setup.env,
+            [(tokens, pool_index, setup.token_b.address.clone())],
+        ),
+        &setup.token_a.address,
+        &1_0000000,
+        &9870300,
+        &101,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2904)")]
+fn test_strict_receive_fee_over_max() {
+    let setup = Setup::default();
+
+    let tokens = Vec::from_array(
+        &setup.env,
+        [setup.token_a.address.clone(), setup.token_b.address.clone()],
+    );
+    let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
+
+    let user = Address::generate(&setup.env);
+    setup.token_a_admin_client.mint(&user, &1_2000000);
+    setup.contract.swap_chained_strict_receive(
+        &user,
+        &Vec::from_array(
+            &setup.env,
+            [(tokens, pool_index, setup.token_b.address.clone())],
+        ),
+        &setup.token_a.address,
+        &1_0000000,
+        &1_2000000,
+        &101,
+    );
 }
 
 #[test]
@@ -79,6 +133,7 @@ fn test_strict_send_bad_slippage() {
             &setup.token_a.address,
             &1_0000000,
             &9870301, // value is not enough to cover provider fee
+            &100,
         )
         .is_err());
     assert!(setup
@@ -89,6 +144,7 @@ fn test_strict_send_bad_slippage() {
             &setup.token_a.address,
             &1_0000000,
             &9870300,
+            &100,
         )
         .is_ok());
 }
@@ -117,6 +173,7 @@ fn test_strict_receive_bad_slippage() {
             &setup.token_a.address,
             &1_0000000,
             &10130391,
+            &100,
         )
         .is_err());
     assert!(setup
@@ -127,16 +184,14 @@ fn test_strict_receive_bad_slippage() {
             &setup.token_a.address,
             &1_0000000,
             &10130392,
+            &100,
         )
         .is_ok());
 }
 
 #[test]
 fn test_strict_send_no_fee() {
-    let setup = Setup::new_with_config(&TestConfig {
-        provider_fee: 0,
-        ..Default::default()
-    });
+    let setup = Setup::default();
 
     let tokens = Vec::from_array(
         &setup.env,
@@ -155,16 +210,14 @@ fn test_strict_send_no_fee() {
         &setup.token_a.address,
         &1_0000000,
         &0,
+        &0,
     );
     assert_eq!(result, 9969999); // (10000000 - .3%)
 }
 
 #[test]
 fn test_strict_receive_no_fee() {
-    let setup = Setup::new_with_config(&TestConfig {
-        provider_fee: 0,
-        ..Default::default()
-    });
+    let setup = Setup::default();
 
     let tokens = Vec::from_array(
         &setup.env,
@@ -183,6 +236,7 @@ fn test_strict_receive_no_fee() {
         &setup.token_a.address,
         &1_0000000,
         &1_2000000,
+        &0,
     );
     assert_eq!(result, 10030092); // ~ (10000000 + .3%)
 }
@@ -208,21 +262,22 @@ fn test_claim_fee() {
         &setup.token_a.address,
         &1_0000000,
         &0,
+        &100,
     );
     assert_eq!(
         setup
             .contract
-            .claim_fees(&setup.operator, &setup.token_b.address, &setup.operator),
+            .claim_fees(&setup.operator, &setup.token_b.address),
         99699
     ); // ~ (10000000 - .3%) * 1%
     assert_eq!(
         setup
             .contract
-            .claim_fees(&setup.operator, &setup.token_a.address, &setup.operator),
+            .claim_fees(&setup.operator, &setup.token_a.address),
         0
     );
-    assert_eq!(setup.token_a.balance(&setup.operator), 0);
-    assert_eq!(setup.token_b.balance(&setup.operator), 99699);
+    assert_eq!(setup.token_a.balance(&setup.fee_destination), 0);
+    assert_eq!(setup.token_b.balance(&setup.fee_destination), 99699);
 }
 
 #[test]
@@ -250,6 +305,7 @@ fn test_claim_fee_and_swap() {
         &setup.token_a.address,
         &1_0000000,
         &0,
+        &100,
     );
     assert_eq!(
         setup.contract.claim_fees_and_swap(
@@ -260,16 +316,15 @@ fn test_claim_fee_and_swap() {
             ),
             &setup.token_b.address,
             &0,
-            &setup.operator
         ),
         99399
     ); // ~ (10000000 - .3%) * 1%
     assert_eq!(
         setup
             .contract
-            .claim_fees(&setup.operator, &setup.token_a.address, &setup.operator),
+            .claim_fees(&setup.operator, &setup.token_a.address),
         0
     );
-    assert_eq!(setup.token_a.balance(&setup.operator), 99399);
-    assert_eq!(setup.token_b.balance(&setup.operator), 0);
+    assert_eq!(setup.token_a.balance(&setup.fee_destination), 99399);
+    assert_eq!(setup.token_b.balance(&setup.fee_destination), 0);
 }

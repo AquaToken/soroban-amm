@@ -4,14 +4,17 @@ extern crate std;
 use crate::testutils::{swap_fee_collector, Setup};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Vec};
-use utils::test_utils::jump_sequence;
 
 #[test]
 fn test() {
     let setup = Setup::default();
 
     let operator = Address::generate(&setup.env);
-    let swap_fee_collector = setup.contract.deploy_swap_fee_contract(&operator, &100);
+    let fee_destination = Address::generate(&setup.env);
+    let swap_fee_collector =
+        setup
+            .contract
+            .deploy_swap_fee_contract(&operator, &fee_destination, &100);
     let swap_fee_collector_client =
         swap_fee_collector::Client::new(&setup.env, &swap_fee_collector);
 
@@ -32,6 +35,7 @@ fn test() {
         &setup.token_a.address,
         &1_0000000,
         &0,
+        &100,
     );
     assert_eq!(result, 9870300); // (10000000 - .3%) - 1%
 }
@@ -41,7 +45,14 @@ fn test_deploy_multiple_times() {
     let setup = Setup::default();
 
     let operator = Address::generate(&setup.env);
-    let swap_fee_collector_1 = setup.contract.deploy_swap_fee_contract(&operator, &100);
-    let swap_fee_collector_2 = setup.contract.deploy_swap_fee_contract(&operator, &100);
+    let fee_destination = Address::generate(&setup.env);
+    let swap_fee_collector_1 =
+        setup
+            .contract
+            .deploy_swap_fee_contract(&operator, &fee_destination, &100);
+    let swap_fee_collector_2 =
+        setup
+            .contract
+            .deploy_swap_fee_contract(&operator, &fee_destination, &100);
     assert_ne!(swap_fee_collector_1, swap_fee_collector_2,);
 }

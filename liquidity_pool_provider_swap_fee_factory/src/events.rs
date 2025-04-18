@@ -16,7 +16,13 @@ impl Events {
 }
 
 pub(crate) trait FactoryEvents {
-    fn deploy(&self, operator: Address, swap_fee_fraction: u32, address: Address);
+    fn deploy(
+        &self,
+        operator: Address,
+        fee_destination: Address,
+        max_swap_fee_fraction: u32,
+        address: Address,
+    );
 }
 
 pub(crate) trait FactoryConfigEvents {
@@ -24,10 +30,16 @@ pub(crate) trait FactoryConfigEvents {
 }
 
 impl FactoryEvents for Events {
-    fn deploy(&self, operator: Address, swap_fee_fraction: u32, address: Address) {
+    fn deploy(
+        &self,
+        operator: Address,
+        fee_destination: Address,
+        max_swap_fee_fraction: u32,
+        address: Address,
+    ) {
         self.env().events().publish(
             (Symbol::new(self.env(), "deploy"),),
-            (operator, swap_fee_fraction, address),
+            (operator, fee_destination, max_swap_fee_fraction, address),
         );
     }
 }

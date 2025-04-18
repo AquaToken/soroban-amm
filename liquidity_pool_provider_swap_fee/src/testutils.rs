@@ -8,13 +8,13 @@ use soroban_sdk::token::{
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 pub(crate) struct TestConfig {
-    pub(crate) provider_fee: u32,
+    pub(crate) max_provider_fee: u32,
 }
 
 impl Default for TestConfig {
     fn default() -> Self {
         TestConfig {
-            provider_fee: 100, // 1% fee
+            max_provider_fee: 100, // 1% fee
         }
     }
 }
@@ -25,6 +25,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) contract: ProviderSwapFeeCollectorClient<'a>,
     pub(crate) router: swap_router::Client<'a>,
     pub(crate) operator: Address,
+    pub(crate) fee_destination: Address,
     pub(crate) token_a: SorobanTokenClient<'a>,
     pub(crate) token_a_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token_b: SorobanTokenClient<'a>,
@@ -52,6 +53,7 @@ impl Setup<'_> {
 
         let admin = Address::generate(&e);
         let operator = Address::generate(&e);
+        let fee_destination = Address::generate(&e);
 
         let token_a = create_token_contract(&e, &admin);
         let token_b = create_token_contract(&e, &admin);
@@ -96,12 +98,19 @@ impl Setup<'_> {
             &1,
         );
 
-        let contract = create_contract(&e, &router.address, &operator, config.provider_fee);
+        let contract = create_contract(
+            &e,
+            &router.address,
+            &operator,
+            &fee_destination,
+            config.max_provider_fee,
+        );
 
         Self {
             env: e,
             admin,
             operator,
+            fee_destination,
             contract,
             router,
             token_a,
@@ -137,13 +146,14 @@ pub fn create_contract<'a>(
     e: &Env,
     router: &Address,
     operator: &Address,
+    fee_destination: &Address,
     swap_fee: u32,
 ) -> ProviderSwapFeeCollectorClient<'a> {
     let contract = ProviderSwapFeeCollectorClient::new(
         e,
         &e.register(
             crate::ProviderSwapFeeCollector,
-            (router, operator, swap_fee),
+            (router, operator, fee_destination, swap_fee),
         ),
     );
     contract
