@@ -1,0 +1,20 @@
+[package]
+name = "soroban-liquidity-pool-provider-swap-fee-factory-contract"
+version.workspace = true
+edition = "2021"
+publish = false
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+access_control = { workspace = true }
+upgrade = { workspace = true }
+paste = { workspace = true }
+utils = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+utils = { workspace = true, features = ["testutils"] }

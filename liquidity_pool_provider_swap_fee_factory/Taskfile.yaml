@@ -1,0 +1,40 @@
+version: '3'
+tasks:
+  clean:
+    cmd: cargo clean
+
+  fmt:
+    cmd: cargo fmt --all
+
+  check:
+    cmd: cargo check
+
+  build:
+    cmds:
+      - soroban contract build --package soroban-liquidity-pool-provider-swap-fee-factory-contract
+      - soroban contract optimize --wasm ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_provider_swap_fee_factory_contract.wasm --wasm-out ../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_provider_swap_fee_factory_contract.wasm
+      - ls -l ../target/wasm32-unknown-unknown/release/*.wasm
+
+  test:
+    deps:
+      - build
+    cmds:
+      - task -d ../liquidity_pool_router build || exit 1
+      - task -d ../liquidity_pool_provider_swap_fee build || exit 1
+      - cargo test
+
+  test_slow:
+    cmds:
+      - task: test
+
+  default:
+    cmds:
+      - task: build
+
+  all:
+    cmds:
+      - task: clean
+      - task: fmt
+      - task: build
+      - task: check
+      - task: test

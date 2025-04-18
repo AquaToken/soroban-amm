@@ -17,6 +17,8 @@ members = [
     "fees_collector",
     "upgrade",
     "locker_feed",
+    "liquidity_pool_provider_swap_fee_factory",
+    "liquidity_pool_provider_swap_fee",
 ]
 
 [workspace.package]
