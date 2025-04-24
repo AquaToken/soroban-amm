@@ -29,6 +29,7 @@ fn test_strict_send() {
         &100,
     );
     assert_eq!(result, 9870300); // (10000000 - .3%) - 1%
+    assert_eq!(setup.token_b.balance(&user), 9870300);
 }
 
 #[test]
@@ -55,6 +56,7 @@ fn test_strict_receive() {
         &100,
     );
     assert_eq!(result, 10130392); // ~ (10000000 + .3%) + 1%
+    assert_eq!(setup.token_b.balance(&user), 1_0000000);
 }
 
 #[test]

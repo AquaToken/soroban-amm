@@ -282,6 +282,11 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             panic_with_error!(&e, Error::FeeFractionTooHigh);
         }
 
+        let (_, _, token_out) = match swaps_chain.last() {
+            Some(v) => v,
+            None => panic_with_error!(&e, Error::PathIsEmpty),
+        };
+
         SorobanTokenClient::new(&e, &token_in).transfer(
             &user,
             &e.current_contract_address(),
@@ -313,6 +318,11 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
                     in_max.into_val(&e),
                 ],
             ),
+        );
+        SorobanTokenClient::new(&e, &token_out).transfer(
+            &e.current_contract_address(),
+            &user,
+            &(out_amount as i128),
         );
         let fee_amount = amount_in * fee_fraction as u128 / FEE_DENOMINATOR as u128;
         let amount_in_with_fee = amount_in + fee_amount;
