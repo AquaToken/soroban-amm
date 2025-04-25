@@ -19,6 +19,8 @@ tasks:
   build:
     cmds:
       - task -d liquidity_pool_router build || exit 1
+      - task -d liquidity_pool_provider_swap_fee build || exit 1
+      - task -d liquidity_pool_provider_swap_fee_factory build || exit 1
       - task -d fees_collector build || exit 1
 
   test:
@@ -44,7 +46,7 @@ tasks:
   _check_bindings_tranfer_ownership:
     vars:
       WASMS:
-        sh: find ./target/wasm32-unknown-unknown/release/ -maxdepth 1 -type f -name '*.wasm'
+        sh: find ./target/wasm32-unknown-unknown/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
     cmds:
       - for: { var: WASMS }
         cmd:
@@ -56,7 +58,7 @@ tasks:
   _check_bindings_delayed_upgrade:
     vars:
       WASMS:
-        sh: find ./target/wasm32-unknown-unknown/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' \)
+        sh: find ./target/wasm32-unknown-unknown/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
     cmds:
       - for: { var: WASMS }
         cmd:
