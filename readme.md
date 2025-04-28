@@ -49,6 +49,7 @@
       </ul>
     </li>
     <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#audit">Competitive Audit</a></li>
     <li><a href="#contact">Contact</a></li>
   </ol>
 </details>
@@ -207,6 +208,15 @@ Don't forget to give the project a star! Thanks again!
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
+
+<!-- AUDIT -->
+## Competitive Audit
+
+Auditors are expected to demonstrate each finding with code.  To make that painless we ship an end‑to‑end test harness that deploys clean contracts and lets you focus on writing failing assertions. Just edit `integration_tests/src/tests.rs`
+```
+# run the whole suite (faster with --release)
+$ cargo test -p integration-tests
+```
 
 
 <!-- CONTACT -->
