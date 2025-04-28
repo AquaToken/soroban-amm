@@ -19,6 +19,7 @@ members = [
     "locker_feed",
     "liquidity_pool_provider_swap_fee_factory",
     "liquidity_pool_provider_swap_fee",
+    "integration_tests",
 ]
 
 [workspace.package]

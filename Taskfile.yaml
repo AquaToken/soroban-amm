@@ -22,6 +22,7 @@ tasks:
       - task -d liquidity_pool_provider_swap_fee build || exit 1
       - task -d liquidity_pool_provider_swap_fee_factory build || exit 1
       - task -d fees_collector build || exit 1
+      - cp ./target/wasm32-unknown-unknown/release/*.wasm ./contracts
 
   test:
     cmds:
