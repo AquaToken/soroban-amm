@@ -49,7 +49,7 @@
       </ul>
     </li>
     <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#audit">Competitive Audit</a></li>
+    <li><a href="#competitive-audit">Competitive Audit</a></li>
     <li><a href="#contact">Contact</a></li>
   </ol>
 </details>
