@@ -147,7 +147,6 @@ We plan to use Soroban to build Automated Market Maker (AMM) smart contracts and
 - [soroban cli](https://github.com/stellar/soroban-tools)
 
 ### Development setup
-Project built using django framework, so setup is similar to generic django project.
 
 #### Clone project
 `git clone git@github.com:AquaToken/soroban-amm.git`
