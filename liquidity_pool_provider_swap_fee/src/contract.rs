@@ -1,10 +1,9 @@
-use crate::constants::FEE_DENOMINATOR;
 use crate::errors::Error;
 use crate::events::{Events, ProviderFeeEvents};
 use crate::interface::ProviderSwapFeeInterface;
 use crate::storage::{
-    get_fee_destination, get_max_swap_fee_fraction, get_operator, get_router, set_fee_destination,
-    set_max_swap_fee_fraction, set_operator, set_router,
+    get_fee_denominator, get_fee_destination, get_max_swap_fee_fraction, get_operator, get_router,
+    set_fee_denominator, set_fee_destination, set_max_swap_fee_fraction, set_operator, set_router,
 };
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -32,11 +31,13 @@ impl ProviderSwapFeeCollector {
         operator: Address,
         fee_destination: Address,
         max_swap_fee_fraction: u32,
+        fee_denominator: u32,
     ) {
         set_router(&e, &router);
         set_operator(&e, &operator);
         set_fee_destination(&e, &fee_destination);
         set_max_swap_fee_fraction(&e, &max_swap_fee_fraction);
+        set_fee_denominator(&e, &fee_denominator);
     }
 
     // get_max_swap_fee_fraction
@@ -239,7 +240,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
                 ],
             ),
         );
-        let fee_amount = amount_out * fee_fraction as u128 / FEE_DENOMINATOR as u128;
+        let fee_amount = amount_out * fee_fraction as u128 / get_fee_denominator(&e) as u128;
         let amount_out_w_fee = amount_out - fee_amount;
         if amount_out_w_fee < out_min {
             panic_with_error!(&e, Error::OutMinNotSatisfied);
@@ -324,7 +325,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             &user,
             &(out_amount as i128),
         );
-        let fee_amount = amount_in * fee_fraction as u128 / FEE_DENOMINATOR as u128;
+        let fee_amount = amount_in * fee_fraction as u128 / get_fee_denominator(&e) as u128;
         let amount_in_with_fee = amount_in + fee_amount;
         if amount_in_with_fee > in_max {
             panic_with_error!(&e, Error::InMaxNotSatisfied);

@@ -14,7 +14,7 @@ fn test() {
     let swap_fee_collector =
         setup
             .contract
-            .deploy_swap_fee_contract(&operator, &fee_destination, &100);
+            .deploy_swap_fee_contract(&operator, &fee_destination, &100, &10_000);
     let swap_fee_collector_client =
         swap_fee_collector::Client::new(&setup.env, &swap_fee_collector);
 
@@ -49,10 +49,10 @@ fn test_deploy_multiple_times() {
     let swap_fee_collector_1 =
         setup
             .contract
-            .deploy_swap_fee_contract(&operator, &fee_destination, &100);
+            .deploy_swap_fee_contract(&operator, &fee_destination, &100, &10_000);
     let swap_fee_collector_2 =
         setup
             .contract
-            .deploy_swap_fee_contract(&operator, &fee_destination, &100);
+            .deploy_swap_fee_contract(&operator, &fee_destination, &100, &10_000);
     assert_ne!(swap_fee_collector_1, swap_fee_collector_2,);
 }
