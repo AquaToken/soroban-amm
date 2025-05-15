@@ -25,11 +25,11 @@ fn test_strict_send() {
         ),
         &setup.token_a.address,
         &1_0000000,
-        &9870300,
+        &9870299,
         &100,
     );
-    assert_eq!(result, 9870300); // (10000000 - .3%) - 1%
-    assert_eq!(setup.token_b.balance(&user), 9870300);
+    assert_eq!(result, 9870299); // (10000000 - .3%) - 1%
+    assert_eq!(setup.token_b.balance(&user), 9870299);
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn test_strict_receive() {
         &1_2000000,
         &100,
     );
-    assert_eq!(result, 10130392); // ~ (10000000 + .3%) + 1%
+    assert_eq!(result, 10130393); // ~ (10000000 + .3%) + 1%
     assert_eq!(setup.token_b.balance(&user), 1_0000000);
 }
 
@@ -134,7 +134,7 @@ fn test_strict_send_bad_slippage() {
             &swap_path,
             &setup.token_a.address,
             &1_0000000,
-            &9870301, // value is not enough to cover provider fee
+            &9870300, // value is not enough to cover provider fee
             &100,
         )
         .is_err());
@@ -145,7 +145,7 @@ fn test_strict_send_bad_slippage() {
             &swap_path,
             &setup.token_a.address,
             &1_0000000,
-            &9870300,
+            &9870299,
             &100,
         )
         .is_ok());
@@ -174,7 +174,7 @@ fn test_strict_receive_bad_slippage() {
             &swap_path,
             &setup.token_a.address,
             &1_0000000,
-            &10130391,
+            &10130392,
             &100,
         )
         .is_err());
@@ -185,7 +185,7 @@ fn test_strict_receive_bad_slippage() {
             &swap_path,
             &setup.token_a.address,
             &1_0000000,
-            &10130392,
+            &10130393,
             &100,
         )
         .is_ok());
@@ -270,7 +270,7 @@ fn test_claim_fee() {
         setup
             .contract
             .claim_fees(&setup.operator, &setup.token_b.address),
-        99699
+        99700
     ); // ~ (10000000 - .3%) * 1%
     assert_eq!(
         setup
@@ -279,7 +279,7 @@ fn test_claim_fee() {
         0
     );
     assert_eq!(setup.token_a.balance(&setup.fee_destination), 0);
-    assert_eq!(setup.token_b.balance(&setup.fee_destination), 99699);
+    assert_eq!(setup.token_b.balance(&setup.fee_destination), 99700);
 }
 
 #[test]
@@ -319,7 +319,7 @@ fn test_claim_fee_and_swap() {
             &setup.token_b.address,
             &0,
         ),
-        99399
+        99400
     ); // ~ (10000000 - .3%) * 1%
     assert_eq!(
         setup
@@ -327,6 +327,6 @@ fn test_claim_fee_and_swap() {
             .claim_fees(&setup.operator, &setup.token_a.address),
         0
     );
-    assert_eq!(setup.token_a.balance(&setup.fee_destination), 99399);
+    assert_eq!(setup.token_a.balance(&setup.fee_destination), 99400);
     assert_eq!(setup.token_b.balance(&setup.fee_destination), 0);
 }

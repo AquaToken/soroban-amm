@@ -9,12 +9,14 @@ use soroban_sdk::{Address, BytesN, Env, Vec};
 
 pub(crate) struct TestConfig {
     pub(crate) max_provider_fee: u32,
+    pub(crate) fee_denominator: u32,
 }
 
 impl Default for TestConfig {
     fn default() -> Self {
         TestConfig {
             max_provider_fee: 100, // 1% fee
+            fee_denominator: 10_000,
         }
     }
 }
@@ -104,6 +106,7 @@ impl Setup<'_> {
             &operator,
             &fee_destination,
             config.max_provider_fee,
+            config.fee_denominator,
         );
 
         Self {
@@ -148,12 +151,13 @@ pub fn create_contract<'a>(
     operator: &Address,
     fee_destination: &Address,
     swap_fee: u32,
+    fee_denominator: u32,
 ) -> ProviderSwapFeeCollectorClient<'a> {
     let contract = ProviderSwapFeeCollectorClient::new(
         e,
         &e.register(
             crate::ProviderSwapFeeCollector,
-            (router, operator, fee_destination, swap_fee),
+            (router, operator, fee_destination, swap_fee, fee_denominator),
         ),
     );
     contract

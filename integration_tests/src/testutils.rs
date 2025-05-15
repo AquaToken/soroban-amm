@@ -129,6 +129,7 @@ impl Setup<'_> {
         operator: &Address,
         fee_destination: &Address,
         max_fee_fraction: u32,
+        fee_denominator: u32,
     ) -> contracts::swap_fee::Client {
         contracts::swap_fee::Client::new(
             &self.env,
@@ -136,6 +137,7 @@ impl Setup<'_> {
                 &operator,
                 &fee_destination,
                 &max_fee_fraction,
+                &fee_denominator,
             ),
         )
     }
