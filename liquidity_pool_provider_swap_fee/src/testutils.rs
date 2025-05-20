@@ -9,12 +9,14 @@ use soroban_sdk::{Address, BytesN, Env, Vec};
 
 pub(crate) struct TestConfig {
     pub(crate) max_provider_fee: u32,
+    pub(crate) fee_denominator: u32,
 }
 
 impl Default for TestConfig {
     fn default() -> Self {
         TestConfig {
             max_provider_fee: 100, // 1% fee
+            fee_denominator: 10_000,
         }
     }
 }
@@ -104,6 +106,7 @@ impl Setup<'_> {
             &operator,
             &fee_destination,
             config.max_provider_fee,
+            config.fee_denominator,
         );
 
         Self {
@@ -131,7 +134,7 @@ pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanToke
 
 pub mod liquidity_pool {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
     );
 }
 
@@ -148,12 +151,13 @@ pub fn create_contract<'a>(
     operator: &Address,
     fee_destination: &Address,
     swap_fee: u32,
+    fee_denominator: u32,
 ) -> ProviderSwapFeeCollectorClient<'a> {
     let contract = ProviderSwapFeeCollectorClient::new(
         e,
         &e.register(
             crate::ProviderSwapFeeCollector,
-            (router, operator, fee_destination, swap_fee),
+            (router, operator, fee_destination, swap_fee, fee_denominator),
         ),
     );
     contract
@@ -161,8 +165,7 @@ pub fn create_contract<'a>(
 
 pub mod swap_router {
     soroban_sdk::contractimport!(
-        file =
-            "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_router_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm"
     );
 }
 
@@ -172,36 +175,35 @@ fn deploy_liqpool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
 
 fn install_token_wasm(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_token_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_stableswap_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_stableswap_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn deploy_plane_contract<'a>(e: &Env) -> Address {
     soroban_sdk::contractimport!(
-        file =
-            "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_plane_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
     );
     Client::new(e, &e.register(WASM, ())).address
 }
 
 mod reward_boost_feed {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_locker_feed_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
     );
 }
 
