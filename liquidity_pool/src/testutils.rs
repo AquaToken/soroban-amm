@@ -55,6 +55,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) operations_admin: Address,
     pub(crate) pause_admin: Address,
     pub(crate) emergency_pause_admin: Address,
+    pub(crate) system_fee_admin: Address,
 }
 
 impl Default for Setup<'_> {
@@ -87,6 +88,7 @@ impl Setup<'_> {
         let rewards_admin = Address::generate(&e);
         let operations_admin = Address::generate(&e);
         let pause_admin = Address::generate(&e);
+        let system_fee_admin = Address::generate(&e);
         let emergency_pause_admin = Address::generate(&e);
 
         let mut token1 = create_token_contract(&e, &admin);
@@ -131,10 +133,11 @@ impl Setup<'_> {
 
         liq_pool.set_privileged_addrs(
             &admin,
-            &rewards_admin.clone(),
-            &operations_admin.clone(),
-            &pause_admin.clone(),
+            &rewards_admin,
+            &operations_admin,
+            &pause_admin,
             &Vec::from_array(&e, [emergency_pause_admin.clone()]),
+            &system_fee_admin,
         );
 
         let emergency_admin = Address::generate(&e);
@@ -167,6 +170,7 @@ impl Setup<'_> {
             operations_admin,
             pause_admin,
             emergency_pause_admin,
+            system_fee_admin,
             reward_boost_token,
             reward_boost_feed,
         }

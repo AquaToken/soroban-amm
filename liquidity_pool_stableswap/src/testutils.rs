@@ -150,6 +150,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) operations_admin: Address,
     pub(crate) pause_admin: Address,
     pub(crate) emergency_pause_admin: Address,
+    pub(crate) system_fee_admin: Address,
 }
 
 impl Default for Setup<'_> {
@@ -177,6 +178,7 @@ impl Setup<'_> {
         let rewards_admin = Address::generate(&env);
         let operations_admin = Address::generate(&env);
         let pause_admin = Address::generate(&env);
+        let system_fee_admin = Address::generate(&env);
         let emergency_pause_admin = Address::generate(&env);
 
         let token1 = SorobanTokenClient::new(
@@ -223,6 +225,7 @@ impl Setup<'_> {
             &operations_admin.clone(),
             &pause_admin.clone(),
             &Vec::from_array(&env, [emergency_pause_admin.clone()]),
+            &system_fee_admin.clone(),
         );
 
         let emergency_admin = Address::generate(&env);
@@ -250,6 +253,7 @@ impl Setup<'_> {
             rewards_admin,
             operations_admin,
             pause_admin,
+            system_fee_admin,
             emergency_pause_admin,
             reward_boost_token,
             reward_boost_feed,

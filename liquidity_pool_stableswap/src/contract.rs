@@ -259,7 +259,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
         let amp = Self::a(e.clone());
-        let mut reserves = get_reserves(&e);
+        let reserves = get_reserves(&e);
 
         let old_balances = reserves.clone();
         let mut new_balances = old_balances.clone();
@@ -270,37 +270,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let d1 = Self::_get_d(&e, &Self::_xp(&e, &new_balances), amp);
-
-        for i in 0..n_coins {
-            let new_balance = new_balances.get(i).unwrap();
-            let ideal_balance = d1
-                .fixed_mul_floor(&e, &U256::from_u128(&e, old_balances.get(i).unwrap()), &d0)
-                .to_u128()
-                .unwrap();
-            let difference = if ideal_balance > new_balance {
-                ideal_balance - new_balance
-            } else {
-                new_balance - ideal_balance
-            };
-            // This formula ensures that the fee is proportionally distributed
-            //  among the different coins in the pool. The denominator (4 * (N_COINS - 1)) is used
-            //  to adjust the fee based on the number of coins. As the number of coins increases,
-            //  the fee for each individual coin decreases.
-            let fee = difference.fixed_mul_ceil(
-                &e,
-                &(get_fee(&e) as u128 * n_coins as u128),
-                &(4 * (n_coins as u128 - 1) * FEE_DENOMINATOR as u128),
-            );
-
-            reserves.set(i, new_balance);
-            new_balances.set(i, new_balance - fee);
-        }
-        put_reserves(&e, &reserves);
-
-        let d2 = Self::_get_d(&e, &Self::_xp(&e, &new_balances), amp);
+        put_reserves(&e, &new_balances);
 
         let mut share_amount = d0
-            .sub(&d2)
+            .sub(&d1)
             .fixed_mul_floor(&e, &U256::from_u128(&e, token_supply), &d0)
             .to_u128()
             .unwrap();
@@ -647,10 +620,6 @@ impl LiquidityPool {
         // First, need to calculate
         // * Get current D
         // * Solve Eqn against y_i for D - token_amount
-
-        let tokens = get_tokens(e);
-        let n_coins = tokens.len();
-
         let amp = Self::a(e.clone());
         let total_supply = get_total_shares(e);
 
@@ -662,38 +631,12 @@ impl LiquidityPool {
                 .mul(&d0)
                 .div(&U256::from_u128(e, total_supply)),
         );
-        let mut xp_reduced = xp.clone();
 
         let new_y = Self::_get_y_d(e, amp, token_idx, &xp, d1.clone());
         let token_idx_precision_mul = get_precision_mul(&e).get(token_idx).unwrap();
-        let dy_0 = (xp.get(token_idx).unwrap() - new_y) / token_idx_precision_mul; // w/o fees;
+        let dy_0 = (xp.get(token_idx).unwrap() - new_y) / token_idx_precision_mul;
 
-        for j in 0..n_coins {
-            let dx_expected = if j == token_idx {
-                U256::from_u128(e, xp.get(j).unwrap())
-                    .mul(&d1)
-                    .div(&d0)
-                    .to_u128()
-                    .unwrap()
-                    - new_y
-            } else {
-                xp.get(j).unwrap()
-                    - U256::from_u128(e, xp.get(j).unwrap())
-                        .mul(&d1)
-                        .div(&d0)
-                        .to_u128()
-                        .unwrap()
-            };
-            let fee = dx_expected.fixed_mul_ceil(
-                e,
-                &((get_fee(e) * n_coins) as u128),
-                &((FEE_DENOMINATOR * 4 * (n_coins - 1)) as u128),
-            );
-            xp_reduced.set(j, xp_reduced.get(j).unwrap() - fee);
-        }
-
-        let mut dy =
-            xp_reduced.get(token_idx).unwrap() - Self::_get_y_d(e, amp, token_idx, &xp_reduced, d1);
+        let mut dy = xp.get(token_idx).unwrap() - Self::_get_y_d(e, amp, token_idx, &xp, d1);
         dy = (dy - 1) / token_idx_precision_mul; // Withdraw less to account for rounding errors
 
         (dy, dy_0 - dy)
@@ -711,6 +654,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // * `operations_admin` - The address of the operations admin.
     // * `pause_admin` - The address of the pause admin.
     // * `emergency_pause_admin` - The addresses of the emergency pause admins.
+    // * `system_fee_admin` - The address of the system fee admin.
     fn set_privileged_addrs(
         e: Env,
         admin: Address,
@@ -718,6 +662,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         operations_admin: Address,
         pause_admin: Address,
         emergency_pause_admins: Vec<Address>,
+        system_fee_admin: Address,
     ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
@@ -727,6 +672,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.set_role_address(&Role::OperationsAdmin, &operations_admin);
         access_control.set_role_address(&Role::PauseAdmin, &pause_admin);
         access_control.set_role_addresses(&Role::EmergencyPauseAdmin, &emergency_pause_admins);
+        access_control.set_role_address(&Role::SystemFeeAdmin, &system_fee_admin);
         AccessControlEvents::new(&e).set_privileged_addrs(
             rewards_admin,
             operations_admin,
@@ -749,6 +695,7 @@ impl AdminInterfaceTrait for LiquidityPool {
             Role::RewardsAdmin,
             Role::OperationsAdmin,
             Role::PauseAdmin,
+            Role::SystemFeeAdmin,
         ] {
             result.set(
                 role.as_symbol(&e),
@@ -1251,52 +1198,14 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         if d1 <= d0 {
             panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
         }
-
-        // We need to recalculate the invariant accounting for fees
-        // to calculate fair user's share
-        let mut d2 = d1.clone();
-        let balances = if token_supply > 0 {
-            let mut result = new_balances.clone();
-            // Only account for fees if we are not the first to deposit
-            for i in 0..n_coins {
-                let new_balance = new_balances.get(i).unwrap();
-                let ideal_balance = d1
-                    .mul(&U256::from_u128(&e, old_balances.get(i).unwrap()))
-                    .div(&d0)
-                    .to_u128()
-                    .unwrap();
-                let difference = if ideal_balance > new_balance {
-                    ideal_balance - new_balance
-                } else {
-                    new_balance - ideal_balance
-                };
-
-                // This formula ensures that the fee is proportionally distributed
-                //  among the different coins in the pool. The denominator (4 * (N_COINS - 1)) is used
-                //  to adjust the fee based on the number of coins. As the number of coins increases,
-                //  the fee for each individual coin decreases.
-                let fee = difference.fixed_mul_ceil(
-                    &e,
-                    &(get_fee(&e) as u128 * n_coins as u128),
-                    &(FEE_DENOMINATOR as u128 * 4 * (n_coins as u128 - 1)),
-                );
-
-                result.set(i, new_balance);
-                new_balances.set(i, new_balances.get(i).unwrap() - fee);
-            }
-            d2 = Self::_get_d(&e, &Self::_xp(&e, &new_balances), amp);
-            result
-        } else {
-            new_balances
-        };
-        put_reserves(&e, &balances);
+        put_reserves(&e, &new_balances);
 
         // Calculate, how much pool tokens to mint
         let mint_amount = if token_supply == 0 {
             d1.to_u128().unwrap() // Take the dust if there was any
         } else {
             U256::from_u128(&e, token_supply)
-                .mul(&d2.sub(&d0))
+                .mul(&d1.sub(&d0))
                 .div(&d0)
                 .to_u128()
                 .unwrap()

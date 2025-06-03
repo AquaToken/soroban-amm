@@ -108,6 +108,7 @@ pub trait AdminInterfaceTrait {
         operations_admin: Address,
         pause_admin: Address,
         emergency_pause_admins: Vec<Address>,
+        system_fee_admin: Address,
     );
 
     // Get map of privileged roles

@@ -485,10 +485,11 @@ fn test_set_privileged_addresses() {
         assert_eq!(
             pool.try_set_privileged_addrs(
                 &addr,
-                &setup.rewards_admin.clone(),
-                &setup.operations_admin.clone(),
-                &setup.pause_admin.clone(),
+                &setup.rewards_admin,
+                &setup.operations_admin,
+                &setup.pause_admin,
                 &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+                &setup.system_fee_admin,
             )
             .is_ok(),
             is_ok

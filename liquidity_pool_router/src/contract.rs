@@ -497,6 +497,7 @@ impl AdminInterface for LiquidityPoolRouter {
     // * `operations_admin` - The address of the operations admin.
     // * `pause_admin` - The address of the pause admin.
     // * `emergency_pause_admin` - The addresses of the emergency pause admins.
+    // * `system_fee_admin` - The address of the system fee admin.
     fn set_privileged_addrs(
         e: Env,
         admin: Address,
@@ -504,6 +505,7 @@ impl AdminInterface for LiquidityPoolRouter {
         operations_admin: Address,
         pause_admin: Address,
         emergency_pause_admins: Vec<Address>,
+        system_fee_admin: Address,
     ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
@@ -513,6 +515,7 @@ impl AdminInterface for LiquidityPoolRouter {
         access_control.set_role_address(&Role::OperationsAdmin, &operations_admin);
         access_control.set_role_address(&Role::PauseAdmin, &pause_admin);
         access_control.set_role_addresses(&Role::EmergencyPauseAdmin, &emergency_pause_admins);
+        access_control.set_role_address(&Role::SystemFeeAdmin, &system_fee_admin);
         AccessControlEvents::new(&e).set_privileged_addrs(
             rewards_admin,
             operations_admin,
@@ -535,6 +538,7 @@ impl AdminInterface for LiquidityPoolRouter {
             Role::RewardsAdmin,
             Role::OperationsAdmin,
             Role::PauseAdmin,
+            Role::SystemFeeAdmin,
         ] {
             result.set(
                 role.as_symbol(&e),

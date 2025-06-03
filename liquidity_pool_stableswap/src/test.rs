@@ -4521,11 +4521,12 @@ fn test_set_privileged_addresses_event() {
     let pool = setup.liq_pool;
 
     pool.set_privileged_addrs(
-        &setup.admin.clone(),
-        &setup.rewards_admin.clone(),
-        &setup.operations_admin.clone(),
-        &setup.pause_admin.clone(),
+        &setup.admin,
+        &setup.rewards_admin,
+        &setup.operations_admin,
+        &setup.pause_admin,
         &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+        &setup.system_fee_admin,
     );
 
     assert_eq!(
@@ -4924,5 +4925,47 @@ fn test_claim_event() {
                 (total_reward_1 as i128,).into_val(&setup.env),
             ),
         ]
+    );
+}
+
+#[test]
+fn test_deposit_and_withdraw_fee() {
+    let setup = Setup::default();
+    let token_1_admin_client =
+        SorobanTokenAdminClient::new(&setup.env, &setup.token1.address.clone());
+    let token_2_admin_client =
+        SorobanTokenAdminClient::new(&setup.env, &setup.token2.address.clone());
+
+    let user1 = Address::generate(&setup.env);
+    token_1_admin_client.mint(&user1, &1000);
+    token_2_admin_client.mint(&user1, &1000);
+
+    let user2 = Address::generate(&setup.env);
+    token_1_admin_client.mint(&user2, &1000);
+    token_2_admin_client.mint(&user2, &1000);
+
+    // initialize pool reserves to avoid edge cases with first deposit/withdraw
+    setup.liq_pool.deposit(&user1, &Vec::from_array(&setup.env, [1000, 1000]), &0);
+
+    setup.liq_pool.deposit(&user2, &Vec::from_array(&setup.env, [1000, 1000]), &0);
+    assert_eq!(setup.token1.balance(&setup.liq_pool.address), 2000);
+    assert_eq!(setup.token2.balance(&setup.liq_pool.address), 2000);
+    assert_eq!(
+        setup.liq_pool.get_reserves(),
+        Vec::from_array(&setup.env, [2000, 2000])
+    );
+
+    setup.liq_pool.withdraw(
+        &user2,
+        &1000,
+        &Vec::from_array(&setup.env, [0, 0]),
+    );
+    assert_eq!(setup.token1.balance(&user2), 1000);
+    assert_eq!(setup.token2.balance(&user2), 1000);
+    assert_eq!(setup.token1.balance(&setup.liq_pool.address), 1000);
+    assert_eq!(setup.token2.balance(&setup.liq_pool.address), 1000);
+    assert_eq!(
+        setup.liq_pool.get_reserves(),
+        Vec::from_array(&setup.env, [1000, 1000])
     );
 }
