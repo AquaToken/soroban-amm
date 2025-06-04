@@ -1345,6 +1345,7 @@ fn test_rewards_distribution_as_operator() {
         &admin,
         &admin,
         &Vec::from_array(&e, [admin.clone()]),
+        &setup.system_fee_admin,
     );
     assert!(router
         .try_distribute_outstanding_reward(&user1, &router.address, &tokens, &standard_pool_hash)
@@ -1509,6 +1510,7 @@ fn test_rewards_distribution_override() {
         &admin,
         &admin,
         &Vec::from_array(&e, [admin.clone()]),
+        &setup.system_fee_admin,
     );
     assert_eq!(
         router.distribute_outstanding_reward(
@@ -2720,6 +2722,10 @@ fn test_privileged_users() {
                 Symbol::new(&e, "EmergencyPauseAdmin"),
                 Vec::from_array(&e, [setup.emergency_pause_admin]),
             ),
+            (
+                Symbol::new(&e, "SystemFeeAdmin"),
+                Vec::from_array(&e, [setup.system_fee_admin]),
+            ),
         ],
     );
     assert_eq!(privileged_addrs, router.get_privileged_addrs());
@@ -2745,6 +2751,7 @@ fn test_set_privileged_addresses_event() {
         &setup.operations_admin.clone(),
         &setup.pause_admin.clone(),
         &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+        &setup.system_fee_admin,
     );
 
     assert_eq!(

@@ -50,6 +50,7 @@ pub fn create_liqpool_contract<'a>(
             admin.clone(),
             admin.clone(),
             Vec::from_array(&e, [admin.clone()]),
+            admin.clone(),
         ),
         router,
         token_wasm_hash,

@@ -1,4 +1,4 @@
-use crate::constants::FEE_MULTIPLIER;
+use crate::constants::{ADMIN_FEE_PERCENT, FEE_MULTIPLIER};
 use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
@@ -9,13 +9,7 @@ use crate::pool_interface::{
     UpgradeableContract, UpgradeableLPTokenTrait,
 };
 use crate::rewards::get_rewards_manager;
-use crate::storage::{
-    get_fee_fraction, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_plane,
-    get_reserve_a, get_reserve_b, get_router, get_token_a, get_token_b, get_token_future_wasm,
-    has_plane, put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a, put_token_b,
-    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
-    set_token_future_wasm,
-};
+use crate::storage::{get_admin_fee_a, get_admin_fee_b, get_fee_fraction, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_plane, get_reserve_a, get_reserve_b, get_router, get_token_a, get_token_b, get_token_future_wasm, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a, put_token_b, set_admin_fee_a, set_admin_fee_b, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router, set_token_future_wasm};
 use crate::token::{create_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -72,7 +66,8 @@ impl LiquidityPoolCrunch for LiquidityPool {
     //      rewards admin,
     //      operations admin,
     //      pause admin,
-    //      emergency pause admins
+    //      emergency pause admins,
+    //      system fee admin,
     //  ).
     // * `router` - The address of the router.
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
@@ -87,7 +82,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -136,6 +131,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     //      operations admin,
     //      pause admin,
     //      emergency pause admins
+    //      system fee admin,
     //  ).
     // * `router` - The address of the router.
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
@@ -144,7 +140,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn initialize(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -160,6 +156,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         access_control.set_role_address(&Role::OperationsAdmin, &privileged_addrs.2);
         access_control.set_role_address(&Role::PauseAdmin, &privileged_addrs.3);
         access_control.set_role_addresses(&Role::EmergencyPauseAdmin, &privileged_addrs.4);
+        access_control.set_role_address(&Role::SystemFeeAdmin, &privileged_addrs.5);
 
         set_router(&e, &router);
 
@@ -397,7 +394,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let (out, fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
+        let (out, total_fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
+        let admin_fee = total_fee * ADMIN_FEE_PERCENT / 100;
+        let lp_fee = total_fee - admin_fee;
 
         if out < out_min {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
@@ -418,8 +417,11 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
-        let residue_numerator = FEE_MULTIPLIER - (get_fee_fraction(&e) as u128);
-        let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
+        let base_fee_fraction    = get_fee_fraction(&e) as u128;                    // e.g. 30 = 0.3%
+        let admin_fee_frac       = base_fee_fraction * ADMIN_FEE_PERCENT / 100;     // e.g. 30 * 50 / 100 = 0.15% admin fee
+        let pool_fee_frac        = base_fee_fraction - admin_fee_frac;              // e.g. 15 = 0.15% stays in pool
+        let residue_numerator    = FEE_MULTIPLIER - pool_fee_frac;                  // e.g. 10000 - 15  = 9985
+        let residue_denominator  = U256::from_u128(&e, FEE_MULTIPLIER);
 
         let new_invariant_factor = |reserve: u128, old_reserve: u128, out: u128| {
             if reserve - old_reserve > out {
@@ -448,12 +450,22 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
         }
 
+        // 1) send user-out
         if out_idx == 0 {
             transfer_a(&e, &user, out_a);
-            put_reserve_a(&e, reserve_a - out);
+            put_reserve_a(&e, new_reserve_a - out_a);            // only user_out leaves A
         } else {
             transfer_b(&e, &user, out_b);
-            put_reserve_b(&e, reserve_b - out);
+            put_reserve_b(&e, new_reserve_b - out_b);            // only user_out leaves B
+        }
+
+        // 2) remove admin_fee from **input-token** side
+        if in_idx == 0 {
+            put_reserve_a(&e, get_reserve_a(&e) - admin_fee);
+            set_admin_fee_a(&e, &(get_admin_fee_a(&e) + admin_fee));
+        } else {
+            put_reserve_b(&e, get_reserve_b(&e) - admin_fee);
+            set_admin_fee_b(&e, &(get_admin_fee_b(&e) + admin_fee));
         }
 
         // update plane data for every pool update
@@ -465,7 +477,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             tokens.get(out_idx).unwrap(),
             in_amount,
             out,
-            fee,
+            lp_fee,
         );
 
         out
@@ -559,7 +571,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let (in_amount, fee) =
+        let (in_amount, total_fee) =
             get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy);
 
         if in_amount > in_max {
@@ -588,8 +600,11 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
-        let residue_numerator = FEE_MULTIPLIER - (get_fee_fraction(&e) as u128);
-        let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
+        let base_fee_fraction    = get_fee_fraction(&e) as u128;                    // e.g. 30 = 0.3%
+        let admin_fee_frac       = base_fee_fraction * ADMIN_FEE_PERCENT / 100;     // e.g. 30 * 50 / 100 = 0.15% admin fee
+        let pool_fee_frac        = base_fee_fraction - admin_fee_frac;              // e.g. 15 = 0.15% stays in pool
+        let residue_numerator    = FEE_MULTIPLIER - pool_fee_frac;                  // e.g. 10000 - 15  = 9985
+        let residue_denominator  = U256::from_u128(&e, FEE_MULTIPLIER);
 
         let new_invariant_factor = |reserve: u128, old_reserve: u128, out: u128| {
             if reserve - old_reserve > out {
@@ -622,12 +637,24 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
         }
 
+        // give trader the exact out_amount
         if out_idx == 0 {
-            transfer_a(&e, &user, out_a);
-            put_reserve_a(&e, reserve_a - out_amount);
+            transfer_a(&e, &user, out_amount);
+            put_reserve_a(&e, new_reserve_a - out_amount);
         } else {
-            transfer_b(&e, &user, out_b);
-            put_reserve_b(&e, reserve_b - out_amount);
+            transfer_b(&e, &user, out_amount);
+            put_reserve_b(&e, new_reserve_b - out_amount);
+        }
+
+        // collect admin_fee on input side
+        let admin_fee = total_fee * ADMIN_FEE_PERCENT / 100;
+        let lp_fee = total_fee - admin_fee;
+        if in_idx == 0 {
+            put_reserve_a(&e, get_reserve_a(&e) - admin_fee);
+            set_admin_fee_a(&e, &(get_admin_fee_a(&e) + admin_fee));
+        } else {
+            put_reserve_b(&e, get_reserve_b(&e) - admin_fee);
+            set_admin_fee_b(&e, &(get_admin_fee_b(&e) + admin_fee));
         }
 
         // update plane data for every pool update
@@ -639,7 +666,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             tokens.get(out_idx).unwrap(),
             in_amount,
             out_amount,
-            fee,
+            lp_fee,
         );
 
         in_amount
@@ -940,6 +967,43 @@ impl AdminInterfaceTrait for LiquidityPool {
     // Get claim killswitch status.
     fn get_is_killed_claim(e: Env) -> bool {
         get_is_killed_claim(&e)
+    }
+
+    // Claims the protocol fees accumulated in the pool.
+    fn claim_fees(e: Env, admin: Address) -> Vec<u128> {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::SystemFeeAdmin);
+
+        let token_a = get_token_a(&e);
+        let token_b = get_token_b(&e);
+
+        let fee_a = get_admin_fee_a(&e);
+        let fee_b = get_admin_fee_b(&e);
+
+        if fee_a == 0 && fee_b == 0 {
+            return Vec::from_array(&e, [0, 0]);
+        }
+
+        if fee_a > 0 {
+            SorobanTokenClient::new(&e, &token_a).transfer(
+                &e.current_contract_address(),
+                &admin,
+                &(fee_a as i128),
+            );
+            set_admin_fee_a(&e, &0);
+            PoolEvents::new(&e).claim_protocol_fee(token_a, fee_a);
+        }
+        if fee_b > 0 {
+            SorobanTokenClient::new(&e, &token_b).transfer(
+                &e.current_contract_address(),
+                &admin,
+                &(fee_b as i128),
+            );
+            set_admin_fee_b(&e, &0);
+            PoolEvents::new(&e).claim_protocol_fee(token_b, fee_b);
+        }
+
+        Vec::from_array(&e, [fee_a, fee_b])
     }
 }
 

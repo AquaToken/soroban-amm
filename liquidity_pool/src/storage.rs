@@ -22,6 +22,8 @@ enum DataKey {
     IsKilledClaim,
 
     TokenFutureWASM,
+    AdminFeeA,
+    AdminFeeB,
 }
 
 generate_instance_storage_getter_and_setter_with_default!(
@@ -41,6 +43,18 @@ generate_instance_storage_getter_and_setter_with_default!(
     DataKey::IsKilledClaim,
     bool,
     false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    admin_fee_a,
+    DataKey::AdminFeeA,
+    u128,
+    0
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    admin_fee_b,
+    DataKey::AdminFeeB,
+    u128,
+    0
 );
 
 pub fn get_token_a(e: &Env) -> Address {

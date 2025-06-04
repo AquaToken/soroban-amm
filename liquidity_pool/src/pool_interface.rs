@@ -5,7 +5,7 @@ pub trait LiquidityPoolCrunch {
     fn initialize_all(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -23,7 +23,7 @@ pub trait LiquidityPoolTrait {
     fn initialize(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -128,6 +128,9 @@ pub trait AdminInterfaceTrait {
     fn get_is_killed_deposit(e: Env) -> bool;
     fn get_is_killed_swap(e: Env) -> bool;
     fn get_is_killed_claim(e: Env) -> bool;
+
+    // Claim protocol fees.
+    fn claim_fees(e: Env, admin: Address) -> Vec<u128>;
 }
 
 pub trait UpgradeableContract {

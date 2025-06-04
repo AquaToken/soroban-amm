@@ -337,6 +337,7 @@ fn test_set_privileged_addresses() {
                     &setup.operations_admin.clone(),
                     &setup.pause_admin.clone(),
                     &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+                    &setup.system_fee_admin,
                 )
                 .is_ok(),
             is_ok

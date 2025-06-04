@@ -139,7 +139,7 @@ fn test() {
     assert_eq!(token2.balance(&liq_pool.address), amount_to_deposit as i128);
 
     let swap_in_amount = 1_0000000_u128;
-    let expected_swap_result = 9871287_u128;
+    let expected_swap_result = 9871580_u128;
 
     assert_eq!(
         liq_pool.estimate_swap(&0, &1, &swap_in_amount),
@@ -178,13 +178,22 @@ fn test() {
         )
     );
 
+    // claim fees
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        amount_to_deposit as i128 + swap_in_amount as i128
+    );
+    let admin_fee = liq_pool.claim_fees(&setup.system_fee_admin).get(0).unwrap();
+    assert!(admin_fee > 0);
+    let swap_in_amount_minus_admin_fee = swap_in_amount - admin_fee;
+
     assert_eq!(
         token1.balance(&user1),
         i128::MAX - amount_to_deposit as i128 - swap_in_amount as i128
     );
     assert_eq!(
         token1.balance(&liq_pool.address),
-        amount_to_deposit as i128 + swap_in_amount as i128
+        amount_to_deposit as i128 + swap_in_amount_minus_admin_fee as i128
     );
     assert_eq!(
         token2.balance(&user1),
@@ -196,7 +205,7 @@ fn test() {
     );
 
     let withdraw_amounts = [
-        amount_to_deposit + swap_in_amount,
+        amount_to_deposit + swap_in_amount_minus_admin_fee,
         amount_to_deposit - expected_swap_result,
     ];
     liq_pool.withdraw(
@@ -243,7 +252,7 @@ fn test() {
         total_reward_1 + total_reward_2 + total_reward_3
     );
 
-    assert_eq!(token1.balance(&user1), i128::MAX);
+    assert_eq!(token1.balance(&user1), i128::MAX - admin_fee as i128);
     assert_eq!(token2.balance(&user1), i128::MAX);
     assert_eq!(token_share.balance(&user1), 0);
     assert_eq!(token1.balance(&liq_pool.address), 0);
@@ -261,7 +270,7 @@ fn test_strict_receive() {
     let desired_amounts = Vec::from_array(&setup.env, [100_0000000, 100_0000000]);
     setup.liq_pool.deposit(&user1, &desired_amounts, &0);
     let swap_in_amount = 1_0000000_u128;
-    let expected_swap_result = 9871287_u128;
+    let expected_swap_result = 9871580_u128;
 
     assert_eq!(
         setup.liq_pool.estimate_swap(&0, &1, &swap_in_amount),
@@ -299,26 +308,27 @@ fn test_strict_receive_over_max() {
         .liq_pool
         .try_swap_strict_receive(&user1, &0, &1, &100_0000000, &100_0000000)
         .is_err());
+    // technically we can buy 100_0000000 - 1, but we can't pay for it
     assert!(setup
         .liq_pool
-        .try_estimate_swap_strict_receive(&0, &1, &99_7000000)
-        .is_err());
+        .try_estimate_swap_strict_receive(&0, &1, &99_9999999)
+        .is_ok());
     assert!(setup
         .liq_pool
-        .try_swap_strict_receive(&user1, &0, &1, &99_7000000, &100_0000000)
+        .try_swap_strict_receive(&user1, &0, &1, &99_9999999, &100_0000000)
         .is_err());
-    // maximum we're able to buy is `reserve * (1 - fee) - delta`
+    // maximum we're able to buy is `reserve - 1`
     assert_eq!(
         setup
             .liq_pool
-            .estimate_swap_strict_receive(&0, &1, &99_6999999),
-        99999999900_0000001,
+            .estimate_swap_strict_receive(&0, &1, &99_9999999),
+        100300902607_8234705,
     );
     assert_eq!(
         setup
             .liq_pool
-            .swap_strict_receive(&user1, &0, &1, &99_6999999, &99999999900_0000001),
-        99999999900_0000001
+            .swap_strict_receive(&user1, &0, &1, &99_9999999, &100300902607_8234705),
+        100300902607_8234705
     );
 }
 
@@ -461,6 +471,7 @@ fn initialize_already_initialized() {
             users[0].clone(),
             users[0].clone(),
             Vec::from_array(&setup.env, [users[0].clone()]),
+            users[0].clone(),
         ),
         &users[0],
         &install_token_wasm(&setup.env),
@@ -486,6 +497,7 @@ fn initialize_already_initialized_plane() {
             users[0].clone(),
             users[0].clone(),
             Vec::new(&setup.env),
+            users[0].clone(),
         ),
         &users[0],
         &install_token_wasm(&setup.env),
@@ -511,12 +523,12 @@ fn test_custom_fee() {
     // we're checking fraction against output for 1 token
     for fee_config in [
         (0, 9900990_u128),    // 0%
-        (10, 9891089_u128),   // 0.1%
-        (30, 9871287_u128),   // 0.3%
-        (100, 9801980_u128),  // 1%
-        (1000, 8910891_u128), // 10%
-        (3000, 6930693_u128), // 30%
-        (5000, 4950495_u128), // 50%
+        (10, 9891187_u128),   // 0.1%
+        (30, 9871580_u128),   // 0.3%
+        (100, 9802950_u128),  // 1%
+        (1000, 8919722_u128), // 10%
+        (3000, 6951340_u128), // 30%
+        (5000, 4975124_u128), // 50%
     ] {
         let liqpool = create_liqpool_contract(
             &setup.env,
@@ -1257,13 +1269,22 @@ fn test_large_numbers() {
         estimate_swap_result
     );
 
+    // claim fees
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        amount_to_deposit as i128 + swap_in as i128
+    );
+    let admin_fee = liq_pool.claim_fees(&setup.system_fee_admin).get(0).unwrap();
+    assert!(admin_fee > 0);
+    let swap_in_amount_minus_admin_fee = swap_in - admin_fee;
+
     assert_eq!(
         token1.balance(&user1),
         i128::MAX - amount_to_deposit as i128 - swap_in as i128
     );
     assert_eq!(
         token1.balance(&liq_pool.address),
-        amount_to_deposit as i128 + swap_in as i128
+        amount_to_deposit as i128 + swap_in_amount_minus_admin_fee as i128
     );
     assert_eq!(
         token2.balance(&user1),
@@ -1275,7 +1296,7 @@ fn test_large_numbers() {
     );
 
     let withdraw_amounts = [
-        amount_to_deposit + swap_in,
+        amount_to_deposit + swap_in_amount_minus_admin_fee,
         amount_to_deposit - estimate_swap_result,
     ];
     liq_pool.withdraw(
@@ -1284,7 +1305,7 @@ fn test_large_numbers() {
         &Vec::from_array(&e, withdraw_amounts),
     );
 
-    assert_eq!(token1.balance(&user1), i128::MAX);
+    assert_eq!(token1.balance(&user1), i128::MAX - admin_fee as i128);
     assert_eq!(token2.balance(&user1), i128::MAX);
     assert_eq!(token_share.balance(&user1), 0);
     assert_eq!(token1.balance(&liq_pool.address), 0);
@@ -1743,6 +1764,9 @@ fn test_swap_rewards() {
     let swap_result2 = liq_pool2.swap(&user2, &1, &0, &10_0000000, &estimate1_after_rewards);
     assert_eq!(swap_result1, estimate1_after_rewards);
     assert_eq!(swap_result2, estimate1_after_rewards);
+
+    // claim admin fee to avoid issues with reserves
+    assert_eq!(liq_pool1.claim_fees(&admin), Vec::from_array(&e, [150000, 0]));
 
     let reserves1 = liq_pool1.get_reserves();
 

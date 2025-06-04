@@ -154,6 +154,9 @@ fn init_standard_pool(
     let pause_admin = access_control
         .get_role_safe(&Role::PauseAdmin)
         .unwrap_or(admin.clone());
+    let system_fee_admin = access_control
+        .get_role_safe(&Role::SystemFeeAdmin)
+        .unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
@@ -171,6 +174,7 @@ fn init_standard_pool(
                     operations_admin,
                     pause_admin,
                     emergency_pause_admins,
+                    system_fee_admin,
                 )
                     .into_val(e),
                 e.current_contract_address().to_val(),
@@ -217,6 +221,9 @@ fn init_stableswap_pool(
     let pause_admin = access_control
         .get_role_safe(&Role::PauseAdmin)
         .unwrap_or(admin.clone());
+    let system_fee_admin = access_control
+        .get_role_safe(&Role::SystemFeeAdmin)
+        .unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
@@ -234,6 +241,7 @@ fn init_stableswap_pool(
                     operations_admin,
                     pause_admin,
                     emergency_pause_admins,
+                    system_fee_admin,
                 )
                     .into_val(e),
                 e.current_contract_address().to_val(),

@@ -961,7 +961,7 @@ impl ManagedLiquidityPool for LiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
@@ -1011,7 +1011,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     //      rewards admin,
     //      operations admin,
     //      pause admin,
-    //      emergency pause admins
+    //      emergency pause admins,
+    //      system fee admin,
     //  ).
     // * `router` - The address of the router.
     // * `token_wasm_hash` - The hash of the token's WASM code.
@@ -1021,7 +1022,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     fn initialize(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
         token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
@@ -1039,6 +1040,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         access_control.set_role_address(&Role::OperationsAdmin, &privileged_addrs.2);
         access_control.set_role_address(&Role::PauseAdmin, &privileged_addrs.3);
         access_control.set_role_addresses(&Role::EmergencyPauseAdmin, &privileged_addrs.4);
+        access_control.set_role_address(&Role::SystemFeeAdmin, &privileged_addrs.5);
 
         set_router(&e, &router);
 

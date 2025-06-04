@@ -47,6 +47,8 @@ pub trait LiquidityPoolEvents {
     fn kill_claim(&self);
 
     fn unkill_claim(&self);
+
+    fn claim_protocol_fee(&self, token: Address, amount: u128);
 }
 
 // This trait is used to emit events related to liquidity pool operations.
@@ -171,5 +173,23 @@ impl LiquidityPoolEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "unkill_claim"),), ())
+    }
+
+    fn claim_protocol_fee(&self, token: Address, amount: u128) {
+        // topics
+        // [
+        //   "claim_protocol_fee": Symbol,  // event identifier
+        //   asset: Address,                // contract address identifying asset claimed
+        // ]
+        //
+        // body
+        // [
+        //   amount: i128                   // amount of tokens claimed
+        // ]
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "claim_protocol_fee"), token),
+            (amount as i128,),
+        );
     }
 }
