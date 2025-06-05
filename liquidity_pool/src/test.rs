@@ -501,7 +501,7 @@ fn initialize_already_initialized() {
         &users[0],
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
-        &10_u32,
+        &(10_u32, 5000_u32),
     );
 }
 
@@ -527,7 +527,7 @@ fn initialize_already_initialized_plane() {
         &users[0],
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
-        &10_u32,
+        &(10_u32, 5000_u32),
         &(
             setup.token_reward.address,
             setup.reward_boost_token.address,

@@ -20,8 +20,8 @@ use crate::storage::{
     remove_pool, set_constant_product_pool_hash, set_init_pool_payment_address,
     set_init_pool_payment_token, set_init_stable_pool_payment_amount,
     set_init_standard_pool_payment_amount, set_liquidity_calculator, set_pool_plane,
-    set_reward_tokens, set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash,
-    set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
+    set_protocol_fee_fraction, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
+    set_stableswap_pool_hash, set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -657,6 +657,14 @@ impl AdminInterface for LiquidityPoolRouter {
         let rewards_storage = get_rewards_manager(&e).storage();
         rewards_storage.put_reward_boost_token(reward_boost_token);
         rewards_storage.put_reward_boost_feed(reward_boost_feed);
+    }
+
+    // Sets the protocol fraction of total fee for the pool.
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+        set_protocol_fee_fraction(&e, &new_fraction);
+        Events::new(&e).set_protocol_fee_fraction(new_fraction);
     }
 }
 

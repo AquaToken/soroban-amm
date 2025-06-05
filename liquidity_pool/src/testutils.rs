@@ -268,7 +268,10 @@ pub fn create_liqpool_contract<'a>(
         router,
         token_wasm_hash,
         tokens,
-        &fee_fraction,
+        &(
+            fee_fraction,
+            5000, // 50% protocol fee fraction
+        ),
         &(
             reward_token.clone(),
             reward_boost_token.clone(),

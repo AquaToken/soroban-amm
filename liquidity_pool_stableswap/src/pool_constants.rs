@@ -4,5 +4,3 @@ pub const MAX_A_CHANGE: u128 = 10; // maximum multiplier allowed for a change in
 
 pub const MIN_RAMP_TIME: u64 = 86400; // minimum time for ramping. ensures that changes occur
                                       //    over a minimum duration to prevent abrupt shifts.
-
-pub(crate) const PROTOCOL_FEE_PERCENT: u128 = 50; // 50% of the fee goes to the protocol

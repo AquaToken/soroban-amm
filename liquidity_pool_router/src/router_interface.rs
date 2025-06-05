@@ -53,4 +53,7 @@ pub trait AdminInterface {
         reward_boost_token: Address,
         reward_boost_feed: Address,
     );
+
+    // Sets the protocol fraction of total fee for the pool.
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
 }

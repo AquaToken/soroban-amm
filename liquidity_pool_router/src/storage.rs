@@ -61,6 +61,7 @@ enum DataKey {
     PoolCounter,
     PoolPlane,
     LiquidityCalculator,
+    ProtocolFeeFraction,
 
     // Temporary storage
     RewardsConfig,                          // Global reward config
@@ -130,6 +131,12 @@ generate_instance_storage_getter_and_setter!(
     liquidity_calculator,
     DataKey::LiquidityCalculator,
     Address
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    protocol_fee_fraction,
+    DataKey::ProtocolFeeFraction,
+    u32,
+    5000 // by default, 50% of the collected fee goes to the protocol
 );
 
 pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {

@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::pool_constants::{MIN_RAMP_TIME, PROTOCOL_FEE_PERCENT};
+use crate::pool_constants::{FEE_DENOMINATOR, MIN_RAMP_TIME};
 use core::cmp::min;
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Address as _, Events};
@@ -202,9 +202,10 @@ fn test_strict_receive() {
 
     // that's what we expect from test_happy_flow
     let swap_amount_in = 10_0000000;
-    let swap_amount_in_protocol_fee =
-        swap_amount_in * setup.liq_pool.get_fee_fraction() as u128 / 10000 * PROTOCOL_FEE_PERCENT
-            / 100;
+    let swap_amount_in_protocol_fee = swap_amount_in * setup.liq_pool.get_fee_fraction() as u128
+        / FEE_DENOMINATOR as u128
+        * setup.liq_pool.get_protocol_fee_fraction() as u128
+        / FEE_DENOMINATOR as u128;
     let swap_amount_out = 7_9637266;
     assert_eq!(
         setup.liq_pool.estimate_swap(&0, &1, &swap_amount_in),

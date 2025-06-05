@@ -56,7 +56,9 @@ pub fn create_liqpool_contract<'a>(
         token_wasm_hash,
         coins,
         &a,
-        &fee,
+        &(
+            fee, 5000, // 50% protocol fee fraction
+        ),
         &(
             reward_token.clone(),
             reward_boost_token.clone(),

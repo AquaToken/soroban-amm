@@ -1,6 +1,4 @@
-use crate::pool_constants::{
-    FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MIN_RAMP_TIME, PROTOCOL_FEE_PERCENT,
-};
+use crate::pool_constants::{FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MIN_RAMP_TIME};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait, ManagedLiquidityPool,
     RewardsTrait, UpgradeableContract, UpgradeableLPTokenTrait,
@@ -8,12 +6,12 @@ use crate::pool_interface::{
 use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
     get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_protocol_fees,
-    get_reserves, get_router, get_token_future_wasm, get_tokens, has_plane,
+    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_protocol_fee_fraction,
+    get_protocol_fees, get_reserves, get_router, get_token_future_wasm, get_tokens, has_plane,
     put_admin_actions_deadline, put_decimals, put_fee, put_future_a, put_future_a_time,
     put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees, put_reserves, put_tokens,
-    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
-    set_token_future_wasm,
+    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane,
+    set_protocol_fee_fraction, set_router, set_token_future_wasm,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -40,6 +38,7 @@ use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{
     require_operations_admin_or_owner, require_pause_admin_or_owner,
     require_pause_or_emergency_pause_admin_or_owner, require_rewards_admin_or_owner,
+    require_system_fee_admin_or_owner,
 };
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -938,6 +937,15 @@ impl AdminInterfaceTrait for LiquidityPool {
         get_is_killed_claim(&e)
     }
 
+    // Sets the protocol fraction of total fee for the pool.
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+        set_protocol_fee_fraction(&e, &new_fraction);
+        PoolEvents::new(&e).set_protocol_fee_fraction(new_fraction);
+    }
+
+    // Returns the protocol fees accumulated in the pool.
     fn get_protocol_fees(e: Env) -> Vec<u128> {
         get_protocol_fees(&e)
     }
@@ -945,7 +953,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     // Claims the protocol fees accumulated in the pool.
     fn claim_protocol_fees(e: Env, admin: Address) -> Vec<u128> {
         admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::SystemFeeAdmin);
+        require_system_fee_admin_or_owner(&e, &admin);
 
         let tokens = get_tokens(&e);
         let collected_fees = get_protocol_fees(&e);
@@ -990,7 +998,10 @@ impl ManagedLiquidityPool for LiquidityPool {
     // * `token_wasm_hash` - The hash of the token's WASM code.
     // * `coins` - The addresses of the coins.
     // * `amp` - The amplification coefficient. Amp = A*N**(N-1)
-    // * `fee` - The fee to be applied.
+    // * `fees_config` - (
+    //      `fee_fraction` - The fee fraction for the pool.
+    //      `protocol_fee_fraction` - The protocol fee fraction for the pool.
+    //  )
     // * `reward_config` - (
     // *    `reward_token` - The address of the reward token.
     // *    `reward_boost_token` - The address of the reward boost token.
@@ -1005,7 +1016,7 @@ impl ManagedLiquidityPool for LiquidityPool {
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
         amp: u128,
-        fee: u32,
+        fees_config: (u32, u32),
         reward_config: (Address, Address, Address),
         plane: Address,
     ) {
@@ -1022,7 +1033,7 @@ impl ManagedLiquidityPool for LiquidityPool {
             token_wasm_hash,
             coins,
             amp,
-            fee,
+            fees_config,
         );
         Self::initialize_boost_config(e.clone(), reward_boost_token, reward_boost_feed);
         Self::initialize_rewards_config(e.clone(), reward_token);
@@ -1057,7 +1068,10 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // * `token_wasm_hash` - The hash of the token's WASM code.
     // * `tokens` - The addresses of the coins.
     // * `amp` - The amplification coefficient. Amp = A*N**(N-1)
-    // * `fee` - The fee to be applied.
+    // * `fees_config` - (
+    //      `fee_fraction` - The fee fraction for the pool.
+    //      `protocol_fee_fraction` - The protocol fee fraction for the pool.
+    //  )
     fn initialize(
         e: Env,
         admin: Address,
@@ -1066,8 +1080,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         amp: u128,
-        fee: u32,
+        fees_config: (u32, u32),
     ) {
+        let (fee_fraction, protocol_fee_fraction) = fees_config;
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
@@ -1084,11 +1099,15 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         set_router(&e, &router);
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
-        if fee > FEE_DENOMINATOR - 1 {
+        if fee_fraction > FEE_DENOMINATOR - 1 {
+            panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
+        }
+        if protocol_fee_fraction > FEE_DENOMINATOR - 1 {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
 
-        put_fee(&e, &fee);
+        put_fee(&e, &fee_fraction);
+        set_protocol_fee_fraction(&e, &protocol_fee_fraction);
 
         put_tokens(&e, &tokens);
         put_decimals(&e, &read_decimals(&e, &tokens));
@@ -1126,6 +1145,15 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     // The pool's fee fraction as a u32.
     fn get_fee_fraction(e: Env) -> u32 {
         get_fee(&e)
+    }
+
+    // Returns part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
+    //
+    // # Returns
+    //
+    // The pool's protocol fee fraction as a u32.
+    fn get_protocol_fee_fraction(e: Env) -> u32 {
+        get_protocol_fee_fraction(&e)
     }
 
     // Returns the pool's share token address.
@@ -1326,7 +1354,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let dy = xp.get(out_idx).unwrap() - y - 1; // -1 just in case there were some rounding errors
         let dy_fee_total =
             dy.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
-        let dy_protocol_fee = dy_fee_total * PROTOCOL_FEE_PERCENT / 100;
+        let dy_protocol_fee =
+            dy_fee_total * get_protocol_fee_fraction(&e) as u128 / FEE_DENOMINATOR as u128;
 
         // Convert all to real units
         let out_precision_mul = precision_mul.get(out_idx).unwrap();
@@ -1470,7 +1499,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // Calculate fees
         let dx_wo_fee = dx * (FEE_DENOMINATOR - get_fee(&e)) as u128 / FEE_DENOMINATOR as u128;
         let dx_total_fee = dx - dx_wo_fee;
-        let dx_lp_fee = dx_total_fee * (100 - PROTOCOL_FEE_PERCENT) / 100;
+        let dx_lp_fee = dx_total_fee * (FEE_DENOMINATOR - get_protocol_fee_fraction(&e)) as u128
+            / FEE_DENOMINATOR as u128;
         let dx_protocol_fee = dx_total_fee - dx_lp_fee;
 
         // Update reserves

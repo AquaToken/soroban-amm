@@ -34,6 +34,8 @@ enum DataKey {
     // Tokens precision
     Precision, // target precision for internal calculations. It's the maximum precision of all tokens.
     PrecisionMul, // Scales raw token amounts to match `Precision`, accounting for decimal differences.
+
+    ProtocolFeeFraction, // part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
     ProtocolFees,
 }
 
@@ -54,6 +56,12 @@ generate_instance_storage_getter_and_setter_with_default!(
     DataKey::IsKilledClaim,
     bool,
     false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    protocol_fee_fraction,
+    DataKey::ProtocolFeeFraction,
+    u32,
+    5000 // by default, 50% of the collected fee goes to the protocol
 );
 
 pub fn get_tokens(e: &Env) -> Vec<Address> {

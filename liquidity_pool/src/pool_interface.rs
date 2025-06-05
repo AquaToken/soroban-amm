@@ -9,7 +9,7 @@ pub trait LiquidityPoolCrunch {
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
-        fee_fraction: u32,
+        fees_config: (u32, u32),
         reward_config: (Address, Address, Address),
         plane: Address,
     );
@@ -27,7 +27,7 @@ pub trait LiquidityPoolTrait {
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
-        fee_fraction: u32,
+        fees_config: (u32, u32),
     );
 
     // Returns the token contract address for the pool share token
@@ -95,6 +95,9 @@ pub trait LiquidityPoolTrait {
     // Fee fraction getter. 1 = 0.01%
     fn get_fee_fraction(e: Env) -> u32;
 
+    // Returns part of the fee that goes to the protocol
+    fn get_protocol_fee_fraction(e: Env) -> u32;
+
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> Map<Symbol, Val>;
 }
@@ -129,9 +132,13 @@ pub trait AdminInterfaceTrait {
     fn get_is_killed_swap(e: Env) -> bool;
     fn get_is_killed_claim(e: Env) -> bool;
 
+    // Sets the protocol fraction of total fee for the pool.
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
+
+    // Returns the protocol fees accumulated in the pool.
     fn get_protocol_fees(e: Env) -> Vec<u128>;
 
-    // Claim protocol fees.
+    // Claims the protocol fees accumulated in the pool.
     fn claim_protocol_fees(e: Env, admin: Address) -> Vec<u128>;
 }
 

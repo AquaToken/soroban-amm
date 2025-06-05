@@ -104,6 +104,10 @@ fn test_constant_product_pool() {
         Symbol::from_val(&e, &pool_info.get(Symbol::new(&e, "pool_type")).unwrap()),
         Symbol::new(&e, "constant_product")
     );
+    assert_eq!(
+        testutils::standard_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
+        5000,
+    );
 
     let pools = router.get_pools(&tokens);
 
@@ -343,6 +347,10 @@ fn test_stableswap_pool() {
     assert_eq!(
         testutils::stableswap_pool::Client::new(&e, &pool_address).a(),
         1500,
+    );
+    assert_eq!(
+        testutils::stableswap_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
+        5000,
     );
 
     let pools = router.get_pools(&tokens);
