@@ -36,6 +36,8 @@ pub trait LiquidityPoolEvents {
         fee_amount: u128,
     );
 
+    fn update_reserves(&self, reserves: Vec<u128>);
+
     fn kill_deposit(&self);
 
     fn unkill_deposit(&self);
@@ -137,6 +139,21 @@ impl LiquidityPoolEvents for Events {
             (Symbol::new(e, "trade"), token_in, token_out, user),
             (in_amount as i128, out_amount as i128, fee_amount as i128),
         );
+    }
+
+    fn update_reserves(&self, reserves: Vec<u128>) {
+        // topics
+        // [
+        //   "update_reserves": Symbol, // event identifier
+        // ]
+        //
+        // body
+        // [
+        //   reserves: Vec<u128>         // updated reserves of the pool
+        // ]
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "update_reserves"),), (reserves,));
     }
 
     fn kill_deposit(&self) {

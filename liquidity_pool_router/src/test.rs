@@ -409,7 +409,7 @@ fn test_stableswap_pool() {
     assert_eq!(token2.balance(&pool_address), 4_1079105);
     assert_eq!(
         router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [197_0000000, 4_1079105])
+        Vec::from_array(&e, [197_0000000, 3_9636396])
     );
 
     router.withdraw(
@@ -417,14 +417,14 @@ fn test_stableswap_pool() {
         &tokens,
         &pool_hash,
         &200_0000000_u128,
-        &Vec::from_array(&e, [197_0000000_u128, 4_1079105_u128]),
+        &Vec::from_array(&e, [197_0000000_u128, 3_9636396_u128]),
     );
 
     assert_eq!(token1.balance(&user1), 1000_0000000);
-    assert_eq!(token2.balance(&user1), 1000_0000000);
+    assert_eq!(token2.balance(&user1), 999_8557291); // minus protocol fee
     assert_eq!(token_share.balance(&user1), 0);
     assert_eq!(token1.balance(&pool_address), 0);
-    assert_eq!(token2.balance(&pool_address), 0);
+    assert_eq!(token2.balance(&pool_address), 1442709);
     assert_eq!(token_share.balance(&pool_address), 0);
 }
 
@@ -521,20 +521,20 @@ fn test_stableswap_3_pool() {
             &token3.address,
             &pool_hash,
             &20_0000000_u128,
-            &20_1144225_u128,
+            &20_1230513_u128,
         ),
-        20_1144225
+        20_1230513
     );
 
     assert_eq!(token1.balance(&user1), 803_0000000);
     assert_eq!(token1.balance(&pool_address), 197_0000000);
     assert_eq!(token2.balance(&user1), 97_64908385);
     assert_eq!(token2.balance(&pool_address), 23_5091615);
-    assert_eq!(token3.balance(&user1), 920_1144225);
-    assert_eq!(token3.balance(&pool_address), 79_8855775);
+    assert_eq!(token3.balance(&user1), 920_1230513);
+    assert_eq!(token3.balance(&pool_address), 79_8769487);
     assert_eq!(
         router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [197_0000000, 23_5091615, 79_8855775])
+        Vec::from_array(&e, [197_0000000, 23_3639897, 79_8466733])
     );
 
     router.withdraw(
@@ -542,15 +542,16 @@ fn test_stableswap_3_pool() {
         &tokens,
         &pool_hash,
         &300_0000000_u128,
-        &Vec::from_array(&e, [197_0000000, 23_5091615, 79_8855775]),
+        &Vec::from_array(&e, [197_0000000, 23_3639897, 79_8466733]),
     );
 
     assert_eq!(token1.balance(&user1), 1000_0000000);
-    assert_eq!(token2.balance(&user1), 1000_0000000);
-    assert_eq!(token3.balance(&user1), 1000_0000000);
+    assert_eq!(token2.balance(&user1), 999_8548282);
+    assert_eq!(token3.balance(&user1), 999_9697246);
     assert_eq!(token_share.balance(&user1), 0);
     assert_eq!(token1.balance(&pool_address), 0);
-    assert_eq!(token2.balance(&pool_address), 0);
+    assert_eq!(token2.balance(&pool_address), 1451718);
+    assert_eq!(token3.balance(&pool_address), 302754);
     assert_eq!(token_share.balance(&pool_address), 0);
 }
 

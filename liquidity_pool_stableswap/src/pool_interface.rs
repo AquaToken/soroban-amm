@@ -233,6 +233,9 @@ pub trait AdminInterfaceTrait {
     fn get_is_killed_deposit(e: Env) -> bool;
     fn get_is_killed_swap(e: Env) -> bool;
     fn get_is_killed_claim(e: Env) -> bool;
+
+    fn get_protocol_fees(e: Env) -> Vec<u128>;
+    fn claim_protocol_fees(e: Env, admin: Address) -> Vec<u128>;
 }
 
 pub trait LiquidityPoolTrait:

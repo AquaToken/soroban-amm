@@ -34,25 +34,25 @@ pub fn get_deposit_amounts(
 
 pub fn get_amount_out(
     e: &Env,
-    in_amount: u128,        // dx  – exact tokens the trader wants to sell
-    reserve_sell: u128,     // x
-    reserve_buy: u128,      // y
+    in_amount: u128,    // dx  – exact tokens the trader wants to sell
+    reserve_sell: u128, // x
+    reserve_buy: u128,  // y
 ) -> (u128, u128) {
     if in_amount == 0 {
         return (0, 0);
     }
 
-    let fee_fraction = get_fee_fraction(e) as u128;   // e.g. 30 => 0.3 %
+    let fee_fraction = get_fee_fraction(e) as u128; // e.g. 30 => 0.3 %
     let in_after_fee = in_amount * (FEE_MULTIPLIER - fee_fraction) / FEE_MULTIPLIER;
     let raw_out = in_after_fee.fixed_mul_floor(e, &reserve_buy, &(reserve_sell + in_after_fee));
-    (raw_out, in_amount - in_after_fee)   // fee is taken on input
+    (raw_out, in_amount - in_after_fee) // fee is taken on input
 }
 
 pub fn get_amount_out_strict_receive(
     e: &Env,
-    out_amount: u128,      // dy  – exact tokens the trader wants to receive
-    reserve_sell: u128,    // x
-    reserve_buy: u128,     // y
+    out_amount: u128,   // dy  – exact tokens the trader wants to receive
+    reserve_sell: u128, // x
+    reserve_buy: u128,  // y
 ) -> (u128, u128) {
     if out_amount == 0 {
         return (0, 0);
@@ -64,19 +64,12 @@ pub fn get_amount_out_strict_receive(
     let fee_fraction = get_fee_fraction(&e) as u128;
 
     // ----------  Step 1: dx_after_fee = ceil(x·dy / (y-dy))  ----------
-    let dx_after_fee = reserve_sell.fixed_mul_ceil(
-        e,
-        &out_amount,
-        &(reserve_buy - out_amount),
-    );
+    let dx_after_fee = reserve_sell.fixed_mul_ceil(e, &out_amount, &(reserve_buy - out_amount));
 
     // ----------  Step 2: gross-up for fee on *input* side  -------------
     // dx_before_fee = ceil( dx_after_fee / (1-f) )
-    let dx_before_fee = dx_after_fee.fixed_mul_ceil(
-        e,
-        &FEE_MULTIPLIER,
-        &(FEE_MULTIPLIER - fee_fraction),
-    );
+    let dx_before_fee =
+        dx_after_fee.fixed_mul_ceil(e, &FEE_MULTIPLIER, &(FEE_MULTIPLIER - fee_fraction));
 
     // ----------  Step 3: fee = dx_before_fee - dx_after_fee -----------
     let fee = dx_before_fee - dx_after_fee;

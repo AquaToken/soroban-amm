@@ -1,4 +1,4 @@
-use crate::constants::{ADMIN_FEE_PERCENT, FEE_MULTIPLIER};
+use crate::constants::{FEE_MULTIPLIER, PROTOCOL_FEE_PERCENT};
 use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
@@ -9,7 +9,13 @@ use crate::pool_interface::{
     UpgradeableContract, UpgradeableLPTokenTrait,
 };
 use crate::rewards::get_rewards_manager;
-use crate::storage::{get_admin_fee_a, get_admin_fee_b, get_fee_fraction, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_plane, get_reserve_a, get_reserve_b, get_router, get_token_a, get_token_b, get_token_future_wasm, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a, put_token_b, set_admin_fee_a, set_admin_fee_b, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router, set_token_future_wasm};
+use crate::storage::{
+    get_fee_fraction, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_plane,
+    get_protocol_fee_a, get_protocol_fee_b, get_reserve_a, get_reserve_b, get_router, get_token_a,
+    get_token_b, get_token_future_wasm, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b,
+    put_token_a, put_token_b, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
+    set_plane, set_protocol_fee_a, set_protocol_fee_b, set_router, set_token_future_wasm,
+};
 use crate::token::{create_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -336,6 +342,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             amounts_vec.clone(),
             shares_to_mint,
         );
+        PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
         (amounts_vec, shares_to_mint)
     }
@@ -395,8 +402,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let (out, total_fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
-        let admin_fee = total_fee * ADMIN_FEE_PERCENT / 100;
-        let lp_fee = total_fee - admin_fee;
+        let protocol_fee = total_fee * PROTOCOL_FEE_PERCENT / 100;
+        let lp_fee = total_fee - protocol_fee;
 
         if out < out_min {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
@@ -413,15 +420,15 @@ impl LiquidityPoolTrait for LiquidityPool {
             put_reserve_b(&e, reserve_b + in_amount);
         }
 
-        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        let (mut new_reserve_a, mut new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
-        let base_fee_fraction    = get_fee_fraction(&e) as u128;                    // e.g. 30 = 0.3%
-        let admin_fee_frac       = base_fee_fraction * ADMIN_FEE_PERCENT / 100;     // e.g. 30 * 50 / 100 = 0.15% admin fee
-        let pool_fee_frac        = base_fee_fraction - admin_fee_frac;              // e.g. 15 = 0.15% stays in pool
-        let residue_numerator    = FEE_MULTIPLIER - pool_fee_frac;                  // e.g. 10000 - 15  = 9985
-        let residue_denominator  = U256::from_u128(&e, FEE_MULTIPLIER);
+        let base_fee_fraction = get_fee_fraction(&e) as u128; // e.g. 30 = 0.3%
+        let protocol_fee_frac = base_fee_fraction * PROTOCOL_FEE_PERCENT / 100; // e.g. 30 * 50 / 100 = 0.15% admin fee
+        let pool_fee_frac = base_fee_fraction - protocol_fee_frac; // e.g. 15 = 0.15% stays in pool
+        let residue_numerator = FEE_MULTIPLIER - pool_fee_frac; // e.g. 10000 - 15  = 9985
+        let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
 
         let new_invariant_factor = |reserve: u128, old_reserve: u128, out: u128| {
             if reserve - old_reserve > out {
@@ -450,23 +457,19 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
         }
 
-        // 1) send user-out
         if out_idx == 0 {
             transfer_a(&e, &user, out_a);
-            put_reserve_a(&e, new_reserve_a - out_a);            // only user_out leaves A
+            new_reserve_a = new_reserve_a - out_a;
+            new_reserve_b = new_reserve_b - protocol_fee;
+            set_protocol_fee_b(&e, &(get_protocol_fee_b(&e) + protocol_fee));
         } else {
             transfer_b(&e, &user, out_b);
-            put_reserve_b(&e, new_reserve_b - out_b);            // only user_out leaves B
+            new_reserve_a = new_reserve_a - protocol_fee;
+            new_reserve_b = new_reserve_b - out_b;
+            set_protocol_fee_a(&e, &(get_protocol_fee_a(&e) + protocol_fee));
         }
-
-        // 2) remove admin_fee from **input-token** side
-        if in_idx == 0 {
-            put_reserve_a(&e, get_reserve_a(&e) - admin_fee);
-            set_admin_fee_a(&e, &(get_admin_fee_a(&e) + admin_fee));
-        } else {
-            put_reserve_b(&e, get_reserve_b(&e) - admin_fee);
-            set_admin_fee_b(&e, &(get_admin_fee_b(&e) + admin_fee));
-        }
+        put_reserve_a(&e, new_reserve_a);
+        put_reserve_b(&e, new_reserve_b);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -479,6 +482,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             out,
             lp_fee,
         );
+        PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
         out
     }
@@ -596,15 +600,15 @@ impl LiquidityPoolTrait for LiquidityPool {
             put_reserve_b(&e, reserve_b + in_amount);
         }
 
-        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        let (mut new_reserve_a, mut new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
-        let base_fee_fraction    = get_fee_fraction(&e) as u128;                    // e.g. 30 = 0.3%
-        let admin_fee_frac       = base_fee_fraction * ADMIN_FEE_PERCENT / 100;     // e.g. 30 * 50 / 100 = 0.15% admin fee
-        let pool_fee_frac        = base_fee_fraction - admin_fee_frac;              // e.g. 15 = 0.15% stays in pool
-        let residue_numerator    = FEE_MULTIPLIER - pool_fee_frac;                  // e.g. 10000 - 15  = 9985
-        let residue_denominator  = U256::from_u128(&e, FEE_MULTIPLIER);
+        let base_fee_fraction = get_fee_fraction(&e) as u128; // e.g. 30 = 0.3%
+        let protocol_fee_frac = base_fee_fraction * PROTOCOL_FEE_PERCENT / 100; // e.g. 30 * 50 / 100 = 0.15% admin fee
+        let pool_fee_frac = base_fee_fraction - protocol_fee_frac; // e.g. 15 = 0.15% stays in pool
+        let residue_numerator = FEE_MULTIPLIER - pool_fee_frac; // e.g. 10000 - 15  = 9985
+        let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
 
         let new_invariant_factor = |reserve: u128, old_reserve: u128, out: u128| {
             if reserve - old_reserve > out {
@@ -637,25 +641,24 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
         }
 
+        // collect protocol_fee on input side
+        let protocol_fee = total_fee * PROTOCOL_FEE_PERCENT / 100;
+        let lp_fee = total_fee - protocol_fee;
+
         // give trader the exact out_amount
         if out_idx == 0 {
             transfer_a(&e, &user, out_amount);
-            put_reserve_a(&e, new_reserve_a - out_amount);
+            new_reserve_a = new_reserve_a - out_amount;
+            new_reserve_b = new_reserve_b - protocol_fee;
+            set_protocol_fee_b(&e, &(get_protocol_fee_b(&e) + protocol_fee));
         } else {
             transfer_b(&e, &user, out_amount);
-            put_reserve_b(&e, new_reserve_b - out_amount);
+            new_reserve_a = new_reserve_a - protocol_fee;
+            new_reserve_b = new_reserve_b - out_amount;
+            set_protocol_fee_a(&e, &(get_protocol_fee_a(&e) + protocol_fee));
         }
-
-        // collect admin_fee on input side
-        let admin_fee = total_fee * ADMIN_FEE_PERCENT / 100;
-        let lp_fee = total_fee - admin_fee;
-        if in_idx == 0 {
-            put_reserve_a(&e, get_reserve_a(&e) - admin_fee);
-            set_admin_fee_a(&e, &(get_admin_fee_a(&e) + admin_fee));
-        } else {
-            put_reserve_b(&e, get_reserve_b(&e) - admin_fee);
-            set_admin_fee_b(&e, &(get_admin_fee_b(&e) + admin_fee));
-        }
+        put_reserve_a(&e, new_reserve_a);
+        put_reserve_b(&e, new_reserve_b);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -668,6 +671,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             out_amount,
             lp_fee,
         );
+        PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
         in_amount
     }
@@ -748,8 +752,10 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         transfer_a(&e, &user, out_a);
         transfer_b(&e, &user, out_b);
-        put_reserve_a(&e, reserve_a - out_a);
-        put_reserve_b(&e, reserve_b - out_b);
+        let new_reserve_a = reserve_a - out_a;
+        let new_reserve_b = reserve_b - out_b;
+        put_reserve_a(&e, new_reserve_a);
+        put_reserve_b(&e, new_reserve_b);
 
         // Checkpoint resulting working balance
         rewards.manager().update_working_balance(
@@ -767,6 +773,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             withdraw_amounts.clone(),
             share_amount,
         );
+        PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
         withdraw_amounts
     }
@@ -969,16 +976,21 @@ impl AdminInterfaceTrait for LiquidityPool {
         get_is_killed_claim(&e)
     }
 
+    // Returns the protocol fees accumulated in the pool.
+    fn get_protocol_fees(e: Env) -> Vec<u128> {
+        Vec::from_array(&e, [get_protocol_fee_a(&e), get_protocol_fee_b(&e)])
+    }
+
     // Claims the protocol fees accumulated in the pool.
-    fn claim_fees(e: Env, admin: Address) -> Vec<u128> {
+    fn claim_protocol_fees(e: Env, admin: Address) -> Vec<u128> {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::SystemFeeAdmin);
 
         let token_a = get_token_a(&e);
         let token_b = get_token_b(&e);
 
-        let fee_a = get_admin_fee_a(&e);
-        let fee_b = get_admin_fee_b(&e);
+        let fee_a = get_protocol_fee_a(&e);
+        let fee_b = get_protocol_fee_b(&e);
 
         if fee_a == 0 && fee_b == 0 {
             return Vec::from_array(&e, [0, 0]);
@@ -990,7 +1002,7 @@ impl AdminInterfaceTrait for LiquidityPool {
                 &admin,
                 &(fee_a as i128),
             );
-            set_admin_fee_a(&e, &0);
+            set_protocol_fee_a(&e, &0);
             PoolEvents::new(&e).claim_protocol_fee(token_a, fee_a);
         }
         if fee_b > 0 {
@@ -999,7 +1011,7 @@ impl AdminInterfaceTrait for LiquidityPool {
                 &admin,
                 &(fee_b as i128),
             );
-            set_admin_fee_b(&e, &0);
+            set_protocol_fee_b(&e, &0);
             PoolEvents::new(&e).claim_protocol_fee(token_b, fee_b);
         }
 

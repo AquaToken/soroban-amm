@@ -22,8 +22,8 @@ enum DataKey {
     IsKilledClaim,
 
     TokenFutureWASM,
-    AdminFeeA,
-    AdminFeeB,
+    ProtocolFeeA,
+    ProtocolFeeB,
 }
 
 generate_instance_storage_getter_and_setter_with_default!(
@@ -45,14 +45,14 @@ generate_instance_storage_getter_and_setter_with_default!(
     false
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    admin_fee_a,
-    DataKey::AdminFeeA,
+    protocol_fee_a,
+    DataKey::ProtocolFeeA,
     u128,
     0
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    admin_fee_b,
-    DataKey::AdminFeeB,
+    protocol_fee_b,
+    DataKey::ProtocolFeeB,
     u128,
     0
 );

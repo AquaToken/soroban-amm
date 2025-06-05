@@ -1,4 +1,6 @@
-use crate::pool_constants::{FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MIN_RAMP_TIME};
+use crate::pool_constants::{
+    FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MIN_RAMP_TIME, PROTOCOL_FEE_PERCENT,
+};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait, ManagedLiquidityPool,
     RewardsTrait, UpgradeableContract, UpgradeableLPTokenTrait,
@@ -6,11 +8,12 @@ use crate::pool_interface::{
 use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
     get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_reserves, get_router,
-    get_token_future_wasm, get_tokens, has_plane, put_admin_actions_deadline, put_decimals,
-    put_fee, put_future_a, put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time,
-    put_reserves, put_tokens, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
-    set_plane, set_router, set_token_future_wasm,
+    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_protocol_fees,
+    get_reserves, get_router, get_token_future_wasm, get_tokens, has_plane,
+    put_admin_actions_deadline, put_decimals, put_fee, put_future_a, put_future_a_time,
+    put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees, put_reserves, put_tokens,
+    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_router,
+    set_token_future_wasm,
 };
 use crate::token::create_contract;
 use token_share::{
@@ -315,6 +318,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         update_plane(&e);
 
         PoolEvents::new(&e).withdraw_liquidity(tokens, amounts, share_amount);
+        PoolEvents::new(&e).update_reserves(new_balances);
 
         share_amount
     }
@@ -397,6 +401,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             }
         }
         PoolEvents::new(&e).withdraw_liquidity(coins, amounts.clone(), share_amount);
+        PoolEvents::new(&e).update_reserves(reserves);
+
         amounts
     }
 }
@@ -931,6 +937,39 @@ impl AdminInterfaceTrait for LiquidityPool {
     fn get_is_killed_claim(e: Env) -> bool {
         get_is_killed_claim(&e)
     }
+
+    fn get_protocol_fees(e: Env) -> Vec<u128> {
+        get_protocol_fees(&e)
+    }
+
+    // Claims the protocol fees accumulated in the pool.
+    fn claim_protocol_fees(e: Env, admin: Address) -> Vec<u128> {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::SystemFeeAdmin);
+
+        let tokens = get_tokens(&e);
+        let collected_fees = get_protocol_fees(&e);
+        let mut fees_updated = collected_fees.clone();
+
+        for i in 0..tokens.len() {
+            let fee = collected_fees.get(i).unwrap();
+            if fee == 0 {
+                continue;
+            }
+
+            let token = tokens.get(i).unwrap();
+            SorobanTokenClient::new(&e, &token).transfer(
+                &e.current_contract_address(),
+                &admin,
+                &(fee as i128),
+            );
+            PoolEvents::new(&e).claim_protocol_fee(token, fee);
+            fees_updated.set(i, 0);
+        }
+        put_protocol_fees(&e, &fees_updated);
+
+        collected_fees
+    }
 }
 
 #[contractimpl]
@@ -1230,6 +1269,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         update_plane(&e);
 
         PoolEvents::new(&e).deposit_liquidity(tokens, amounts.clone(), mint_amount);
+        PoolEvents::new(&e).update_reserves(new_balances);
 
         (amounts, mint_amount)
     }
@@ -1284,19 +1324,32 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let y = Self::_get_y(&e, in_idx, out_idx, x, &xp);
 
         let dy = xp.get(out_idx).unwrap() - y - 1; // -1 just in case there were some rounding errors
-        let dy_fee = dy.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
+        let dy_fee_total =
+            dy.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
+        let dy_protocol_fee = dy_fee_total * PROTOCOL_FEE_PERCENT / 100;
 
         // Convert all to real units
-        let dy = (dy - dy_fee) / precision_mul.get(out_idx).unwrap();
+        let out_precision_mul = precision_mul.get(out_idx).unwrap();
+        let dy = (dy - dy_fee_total) / out_precision_mul;
+        let dy_protocol_fee = dy_protocol_fee / out_precision_mul;
         if dy < out_min {
             panic_with_error!(e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
-        // Change balances exactly in same way as we change actual ERC20 coin amounts
         let mut reserves = get_reserves(&e);
         reserves.set(in_idx, old_balances.get(in_idx).unwrap() + in_amount);
-        reserves.set(out_idx, old_balances.get(out_idx).unwrap() - dy);
+        reserves.set(
+            out_idx,
+            old_balances.get(out_idx).unwrap() - dy - dy_protocol_fee,
+        );
         put_reserves(&e, &reserves);
+
+        let mut protocol_fees = get_protocol_fees(&e);
+        protocol_fees.set(
+            out_idx,
+            protocol_fees.get(out_idx).unwrap() + dy_protocol_fee,
+        );
+        put_protocol_fees(&e, &protocol_fees);
 
         let token_out = coins.get(out_idx).unwrap();
         let token_client = SorobanTokenClient::new(&e, &token_out);
@@ -1309,6 +1362,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         let dx_fee =
             in_amount.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
         PoolEvents::new(&e).trade(user, input_coin, token_out, in_amount, dy, dx_fee);
+        PoolEvents::new(&e).update_reserves(reserves);
 
         dy
     }
@@ -1413,11 +1467,24 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             );
         }
 
+        // Calculate fees
+        let dx_wo_fee = dx * (FEE_DENOMINATOR - get_fee(&e)) as u128 / FEE_DENOMINATOR as u128;
+        let dx_total_fee = dx - dx_wo_fee;
+        let dx_lp_fee = dx_total_fee * (100 - PROTOCOL_FEE_PERCENT) / 100;
+        let dx_protocol_fee = dx_total_fee - dx_lp_fee;
+
         // Update reserves
         let mut reserves = get_reserves(&e);
-        reserves.set(in_idx, old_balances.get(in_idx).unwrap() + dx);
+        reserves.set(
+            in_idx,
+            old_balances.get(in_idx).unwrap() + dx_wo_fee + dx_lp_fee,
+        );
         reserves.set(out_idx, old_balances.get(out_idx).unwrap() - out_amount);
         put_reserves(&e, &reserves);
+
+        let mut protocol_fees = get_protocol_fees(&e);
+        protocol_fees.set(in_idx, protocol_fees.get(in_idx).unwrap() + dx_protocol_fee);
+        put_protocol_fees(&e, &protocol_fees);
 
         let token_out = coins.get(out_idx).unwrap();
         let token_client = SorobanTokenClient::new(&e, &token_out);
@@ -1426,14 +1493,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        PoolEvents::new(&e).trade(
-            user,
-            input_coin,
-            token_out,
-            dx,
-            out_amount,
-            dy_w_fee - out_amount,
-        );
+        PoolEvents::new(&e).trade(user, input_coin, token_out, dx, out_amount, dx_total_fee);
+        PoolEvents::new(&e).update_reserves(reserves);
 
         dx
     }
@@ -1517,6 +1578,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         update_plane(&e);
 
         PoolEvents::new(&e).withdraw_liquidity(tokens, amounts.clone(), share_amount);
+        PoolEvents::new(&e).update_reserves(reserves);
 
         amounts
     }
