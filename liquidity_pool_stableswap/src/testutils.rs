@@ -240,6 +240,8 @@ impl Setup<'_> {
         jump(&env, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
         liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
 
+        liq_pool.set_protocol_fee_fraction(&admin, &5000);
+
         let token_share = ShareTokenClient::new(&env, &liq_pool.share_id());
 
         Setup {

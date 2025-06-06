@@ -136,7 +136,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     protocol_fee_fraction,
     DataKey::ProtocolFeeFraction,
     u32,
-    5000 // by default, 50% of the collected fee goes to the protocol
+    0
 );
 
 pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {

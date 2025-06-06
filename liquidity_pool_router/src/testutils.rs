@@ -181,6 +181,7 @@ impl Default for Setup<'_> {
             &reward_boost_token.address,
             &reward_boost_feed.address,
         );
+        router.set_protocol_fee_fraction(&admin, &5000);
 
         let emergency_admin = Address::generate(&env);
         router.commit_transfer_ownership(
