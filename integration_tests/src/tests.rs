@@ -68,13 +68,13 @@ fn test_integration() {
             ],
             &xlm.address,
             &10_0000000,
-            &2_8952731,
+            &2_8952734,
         ),
-        2_8952731,
+        2_8952734,
     );
 
     // deploy provider swap fee contract
-    let swap_fee = setup.deploy_swap_fee_contract(&setup.operator, &setup.admin, 1000);
+    let swap_fee = setup.deploy_swap_fee_contract(&setup.operator, &setup.admin, 1000, 10_000);
 
     // now swap with additional provider fee
     xlm_admin.mint(&user, &10_0000000);
@@ -96,9 +96,9 @@ fn test_integration() {
             ],
             &xlm.address,
             &10_0000000,
-            &2_8864196,
+            &2_8864200,
             &30,
         ),
-        2_8864196,
+        2_8864200,
     );
 }

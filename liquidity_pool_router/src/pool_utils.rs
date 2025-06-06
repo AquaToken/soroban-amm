@@ -4,7 +4,8 @@ use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
     add_pool, add_tokens_set, get_constant_product_pool_hash, get_pool_next_counter,
-    get_pool_plane, get_pools_plain, get_stableswap_pool_hash, get_token_hash, LiquidityPoolType,
+    get_pool_plane, get_pools_plain, get_protocol_fee_fraction, get_stableswap_pool_hash,
+    get_token_hash, LiquidityPoolType,
 };
 use access_control::access::AccessControl;
 use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
@@ -154,9 +155,14 @@ fn init_standard_pool(
     let pause_admin = access_control
         .get_role_safe(&Role::PauseAdmin)
         .unwrap_or(admin.clone());
+    let system_fee_admin = access_control
+        .get_role_safe(&Role::SystemFeeAdmin)
+        .unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
+
+    let protocol_fee_fraction = get_protocol_fee_fraction(&e);
 
     e.invoke_contract::<()>(
         pool_contract_id,
@@ -171,12 +177,17 @@ fn init_standard_pool(
                     operations_admin,
                     pause_admin,
                     emergency_pause_admins,
+                    system_fee_admin,
                 )
                     .into_val(e),
                 e.current_contract_address().to_val(),
                 token_wasm_hash.into_val(e),
                 tokens.clone().into_val(e),
-                fee_fraction.into_val(e),
+                (
+                    <u32 as IntoVal<Env, u32>>::into_val(&fee_fraction, e),
+                    <u32 as IntoVal<Env, u32>>::into_val(&protocol_fee_fraction, e),
+                )
+                    .into_val(e),
                 (
                     reward_token.to_val(),
                     reward_boost_token.to_val(),
@@ -217,9 +228,14 @@ fn init_stableswap_pool(
     let pause_admin = access_control
         .get_role_safe(&Role::PauseAdmin)
         .unwrap_or(admin.clone());
+    let system_fee_admin = access_control
+        .get_role_safe(&Role::SystemFeeAdmin)
+        .unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
+
+    let protocol_fee_fraction = get_protocol_fee_fraction(&e);
 
     e.invoke_contract::<()>(
         pool_contract_id,
@@ -234,13 +250,18 @@ fn init_stableswap_pool(
                     operations_admin,
                     pause_admin,
                     emergency_pause_admins,
+                    system_fee_admin,
                 )
                     .into_val(e),
                 e.current_contract_address().to_val(),
                 token_wasm_hash.into_val(e),
                 tokens.clone().into_val(e),
                 amp.into_val(e),
-                fee_fraction.into_val(e),
+                (
+                    <u32 as IntoVal<Env, u32>>::into_val(&fee_fraction, e),
+                    <u32 as IntoVal<Env, u32>>::into_val(&protocol_fee_fraction, e),
+                )
+                    .into_val(e),
                 (
                     reward_token.to_val(),
                     reward_boost_token.to_val(),
