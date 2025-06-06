@@ -9,6 +9,7 @@ pub enum Role {
     OperationsAdmin,
     PauseAdmin,
     EmergencyPauseAdmin,
+    SystemFeeAdmin,
 }
 
 impl Role {
@@ -20,6 +21,7 @@ impl Role {
             Role::OperationsAdmin => false,
             Role::PauseAdmin => false,
             Role::EmergencyPauseAdmin => true,
+            Role::SystemFeeAdmin => false,
         }
     }
 
@@ -31,6 +33,7 @@ impl Role {
             Role::OperationsAdmin => false,
             Role::PauseAdmin => false,
             Role::EmergencyPauseAdmin => false,
+            Role::SystemFeeAdmin => false,
         }
     }
 }
@@ -49,6 +52,7 @@ impl SymbolRepresentation for Role {
             Role::OperationsAdmin => Symbol::new(&e, "OperationsAdmin"),
             Role::PauseAdmin => Symbol::new(&e, "PauseAdmin"),
             Role::EmergencyPauseAdmin => Symbol::new(&e, "EmergencyPauseAdmin"),
+            Role::SystemFeeAdmin => Symbol::new(&e, "SystemFeeAdmin"),
         }
     }
 
@@ -65,6 +69,8 @@ impl SymbolRepresentation for Role {
             return Role::PauseAdmin;
         } else if value == Symbol::new(e, "EmergencyPauseAdmin") {
             return Role::EmergencyPauseAdmin;
+        } else if value == Symbol::new(e, "SystemFeeAdmin") {
+            return Role::SystemFeeAdmin;
         }
         panic_with_error!(e, AccessControlError::BadRoleUsage);
     }

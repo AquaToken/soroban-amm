@@ -71,6 +71,7 @@ impl Setup<'_> {
             &router.address,
         );
         router.set_reward_boost_config(&admin, &locked_token.address, &boost_feed.address);
+        router.set_protocol_fee_fraction(&admin, &5000);
 
         let fee_collector_factory =
             deploy_provider_swap_fee_factory(&e, &admin, &emergency_admin, &router.address);
@@ -129,6 +130,7 @@ impl Setup<'_> {
         operator: &Address,
         fee_destination: &Address,
         max_fee_fraction: u32,
+        fee_denominator: u32,
     ) -> contracts::swap_fee::Client {
         contracts::swap_fee::Client::new(
             &self.env,
@@ -136,6 +138,7 @@ impl Setup<'_> {
                 &operator,
                 &fee_destination,
                 &max_fee_fraction,
+                &fee_denominator,
             ),
         )
     }

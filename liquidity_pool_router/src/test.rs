@@ -104,6 +104,10 @@ fn test_constant_product_pool() {
         Symbol::from_val(&e, &pool_info.get(Symbol::new(&e, "pool_type")).unwrap()),
         Symbol::new(&e, "constant_product")
     );
+    assert_eq!(
+        testutils::standard_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
+        5000,
+    );
 
     let pools = router.get_pools(&tokens);
 
@@ -344,6 +348,10 @@ fn test_stableswap_pool() {
         testutils::stableswap_pool::Client::new(&e, &pool_address).a(),
         1500,
     );
+    assert_eq!(
+        testutils::stableswap_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
+        5000,
+    );
 
     let pools = router.get_pools(&tokens);
 
@@ -409,7 +417,7 @@ fn test_stableswap_pool() {
     assert_eq!(token2.balance(&pool_address), 4_1079105);
     assert_eq!(
         router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [197_0000000, 4_1079105])
+        Vec::from_array(&e, [197_0000000, 3_9636396])
     );
 
     router.withdraw(
@@ -417,14 +425,14 @@ fn test_stableswap_pool() {
         &tokens,
         &pool_hash,
         &200_0000000_u128,
-        &Vec::from_array(&e, [197_0000000_u128, 4_1079105_u128]),
+        &Vec::from_array(&e, [197_0000000_u128, 3_9636396_u128]),
     );
 
     assert_eq!(token1.balance(&user1), 1000_0000000);
-    assert_eq!(token2.balance(&user1), 1000_0000000);
+    assert_eq!(token2.balance(&user1), 999_8557291); // minus protocol fee
     assert_eq!(token_share.balance(&user1), 0);
     assert_eq!(token1.balance(&pool_address), 0);
-    assert_eq!(token2.balance(&pool_address), 0);
+    assert_eq!(token2.balance(&pool_address), 1442709);
     assert_eq!(token_share.balance(&pool_address), 0);
 }
 
@@ -521,20 +529,20 @@ fn test_stableswap_3_pool() {
             &token3.address,
             &pool_hash,
             &20_0000000_u128,
-            &20_1144225_u128,
+            &20_1230513_u128,
         ),
-        20_1144225
+        20_1230513
     );
 
     assert_eq!(token1.balance(&user1), 803_0000000);
     assert_eq!(token1.balance(&pool_address), 197_0000000);
     assert_eq!(token2.balance(&user1), 97_64908385);
     assert_eq!(token2.balance(&pool_address), 23_5091615);
-    assert_eq!(token3.balance(&user1), 920_1144225);
-    assert_eq!(token3.balance(&pool_address), 79_8855775);
+    assert_eq!(token3.balance(&user1), 920_1230513);
+    assert_eq!(token3.balance(&pool_address), 79_8769487);
     assert_eq!(
         router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [197_0000000, 23_5091615, 79_8855775])
+        Vec::from_array(&e, [197_0000000, 23_3639897, 79_8466733])
     );
 
     router.withdraw(
@@ -542,15 +550,16 @@ fn test_stableswap_3_pool() {
         &tokens,
         &pool_hash,
         &300_0000000_u128,
-        &Vec::from_array(&e, [197_0000000, 23_5091615, 79_8855775]),
+        &Vec::from_array(&e, [197_0000000, 23_3639897, 79_8466733]),
     );
 
     assert_eq!(token1.balance(&user1), 1000_0000000);
-    assert_eq!(token2.balance(&user1), 1000_0000000);
-    assert_eq!(token3.balance(&user1), 1000_0000000);
+    assert_eq!(token2.balance(&user1), 999_8548282);
+    assert_eq!(token3.balance(&user1), 999_9697246);
     assert_eq!(token_share.balance(&user1), 0);
     assert_eq!(token1.balance(&pool_address), 0);
-    assert_eq!(token2.balance(&pool_address), 0);
+    assert_eq!(token2.balance(&pool_address), 1451718);
+    assert_eq!(token3.balance(&pool_address), 302754);
     assert_eq!(token_share.balance(&pool_address), 0);
 }
 
@@ -1345,6 +1354,7 @@ fn test_rewards_distribution_as_operator() {
         &admin,
         &admin,
         &Vec::from_array(&e, [admin.clone()]),
+        &setup.system_fee_admin,
     );
     assert!(router
         .try_distribute_outstanding_reward(&user1, &router.address, &tokens, &standard_pool_hash)
@@ -1509,6 +1519,7 @@ fn test_rewards_distribution_override() {
         &admin,
         &admin,
         &Vec::from_array(&e, [admin.clone()]),
+        &setup.system_fee_admin,
     );
     assert_eq!(
         router.distribute_outstanding_reward(
@@ -2720,6 +2731,10 @@ fn test_privileged_users() {
                 Symbol::new(&e, "EmergencyPauseAdmin"),
                 Vec::from_array(&e, [setup.emergency_pause_admin]),
             ),
+            (
+                Symbol::new(&e, "SystemFeeAdmin"),
+                Vec::from_array(&e, [setup.system_fee_admin]),
+            ),
         ],
     );
     assert_eq!(privileged_addrs, router.get_privileged_addrs());
@@ -2745,6 +2760,7 @@ fn test_set_privileged_addresses_event() {
         &setup.operations_admin.clone(),
         &setup.pause_admin.clone(),
         &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+        &setup.system_fee_admin,
     );
 
     assert_eq!(
