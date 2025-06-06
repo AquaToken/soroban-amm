@@ -68,7 +68,7 @@ pub fn create_liqpool_contract<'a>(
 
 pub fn install_token_wasm(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_token_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
@@ -91,7 +91,7 @@ pub fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 
 mod reward_boost_feed {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_locker_feed_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
     );
 }
 

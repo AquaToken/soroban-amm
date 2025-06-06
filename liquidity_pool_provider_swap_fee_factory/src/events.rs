@@ -21,6 +21,7 @@ pub(crate) trait FactoryEvents {
         operator: Address,
         fee_destination: Address,
         max_swap_fee_fraction: u32,
+        swap_fee_fraction_denominator: u32,
         address: Address,
     );
 }
@@ -35,11 +36,18 @@ impl FactoryEvents for Events {
         operator: Address,
         fee_destination: Address,
         max_swap_fee_fraction: u32,
+        swap_fee_fraction_denominator: u32,
         address: Address,
     ) {
         self.env().events().publish(
             (Symbol::new(self.env(), "deploy"),),
-            (operator, fee_destination, max_swap_fee_fraction, address),
+            (
+                operator,
+                fee_destination,
+                max_swap_fee_fraction,
+                swap_fee_fraction_denominator,
+                address,
+            ),
         );
     }
 }

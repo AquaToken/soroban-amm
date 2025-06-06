@@ -222,7 +222,7 @@ pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 
 mod reward_boost_feed {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/soroban_locker_feed_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
     );
 }
 

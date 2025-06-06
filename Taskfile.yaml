@@ -22,7 +22,7 @@ tasks:
       - task -d liquidity_pool_provider_swap_fee build || exit 1
       - task -d liquidity_pool_provider_swap_fee_factory build || exit 1
       - task -d fees_collector build || exit 1
-      - cp ./target/wasm32-unknown-unknown/release/*.wasm ./contracts
+      - cp ./target/wasm32v1-none/release/*.wasm ./contracts
 
   test:
     cmds:
@@ -47,7 +47,7 @@ tasks:
   _check_bindings_tranfer_ownership:
     vars:
       WASMS:
-        sh: find ./target/wasm32-unknown-unknown/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
+        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
     cmds:
       - for: { var: WASMS }
         cmd:
@@ -59,7 +59,7 @@ tasks:
   _check_bindings_delayed_upgrade:
     vars:
       WASMS:
-        sh: find ./target/wasm32-unknown-unknown/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
+        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
     cmds:
       - for: { var: WASMS }
         cmd:
@@ -70,7 +70,7 @@ tasks:
 
   _check_bindings_upgrade:
     vars:
-      WASM: "./target/wasm32-unknown-unknown/release/soroban_token_contract.wasm"
+      WASM: "./target/wasm32v1-none/release/soroban_token_contract.wasm"
     cmds:
       - echo "Checking upgrade bindings for {{ .WASM }}" && 
         soroban contract info interface --wasm {{ .WASM }} | grep upgrade 

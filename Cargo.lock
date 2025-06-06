@@ -1244,6 +1244,7 @@ name = "soroban-liquidity-pool-provider-swap-fee-contract"
 version = "1.5.0"
 dependencies = [
  "paste",
+ "soroban-fixed-point-math",
  "soroban-sdk",
  "utils",
 ]
