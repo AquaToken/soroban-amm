@@ -333,14 +333,16 @@ fn test_claim_fee_and_swap() {
     assert_eq!(setup.token_b.balance(&setup.fee_destination), 0);
 }
 
-
 #[test]
 fn test_swap_equivalence_send_receive() {
     // Strict‐send
     let setup_send = Setup::default();
     let tokens = Vec::from_array(
         &setup_send.env,
-        [setup_send.token_a.address.clone(), setup_send.token_b.address.clone()],
+        [
+            setup_send.token_a.address.clone(),
+            setup_send.token_b.address.clone(),
+        ],
     );
     let (pool_index, _) = setup_send.router.get_pools(&tokens).iter().last().unwrap();
 
@@ -358,9 +360,14 @@ fn test_swap_equivalence_send_receive() {
         )],
     );
 
-    let out_send = setup_send
-        .contract
-        .swap_chained(&user_send, &path_send, &setup_send.token_a.address, &in_amount, &0, &fee_fraction);
+    let out_send = setup_send.contract.swap_chained(
+        &user_send,
+        &path_send,
+        &setup_send.token_a.address,
+        &in_amount,
+        &0,
+        &fee_fraction,
+    );
     // Collected fee (held in contract)
     let fee_send = setup_send.token_b.balance(&setup_send.contract.address) as u128;
 
@@ -368,9 +375,17 @@ fn test_swap_equivalence_send_receive() {
     let setup_receive = Setup::default();
     let tokens2 = Vec::from_array(
         &setup_receive.env,
-        [setup_receive.token_a.address.clone(), setup_receive.token_b.address.clone()],
+        [
+            setup_receive.token_a.address.clone(),
+            setup_receive.token_b.address.clone(),
+        ],
     );
-    let (pool_index2, _) = setup_receive.router.get_pools(&tokens2).iter().last().unwrap();
+    let (pool_index2, _) = setup_receive
+        .router
+        .get_pools(&tokens2)
+        .iter()
+        .last()
+        .unwrap();
 
     let user_receive = Address::generate(&setup_receive.env);
     // Mint enough so strict‐receive’s gross_in ≤ this amount
@@ -396,20 +411,43 @@ fn test_swap_equivalence_send_receive() {
         &fee_fraction,
     );
     // Fee collected in strict‐receive (held in contract)
-    let fee_receive = setup_receive.token_b.balance(&setup_receive.contract.address) as u128;
+    let fee_receive = setup_receive
+        .token_b
+        .balance(&setup_receive.contract.address) as u128;
 
     // User net output matches
     assert_eq!(setup_send.token_b.balance(&user_send), out_send as i128);
-    assert_eq!(setup_receive.token_b.balance(&user_receive), out_send as i128);
+    assert_eq!(
+        setup_receive.token_b.balance(&user_receive),
+        out_send as i128
+    );
 
     // Input consumed matches (strict‐receive should use exactly in_amount)
     assert_eq!(in_receive, in_amount);
 
     // Fees match exactly
     assert_eq!(fee_receive, fee_send);
-    
-    assert_eq!(setup_send.contract.claim_fees(&setup_send.operator, &setup_send.token_b.address), fee_send);
-    assert_eq!(setup_receive.contract.claim_fees(&setup_receive.operator, &setup_receive.token_b.address), fee_receive);
-    assert_eq!(setup_send.token_b.balance(&setup_send.fee_destination) as u128, fee_send);
-    assert_eq!(setup_receive.token_b.balance(&setup_receive.fee_destination) as u128, fee_receive);
+
+    assert_eq!(
+        setup_send
+            .contract
+            .claim_fees(&setup_send.operator, &setup_send.token_b.address),
+        fee_send
+    );
+    assert_eq!(
+        setup_receive
+            .contract
+            .claim_fees(&setup_receive.operator, &setup_receive.token_b.address),
+        fee_receive
+    );
+    assert_eq!(
+        setup_send.token_b.balance(&setup_send.fee_destination) as u128,
+        fee_send
+    );
+    assert_eq!(
+        setup_receive
+            .token_b
+            .balance(&setup_receive.fee_destination) as u128,
+        fee_receive
+    );
 }
