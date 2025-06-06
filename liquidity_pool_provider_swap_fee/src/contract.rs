@@ -288,6 +288,14 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             panic_with_error!(&e, Error::FeeFractionTooHigh);
         }
 
+        // Calculate how big "gross_out" must be so that, after provider‐fee on output, the user actually nets out_amount.
+        let fee_denominator = get_fee_denominator(&e) as u128;
+        let gross_out = out_amount.fixed_mul_ceil(
+            &e,
+            &fee_denominator,
+            &(fee_denominator - fee_fraction as u128),
+        );
+
         let (_, _, token_out) = match swaps_chain.last() {
             Some(v) => v,
             None => panic_with_error!(&e, Error::PathIsEmpty),
@@ -320,7 +328,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
                     e.current_contract_address().to_val(),
                     swaps_chain.to_val(),
                     token_in.clone().to_val(),
-                    out_amount.into_val(&e),
+                    gross_out.into_val(&e),
                     in_max.into_val(&e),
                 ],
             ),
@@ -330,16 +338,9 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             &user,
             &(out_amount as i128),
         );
-        let fee_amount = amount_in.fixed_mul_ceil(
-            &e,
-            &(fee_fraction as u128),
-            &(get_fee_denominator(&e) as u128),
-        );
-        let amount_in_with_fee = amount_in + fee_amount;
-        if amount_in_with_fee > in_max {
-            panic_with_error!(&e, Error::InMaxNotSatisfied);
-        }
-        let surplus = in_max - amount_in_with_fee;
+
+        // return surplus to the user
+        let surplus = in_max - amount_in;
         if surplus > 0 {
             SorobanTokenClient::new(&e, &token_in).transfer(
                 &e.current_contract_address(),
@@ -347,7 +348,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
                 &(surplus as i128),
             );
         }
-        Events::new(&e).charge_provider_fee(token_in, fee_amount);
-        amount_in_with_fee
+        Events::new(&e).charge_provider_fee(token_out, gross_out - out_amount);
+        amount_in
     }
 }
