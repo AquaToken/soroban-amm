@@ -32,8 +32,8 @@ pub trait AdminInterface {
         e: Env,
         admin: Address,
         token: Address,
-        stable_pool_amount: u128,
         standard_pool_amount: u128,
+        stable_pool_amount: u128,
         to: Address,
     );
 
