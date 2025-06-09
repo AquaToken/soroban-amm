@@ -78,7 +78,8 @@ impl ProviderSwapFeeFactory {
         e: Env,
         operator: Address,
         fee_destination: Address,
-        max_max_swap_fee_fraction: u32,
+        max_swap_fee_fraction: u32,
+        swap_fee_fraction_denominator: u32,
     ) -> Address {
         operator.require_auth();
 
@@ -96,13 +97,15 @@ impl ProviderSwapFeeFactory {
                     get_router(&e),
                     operator.clone(),
                     fee_destination.clone(),
-                    max_max_swap_fee_fraction,
+                    max_swap_fee_fraction,
+                    swap_fee_fraction_denominator,
                 ),
             );
         Events::new(&e).deploy(
             operator,
             fee_destination,
-            max_max_swap_fee_fraction,
+            max_swap_fee_fraction,
+            swap_fee_fraction_denominator,
             address.clone(),
         );
         address
