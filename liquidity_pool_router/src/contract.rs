@@ -15,13 +15,14 @@ use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_init_pool_payment_address, get_init_pool_payment_token,
     get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
-    get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_reward_tokens,
-    get_reward_tokens_detailed, get_rewards_config, get_tokens_set, get_tokens_set_count, has_pool,
-    remove_pool, set_constant_product_pool_hash, set_init_pool_payment_address,
-    set_init_pool_payment_token, set_init_stable_pool_payment_amount,
-    set_init_standard_pool_payment_amount, set_liquidity_calculator, set_pool_plane,
-    set_protocol_fee_fraction, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
-    set_stableswap_pool_hash, set_token_hash, GlobalRewardsConfig, LiquidityPoolRewardInfo,
+    get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_protocol_fee_fraction,
+    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_tokens_set,
+    get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
+    set_init_pool_payment_address, set_init_pool_payment_token,
+    set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
+    set_liquidity_calculator, set_pool_plane, set_protocol_fee_fraction, set_reward_tokens,
+    set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash,
+    GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -1328,6 +1329,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             result.push_back((tokens.clone(), Self::get_pools(e.clone(), tokens)))
         }
         result
+    }
+
+    // Returns the protocol fee fraction.
+    fn get_protocol_fee_fraction(e: Env) -> u32 {
+        get_protocol_fee_fraction(&e)
     }
 }
 

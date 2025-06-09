@@ -645,3 +645,25 @@ fn test_remove_pool() {
         );
     }
 }
+
+#[test]
+fn test_set_protocol_fee() {
+    let setup = Setup::default();
+    let router = setup.router;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user.clone(), false),
+        (setup.admin.clone(), true),
+        (setup.emergency_admin, false),
+        (setup.rewards_admin, false),
+        (setup.operations_admin, true),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(
+            router.try_set_protocol_fee_fraction(&addr, &5000).is_ok(),
+            is_ok
+        );
+    }
+}

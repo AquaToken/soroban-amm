@@ -8,6 +8,7 @@ use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
     AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
 };
+use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, FromVal, IntoVal, Map, Symbol, Val, Vec,
     U256,
@@ -2952,4 +2953,25 @@ fn test_regular_upgrade() {
     contract.apply_upgrade(&setup.admin);
 
     assert_eq!(contract.version(), 130)
+}
+
+#[test]
+fn test_protocol_fee_inheritance() {
+    let setup = Setup::default();
+    let [token1, token2, _, _] = setup.tokens;
+    StellarAssetClient::new(&setup.env, &setup.reward_token.address)
+        .mint(&setup.admin, &20_0000000);
+    let tokens = Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]);
+
+    assert_eq!(setup.router.get_protocol_fee_fraction(), 5000);
+
+    let (_, pool1_address) = setup.router.init_standard_pool(&setup.admin, &tokens, &10);
+    let pool1_client = testutils::standard_pool::Client::new(&setup.env, &pool1_address);
+    assert_eq!(pool1_client.get_protocol_fee_fraction(), 5000);
+
+    setup.router.set_protocol_fee_fraction(&setup.admin, &1000);
+    let (_, pool2_address) = setup.router.init_standard_pool(&setup.admin, &tokens, &30);
+    let pool2_client = testutils::standard_pool::Client::new(&setup.env, &pool2_address);
+    assert_eq!(pool1_client.get_protocol_fee_fraction(), 5000);
+    assert_eq!(pool2_client.get_protocol_fee_fraction(), 1000);
 }
