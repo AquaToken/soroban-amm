@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 soroban-sdk = { workspace = true }
 paste = { workspace = true }
 utils = { workspace = true }
+soroban-fixed-point-math = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

@@ -13,7 +13,8 @@ enum DataKey {
     Router,             // Address of the AMM router.
     Operator, // Address of the operator. Operator is capable to configure fees and claim them.
     FeeDestination, // Fee destination address
-    MaxSwapFeeFraction, // Max swap fee in basis points (100 = 1%)
+    MaxSwapFeeFraction, // Max swap fee in basis points (100 = 1% considering denominator is 10_000)
+    FeeDenominator, // Fee denominator
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
@@ -24,3 +25,4 @@ generate_instance_storage_getter_and_setter!(
     DataKey::MaxSwapFeeFraction,
     u32
 );
+generate_instance_storage_getter_and_setter!(fee_denominator, DataKey::FeeDenominator, u32);
