@@ -12,6 +12,7 @@ pub trait AdminInterface {
         operations_admin: Address,
         pause_admin: Address,
         emergency_pause_admins: Vec<Address>,
+        system_fee_admin: Address,
     );
 
     // Get map of privileged roles
@@ -31,8 +32,8 @@ pub trait AdminInterface {
         e: Env,
         admin: Address,
         token: Address,
-        stable_pool_amount: u128,
         standard_pool_amount: u128,
+        stable_pool_amount: u128,
         to: Address,
     );
 
@@ -52,4 +53,7 @@ pub trait AdminInterface {
         reward_boost_token: Address,
         reward_boost_feed: Address,
     );
+
+    // Sets the protocol fraction of total fee for the pool.
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
 }

@@ -74,6 +74,7 @@ impl Setup<'_> {
             &router.address,
         );
         router.set_reward_boost_config(&admin, &token_a.address, &boost_feed.address);
+        router.set_protocol_fee_fraction(&admin, &5000);
 
         // create swap pool & deposit initial liquidity
         token_a_admin_client.mint(&admin, &10_0000000);

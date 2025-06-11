@@ -71,6 +71,7 @@ impl Setup<'_> {
             &router.address,
         );
         router.set_reward_boost_config(&admin, &locked_token.address, &boost_feed.address);
+        router.set_protocol_fee_fraction(&admin, &5000);
 
         let fee_collector_factory =
             deploy_provider_swap_fee_factory(&e, &admin, &emergency_admin, &router.address);

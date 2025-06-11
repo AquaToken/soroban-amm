@@ -486,10 +486,11 @@ fn test_set_privileged_addresses() {
         assert_eq!(
             pool.try_set_privileged_addrs(
                 &addr,
-                &setup.rewards_admin.clone(),
-                &setup.operations_admin.clone(),
-                &setup.pause_admin.clone(),
+                &setup.rewards_admin,
+                &setup.operations_admin,
+                &setup.pause_admin,
                 &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+                &setup.system_fee_admin,
             )
             .is_ok(),
             is_ok
@@ -589,5 +590,29 @@ fn test_update_fee() {
         assert_eq!(pool.try_commit_new_fee(&addr, &1).is_ok(), is_ok);
         jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
         assert_eq!(pool.try_apply_new_fee(&addr).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_set_protocol_fee() {
+    let setup = Setup::default();
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user.clone(), false),
+        (setup.admin.clone(), true),
+        (setup.emergency_admin, false),
+        (setup.rewards_admin, false),
+        (setup.operations_admin, true),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(
+            setup
+                .liq_pool
+                .try_set_protocol_fee_fraction(&addr, &5000)
+                .is_ok(),
+            is_ok
+        );
     }
 }

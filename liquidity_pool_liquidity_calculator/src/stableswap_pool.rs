@@ -143,8 +143,10 @@ fn get_dy(
     j: u32,
     dx: u128,
 ) -> u128 {
+    let dx_fee = dx.fixed_mul_ceil(&e, &fee_fraction, &FEE_MULTIPLIER);
+
     // dx and dy in c-units
-    let x = xp.get(i).unwrap() + dx;
+    let x = xp.get(i).unwrap() + dx - dx_fee;
     let y = get_y(e, d, xp.len(), i, j, x, xp, amp);
 
     if y == 0 {
@@ -152,11 +154,7 @@ fn get_dy(
         return 0;
     }
 
-    let dy = xp.get(j).unwrap() - y - 1;
-    // The `fixed_mul_ceil` function is used to perform the multiplication
-    //  to ensure user cannot exploit rounding errors.
-    let fee = fee_fraction.fixed_mul_ceil(&e, &dy, &FEE_MULTIPLIER);
-    dy - fee
+    xp.get(j).unwrap() - y - 1
 }
 
 fn estimate_swap(

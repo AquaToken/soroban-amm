@@ -22,6 +22,10 @@ enum DataKey {
     IsKilledClaim,
 
     TokenFutureWASM,
+
+    ProtocolFeeFraction, // part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
+    ProtocolFeeA,
+    ProtocolFeeB,
 }
 
 generate_instance_storage_getter_and_setter_with_default!(
@@ -41,6 +45,24 @@ generate_instance_storage_getter_and_setter_with_default!(
     DataKey::IsKilledClaim,
     bool,
     false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    protocol_fee_fraction,
+    DataKey::ProtocolFeeFraction,
+    u32,
+    0
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    protocol_fee_a,
+    DataKey::ProtocolFeeA,
+    u128,
+    0
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    protocol_fee_b,
+    DataKey::ProtocolFeeB,
+    u128,
+    0
 );
 
 pub fn get_token_a(e: &Env) -> Address {

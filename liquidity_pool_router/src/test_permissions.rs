@@ -337,6 +337,7 @@ fn test_set_privileged_addresses() {
                     &setup.operations_admin.clone(),
                     &setup.pause_admin.clone(),
                     &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+                    &setup.system_fee_admin,
                 )
                 .is_ok(),
             is_ok
@@ -640,6 +641,28 @@ fn test_remove_pool() {
         let (pool_hash, _pool_address) = router.init_standard_pool(&user.clone(), &tokens, &10);
         assert_eq!(
             router.try_remove_pool(&addr, &tokens, &pool_hash).is_ok(),
+            is_ok
+        );
+    }
+}
+
+#[test]
+fn test_set_protocol_fee() {
+    let setup = Setup::default();
+    let router = setup.router;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user.clone(), false),
+        (setup.admin.clone(), true),
+        (setup.emergency_admin, false),
+        (setup.rewards_admin, false),
+        (setup.operations_admin, true),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(
+            router.try_set_protocol_fee_fraction(&addr, &5000).is_ok(),
             is_ok
         );
     }

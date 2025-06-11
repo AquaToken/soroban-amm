@@ -105,8 +105,8 @@ fn test() {
                 U256::from_u128(&e, 536250536),
                 U256::from_u128(&e, 54112554),
                 U256::from_u128(&e, 2802265656),
-                U256::from_u128(&e, 2802262932),
-                U256::from_u128(&e, 2802267364),
+                U256::from_u128(&e, 2803913666),
+                U256::from_u128(&e, 2810509436),
             ]
         )
     );
@@ -191,11 +191,11 @@ fn test_bad_math() {
             &e,
             [
                 U256::from_u128(&e, 0),
-                U256::from_u128(&e, 12208000),
-                U256::from_u128(&e, 131221069311),
+                U256::from_u128(&e, 29341378000000),
+                U256::from_u128(&e, 110217798402),
                 U256::from_u128(&e, 0),
                 U256::from_u128(&e, 3753762435904),
-                U256::from_u128(&e, 630244655854000),
+                U256::from_u128(&e, 2511888896000),
             ]
         )
     );
@@ -250,7 +250,7 @@ fn test_bad_math_2() {
 fn test_bad_math_big_tokens_value_difference() {
     let e = Env::default();
     e.mock_all_auths();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().reset_unlimited();
 
     let admin = Address::generate(&e);
 
@@ -277,11 +277,11 @@ fn test_bad_math_big_tokens_value_difference() {
     calculator.init_admin(&admin);
     calculator.set_pools_plane(&admin, &plane.address);
 
-    e.budget().reset_default();
+    e.cost_estimate().budget().reset_default();
     let results =
         calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
-    e.budget().print();
-    e.budget().reset_unlimited();
+    e.cost_estimate().budget().print();
+    e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
         Vec::from_array(
@@ -325,7 +325,7 @@ fn test_out_of_fuel() {
     e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [U256::from_u128(&e, 345242385178),])
+        Vec::from_array(&e, [U256::from_u128(&e, 344748461421),])
     );
 }
 
@@ -408,9 +408,9 @@ fn test_norm() {
                 U256::from_u128(&e, 53822180827),
                 U256::from_u128(&e, 5373262644),
                 U256::from_u128(&e, 552282768),
-                U256::from_u128(&e, 345062872750),
-                U256::from_u128(&e, 34479140125),
-                U256::from_u128(&e, 3447914006),
+                U256::from_u128(&e, 346246993250),
+                U256::from_u128(&e, 34597810475),
+                U256::from_u128(&e, 3459781034),
             ]
         )
     );
@@ -563,8 +563,8 @@ fn test_reversed() {
             [
                 U256::from_u128(&e, 70),
                 U256::from_u128(&e, 70),
-                U256::from_u128(&e, 529),
-                U256::from_u128(&e, 529),
+                U256::from_u128(&e, 531),
+                U256::from_u128(&e, 531),
             ]
         )
     );
@@ -610,7 +610,7 @@ fn test_liquidity_overflow() {
             &e,
             [
                 U256::from_u128(&e, 12189510206366902975475519681607974332),
-                U256::from_u128(&e, 95356066323576883081645100203114078476),
+                U256::from_u128(&e, 95412237890844569924999775225036213838),
             ]
         )
     );
@@ -663,10 +663,11 @@ fn test_multiple_tokens() {
     for i in [1, 2] {
         assert!(results.get(i).unwrap() > U256::from_u128(&e, u128::MAX));
     }
-    // assert_eq!(
-    //     results.get(0).unwrap().to_be_bytes(),
-    //     Bytes::from_array(&e, &[0])
-    // );
+    // for r in results.iter().map(|x| x.to_be_bytes()) {
+    //     let mut slice = [0u8; 32];
+    //     r.copy_into_slice(&mut slice);
+    //     std::println!("Result: {:?}", std::vec::Vec::<u8>::from(slice));
+    // }
     assert_eq!(
         results,
         Vec::from_array(
@@ -677,8 +678,8 @@ fn test_multiple_tokens() {
                     &Bytes::from_array(
                         &e,
                         &[
-                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 215, 54, 187, 38, 81,
-                            230, 97, 36, 91, 116, 178, 233, 122, 252, 227, 36
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 215, 87, 47, 144, 226,
+                            28, 6, 159, 64, 28, 134, 187, 70, 63, 42, 234
                         ]
                     )
                 ),
@@ -687,8 +688,8 @@ fn test_multiple_tokens() {
                     &Bytes::from_array(
                         &e,
                         &[
-                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 174, 109, 118, 76, 163,
-                            204, 194, 72, 182, 233, 101, 210, 245, 249, 198, 72
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 174, 174, 95, 33, 196,
+                            56, 13, 62, 128, 57, 13, 118, 140, 126, 85, 212
                         ]
                     )
                 ),
@@ -697,8 +698,8 @@ fn test_multiple_tokens() {
                     &Bytes::from_array(
                         &e,
                         &[
-                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 205, 97, 26, 127, 187,
-                            170, 153, 35, 219, 132, 255, 10, 68, 160, 74, 120
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 205, 205, 73, 56, 71,
+                            8, 22, 18, 213, 180, 107, 197, 148, 210, 143, 12
                         ]
                     )
                 ),
