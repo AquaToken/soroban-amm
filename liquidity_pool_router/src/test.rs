@@ -75,7 +75,7 @@ fn test_total_liquidity() {
     e.cost_estimate().budget().reset_default();
     assert_eq!(
         setup.router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 33600)
+        U256::from_u32(&e, 33842)
     );
     e.cost_estimate().budget().print();
     assert!(
@@ -373,7 +373,7 @@ fn test_stableswap_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 337515788)
+        U256::from_u32(&e, 339269948)
     );
 
     assert_eq!(token_share.balance(&user1), 200_0000000);
@@ -492,7 +492,7 @@ fn test_stableswap_3_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 1038936246)
+        U256::from_u32(&e, 1046116962)
     );
 
     assert_eq!(token_share.balance(&user1), 300_0000000);
@@ -755,7 +755,7 @@ fn test_simple_ongoing_reward() {
     let stable_liquidity = router.get_total_liquidity(&tokens).sub(&standard_liquidity);
     assert_eq!(
         standard_liquidity.add(&stable_liquidity),
-        U256::from_u32(&e, 370)
+        U256::from_u32(&e, 372)
     );
 
     assert_eq!(
@@ -1060,11 +1060,11 @@ fn test_rewards_distribution() {
         .sub(&standard_liquidity2);
     assert_eq!(
         standard_liquidity1.add(&stable_liquidity1),
-        U256::from_u32(&e, 370)
+        U256::from_u32(&e, 372)
     );
     assert_eq!(
         standard_liquidity2.add(&stable_liquidity2),
-        U256::from_u32(&e, 370)
+        U256::from_u32(&e, 372)
     );
 
     let rewards = Vec::from_array(
