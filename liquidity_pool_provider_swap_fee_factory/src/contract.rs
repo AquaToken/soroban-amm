@@ -120,7 +120,7 @@ impl UpgradeableContract for ProviderSwapFeeFactory {
     // Returns:
     //   - A u32 representing the version.
     fn version() -> u32 {
-        150
+        160
     }
 
     // commit_upgrade

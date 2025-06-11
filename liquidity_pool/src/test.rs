@@ -2656,3 +2656,82 @@ fn test_deposit_and_withdraw_fee() {
         Vec::from_array(&setup.env, [500_0000000, 1000_0000000])
     );
 }
+
+#[test]
+fn test_custom_protocol_fee() {
+    let config = TestConfig {
+        mint_to_user: 1000000_0000000,
+        ..TestConfig::default()
+    };
+    let setup = Setup::new_with_config(&config);
+
+    // we're checking fraction against output for 1 token
+    for (protocol_fee_fraction, protocol_fee_amount) in [
+        (1000, 3000_u128),  // 0.3% * 10%
+        (3000, 9000_u128),  // 0.3% * 30%
+        (5000, 15000_u128), // 0.3% * 50%
+    ] {
+        let liqpool = create_liqpool_contract(
+            &setup.env,
+            &setup.admin,
+            &Address::generate(&setup.env),
+            &install_token_wasm(&setup.env),
+            &Vec::from_array(
+                &setup.env,
+                [setup.token1.address.clone(), setup.token2.address.clone()],
+            ),
+            &setup.token_reward.address,
+            &setup.reward_boost_token.address,
+            &setup.reward_boost_feed.address,
+            30,
+            &setup.plane.address,
+        );
+        liqpool.set_protocol_fee_fraction(&setup.admin, &protocol_fee_fraction);
+        liqpool.deposit(
+            &setup.users[0],
+            &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
+            &0,
+        );
+        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), 9871580);
+        assert_eq!(
+            liqpool.swap(&setup.users[0], &1, &0, &1_0000000, &0),
+            9871580
+        );
+        assert_eq!(liqpool.get_protocol_fees().get_unchecked(0), 0);
+        assert_eq!(
+            liqpool.get_protocol_fees().get_unchecked(1),
+            protocol_fee_amount
+        );
+
+        // full withdraw & deposit to reset pool reserves
+        liqpool.withdraw(
+            &setup.users[0],
+            &(SorobanTokenClient::new(&setup.env, &liqpool.share_id()).balance(&setup.users[0])
+                as u128),
+            &Vec::from_array(&setup.env, [0, 0]),
+        );
+        liqpool.deposit(
+            &setup.users[0],
+            &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
+            &0,
+        );
+        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), 9871580); // re-check swap result didn't change
+        assert_eq!(
+            liqpool.estimate_swap_strict_receive(&0, &1, &9871580),
+            1_0000000
+        );
+        assert_eq!(
+            liqpool.swap_strict_receive(&setup.users[0], &0, &1, &9871580, &1_0000000),
+            1_0000000
+        );
+        // each time we collect protocol fee on input token
+        assert_eq!(
+            liqpool.get_protocol_fees().get_unchecked(0),
+            protocol_fee_amount
+        );
+        assert_eq!(
+            liqpool.get_protocol_fees().get_unchecked(1),
+            protocol_fee_amount
+        );
+    }
+}
