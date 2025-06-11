@@ -242,6 +242,9 @@ pub trait PoolsManagementTrait {
         start: u128,
         end: u128,
     ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
+
+    // Returns the protocol fee fraction.
+    fn get_protocol_fee_fraction(e: Env) -> u32;
 }
 
 pub trait PoolPlaneInterface {

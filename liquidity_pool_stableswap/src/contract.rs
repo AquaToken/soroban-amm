@@ -159,11 +159,13 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // * The amount of token `j` that will be received.
     fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128 {
+        let dx_fee = dx.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
+
         // dx and dy in c-units
         let precision_mul = get_precision_mul(&e);
         let xp = Self::_xp(&e, &get_reserves(&e));
 
-        let x = xp.get(i).unwrap() + dx * precision_mul.get(i).unwrap();
+        let x = xp.get(i).unwrap() + (dx - dx_fee) * precision_mul.get(i).unwrap();
         let y = Self::_get_y(&e, i, j, x, &xp);
 
         if y == 0 {
@@ -172,10 +174,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let dy = (xp.get(j).unwrap() - y - 1) / precision_mul.get(j).unwrap();
-        // The `fixed_mul_ceil` function is used to perform the multiplication
-        //  to ensure user cannot exploit rounding errors.
-        let fee = (get_fee(&e) as u128).fixed_mul_ceil(&e, &dy, &(FEE_DENOMINATOR as u128));
-        dy - fee
+        dy
     }
 
     // Calculate the amount of token `i` that will be sent for swapping `dy` of token `j`.
@@ -195,23 +194,18 @@ impl LiquidityPoolTrait for LiquidityPool {
         let xp = Self::_xp(&e, &get_reserves(&e));
         let xp_buy = xp.get(j).unwrap();
 
-        // apply fee to dy to keep swap symmetrical
-        let dy_w_fee_scaled = dy.fixed_mul_ceil(
-            &e,
-            &(FEE_DENOMINATOR as u128),
-            &((FEE_DENOMINATOR - get_fee(&e)) as u128),
-        ) * precision_mul.get(j).unwrap();
+        let dy_scaled = dy * precision_mul.get(j).unwrap();
 
         // if total value including fee is more than the reserve, math can't be done properly
-        if dy_w_fee_scaled >= xp_buy {
+        if dy_scaled >= xp_buy {
             panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
         }
 
-        let y_w_fee = match xp_buy.checked_sub(dy_w_fee_scaled) {
+        let y = match xp_buy.checked_sub(dy_scaled) {
             Some(y) => y,
             None => panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance),
         };
-        let x = Self::_get_y(&e, j, i, y_w_fee, &xp);
+        let x = Self::_get_y(&e, j, i, y, &xp);
 
         if x == 0 {
             // pool is empty
@@ -219,7 +213,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         let dx = (x - xp.get(i).unwrap() + 1) / precision_mul.get(i).unwrap();
-        dx
+        let dx_w_fee = dx.fixed_mul_ceil(
+            &e,
+            &(FEE_DENOMINATOR as u128),
+            &((FEE_DENOMINATOR - get_fee(&e)) as u128),
+        );
+        dx_w_fee
     }
 
     // Withdraw coins from the pool in an imbalanced amount.
@@ -1348,36 +1347,34 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let x = xp.get(in_idx).unwrap() + in_amount * precision_mul.get(in_idx).unwrap();
+        let dx_fee =
+            in_amount.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
+        let dx_protocol_fee = dx_fee.fixed_mul_ceil(
+            &e,
+            &(get_protocol_fee_fraction(&e) as u128),
+            &(FEE_DENOMINATOR as u128),
+        );
+        let x = xp.get(in_idx).unwrap() + (in_amount - dx_fee) * precision_mul.get(in_idx).unwrap();
         let y = Self::_get_y(&e, in_idx, out_idx, x, &xp);
 
         let dy = xp.get(out_idx).unwrap() - y - 1; // -1 just in case there were some rounding errors
-        let dy_fee_total =
-            dy.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
-        let dy_protocol_fee =
-            dy_fee_total * get_protocol_fee_fraction(&e) as u128 / FEE_DENOMINATOR as u128;
 
         // Convert all to real units
-        let out_precision_mul = precision_mul.get(out_idx).unwrap();
-        let dy = (dy - dy_fee_total) / out_precision_mul;
-        let dy_protocol_fee = dy_protocol_fee / out_precision_mul;
+        let dy = dy / precision_mul.get(out_idx).unwrap();
         if dy < out_min {
             panic_with_error!(e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
         let mut reserves = get_reserves(&e);
-        reserves.set(in_idx, old_balances.get(in_idx).unwrap() + in_amount);
         reserves.set(
-            out_idx,
-            old_balances.get(out_idx).unwrap() - dy - dy_protocol_fee,
+            in_idx,
+            old_balances.get(in_idx).unwrap() + in_amount - dx_protocol_fee,
         );
+        reserves.set(out_idx, old_balances.get(out_idx).unwrap() - dy);
         put_reserves(&e, &reserves);
 
         let mut protocol_fees = get_protocol_fees(&e);
-        protocol_fees.set(
-            out_idx,
-            protocol_fees.get(out_idx).unwrap() + dy_protocol_fee,
-        );
+        protocol_fees.set(in_idx, protocol_fees.get(in_idx).unwrap() + dx_protocol_fee);
         put_protocol_fees(&e, &protocol_fees);
 
         let token_out = coins.get(out_idx).unwrap();
@@ -1387,9 +1384,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        // since we need fee in amount sent to the pool, calculate it here
-        let dx_fee =
-            in_amount.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
         PoolEvents::new(&e).trade(user, input_coin, token_out, in_amount, dy, dx_fee);
         PoolEvents::new(&e).update_reserves(reserves);
 
@@ -1457,31 +1451,33 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        // apply fee to dy to keep swap symmetrical
-        // we'll transfer to user the amount he wants to receive, however calculation will be done with fee
-        let dy_w_fee = out_amount.fixed_mul_ceil(
-            &e,
-            &(FEE_DENOMINATOR as u128),
-            &((FEE_DENOMINATOR - get_fee(&e)) as u128),
-        );
-
-        // if total value including fee is more than the reserve, math can't be done properly
-        if dy_w_fee >= reserve_buy {
+        if out_amount >= reserve_buy {
             panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
         }
 
-        let y_w_fee = match xp
+        let y = match xp
             .get(out_idx)
             .unwrap()
-            .checked_sub(dy_w_fee * precision_mul.get(out_idx).unwrap())
+            .checked_sub(out_amount * precision_mul.get(out_idx).unwrap())
         {
             Some(y) => y,
             None => panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance),
         };
-        let x = Self::_get_y(&e, out_idx, in_idx, y_w_fee, &xp);
+        let x = Self::_get_y(&e, out_idx, in_idx, y, &xp);
 
         // +1 just in case there were some rounding errors & convert to real units in place
-        let dx = (x - xp.get(in_idx).unwrap() + 1) / precision_mul.get(in_idx).unwrap();
+        let dx_wo_fee = (x - xp.get(in_idx).unwrap() + 1) / precision_mul.get(in_idx).unwrap();
+        let dx = dx_wo_fee.fixed_mul_ceil(
+            &e,
+            &(FEE_DENOMINATOR as u128),
+            &((FEE_DENOMINATOR - get_fee(&e)) as u128),
+        );
+        let dx_fee = dx - dx_wo_fee;
+        let dx_protocol_fee = dx_fee.fixed_mul_ceil(
+            &e,
+            &(get_protocol_fee_fraction(&e) as u128),
+            &(FEE_DENOMINATOR as u128),
+        );
         if dx > in_max {
             panic_with_error!(e, LiquidityPoolValidationError::InMaxNotSatisfied);
         }
@@ -1496,18 +1492,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             );
         }
 
-        // Calculate fees
-        let dx_wo_fee = dx * (FEE_DENOMINATOR - get_fee(&e)) as u128 / FEE_DENOMINATOR as u128;
-        let dx_total_fee = dx - dx_wo_fee;
-        let dx_lp_fee = dx_total_fee * (FEE_DENOMINATOR - get_protocol_fee_fraction(&e)) as u128
-            / FEE_DENOMINATOR as u128;
-        let dx_protocol_fee = dx_total_fee - dx_lp_fee;
-
         // Update reserves
         let mut reserves = get_reserves(&e);
         reserves.set(
             in_idx,
-            old_balances.get(in_idx).unwrap() + dx_wo_fee + dx_lp_fee,
+            old_balances.get(in_idx).unwrap() + dx - dx_protocol_fee,
         );
         reserves.set(out_idx, old_balances.get(out_idx).unwrap() - out_amount);
         put_reserves(&e, &reserves);
@@ -1523,7 +1512,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        PoolEvents::new(&e).trade(user, input_coin, token_out, dx, out_amount, dx_total_fee);
+        PoolEvents::new(&e).trade(user, input_coin, token_out, dx, out_amount, dx_fee);
         PoolEvents::new(&e).update_reserves(reserves);
 
         dx
@@ -1642,7 +1631,7 @@ impl UpgradeableContract for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        150
+        160
     }
 
     // Commits a new wasm hash for a future upgrade.
