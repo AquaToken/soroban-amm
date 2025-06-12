@@ -542,11 +542,7 @@ fn test_events_2_tokens() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![
-                    &e,
-                    Vec::from_array(&e, [100_0000000_u128, 100_0000000_u128]).to_val()
-                ]
-                .to_val()
+                vec![&e, 100_0000000_i128, 100_0000000_i128,].to_val()
             ),
         ]
     );
@@ -572,11 +568,7 @@ fn test_events_2_tokens() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![
-                    &e,
-                    Vec::from_array(&e, [1000000099_u128, 999999902_u128]).to_val()
-                ]
-                .to_val()
+                vec![&e, 1000000099_i128, 999999902_i128,].to_val()
             ),
         ]
     );
@@ -607,7 +599,7 @@ fn test_events_2_tokens() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![&e, Vec::from_array(&e, [0_u128, 0_u128]).to_val()].to_val()
+                vec![&e, 0_i128, 0_i128].to_val()
             ),
         ]
     );
@@ -698,12 +690,7 @@ fn test_events_3_tokens() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![
-                    &e,
-                    Vec::from_array(&e, [100_0000000_u128, 100_0000000_u128, 100_0000000_u128])
-                        .to_val()
-                ]
-                .to_val()
+                vec![&e, 100_0000000_i128, 100_0000000_i128, 100_0000000_i128,].to_val()
             ),
         ]
     );
@@ -728,12 +715,7 @@ fn test_events_3_tokens() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![
-                    &e,
-                    Vec::from_array(&e, [1000000099_u128, 999999902_u128, 1000000000_u128])
-                        .to_val()
-                ]
-                .to_val()
+                vec![&e, 1000000099_i128, 999999902_i128, 1000000000_i128,].to_val()
             ),
         ]
     );
@@ -767,7 +749,7 @@ fn test_events_3_tokens() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![&e, Vec::from_array(&e, [0_u128, 0_u128, 0_u128]).to_val()].to_val()
+                vec![&e, 0_i128, 0_i128, 0_i128].to_val()
             ),
         ]
     );
@@ -872,16 +854,10 @@ fn test_events_4_tokens() {
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
                 vec![
                     &e,
-                    Vec::from_array(
-                        &e,
-                        [
-                            1000000000_u128,
-                            1000000000_u128,
-                            1000000000_u128,
-                            1000000000_u128
-                        ]
-                    )
-                    .to_val()
+                    1000000000_i128,
+                    1000000000_i128,
+                    1000000000_i128,
+                    1000000000_i128,
                 ]
                 .to_val()
             ),
@@ -910,16 +886,10 @@ fn test_events_4_tokens() {
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
                 vec![
                     &e,
-                    Vec::from_array(
-                        &e,
-                        [
-                            1000000099_u128,
-                            999999902_u128,
-                            1000000000_u128,
-                            1000000000_u128
-                        ]
-                    )
-                    .to_val()
+                    1000000099_i128,
+                    999999902_i128,
+                    1000000000_i128,
+                    1000000000_i128,
                 ]
                 .to_val()
             ),
@@ -958,11 +928,7 @@ fn test_events_4_tokens() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![
-                    &e,
-                    Vec::from_array(&e, [0_u128, 0_u128, 0_u128, 0_u128]).to_val()
-                ]
-                .to_val()
+                vec![&e, 0_i128, 0_i128, 0_i128, 0_i128,].to_val()
             ),
         ]
     );
@@ -1767,11 +1733,7 @@ fn test_withdraw_one_token() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![
-                    &e,
-                    Vec::from_array(&e, [8_9564393_u128, 100_0000000_u128]).to_val()
-                ]
-                .to_val()
+                vec![&e, 8_9564393_i128, 100_0000000_i128,].to_val()
             ),
         ]
     );
@@ -2118,11 +2080,7 @@ fn test_remove_liquidity_imbalance() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![
-                    &e,
-                    Vec::from_array(&e, [9_5000000_u128, 1_0000000_u128]).to_val()
-                ]
-                .to_val()
+                vec![&e, 9_5000000_i128, 1_0000000_i128,].to_val()
             ),
         ]
     );
