@@ -373,7 +373,7 @@ fn test_events() {
             (
                 liq_pool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![&e, desired_amounts.to_val()].to_val()
+                vec![&e, amount_to_deposit as i128, amount_to_deposit as i128].to_val()
             ),
         ]
     );
@@ -398,11 +398,7 @@ fn test_events() {
             (
                 liq_pool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![
-                    &e,
-                    Vec::from_array(&e, [100_0000100_u128, 999999902_u128]).to_val()
-                ]
-                .to_val()
+                vec![&e, 100_0000100_i128, 999999902_i128,].to_val()
             ),
         ]
     );
@@ -433,7 +429,7 @@ fn test_events() {
             (
                 liq_pool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![&e, Vec::from_array(&e, [0_u128, 0_u128]).to_val()].to_val()
+                vec![&e, 0_i128, 0_i128].to_val()
             ),
         ]
     );

@@ -151,11 +151,18 @@ impl LiquidityPoolEvents for Events {
         //
         // body
         // [
-        //   reserves: Vec<u128>         // updated reserves of the pool
+        //   reserve0: i128,      // updated reserve for asset0
+        //   reserve1: i128,      // updated reserve for asset1
+        //   reserve2: i128       // updated reserve for asset2 (optional)
+        //   ...                  // additional reserves if needed
         // ]
         let e = self.env();
+        let mut body: Vec<Val> = Vec::new(e);
+        for reserve in reserves.iter() {
+            body.push_back((reserve as i128).into_val(e));
+        }
         e.events()
-            .publish((Symbol::new(e, "update_reserves"),), (reserves,));
+            .publish((Symbol::new(e, "update_reserves"),), body);
     }
 
     fn kill_deposit(&self) {
