@@ -109,6 +109,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) operations_admin: Address,
     pub(crate) pause_admin: Address,
     pub(crate) emergency_pause_admin: Address,
+    pub(crate) system_fee_admin: Address,
 }
 
 impl Default for Setup<'_> {
@@ -149,6 +150,7 @@ impl Default for Setup<'_> {
         let operations_admin = soroban_sdk::Address::generate(&env);
         let pause_admin = soroban_sdk::Address::generate(&env);
         let emergency_pause_admin = soroban_sdk::Address::generate(&env);
+        let system_fee_admin = soroban_sdk::Address::generate(&env);
         let reward_boost_feed = create_reward_boost_feed_contract(
             &env,
             &admin,
@@ -161,6 +163,7 @@ impl Default for Setup<'_> {
             &operations_admin,
             &pause_admin,
             &Vec::from_array(&env, [emergency_pause_admin.clone()]),
+            &system_fee_admin,
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&env));
@@ -178,6 +181,7 @@ impl Default for Setup<'_> {
             &reward_boost_token.address,
             &reward_boost_feed.address,
         );
+        router.set_protocol_fee_fraction(&admin, &5000);
 
         let emergency_admin = Address::generate(&env);
         router.commit_transfer_ownership(
@@ -206,6 +210,7 @@ impl Default for Setup<'_> {
             operations_admin,
             pause_admin,
             emergency_pause_admin,
+            system_fee_admin,
             reward_boost_token,
             reward_boost_feed,
         }

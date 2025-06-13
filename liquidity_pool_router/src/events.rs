@@ -70,6 +70,8 @@ pub(crate) trait LiquidityPoolRouterEvents {
         reward_token: Address,
         reward_amount: u128,
     );
+
+    fn set_protocol_fee_fraction(&self, fraction: u32);
 }
 
 impl LiquidityPoolRouterEvents for Events {
@@ -156,5 +158,20 @@ impl LiquidityPoolRouterEvents for Events {
             (Symbol::new(self.env(), "claim"), tokens, user),
             (pool_address, reward_token, reward_amount),
         );
+    }
+
+    fn set_protocol_fee_fraction(&self, fraction: u32) {
+        // topics
+        // [
+        //   "set_protocol_fee": Symbol, // event identifier
+        // ]
+        //
+        // body
+        // [
+        //   fraction: u32                          // new protocol fee fraction
+        // ]
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "set_protocol_fee"),), (fraction,));
     }
 }

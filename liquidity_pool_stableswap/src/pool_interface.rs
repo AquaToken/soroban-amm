@@ -5,12 +5,12 @@ pub trait ManagedLiquidityPool {
     fn initialize_all(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
         token_wasm_hash: BytesN<32>,
         coins: Vec<Address>,
         amp: u128,
-        fee: u32,
+        fees_config: (u32, u32),
         reward_config: (Address, Address, Address),
         plane: Address,
     );
@@ -24,16 +24,19 @@ pub trait LiquidityPoolInterfaceTrait {
     fn initialize(
         e: Env,
         admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         a: u128,
-        fee_fraction: u32,
+        fees_config: (u32, u32),
     );
 
     // The pool swap fee, as an integer with 1e4 precision. 0.01% = 1; 0.3% = 30; 1% = 100;
     fn get_fee_fraction(e: Env) -> u32;
+
+    // Returns part of the fee that goes to the protocol
+    fn get_protocol_fee_fraction(e: Env) -> u32;
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
@@ -198,6 +201,7 @@ pub trait AdminInterfaceTrait {
         operations_admin: Address,
         pause_admin: Address,
         emergency_pause_admins: Vec<Address>,
+        system_fee_admin: Address,
     );
 
     // Get map of privileged roles
@@ -232,6 +236,15 @@ pub trait AdminInterfaceTrait {
     fn get_is_killed_deposit(e: Env) -> bool;
     fn get_is_killed_swap(e: Env) -> bool;
     fn get_is_killed_claim(e: Env) -> bool;
+
+    // Sets the protocol fraction of total fee for the pool.
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
+
+    // Returns the protocol fees accumulated in the pool.
+    fn get_protocol_fees(e: Env) -> Vec<u128>;
+
+    // Claims the protocol fees accumulated in the pool.
+    fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128>;
 }
 
 pub trait LiquidityPoolTrait:

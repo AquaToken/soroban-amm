@@ -30,9 +30,10 @@ pub fn apply_upgrade(e: &Env) -> BytesN<32> {
         if e.ledger().timestamp() < get_upgrade_deadline(e) {
             panic_with_error!(e, Error::ActionNotReadyYet);
         }
-        if get_upgrade_deadline(e) == 0 {
-            panic_with_error!(e, Error::NoActionActive);
-        }
+    }
+
+    if get_upgrade_deadline(e) == 0 {
+        panic_with_error!(e, Error::NoActionActive);
     }
 
     put_upgrade_deadline(e, &0);

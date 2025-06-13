@@ -55,6 +55,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) operations_admin: Address,
     pub(crate) pause_admin: Address,
     pub(crate) emergency_pause_admin: Address,
+    pub(crate) system_fee_admin: Address,
 }
 
 impl Default for Setup<'_> {
@@ -87,10 +88,11 @@ impl Setup<'_> {
         let rewards_admin = Address::generate(&e);
         let operations_admin = Address::generate(&e);
         let pause_admin = Address::generate(&e);
+        let system_fee_admin = Address::generate(&e);
         let emergency_pause_admin = Address::generate(&e);
 
-        let mut token1 = create_token_contract(&e, &admin);
-        let mut token2 = create_token_contract(&e, &admin);
+        let token1 = create_token_contract(&e, &admin);
+        let token2 = create_token_contract(&e, &admin);
         let reward_token = if config.reward_token_in_pool {
             SorobanTokenClient::new(&e, &token1.address.clone())
         } else {
@@ -106,9 +108,6 @@ impl Setup<'_> {
 
         let plane = create_plane_contract(&e);
 
-        if &token2.address < &token1.address {
-            std::mem::swap(&mut token1, &mut token2);
-        }
         let token1_admin_client = get_token_admin_client(&e, &token1.address.clone());
         let token2_admin_client = get_token_admin_client(&e, &token2.address.clone());
         let token_reward_admin_client = get_token_admin_client(&e, &reward_token.address.clone());
@@ -131,10 +130,11 @@ impl Setup<'_> {
 
         liq_pool.set_privileged_addrs(
             &admin,
-            &rewards_admin.clone(),
-            &operations_admin.clone(),
-            &pause_admin.clone(),
+            &rewards_admin,
+            &operations_admin,
+            &pause_admin,
             &Vec::from_array(&e, [emergency_pause_admin.clone()]),
+            &system_fee_admin,
         );
 
         let emergency_admin = Address::generate(&e);
@@ -145,6 +145,8 @@ impl Setup<'_> {
         );
         jump(&e, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
         liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
+
+        liq_pool.set_protocol_fee_fraction(&admin, &5000);
 
         let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
@@ -167,6 +169,7 @@ impl Setup<'_> {
             operations_admin,
             pause_admin,
             emergency_pause_admin,
+            system_fee_admin,
             reward_boost_token,
             reward_boost_feed,
         }
@@ -262,11 +265,15 @@ pub fn create_liqpool_contract<'a>(
             admin.clone(),
             admin.clone(),
             Vec::from_array(e, [admin.clone()]),
+            admin.clone(),
         ),
         router,
         token_wasm_hash,
         tokens,
-        &fee_fraction,
+        &(
+            fee_fraction,
+            5000, // 50% protocol fee fraction
+        ),
         &(
             reward_token.clone(),
             reward_boost_token.clone(),

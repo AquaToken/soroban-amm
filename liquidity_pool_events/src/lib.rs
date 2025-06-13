@@ -36,6 +36,8 @@ pub trait LiquidityPoolEvents {
         fee_amount: u128,
     );
 
+    fn update_reserves(&self, reserves: Vec<u128>);
+
     fn kill_deposit(&self);
 
     fn unkill_deposit(&self);
@@ -47,6 +49,10 @@ pub trait LiquidityPoolEvents {
     fn kill_claim(&self);
 
     fn unkill_claim(&self);
+
+    fn set_protocol_fee_fraction(&self, fraction: u32);
+
+    fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128);
 }
 
 // This trait is used to emit events related to liquidity pool operations.
@@ -137,6 +143,28 @@ impl LiquidityPoolEvents for Events {
         );
     }
 
+    fn update_reserves(&self, reserves: Vec<u128>) {
+        // topics
+        // [
+        //   "update_reserves": Symbol, // event identifier
+        // ]
+        //
+        // body
+        // [
+        //   reserve0: i128,      // updated reserve for asset0
+        //   reserve1: i128,      // updated reserve for asset1
+        //   reserve2: i128       // updated reserve for asset2 (optional)
+        //   ...                  // additional reserves if needed
+        // ]
+        let e = self.env();
+        let mut body: Vec<Val> = Vec::new(e);
+        for reserve in reserves.iter() {
+            body.push_back((reserve as i128).into_val(e));
+        }
+        e.events()
+            .publish((Symbol::new(e, "update_reserves"),), body);
+    }
+
     fn kill_deposit(&self) {
         self.env()
             .events()
@@ -171,5 +199,39 @@ impl LiquidityPoolEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "unkill_claim"),), ())
+    }
+
+    fn set_protocol_fee_fraction(&self, fraction: u32) {
+        // topics
+        // [
+        //   "set_protocol_fee": Symbol, // event identifier
+        // ]
+        //
+        // body
+        // [
+        //   fraction: u32                          // new protocol fee fraction
+        // ]
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "set_protocol_fee"),), (fraction,));
+    }
+
+    fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128) {
+        // topics
+        // [
+        //   "claim_protocol_fee": Symbol,  // event identifier
+        //   asset: Address,                // contract address identifying asset claimed
+        // ]
+        //
+        // body
+        // [
+        //   destination: Address,          // address of account/contract that received the claimed tokens
+        //   amount: i128                   // amount of tokens claimed
+        // ]
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "claim_protocol_fee"), token),
+            (destination, amount as i128),
+        );
     }
 }
