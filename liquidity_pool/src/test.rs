@@ -2498,6 +2498,21 @@ fn test_emergency_upgrade() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #2907)")]
+fn test_apply_emergency_upgrade_not_commited() {
+    let setup = Setup::default();
+    let contract = setup.liq_pool;
+
+    let new_wasm = install_dummy_wasm(&setup.env);
+    let new_token_wasm = install_dummy_wasm(&setup.env);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    contract.revert_upgrade(&setup.admin);
+
+    contract.set_emergency_mode(&setup.emergency_admin, &true);
+    contract.apply_upgrade(&setup.admin);
+}
+
+#[test]
 fn test_regular_upgrade_token() {
     let setup = Setup::default();
     let contract = setup.liq_pool;
