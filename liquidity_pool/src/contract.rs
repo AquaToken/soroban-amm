@@ -1014,7 +1014,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     }
 
     // Claims the protocol fees accumulated in the pool.
-    fn claim_protocol_fees(e: Env, admin: Address) -> Vec<u128> {
+    fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128> {
         admin.require_auth();
         require_system_fee_admin_or_owner(&e, &admin);
 
@@ -1031,20 +1031,20 @@ impl AdminInterfaceTrait for LiquidityPool {
         if fee_a > 0 {
             SorobanTokenClient::new(&e, &token_a).transfer(
                 &e.current_contract_address(),
-                &admin,
+                &destination,
                 &(fee_a as i128),
             );
             set_protocol_fee_a(&e, &0);
-            PoolEvents::new(&e).claim_protocol_fee(token_a, fee_a);
+            PoolEvents::new(&e).claim_protocol_fee(token_a, destination.clone(), fee_a);
         }
         if fee_b > 0 {
             SorobanTokenClient::new(&e, &token_b).transfer(
                 &e.current_contract_address(),
-                &admin,
+                &destination,
                 &(fee_b as i128),
             );
             set_protocol_fee_b(&e, &0);
-            PoolEvents::new(&e).claim_protocol_fee(token_b, fee_b);
+            PoolEvents::new(&e).claim_protocol_fee(token_b, destination, fee_b);
         }
 
         Vec::from_array(&e, [fee_a, fee_b])
