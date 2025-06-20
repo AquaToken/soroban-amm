@@ -8,6 +8,7 @@ use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
     AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
 };
+use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, FromVal, IntoVal, Map, Symbol, Val, Vec,
     U256,
@@ -74,7 +75,7 @@ fn test_total_liquidity() {
     e.cost_estimate().budget().reset_default();
     assert_eq!(
         setup.router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 33600)
+        U256::from_u32(&e, 33842)
     );
     e.cost_estimate().budget().print();
     assert!(
@@ -103,6 +104,10 @@ fn test_constant_product_pool() {
     assert_eq!(
         Symbol::from_val(&e, &pool_info.get(Symbol::new(&e, "pool_type")).unwrap()),
         Symbol::new(&e, "constant_product")
+    );
+    assert_eq!(
+        testutils::standard_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
+        5000,
     );
 
     let pools = router.get_pools(&tokens);
@@ -344,6 +349,10 @@ fn test_stableswap_pool() {
         testutils::stableswap_pool::Client::new(&e, &pool_address).a(),
         1500,
     );
+    assert_eq!(
+        testutils::stableswap_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
+        5000,
+    );
 
     let pools = router.get_pools(&tokens);
 
@@ -364,7 +373,7 @@ fn test_stableswap_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 337515788)
+        U256::from_u32(&e, 339269948)
     );
 
     assert_eq!(token_share.balance(&user1), 200_0000000);
@@ -388,7 +397,7 @@ fn test_stableswap_pool() {
             &pool_hash,
             &97_0000000,
         ),
-        95_8920895
+        95_9407569
     );
     assert_eq!(
         router.swap(
@@ -400,16 +409,16 @@ fn test_stableswap_pool() {
             &97_0000000_u128,
             &80_4573705_u128,
         ),
-        95_8920895
+        95_9407569
     );
 
     assert_eq!(token1.balance(&user1), 803_0000000);
     assert_eq!(token1.balance(&pool_address), 197_0000000);
-    assert_eq!(token2.balance(&user1), 995_8920895);
-    assert_eq!(token2.balance(&pool_address), 4_1079105);
+    assert_eq!(token2.balance(&user1), 995_9407569);
+    assert_eq!(token2.balance(&pool_address), 4_0592431);
     assert_eq!(
         router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [197_0000000, 4_1079105])
+        Vec::from_array(&e, [196_8545000, 4_0592431])
     );
 
     router.withdraw(
@@ -417,13 +426,13 @@ fn test_stableswap_pool() {
         &tokens,
         &pool_hash,
         &200_0000000_u128,
-        &Vec::from_array(&e, [197_0000000_u128, 4_1079105_u128]),
+        &Vec::from_array(&e, [196_8545000_u128, 4_0592431_u128]),
     );
 
-    assert_eq!(token1.balance(&user1), 1000_0000000);
-    assert_eq!(token2.balance(&user1), 1000_0000000);
+    assert_eq!(token1.balance(&user1), 999_8545000);
+    assert_eq!(token2.balance(&user1), 1000_0000000); // minus protocol fee
     assert_eq!(token_share.balance(&user1), 0);
-    assert_eq!(token1.balance(&pool_address), 0);
+    assert_eq!(token1.balance(&pool_address), 1455000);
     assert_eq!(token2.balance(&pool_address), 0);
     assert_eq!(token_share.balance(&pool_address), 0);
 }
@@ -483,7 +492,7 @@ fn test_stableswap_3_pool() {
     router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
     assert_eq!(
         router.get_total_liquidity(&tokens),
-        U256::from_u32(&e, 1038936246)
+        U256::from_u32(&e, 1046116962)
     );
 
     assert_eq!(token_share.balance(&user1), 300_0000000);
@@ -511,7 +520,7 @@ fn test_stableswap_3_pool() {
             &97_0000000_u128,
             &80_4573705_u128,
         ),
-        96_4908385
+        96_5081326
     );
     assert_eq!(
         router.swap(
@@ -521,20 +530,20 @@ fn test_stableswap_3_pool() {
             &token3.address,
             &pool_hash,
             &20_0000000_u128,
-            &20_1144225_u128,
+            &20_1156572_u128,
         ),
-        20_1144225
+        20_1156572
     );
 
     assert_eq!(token1.balance(&user1), 803_0000000);
     assert_eq!(token1.balance(&pool_address), 197_0000000);
-    assert_eq!(token2.balance(&user1), 97_64908385);
-    assert_eq!(token2.balance(&pool_address), 23_5091615);
-    assert_eq!(token3.balance(&user1), 920_1144225);
-    assert_eq!(token3.balance(&pool_address), 79_8855775);
+    assert_eq!(token2.balance(&user1), 97_65081326);
+    assert_eq!(token2.balance(&pool_address), 23_4918674);
+    assert_eq!(token3.balance(&user1), 920_1156572);
+    assert_eq!(token3.balance(&pool_address), 79_8843428);
     assert_eq!(
         router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [197_0000000, 23_5091615, 79_8855775])
+        Vec::from_array(&e, [196_8545000, 23_4618674, 79_8843428])
     );
 
     router.withdraw(
@@ -542,15 +551,16 @@ fn test_stableswap_3_pool() {
         &tokens,
         &pool_hash,
         &300_0000000_u128,
-        &Vec::from_array(&e, [197_0000000, 23_5091615, 79_8855775]),
+        &Vec::from_array(&e, [196_8545000, 23_4618674, 79_8843428]),
     );
 
-    assert_eq!(token1.balance(&user1), 1000_0000000);
-    assert_eq!(token2.balance(&user1), 1000_0000000);
+    assert_eq!(token1.balance(&user1), 999_8545000);
+    assert_eq!(token2.balance(&user1), 999_9700000);
     assert_eq!(token3.balance(&user1), 1000_0000000);
     assert_eq!(token_share.balance(&user1), 0);
-    assert_eq!(token1.balance(&pool_address), 0);
-    assert_eq!(token2.balance(&pool_address), 0);
+    assert_eq!(token1.balance(&pool_address), 1455000);
+    assert_eq!(token2.balance(&pool_address), 300000);
+    assert_eq!(token3.balance(&pool_address), 0);
     assert_eq!(token_share.balance(&pool_address), 0);
 }
 
@@ -745,7 +755,7 @@ fn test_simple_ongoing_reward() {
     let stable_liquidity = router.get_total_liquidity(&tokens).sub(&standard_liquidity);
     assert_eq!(
         standard_liquidity.add(&stable_liquidity),
-        U256::from_u32(&e, 370)
+        U256::from_u32(&e, 372)
     );
 
     assert_eq!(
@@ -1050,11 +1060,11 @@ fn test_rewards_distribution() {
         .sub(&standard_liquidity2);
     assert_eq!(
         standard_liquidity1.add(&stable_liquidity1),
-        U256::from_u32(&e, 370)
+        U256::from_u32(&e, 372)
     );
     assert_eq!(
         standard_liquidity2.add(&stable_liquidity2),
-        U256::from_u32(&e, 370)
+        U256::from_u32(&e, 372)
     );
 
     let rewards = Vec::from_array(
@@ -1345,6 +1355,7 @@ fn test_rewards_distribution_as_operator() {
         &admin,
         &admin,
         &Vec::from_array(&e, [admin.clone()]),
+        &setup.system_fee_admin,
     );
     assert!(router
         .try_distribute_outstanding_reward(&user1, &router.address, &tokens, &standard_pool_hash)
@@ -1509,6 +1520,7 @@ fn test_rewards_distribution_override() {
         &admin,
         &admin,
         &Vec::from_array(&e, [admin.clone()]),
+        &setup.system_fee_admin,
     );
     assert_eq!(
         router.distribute_outstanding_reward(
@@ -2720,6 +2732,10 @@ fn test_privileged_users() {
                 Symbol::new(&e, "EmergencyPauseAdmin"),
                 Vec::from_array(&e, [setup.emergency_pause_admin]),
             ),
+            (
+                Symbol::new(&e, "SystemFeeAdmin"),
+                Vec::from_array(&e, [setup.system_fee_admin]),
+            ),
         ],
     );
     assert_eq!(privileged_addrs, router.get_privileged_addrs());
@@ -2745,6 +2761,7 @@ fn test_set_privileged_addresses_event() {
         &setup.operations_admin.clone(),
         &setup.pause_admin.clone(),
         &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+        &setup.system_fee_admin,
     );
 
     assert_eq!(
@@ -2759,6 +2776,7 @@ fn test_set_privileged_addresses_event() {
                     setup.operations_admin,
                     setup.pause_admin,
                     Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
+                    setup.system_fee_admin,
                 )
                     .into_val(&setup.env),
             ),
@@ -2922,6 +2940,20 @@ fn test_emergency_upgrade() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #2907)")]
+fn test_apply_emergency_upgrade_not_commited() {
+    let setup = Setup::default();
+    let contract = setup.router;
+
+    let new_wasm = install_dummy_wasm(&setup.env);
+    contract.commit_upgrade(&setup.admin, &new_wasm);
+    contract.revert_upgrade(&setup.admin);
+
+    contract.set_emergency_mode(&setup.emergency_admin, &true);
+    contract.apply_upgrade(&setup.admin);
+}
+
+#[test]
 fn test_regular_upgrade() {
     let setup = Setup::default();
     let contract = setup.router;
@@ -2936,4 +2968,25 @@ fn test_regular_upgrade() {
     contract.apply_upgrade(&setup.admin);
 
     assert_eq!(contract.version(), 130)
+}
+
+#[test]
+fn test_protocol_fee_inheritance() {
+    let setup = Setup::default();
+    let [token1, token2, _, _] = setup.tokens;
+    StellarAssetClient::new(&setup.env, &setup.reward_token.address)
+        .mint(&setup.admin, &20_0000000);
+    let tokens = Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]);
+
+    assert_eq!(setup.router.get_protocol_fee_fraction(), 5000);
+
+    let (_, pool1_address) = setup.router.init_standard_pool(&setup.admin, &tokens, &10);
+    let pool1_client = testutils::standard_pool::Client::new(&setup.env, &pool1_address);
+    assert_eq!(pool1_client.get_protocol_fee_fraction(), 5000);
+
+    setup.router.set_protocol_fee_fraction(&setup.admin, &1000);
+    let (_, pool2_address) = setup.router.init_standard_pool(&setup.admin, &tokens, &30);
+    let pool2_client = testutils::standard_pool::Client::new(&setup.env, &pool2_address);
+    assert_eq!(pool1_client.get_protocol_fee_fraction(), 5000);
+    assert_eq!(pool2_client.get_protocol_fee_fraction(), 1000);
 }

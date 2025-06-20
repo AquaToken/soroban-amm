@@ -34,6 +34,9 @@ enum DataKey {
     // Tokens precision
     Precision, // target precision for internal calculations. It's the maximum precision of all tokens.
     PrecisionMul, // Scales raw token amounts to match `Precision`, accounting for decimal differences.
+
+    ProtocolFeeFraction, // part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
+    ProtocolFees,
 }
 
 generate_instance_storage_getter_and_setter_with_default!(
@@ -53,6 +56,12 @@ generate_instance_storage_getter_and_setter_with_default!(
     DataKey::IsKilledClaim,
     bool,
     false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    protocol_fee_fraction,
+    DataKey::ProtocolFeeFraction,
+    u32,
+    0
 );
 
 pub fn get_tokens(e: &Env) -> Vec<Address> {
@@ -279,5 +288,26 @@ pub(crate) fn get_token_future_wasm(e: &Env) -> BytesN<32> {
     match e.storage().instance().get(&DataKey::TokenFutureWASM) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
+}
+
+pub(crate) fn put_protocol_fees(e: &Env, value: &Vec<u128>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::ProtocolFees, value);
+}
+
+pub(crate) fn get_protocol_fees(e: &Env) -> Vec<u128> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::ProtocolFees) {
+        Some(v) => v,
+        None => {
+            let tokens = get_tokens(e);
+            let mut fees = Vec::new(e);
+            for _ in tokens {
+                fees.push_back(0);
+            }
+            put_protocol_fees(e, &fees);
+            fees
+        }
     }
 }
