@@ -2305,6 +2305,7 @@ fn test_set_privileged_addresses_event() {
                     setup.operations_admin,
                     setup.pause_admin,
                     Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
+                    setup.system_fee_admin,
                 )
                     .into_val(&setup.env),
             ),

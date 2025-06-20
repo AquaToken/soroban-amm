@@ -89,8 +89,9 @@ impl AdminInterfaceTrait for LockerFeed {
         AccessControlEvents::new(&e).set_privileged_addrs(
             admin.clone(),
             operations_admin,
-            admin,
+            admin.clone(),
             Vec::new(&e),
+            admin,
         );
     }
 

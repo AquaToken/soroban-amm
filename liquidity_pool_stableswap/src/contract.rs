@@ -682,6 +682,7 @@ impl AdminInterfaceTrait for LiquidityPool {
             operations_admin,
             pause_admin,
             emergency_pause_admins,
+            system_fee_admin,
         );
     }
 
@@ -940,6 +941,11 @@ impl AdminInterfaceTrait for LiquidityPool {
     fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
+
+        if new_fraction > FEE_DENOMINATOR {
+            panic_with_error!(e, LiquidityPoolValidationError::FeeOutOfBounds);
+        }
+
         set_protocol_fee_fraction(&e, &new_fraction);
         PoolEvents::new(&e).set_protocol_fee_fraction(new_fraction);
     }
