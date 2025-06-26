@@ -51,6 +51,7 @@ impl Events {
         operations_admin: Address,
         pause_admin: Address,
         emergency_pause_admins: Vec<Address>,
+        system_fee_admin: Address,
     ) {
         self.env().events().publish(
             (Symbol::new(self.env(), "set_privileged_addrs"),),
@@ -59,6 +60,7 @@ impl Events {
                 operations_admin,
                 pause_admin,
                 emergency_pause_admins,
+                system_fee_admin,
             ),
         )
     }

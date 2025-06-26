@@ -2776,6 +2776,7 @@ fn test_set_privileged_addresses_event() {
                     setup.operations_admin,
                     setup.pause_admin,
                     Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
+                    setup.system_fee_admin,
                 )
                     .into_val(&setup.env),
             ),
@@ -2936,6 +2937,20 @@ fn test_emergency_upgrade() {
     contract.apply_upgrade(&setup.admin);
 
     assert_eq!(contract.version(), 130)
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2907)")]
+fn test_apply_emergency_upgrade_not_commited() {
+    let setup = Setup::default();
+    let contract = setup.router;
+
+    let new_wasm = install_dummy_wasm(&setup.env);
+    contract.commit_upgrade(&setup.admin, &new_wasm);
+    contract.revert_upgrade(&setup.admin);
+
+    contract.set_emergency_mode(&setup.emergency_admin, &true);
+    contract.apply_upgrade(&setup.admin);
 }
 
 #[test]
