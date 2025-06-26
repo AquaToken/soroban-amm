@@ -139,7 +139,7 @@ pub trait AdminInterfaceTrait {
     fn get_protocol_fees(e: Env) -> Vec<u128>;
 
     // Claims the protocol fees accumulated in the pool.
-    fn claim_protocol_fees(e: Env, admin: Address) -> Vec<u128>;
+    fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128>;
 }
 
 pub trait UpgradeableContract {

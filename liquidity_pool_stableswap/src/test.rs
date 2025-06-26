@@ -152,10 +152,13 @@ fn test_happy_flow() {
         &Vec::from_array(&e, [0, 0]),
     );
 
-    let protocol_fees = liqpool.claim_protocol_fees(&user1);
+    let protocol_fees_destination = Address::generate(&e);
+    let protocol_fees = liqpool.claim_protocol_fees(&user1, &protocol_fees_destination);
     assert_eq!(protocol_fees, Vec::from_array(&e, [10000000, 0]));
+    assert_eq!(token1.balance(&protocol_fees_destination), 10000000);
+    assert_eq!(token2.balance(&protocol_fees_destination), 0);
 
-    assert_eq!(token1.balance(&user1) as u128, 895_5000000);
+    assert_eq!(token1.balance(&user1) as u128, 894_5000000);
     assert_eq!(token2.balance(&user1) as u128, 903_9854881);
     assert_eq!(
         token_share.balance(&user1) as u128,
@@ -171,7 +174,7 @@ fn test_happy_flow() {
         &Vec::from_array(&e, [0, 0]),
     );
 
-    assert_eq!(token1.balance(&user1) as u128, 1000_0000000);
+    assert_eq!(token1.balance(&user1) as u128, 999_0000000);
     assert_eq!(token2.balance(&user1) as u128, 1000_0000000);
     assert_eq!(token_share.balance(&user1) as u128, 0);
     assert_eq!(token1.balance(&liqpool.address) as u128, 0);
@@ -427,7 +430,7 @@ fn test_happy_flow_different_decimals() {
     assert_eq!(token18.balance(&liqpool.address) as u128, 0);
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
     assert_eq!(
-        liqpool.claim_protocol_fees(&user1),
+        liqpool.claim_protocol_fees(&user1, &user1),
         Vec::from_array(&e, [10000000, 0])
     );
     assert_eq!(token_7.balance(&liqpool.address) as u128, 0);
@@ -1416,7 +1419,7 @@ fn test_happy_flow_3_tokens() {
     assert_eq!(token3.balance(&liqpool.address) as u128, 20000000);
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
     assert_eq!(
-        liqpool.claim_protocol_fees(&user1),
+        liqpool.claim_protocol_fees(&user1, &user1),
         vec![&e, 10000000, 0, 20000000]
     );
     assert_eq!(token1.balance(&liqpool.address) as u128, 0);
@@ -1561,7 +1564,7 @@ fn test_happy_flow_4_tokens() {
     assert_eq!(token4.balance(&liqpool.address) as u128, 20000000);
     assert_eq!(token_share.balance(&liqpool.address) as u128, 0);
     assert_eq!(
-        liqpool.claim_protocol_fees(&user1),
+        liqpool.claim_protocol_fees(&user1, &user1),
         vec![&e, 10000000, 0, 0, 20000000]
     );
     assert_eq!(token1.balance(&liqpool.address) as u128, 0);
@@ -3493,7 +3496,7 @@ fn test_large_numbers() {
     assert_eq!(token2.balance(&liqpool.address), 0);
     assert_eq!(token_share.balance(&liqpool.address), 0);
     assert_eq!(
-        liqpool.claim_protocol_fees(&pool_admin),
+        liqpool.claim_protocol_fees(&pool_admin, &user1),
         vec![&e, protocol_fee_a, 0]
     );
     assert_eq!(token1.balance(&liqpool.address), 0);
@@ -4062,7 +4065,10 @@ fn test_swap_rewards() {
 
     // the second pool claimed protocol fees, the first pool didn't. this is to check that reserves are not affected
     assert_eq!(liq_pool1.get_protocol_fees(), vec![&e, 150000, 0]);
-    assert_eq!(liq_pool2.claim_protocol_fees(&admin), vec![&e, 0, 150000]);
+    assert_eq!(
+        liq_pool2.claim_protocol_fees(&admin, &user1),
+        vec![&e, 0, 150000]
+    );
 
     let reserves1 = liq_pool1.get_reserves();
 
@@ -4675,6 +4681,7 @@ fn test_set_privileged_addresses_event() {
                     setup.operations_admin,
                     setup.pause_admin,
                     Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
+                    setup.system_fee_admin,
                 )
                     .into_val(&setup.env),
             ),
@@ -4960,6 +4967,21 @@ fn test_emergency_upgrade() {
 
     assert_eq!(contract.version(), 130);
     assert_eq!(token.version(), 130);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2907)")]
+fn test_apply_emergency_upgrade_not_commited() {
+    let setup = Setup::default();
+    let contract = setup.liq_pool;
+
+    let new_wasm = install_dummy_wasm(&setup.env);
+    let new_token_wasm = install_dummy_wasm(&setup.env);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    contract.revert_upgrade(&setup.admin);
+
+    contract.set_emergency_mode(&setup.emergency_admin, &true);
+    contract.apply_upgrade(&setup.admin);
 }
 
 #[test]

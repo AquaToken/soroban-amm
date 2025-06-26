@@ -183,11 +183,15 @@ fn test() {
         token1.balance(&liq_pool.address),
         amount_to_deposit as i128 + swap_in_amount as i128
     );
+    let fee_destination = Address::generate(&e);
     let protocol_fee = liq_pool
-        .claim_protocol_fees(&setup.system_fee_admin)
+        .claim_protocol_fees(&setup.system_fee_admin, &fee_destination)
         .get(0)
         .unwrap();
     assert!(protocol_fee > 0);
+    assert_eq!(token1.balance(&fee_destination), protocol_fee as i128);
+    assert_eq!(token2.balance(&fee_destination), 0);
+
     let swap_in_amount_minus_protocol_fee = swap_in_amount - protocol_fee;
 
     assert_eq!(
@@ -1296,7 +1300,7 @@ fn test_large_numbers() {
         amount_to_deposit as i128 + swap_in as i128
     );
     let protocol_fee = liq_pool
-        .claim_protocol_fees(&setup.system_fee_admin)
+        .claim_protocol_fees(&setup.system_fee_admin, &setup.system_fee_admin)
         .get(0)
         .unwrap();
     assert!(protocol_fee > 0);
@@ -1791,7 +1795,7 @@ fn test_swap_rewards() {
 
     // claim admin fee to avoid issues with reserves
     assert_eq!(
-        liq_pool1.claim_protocol_fees(&admin),
+        liq_pool1.claim_protocol_fees(&admin, &admin),
         Vec::from_array(&e, [150000, 0])
     );
 
@@ -2301,6 +2305,7 @@ fn test_set_privileged_addresses_event() {
                     setup.operations_admin,
                     setup.pause_admin,
                     Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
+                    setup.system_fee_admin,
                 )
                     .into_val(&setup.env),
             ),
@@ -2495,6 +2500,21 @@ fn test_emergency_upgrade() {
 
     assert_eq!(contract.version(), 130);
     assert_eq!(token.version(), 130);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2907)")]
+fn test_apply_emergency_upgrade_not_commited() {
+    let setup = Setup::default();
+    let contract = setup.liq_pool;
+
+    let new_wasm = install_dummy_wasm(&setup.env);
+    let new_token_wasm = install_dummy_wasm(&setup.env);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    contract.revert_upgrade(&setup.admin);
+
+    contract.set_emergency_mode(&setup.emergency_admin, &true);
+    contract.apply_upgrade(&setup.admin);
 }
 
 #[test]

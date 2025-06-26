@@ -522,6 +522,7 @@ impl AdminInterface for LiquidityPoolRouter {
             operations_admin,
             pause_admin,
             emergency_pause_admins,
+            system_fee_admin,
         );
     }
 

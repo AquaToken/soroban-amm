@@ -682,6 +682,7 @@ impl AdminInterfaceTrait for LiquidityPool {
             operations_admin,
             pause_admin,
             emergency_pause_admins,
+            system_fee_admin,
         );
     }
 
@@ -940,6 +941,11 @@ impl AdminInterfaceTrait for LiquidityPool {
     fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
+
+        if new_fraction > FEE_DENOMINATOR {
+            panic_with_error!(e, LiquidityPoolValidationError::FeeOutOfBounds);
+        }
+
         set_protocol_fee_fraction(&e, &new_fraction);
         PoolEvents::new(&e).set_protocol_fee_fraction(new_fraction);
     }
@@ -950,7 +956,7 @@ impl AdminInterfaceTrait for LiquidityPool {
     }
 
     // Claims the protocol fees accumulated in the pool.
-    fn claim_protocol_fees(e: Env, admin: Address) -> Vec<u128> {
+    fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128> {
         admin.require_auth();
         require_system_fee_admin_or_owner(&e, &admin);
 
@@ -967,10 +973,10 @@ impl AdminInterfaceTrait for LiquidityPool {
             let token = tokens.get(i).unwrap();
             SorobanTokenClient::new(&e, &token).transfer(
                 &e.current_contract_address(),
-                &admin,
+                &destination,
                 &(fee as i128),
             );
-            PoolEvents::new(&e).claim_protocol_fee(token, fee);
+            PoolEvents::new(&e).claim_protocol_fee(token, destination.clone(), fee);
             fees_updated.set(i, 0);
         }
         put_protocol_fees(&e, &fees_updated);

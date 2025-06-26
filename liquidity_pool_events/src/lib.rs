@@ -52,7 +52,7 @@ pub trait LiquidityPoolEvents {
 
     fn set_protocol_fee_fraction(&self, fraction: u32);
 
-    fn claim_protocol_fee(&self, token: Address, amount: u128);
+    fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128);
 }
 
 // This trait is used to emit events related to liquidity pool operations.
@@ -216,7 +216,7 @@ impl LiquidityPoolEvents for Events {
             .publish((Symbol::new(e, "set_protocol_fee"),), (fraction,));
     }
 
-    fn claim_protocol_fee(&self, token: Address, amount: u128) {
+    fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128) {
         // topics
         // [
         //   "claim_protocol_fee": Symbol,  // event identifier
@@ -225,12 +225,13 @@ impl LiquidityPoolEvents for Events {
         //
         // body
         // [
+        //   destination: Address,          // address of account/contract that received the claimed tokens
         //   amount: i128                   // amount of tokens claimed
         // ]
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "claim_protocol_fee"), token),
-            (amount as i128,),
+            (destination, amount as i128),
         );
     }
 }
