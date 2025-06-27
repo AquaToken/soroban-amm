@@ -1394,6 +1394,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "soroban_rewards_gauge_contract"
+version = "1.5.0"
+dependencies = [
+ "access_control",
+ "paste",
+ "soroban-sdk",
+ "upgrade",
+ "utils",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

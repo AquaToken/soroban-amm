@@ -20,6 +20,7 @@ members = [
     "liquidity_pool_provider_swap_fee_factory",
     "liquidity_pool_provider_swap_fee",
     "integration_tests",
+    "rewards_gauge",
 ]
 
 [workspace.package]
