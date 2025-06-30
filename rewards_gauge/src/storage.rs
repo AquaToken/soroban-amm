@@ -20,11 +20,12 @@ pub struct RewardConfig {
     pub expired_at: u64,
 }
 
-// Mutable pool reward data that evolves over time.
+// Mutable global reward data that evolves over time.
 #[derive(Clone)]
 #[contracttype]
 pub struct GlobalRewardData {
     pub epoch: u64,
+    pub inv: u128,
     pub accumulated: u128,
     pub claimed: u128,
 }
@@ -34,6 +35,7 @@ pub struct GlobalRewardData {
 #[contracttype]
 pub struct UserRewardData {
     pub epoch: u64,
+    pub last_inv: u128,
     pub to_claim: u128,
 }
 
@@ -41,18 +43,17 @@ pub struct UserRewardData {
 #[contracttype]
 enum DataKey {
     Pool,
+    Operator,
     RewardToken,
     RewardConfig,
     GlobalRewardData,
 
     // User-level data
     UserRewardData(Address),
-
-    // Global reward cumulative invariant per 1 share. key is the timestamp
-    RewardInvData(u64),
 }
 
 generate_instance_storage_getter_and_setter!(pool, DataKey::Pool, Address);
+generate_instance_storage_getter_and_setter!(operator, DataKey::Operator, Address);
 generate_instance_storage_getter_and_setter!(reward_token, DataKey::RewardToken, Address);
 generate_instance_storage_getter_and_setter_with_default!(
     reward_config,
@@ -68,6 +69,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     DataKey::GlobalRewardData,
     GlobalRewardData,
     GlobalRewardData {
+        inv: 0,
         epoch: 0,
         accumulated: 0,
         claimed: 0,
@@ -87,24 +89,4 @@ pub(crate) fn get_user_reward_data(env: &Env, user: Address) -> Option<UserRewar
         bump_persistent(env, &key);
     }
     data
-}
-
-pub(crate) fn set_reward_inv_data(env: &Env, epoch: u64, inv: u128) {
-    log!(env, "inv({}): {}", epoch, inv);
-    let key = DataKey::RewardInvData(epoch);
-    env.storage().persistent().set(&key, &inv);
-    bump_persistent(env, &key);
-}
-
-pub(crate) fn get_reward_inv_data(env: &Env, epoch: u64) -> u128 {
-    let key = DataKey::RewardInvData(epoch);
-    match env.storage().persistent().get(&key) {
-        Some(inv) => {
-            bump_persistent(env, &key);
-            inv
-        }
-        None => {
-            panic_with_error!(env, StorageError::ValueMissing);
-        }
-    }
 }

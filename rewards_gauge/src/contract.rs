@@ -1,42 +1,44 @@
-use crate::gauge::{checkpoint_global, checkpoint_user, sync_reward_global};
-use crate::storage::{
-    get_pool, get_reward_token, set_global_reward_data, set_pool, set_reward_config,
-    set_reward_inv_data, set_reward_token, set_user_reward_data, RewardConfig,
-};
-// use crate::interface::AdminInterfaceTrait;
-// use access_control::access::AccessControlTrait;
-// use access_control::errors::AccessControlError;
-// use access_control::interface::TransferableContract;
-// use access_control::management::SingleAddressManagementTrait;
-// use access_control::role::SymbolRepresentation;
-// use access_control::transfer::TransferOwnershipTrait;
-use soroban_sdk::token::Client;
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env};
-// use upgrade::interface::UpgradeableContract;
 use crate::errors::Error;
+use crate::gauge::{checkpoint_global, checkpoint_user, sync_reward_global};
+use crate::interface::UpgradeableContract;
+use crate::storage::{
+    get_operator, get_pool, get_reward_token, set_global_reward_data, set_operator, set_pool,
+    set_reward_config, set_reward_token, set_user_reward_data, RewardConfig,
+};
 use crate::token_share::get_total_shares;
+use soroban_sdk::token::Client;
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env};
 
 #[contract]
 pub struct RewardsGauge;
 
 #[contractimpl]
 impl RewardsGauge {
-    pub fn __constructor(e: Env, pool: Address, reward_token: Address) {
+    pub fn __constructor(e: Env, pool: Address, operator: Address, reward_token: Address) {
         set_pool(&e, &pool);
+        set_operator(&e, &operator);
         set_reward_token(&e, &reward_token);
-
-        set_reward_inv_data(&e, 0, 0);
     }
 
-    pub fn set_rewards_config(e: Env, invoker: Address, duration: u64, tps: u128) {
-        // todo: check if invoker is authorized to set rewards config
-        // assert duration is not zero
-        invoker.require_auth();
+    pub fn set_rewards_config(e: Env, pool: Address, operator: Address, duration: u64, tps: u128) {
+        pool.require_auth();
+        if get_pool(&e) != pool {
+            panic_with_error!(&e, Error::Unauthorized);
+        }
+
+        operator.require_auth();
+        if get_operator(&e) != operator {
+            panic_with_error!(&e, Error::Unauthorized);
+        }
+
+        if duration == 0 || tps == 0 {
+            panic_with_error!(&e, Error::InvalidConfig);
+        }
 
         let reward_token = Client::new(&e, &get_reward_token(&e));
         let new_reward = tps * duration as u128;
         reward_token.transfer(
-            &invoker,
+            &operator,
             &e.current_contract_address(),
             &(new_reward as i128),
         );
@@ -93,5 +95,29 @@ impl RewardsGauge {
         );
 
         user_reward
+    }
+}
+
+// The `UpgradeableContract` trait provides the interface for upgrading the contract.
+// This contract has no delayed upgrade. Liquidity Pool contract handles the upgrade delay.
+#[contractimpl]
+impl UpgradeableContract for RewardsGauge {
+    // Returns the version of the contract.
+    //
+    // # Returns
+    //
+    // The version of the contract as a u32.
+    fn version() -> u32 {
+        160
+    }
+
+    fn upgrade(e: Env, pool: Address, new_wasm_hash: BytesN<32>) {
+        pool.require_auth();
+        if get_pool(&e) != pool {
+            panic_with_error!(&e, Error::Unauthorized);
+        }
+
+        e.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
     }
 }

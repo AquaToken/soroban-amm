@@ -17,15 +17,14 @@ fn test() {
     let user2 = Address::generate(&setup.env);
 
     let reward_token_sac = StellarAssetClient::new(&setup.env, &setup.reward_token.address);
-    let reward_distributor = Address::generate(&setup.env);
-    reward_token_sac.mint(&reward_distributor, &1_000_000_0000000);
+    reward_token_sac.mint(&setup.operator, &1_000_000_0000000);
 
     let mut total_shares = 0;
 
     jump(&setup.env, 1);
     setup
         .contract
-        .checkpoint_user(&setup.pool_address, &reward_distributor, &0, &total_shares);
+        .checkpoint_user(&setup.pool_address, &setup.operator, &0, &total_shares);
     total_shares = 1000_0000000;
     // we need pool total shares for set_rewards_config, so sync it
     pool.set_total_shares(&total_shares);
@@ -34,7 +33,7 @@ fn test() {
 
     setup
         .contract
-        .set_rewards_config(&reward_distributor, &100, &1_0000000);
+        .set_rewards_config(&setup.pool_address, &setup.operator, &100, &1_0000000);
     // inv(2) = 0. no rewards yet generated
 
     jump(&setup.env, 10);

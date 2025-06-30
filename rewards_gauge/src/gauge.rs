@@ -1,8 +1,7 @@
 use crate::constants::REWARD_PRECISION;
 use crate::storage::{
-    get_global_reward_data, get_reward_config, get_reward_inv_data, get_user_reward_data,
-    set_global_reward_data, set_reward_inv_data, set_user_reward_data, GlobalRewardData,
-    UserRewardData,
+    get_global_reward_data, get_reward_config, get_user_reward_data, set_global_reward_data,
+    set_user_reward_data, GlobalRewardData, UserRewardData,
 };
 use soroban_sdk::{Address, Env};
 
@@ -19,16 +18,14 @@ pub(crate) fn checkpoint_global(env: &Env, working_supply: u128) -> GlobalReward
         } else {
             0
         };
-        let prev_reward_inv = get_reward_inv_data(env, data.epoch);
 
         let new_data = GlobalRewardData {
             epoch: now,
+            inv: data.inv + reward_per_share,
             accumulated: data.accumulated + generated_tokens,
             claimed: data.claimed,
         };
         set_global_reward_data(env, &new_data);
-        let new_reward_inv = prev_reward_inv + reward_per_share;
-        set_reward_inv_data(env, new_data.epoch, new_reward_inv);
         new_data
     } else {
         // Already expired
@@ -40,15 +37,13 @@ pub(crate) fn checkpoint_global(env: &Env, working_supply: u128) -> GlobalReward
             } else {
                 0
             };
-            let prev_reward_inv = get_reward_inv_data(env, data.epoch);
             let new_data = GlobalRewardData {
                 epoch: config.expired_at,
+                inv: data.inv + reward_per_share,
                 accumulated: data.accumulated + generated_tokens,
                 claimed: data.claimed,
             };
             set_global_reward_data(env, &new_data);
-            let new_reward_inv = prev_reward_inv + reward_per_share;
-            set_reward_inv_data(env, new_data.epoch, new_reward_inv);
             new_data
         } else {
             // already expired, no new rewards
@@ -67,11 +62,11 @@ pub(crate) fn sync_reward_global(env: &Env) -> GlobalRewardData {
     } else {
         let new_data = GlobalRewardData {
             epoch: now,
+            inv: data.inv,
             accumulated: data.accumulated,
             claimed: data.claimed,
         };
         set_global_reward_data(env, &new_data);
-        set_reward_inv_data(env, new_data.epoch, get_reward_inv_data(env, data.epoch));
         new_data
     }
 }
@@ -92,17 +87,19 @@ pub(crate) fn checkpoint_user(
             // No new reward
             let new_data = UserRewardData {
                 epoch: global_data.epoch,
+                last_inv: global_data.inv,
                 to_claim: user_data.to_claim,
             };
             set_user_reward_data(env, user.clone(), &new_data);
             return new_data;
         }
 
-        let current_inv = get_reward_inv_data(env, global_data.epoch);
-        let prev_inv = get_reward_inv_data(env, user_data.epoch);
+        let current_inv = global_data.inv;
+        let prev_inv = user_data.last_inv;
         let reward = working_balance * (current_inv - prev_inv) / REWARD_PRECISION;
         let new_data = UserRewardData {
             epoch: global_data.epoch,
+            last_inv: current_inv,
             to_claim: user_data.to_claim + reward,
         };
         set_user_reward_data(env, user.clone(), &new_data);
@@ -110,6 +107,7 @@ pub(crate) fn checkpoint_user(
     } else {
         let new_data = UserRewardData {
             epoch: global_data.epoch,
+            last_inv: global_data.inv,
             to_claim: 0,
         };
         set_user_reward_data(env, user.clone(), &new_data);

@@ -8,6 +8,7 @@ mod storage;
 mod test;
 mod testutils;
 mod token_share;
+mod interface;
 // mod interface;
 // mod test_permissions;
 // mod testutils;
