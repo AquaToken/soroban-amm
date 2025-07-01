@@ -6,5 +6,8 @@ use soroban_sdk::contracterror;
 pub enum Error {
     Unauthorized = 102,
     AlreadyInitialized = 201,
-    InvalidConfig = 2018,
+    InvalidConfig = 3000,
+    ConfigNotExpiredYet = 3001,
+    StartNotInFuture = 3002,
+    StartTooEarly = 3003,
 }

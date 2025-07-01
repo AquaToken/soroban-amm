@@ -1,5 +1,5 @@
 use paste::paste;
-use soroban_sdk::{contracttype, log, panic_with_error, Address, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
 use utils::{
@@ -16,6 +16,7 @@ use utils::{
 #[derive(Clone)]
 #[contracttype]
 pub struct RewardConfig {
+    pub start_at: u64,
     pub tps: u128,
     pub expired_at: u64,
 }
@@ -46,6 +47,7 @@ enum DataKey {
     Operator,
     RewardToken,
     RewardConfig,
+    FutureRewardConfig,
     GlobalRewardData,
 
     // User-level data
@@ -60,9 +62,16 @@ generate_instance_storage_getter_and_setter_with_default!(
     DataKey::RewardConfig,
     RewardConfig,
     RewardConfig {
+        start_at: 0,
         tps: 0,
         expired_at: 0,
     }
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    future_reward_config,
+    DataKey::FutureRewardConfig,
+    Option<RewardConfig>,
+    None
 );
 generate_instance_storage_getter_and_setter_with_default!(
     global_reward_data,

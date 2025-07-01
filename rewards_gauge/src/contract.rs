@@ -2,10 +2,10 @@ use crate::errors::Error;
 use crate::gauge::{checkpoint_global, checkpoint_user, sync_reward_global};
 use crate::interface::UpgradeableContract;
 use crate::storage::{
-    get_operator, get_pool, get_reward_token, set_global_reward_data, set_operator, set_pool,
-    set_reward_config, set_reward_token, set_user_reward_data, RewardConfig,
+    get_operator, get_pool, get_reward_config, get_reward_token, set_future_reward_config,
+    set_global_reward_data, set_operator, set_pool, set_reward_config, set_reward_token,
+    set_user_reward_data, RewardConfig,
 };
-use crate::token_share::get_total_shares;
 use soroban_sdk::token::Client;
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env};
 
@@ -20,7 +20,15 @@ impl RewardsGauge {
         set_reward_token(&e, &reward_token);
     }
 
-    pub fn set_rewards_config(e: Env, pool: Address, operator: Address, duration: u64, tps: u128) {
+    pub fn schedule_rewards_config(
+        e: Env,
+        pool: Address,
+        operator: Address,
+        start_at: Option<u64>,
+        duration: u64,
+        tps: u128,
+        working_supply: u128,
+    ) {
         pool.require_auth();
         if get_pool(&e) != pool {
             panic_with_error!(&e, Error::Unauthorized);
@@ -42,11 +50,52 @@ impl RewardsGauge {
             &e.current_contract_address(),
             &(new_reward as i128),
         );
-        let expired_at = e.ledger().timestamp() + duration;
-        let working_supply = get_total_shares(&e, &get_pool(&e));
+
+        // checkpoint the global data before setting the new config
         checkpoint_global(&e, working_supply);
-        sync_reward_global(&e);
-        set_reward_config(&e, &RewardConfig { tps, expired_at })
+        let current_config = get_reward_config(&e);
+        let now = e.ledger().timestamp();
+
+        match start_at {
+            Some(start_at) => {
+                // if start_at is provided, it must be in the future
+                if start_at < now {
+                    panic_with_error!(&e, Error::StartTooEarly);
+                }
+
+                // don't allow overlap with existing config
+                if start_at < current_config.expired_at {
+                    panic_with_error!(&e, Error::StartTooEarly);
+                }
+
+                // schedule reward config to the future
+                set_future_reward_config(
+                    &e,
+                    &Some(RewardConfig {
+                        start_at,
+                        tps,
+                        expired_at: start_at + duration,
+                    }),
+                )
+            }
+            None => {
+                // don't allow setting a new config if the current one is not expired
+                if current_config.expired_at > now {
+                    panic_with_error!(&e, Error::ConfigNotExpiredYet);
+                }
+
+                // force sync of global reward data up to now
+                sync_reward_global(&e, now);
+                set_reward_config(
+                    &e,
+                    &RewardConfig {
+                        start_at: now,
+                        expired_at: now + duration,
+                        tps,
+                    },
+                )
+            }
+        };
     }
 
     pub fn checkpoint_user(

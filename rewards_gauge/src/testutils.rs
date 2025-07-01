@@ -4,29 +4,7 @@ use crate::contract::RewardsGaugeArgs;
 use crate::{RewardsGauge, RewardsGaugeClient};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env};
-
-#[contract]
-pub struct MockedPool;
-
-#[contractimpl]
-impl MockedPool {
-    pub fn set_total_shares(e: Env, shares: u128) {
-        e.storage().instance().set(&symbol_short!("total"), &shares);
-    }
-
-    pub fn get_total_shares(e: Env) -> u128 {
-        e.storage()
-            .instance()
-            .get(&symbol_short!("total"))
-            .unwrap_or_default()
-    }
-}
-
-pub fn install_dummy_wasm<'a>(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(file = "../contracts/dummy_contract.wasm");
-    e.deployer().upload_contract_wasm(WASM)
-}
+use soroban_sdk::{Address, Env};
 
 pub fn create_contract<'a>(
     e: &Env,
@@ -47,7 +25,6 @@ pub fn create_contract<'a>(
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
-    pub(crate) admin: Address,
     pub(crate) operator: Address,
     pub(crate) pool_address: Address,
     pub(crate) reward_token: TokenClient<'a>,
@@ -62,7 +39,7 @@ impl Setup<'_> {
 
         let admin = Address::generate(&env);
         let operator = Address::generate(&env);
-        let pool_address = env.register(MockedPool, ());
+        let pool_address = Address::generate(&env);
         let reward_token = TokenClient::new(
             &env,
             &env.register_stellar_asset_contract_v2(admin.clone())
@@ -72,7 +49,6 @@ impl Setup<'_> {
 
         Setup {
             env,
-            admin,
             operator,
             pool_address,
             reward_token,
