@@ -3,7 +3,7 @@ use soroban_sdk::contracterror;
 #[contracterror]
 #[derive(Copy, Clone)]
 #[repr(u32)]
-pub enum Error {
+pub enum GaugeError {
     Unauthorized = 102,
     AlreadyInitialized = 201,
     InvalidConfig = 3000,

@@ -32,6 +32,8 @@ use access_control::utils::{
     require_pause_or_emergency_pause_admin_or_owner, require_rewards_admin_or_owner,
     require_system_fee_admin_or_owner,
 };
+use liqidity_pool_rewards_gauge as rewards_gauge;
+use liqidity_pool_rewards_gauge::interface::RewardsGaugeInterface;
 use liquidity_pool_events::Events as PoolEvents;
 use liquidity_pool_events::LiquidityPoolEvents;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -274,6 +276,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
@@ -345,6 +348,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             new_total_shares,
             user_shares + shares_to_mint,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -749,6 +753,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         burn_shares(&e, &user, share_amount);
 
@@ -778,6 +783,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             total_shares - share_amount,
             user_shares - share_amount,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1392,6 +1398,7 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
     }
 
     fn checkpoint_working_balance(
@@ -1410,6 +1417,7 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .update_working_balance(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.
@@ -1500,6 +1508,73 @@ impl RewardsTrait for LiquidityPool {
         RewardEvents::new(&e).claim(user, reward_token, reward);
 
         reward
+    }
+}
+
+#[contractimpl]
+impl RewardsGaugeInterface for LiquidityPool {
+    fn gauge_add(e: Env, admin: Address, gauge_address: Address) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        rewards_gauge::operations::add(&e, gauge_address);
+    }
+
+    fn gauge_remove(e: Env, admin: Address, gauge_address: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        rewards_gauge::operations::remove(&e, gauge_address);
+    }
+
+    fn gauge_schedule_reward(
+        e: Env,
+        gauge_operator: Address,
+        gauge: Address,
+        start_at: Option<u64>,
+        duration: u64,
+        tps: u128,
+    ) {
+        gauge_operator.require_auth();
+
+        rewards_gauge::operations::schedule_rewards_config(
+            &e,
+            gauge,
+            gauge_operator,
+            start_at,
+            duration,
+            tps,
+            get_total_shares(&e),
+        );
+    }
+
+    fn kill_gauges_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
+
+        rewards_gauge::operations::kill_claim(&e);
+    }
+
+    fn unkill_gauges_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_admin_or_owner(&e, &admin);
+
+        rewards_gauge::operations::unkill_claim(&e);
+    }
+
+    fn get_gauges(e: Env) -> Vec<Address> {
+        rewards_gauge::operations::list(&e)
+    }
+
+    fn gauges_claim(e: Env, user: Address) -> Map<Address, u128> {
+        user.require_auth();
+
+        rewards_gauge::operations::claim(
+            &e,
+            &user,
+            get_user_balance_shares(&e, &user),
+            get_total_shares(&e),
+        )
     }
 }
 

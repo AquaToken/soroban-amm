@@ -3,7 +3,8 @@ extern crate std;
 
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
-    create_token_contract, get_token_admin_client, install_token_wasm, Setup, TestConfig,
+    create_token_contract, deploy_rewards_gauge, get_token_admin_client, install_token_wasm, Setup,
+    TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use core::cmp::min;
@@ -12,7 +13,7 @@ use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{
-    symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec,
+    symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Map, Symbol, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
 use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump};
@@ -2750,4 +2751,47 @@ fn test_custom_protocol_fee() {
             protocol_fee_amount
         );
     }
+}
+
+#[test]
+fn test_simple_reward_gauge() {
+    let setup = Setup::setup(&TestConfig::default());
+    setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user = setup.users[0].clone();
+
+    let gauge_reward_token = create_token_contract(&env, &setup.admin);
+    let gauge_operator = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(
+        &env,
+        &liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // 10 seconds. user depositing
+    jump(&env, 10);
+    liq_pool.deposit(&user, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 20 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    get_token_admin_client(&env, &gauge_reward_token.address)
+        .mint(&gauge_operator, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(&gauge_operator, &gauge.address, &None, &60, &reward_1_tps);
+
+    // 90 seconds. rewards ended.
+    jump(&env, 70);
+    // 100 seconds. user claim reward
+    jump(&env, 10);
+    assert_eq!(gauge_reward_token.balance(&user), 0);
+    // full reward should be available to the user
+    assert_eq!(
+        liq_pool.gauges_claim(&user),
+        Map::from_array(&env, [(gauge_reward_token.address.clone(), total_reward_1)])
+    );
+    assert_eq!(gauge_reward_token.balance(&user) as u128, total_reward_1);
 }

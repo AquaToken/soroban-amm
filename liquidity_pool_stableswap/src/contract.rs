@@ -6,14 +6,15 @@ use crate::pool_interface::{
 use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
     get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_protocol_fee_fraction,
-    get_protocol_fees, get_reserves, get_router, get_token_future_wasm, get_tokens, has_plane,
-    put_admin_actions_deadline, put_decimals, put_fee, put_future_a, put_future_a_time,
-    put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees, put_reserves, put_tokens,
-    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane,
-    set_protocol_fee_fraction, set_router, set_token_future_wasm,
+    get_is_killed_gauges_claim, get_is_killed_swap, get_plane, get_precision, get_precision_mul,
+    get_protocol_fee_fraction, get_protocol_fees, get_reserves, get_router, get_token_future_wasm,
+    get_tokens, has_plane, put_admin_actions_deadline, put_decimals, put_fee, put_future_a,
+    put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees,
+    put_reserves, put_tokens, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
+    set_plane, set_protocol_fee_fraction, set_router, set_token_future_wasm,
 };
 use crate::token::create_contract;
+use liqidity_pool_rewards_gauge as rewards_gauge;
 use token_share::{
     burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
     put_token_share, Client as LPToken,
@@ -40,6 +41,7 @@ use access_control::utils::{
     require_pause_or_emergency_pause_admin_or_owner, require_rewards_admin_or_owner,
     require_system_fee_admin_or_owner,
 };
+use liqidity_pool_rewards_gauge::interface::RewardsGaugeInterface;
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::events::Events as RewardEvents;
@@ -254,6 +256,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         let token_supply = get_total_shares(&e);
         if token_supply == 0 {
@@ -311,6 +314,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             total_shares - share_amount,
             user_shares - share_amount,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -363,6 +367,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         let (dy, _) = Self::_calc_withdraw_one_coin(&e, share_amount, i);
         if dy < min_amount {
@@ -386,6 +391,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             total_shares - share_amount,
             user_shares - share_amount,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1238,6 +1244,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         let amp = Self::a(e.clone());
 
@@ -1297,6 +1304,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             total_shares + mint_amount,
             user_shares + mint_amount,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1567,6 +1575,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         let total_supply = get_total_shares(&e);
         let mut amounts: Vec<u128> = Vec::new(&e);
@@ -1598,6 +1607,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             total_shares - share_amount,
             user_shares - share_amount,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1960,6 +1970,7 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
     }
 
     // Checkpoints total working balance and the working balance for the user.
@@ -1981,6 +1992,7 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .update_working_balance(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.
@@ -2071,6 +2083,73 @@ impl RewardsTrait for LiquidityPool {
         RewardEvents::new(&e).claim(user, reward_token, reward);
 
         reward
+    }
+}
+
+#[contractimpl]
+impl RewardsGaugeInterface for LiquidityPool {
+    fn gauge_add(e: Env, admin: Address, gauge_address: Address) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        rewards_gauge::operations::add(&e, gauge_address);
+    }
+
+    fn gauge_remove(e: Env, admin: Address, gauge_address: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        rewards_gauge::operations::remove(&e, gauge_address);
+    }
+
+    fn gauge_schedule_reward(
+        e: Env,
+        gauge_operator: Address,
+        gauge: Address,
+        start_at: Option<u64>,
+        duration: u64,
+        tps: u128,
+    ) {
+        gauge_operator.require_auth();
+
+        rewards_gauge::operations::schedule_rewards_config(
+            &e,
+            gauge,
+            gauge_operator,
+            start_at,
+            duration,
+            tps,
+            get_total_shares(&e),
+        );
+    }
+
+    fn kill_gauges_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
+
+        rewards_gauge::operations::kill_claim(&e);
+    }
+
+    fn unkill_gauges_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_admin_or_owner(&e, &admin);
+
+        rewards_gauge::operations::unkill_claim(&e);
+    }
+
+    fn get_gauges(e: Env) -> Vec<Address> {
+        rewards_gauge::operations::list(&e)
+    }
+
+    fn gauges_claim(e: Env, user: Address) -> Map<Address, u128> {
+        user.require_auth();
+
+        rewards_gauge::operations::claim(
+            &e,
+            &user,
+            get_user_balance_shares(&e, &user),
+            get_total_shares(&e),
+        )
     }
 }
 

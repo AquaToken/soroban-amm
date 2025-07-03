@@ -27,6 +27,7 @@ enum DataKey {
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledClaim,
+    IsKilledGaugesClaim,
     Plane,
     Router,
     TokenFutureWASM,
@@ -54,6 +55,12 @@ generate_instance_storage_getter_and_setter_with_default!(
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_claim,
     DataKey::IsKilledClaim,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_gauges_claim,
+    DataKey::IsKilledGaugesClaim,
     bool,
     false
 );

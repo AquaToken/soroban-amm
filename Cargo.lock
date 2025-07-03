@@ -746,6 +746,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 
 [[package]]
+name = "liqidity-pool-rewards-gauge"
+version = "1.5.0"
+dependencies = [
+ "paste",
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
 name = "liquidity-pool-events"
 version = "1.5.0"
 dependencies = [
@@ -1209,6 +1218,7 @@ name = "soroban-liquidity-pool-contract"
 version = "1.5.0"
 dependencies = [
  "access_control",
+ "liqidity-pool-rewards-gauge",
  "liquidity-pool-events",
  "liquidity-pool-validation-errors",
  "paste",
@@ -1279,6 +1289,7 @@ name = "soroban-liquidity-pool-stableswap-contract"
 version = "1.5.0"
 dependencies = [
  "access_control",
+ "liqidity-pool-rewards-gauge",
  "liquidity-pool-events",
  "liquidity-pool-validation-errors",
  "paste",

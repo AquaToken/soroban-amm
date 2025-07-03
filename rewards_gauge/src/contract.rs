@@ -1,10 +1,10 @@
-use crate::errors::Error;
+use crate::errors::GaugeError;
 use crate::gauge::{checkpoint_global, checkpoint_user, sync_reward_global};
 use crate::interface::UpgradeableContract;
 use crate::storage::{
-    get_operator, get_pool, get_reward_config, get_reward_token, set_future_reward_config,
-    set_global_reward_data, set_operator, set_pool, set_reward_config, set_reward_token,
-    set_user_reward_data, RewardConfig,
+    get_future_reward_config, get_operator, get_pool, get_reward_config, get_reward_token,
+    set_future_reward_config, set_global_reward_data, set_operator, set_pool, set_reward_config,
+    set_reward_token, set_user_reward_data, RewardConfig,
 };
 use soroban_sdk::token::Client;
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env};
@@ -31,16 +31,16 @@ impl RewardsGauge {
     ) {
         pool.require_auth();
         if get_pool(&e) != pool {
-            panic_with_error!(&e, Error::Unauthorized);
+            panic_with_error!(&e, GaugeError::Unauthorized);
         }
 
         operator.require_auth();
         if get_operator(&e) != operator {
-            panic_with_error!(&e, Error::Unauthorized);
+            panic_with_error!(&e, GaugeError::Unauthorized);
         }
 
         if duration == 0 || tps == 0 {
-            panic_with_error!(&e, Error::InvalidConfig);
+            panic_with_error!(&e, GaugeError::InvalidConfig);
         }
 
         let reward_token = Client::new(&e, &get_reward_token(&e));
@@ -60,15 +60,26 @@ impl RewardsGauge {
             Some(start_at) => {
                 // if start_at is provided, it must be in the future
                 if start_at < now {
-                    panic_with_error!(&e, Error::StartTooEarly);
+                    panic_with_error!(&e, GaugeError::StartTooEarly);
                 }
 
                 // don't allow overlap with existing config
                 if start_at < current_config.expired_at {
-                    panic_with_error!(&e, Error::StartTooEarly);
+                    panic_with_error!(&e, GaugeError::StartTooEarly);
                 }
 
-                // schedule reward config to the future
+                if let Some(future_reward) = get_future_reward_config(&e) {
+                    // refund the previously planned reward
+                    let old_future_reward = future_reward.tps
+                        * (future_reward.expired_at - future_reward.start_at) as u128;
+                    reward_token.transfer(
+                        &operator,
+                        &e.current_contract_address(),
+                        &(old_future_reward as i128),
+                    );
+                }
+
+                // schedule reward config to the future ;
                 set_future_reward_config(
                     &e,
                     &Some(RewardConfig {
@@ -81,7 +92,7 @@ impl RewardsGauge {
             None => {
                 // don't allow setting a new config if the current one is not expired
                 if current_config.expired_at > now {
-                    panic_with_error!(&e, Error::ConfigNotExpiredYet);
+                    panic_with_error!(&e, GaugeError::ConfigNotExpiredYet);
                 }
 
                 // force sync of global reward data up to now
@@ -107,7 +118,7 @@ impl RewardsGauge {
     ) {
         pool.require_auth();
         if get_pool(&e) != pool {
-            panic_with_error!(&e, Error::Unauthorized);
+            panic_with_error!(&e, GaugeError::Unauthorized);
         }
 
         let global_data = checkpoint_global(&e, working_supply);
@@ -123,7 +134,7 @@ impl RewardsGauge {
     ) -> u128 {
         pool.require_auth();
         if get_pool(&e) != pool {
-            panic_with_error!(&e, Error::Unauthorized);
+            panic_with_error!(&e, GaugeError::Unauthorized);
         }
 
         let mut global_data = checkpoint_global(&e, working_supply);
@@ -145,6 +156,35 @@ impl RewardsGauge {
 
         user_reward
     }
+
+    pub fn get_user_reward(
+        e: Env,
+        pool: Address,
+        user: Address,
+        working_balance: u128,
+        working_supply: u128,
+    ) -> u128 {
+        pool.require_auth();
+        if get_pool(&e) != pool {
+            panic_with_error!(&e, GaugeError::Unauthorized);
+        }
+
+        let global_data = checkpoint_global(&e, working_supply);
+        let user_data = checkpoint_user(&e, &global_data, &user, working_balance);
+        user_data.to_claim
+    }
+
+    pub fn get_reward_token(e: Env) -> Address {
+        get_reward_token(&e)
+    }
+
+    pub fn get_reward_config(e: Env) -> RewardConfig {
+        get_reward_config(&e)
+    }
+
+    pub fn get_future_reward_config(e: Env) -> Option<RewardConfig> {
+        get_future_reward_config(&e)
+    }
 }
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
@@ -163,7 +203,7 @@ impl UpgradeableContract for RewardsGauge {
     fn upgrade(e: Env, pool: Address, new_wasm_hash: BytesN<32>) {
         pool.require_auth();
         if get_pool(&e) != pool {
-            panic_with_error!(&e, Error::Unauthorized);
+            panic_with_error!(&e, GaugeError::Unauthorized);
         }
 
         e.deployer()

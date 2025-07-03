@@ -288,15 +288,23 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(WASM)
 }
 
-#[test]
-fn test() {
-    let config = TestConfig {
-        users_count: 2,
-        mint_to_user: 1000,
-        rewards_count: 1_000_000_0000000,
-        liq_pool_fee: 30,
-        reward_tps: 10_5000000_u128,
-        reward_token_in_pool: false,
-    };
-    let _setup = Setup::new_with_config(&config);
+mod rewards_gauge {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm"
+    );
+}
+
+pub(crate) fn deploy_rewards_gauge<'a>(
+    e: &Env,
+    pool: &Address,
+    operator: &Address,
+    reward_token: &Address,
+) -> rewards_gauge::Client<'a> {
+    rewards_gauge::Client::new(
+        e,
+        &e.register(
+            rewards_gauge::WASM,
+            rewards_gauge::Args::__constructor(pool, operator, reward_token),
+        ),
+    )
 }

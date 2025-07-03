@@ -17,6 +17,7 @@ utils = { workspace = true }
 paste = { workspace = true }
 liquidity-pool-validation-errors = { workspace = true }
 liquidity-pool-events = { workspace = true }
+liqidity-pool-rewards-gauge = { workspace = true }
 soroban-fixed-point-math = { workspace = true }
 upgrade = { workspace = true }
 

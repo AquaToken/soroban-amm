@@ -113,6 +113,27 @@ pub(crate) fn create_reward_boost_feed_contract<'a>(
     )
 }
 
+mod rewards_gauge {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm"
+    );
+}
+
+pub(crate) fn deploy_rewards_gauge<'a>(
+    e: &Env,
+    pool: &Address,
+    operator: &Address,
+    reward_token: &Address,
+) -> rewards_gauge::Client<'a> {
+    rewards_gauge::Client::new(
+        e,
+        &e.register(
+            rewards_gauge::WASM,
+            rewards_gauge::Args::__constructor(pool, operator, reward_token),
+        ),
+    )
+}
+
 pub(crate) struct TestConfig {
     pub(crate) a: u128,
     pub(crate) liq_pool_fee: u32,
