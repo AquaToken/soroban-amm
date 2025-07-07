@@ -54,6 +54,15 @@ impl Setup<'_> {
 
         let router = deploy_liqpool_router_contract(e.clone());
         router.init_admin(&admin);
+        router.init_config_storage(
+            &admin,
+            &deploy_config_storage(&e, &admin, &emergency_admin).address,
+        );
+        router.set_rewards_gauge_hash(
+            &admin,
+            &e.deployer()
+                .upload_contract_wasm(contracts::rewards_gauge::WASM),
+        );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_stableswap_pool_hash(
             &admin,
@@ -181,6 +190,20 @@ fn deploy_liqpool_router_contract<'a>(e: Env) -> contracts::router::Client<'a> {
 
 fn deploy_plane_contract<'a>(e: &Env) -> contracts::pool_plane::Client {
     contracts::pool_plane::Client::new(e, &e.register(contracts::pool_plane::WASM, ()))
+}
+
+fn deploy_config_storage<'a>(
+    e: &Env,
+    admin: &Address,
+    emergency_admin: &Address,
+) -> contracts::config_storage::Client<'a> {
+    contracts::config_storage::Client::new(
+        e,
+        &e.register(
+            contracts::config_storage::WASM,
+            contracts::config_storage::Args::__constructor(admin, emergency_admin),
+        ),
+    )
 }
 
 pub(crate) fn create_reward_boost_feed_contract<'a>(

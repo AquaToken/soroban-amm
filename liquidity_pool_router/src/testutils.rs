@@ -8,7 +8,7 @@ use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Vec};
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
-    contractimport!(file = "../target/wasm32v1-none/release/soroban_token_contract.wasm");
+    contractimport!(file = "../contracts/soroban_token_contract.wasm");
 }
 
 pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client<'a> {
@@ -25,16 +25,12 @@ pub fn create_liqpool_router_contract<'a>(e: &Env) -> LiquidityPoolRouterClient<
 }
 
 pub fn install_token_wasm(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_token_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_token_contract.wasm");
     e.deployer().upload_contract_wasm(WASM)
 }
 
 pub mod standard_pool {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_contract.wasm");
 }
 
 pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
@@ -43,7 +39,7 @@ pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
 
 pub mod stableswap_pool {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_stableswap_contract.wasm"
+        file = "../contracts/soroban_liquidity_pool_stableswap_contract.wasm"
     );
 }
 
@@ -52,9 +48,7 @@ pub fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
 }
 
 mod pool_plane {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_plane_contract.wasm");
 }
 
 pub fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
@@ -63,8 +57,7 @@ pub fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
 
 mod liquidity_calculator {
     soroban_sdk::contractimport!(
-        file =
-            "../target/wasm32v1-none/release/soroban_liquidity_pool_liquidity_calculator_contract.wasm"
+        file = "../contracts/soroban_liquidity_pool_liquidity_calculator_contract.wasm"
     );
 }
 
@@ -73,9 +66,7 @@ pub fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator
 }
 
 mod reward_boost_feed {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_locker_feed_contract.wasm");
 }
 
 pub(crate) fn create_reward_boost_feed_contract<'a>(
@@ -94,15 +85,11 @@ pub(crate) fn create_reward_boost_feed_contract<'a>(
 }
 
 mod rewards_gauge {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_rewards_gauge_contract.wasm");
 }
 
 mod config_storage {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_config_storage_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_config_storage_contract.wasm");
 }
 
 pub(crate) struct Setup<'a> {

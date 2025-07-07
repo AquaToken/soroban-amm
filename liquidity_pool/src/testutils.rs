@@ -228,9 +228,7 @@ pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 }
 
 mod reward_boost_feed {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_locker_feed_contract.wasm");
 }
 
 pub(crate) fn create_reward_boost_feed_contract<'a>(
@@ -295,9 +293,7 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
 }
 
 mod rewards_gauge {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_rewards_gauge_contract.wasm");
 }
 
 pub(crate) fn deploy_rewards_gauge<'a>(

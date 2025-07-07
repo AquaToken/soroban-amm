@@ -197,7 +197,7 @@ impl UpgradeableContract for RewardsGauge {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        160
+        170
     }
 
     fn upgrade(e: Env, pool: Address, new_wasm_hash: BytesN<32>) {

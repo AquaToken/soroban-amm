@@ -31,6 +31,12 @@ pub(crate) struct Setup<'a> {
     pub(crate) contract: RewardsGaugeClient<'a>,
 }
 
+impl Default for Setup<'_> {
+    fn default() -> Self {
+        Setup::with_mocked_pool()
+    }
+}
+
 impl Setup<'_> {
     pub(crate) fn with_mocked_pool() -> Self {
         let env = Env::default();

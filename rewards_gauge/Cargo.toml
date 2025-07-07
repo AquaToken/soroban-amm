@@ -1,5 +1,5 @@
 [package]
-name = "soroban_rewards_gauge_contract"
+name = "soroban-rewards-gauge-contract"
 version.workspace = true
 edition = "2021"
 publish = false

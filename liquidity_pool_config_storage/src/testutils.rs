@@ -2,9 +2,7 @@
 extern crate std;
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
-soroban_sdk::contractimport!(
-    file = "../target/wasm32v1-none/release/soroban_config_storage_contract.wasm"
-);
+soroban_sdk::contractimport!(file = "../contracts/soroban_config_storage_contract.wasm");
 
 pub fn deploy_config_storage<'a>(
     e: &Env,

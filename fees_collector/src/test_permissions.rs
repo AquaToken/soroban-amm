@@ -359,7 +359,7 @@ fn test_set_emergency_mode_third_party_user() {
 }
 
 #[test]
-fn test_set_emergency_mode_emergency_admin() {
+fn test_set_emergency_mode_admin() {
     let setup = Setup::default();
     let collector = setup.collector;
     assert!(collector
@@ -368,7 +368,7 @@ fn test_set_emergency_mode_emergency_admin() {
 }
 
 #[test]
-fn test_set_emergency_mode_admin() {
+fn test_set_emergency_mode_emergency_admin() {
     let setup = Setup::default();
     let collector = setup.collector;
     assert!(collector
