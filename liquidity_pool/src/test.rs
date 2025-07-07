@@ -8,6 +8,7 @@ use crate::testutils::{
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use core::cmp::min;
+use liquidity_pool_config_storage::testutils::deploy_config_storage;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -510,32 +511,16 @@ fn initialize_already_initialized() {
 #[should_panic(expected = "Error(Contract, #202)")]
 fn initialize_already_initialized_plane() {
     let setup = Setup::default();
+    setup.liq_pool.init_pools_plane(&setup.plane.address);
+}
 
-    let users = Setup::generate_random_users(&setup.env, 3);
-    let token1 = create_token_contract(&setup.env, &users[1]);
-    let token2 = create_token_contract(&setup.env, &users[2]);
-
-    setup.liq_pool.initialize_all(
-        &users[0],
-        &(
-            users[0].clone(),
-            users[0].clone(),
-            users[0].clone(),
-            users[0].clone(),
-            Vec::new(&setup.env),
-            users[0].clone(),
-        ),
-        &users[0],
-        &install_token_wasm(&setup.env),
-        &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
-        &(10_u32, 5000_u32),
-        &(
-            setup.token_reward.address,
-            setup.reward_boost_token.address,
-            setup.reward_boost_feed.address,
-        ),
-        &setup.plane.address,
-    );
+#[test]
+#[should_panic(expected = "Error(Contract, #201)")]
+fn initialize_already_initialized_config_storage() {
+    let setup = Setup::default();
+    setup
+        .liq_pool
+        .init_config_storage(&setup.admin, &setup.plane.address);
 }
 
 #[test]
@@ -570,6 +555,7 @@ fn test_custom_fee() {
             &setup.reward_boost_feed.address,
             fee_config.0, // ten percent
             &setup.plane.address,
+            &setup.config_storage.address,
         );
         liqpool.deposit(
             &setup.users[0],
@@ -1572,6 +1558,7 @@ fn test_withdraw_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
     let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
@@ -1673,6 +1660,7 @@ fn test_deposit_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
 
     liq_pool.set_rewards_config(
@@ -1735,6 +1723,7 @@ fn test_swap_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
     let liq_pool2 = create_liqpool_contract(
         &e,
@@ -1747,6 +1736,7 @@ fn test_swap_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
     token1_admin_client.mint(&user1, &200_0000000);
     token2_admin_client.mint(&user1, &200_0000000);
@@ -1856,6 +1846,7 @@ fn test_claim_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
 
     token1_admin_client.mint(&user1, &100_0000000);
@@ -1962,6 +1953,7 @@ fn test_drain_reserves() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
 
     liq_pool.set_rewards_config(
@@ -2408,8 +2400,14 @@ fn test_upgrade_events() {
     let contract = setup.liq_pool;
     let new_wasm_hash = install_dummy_wasm(&setup.env);
     let token_new_wasm_hash = install_dummy_wasm(&setup.env);
+    let gauge_new_wasm_hash = install_dummy_wasm(&setup.env);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
+    contract.commit_upgrade(
+        &setup.admin,
+        &new_wasm_hash,
+        &token_new_wasm_hash,
+        &gauge_new_wasm_hash,
+    );
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -2417,7 +2415,12 @@ fn test_upgrade_events() {
             (
                 contract.address.clone(),
                 (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
-                (new_wasm_hash.clone(), token_new_wasm_hash.clone()).into_val(&setup.env),
+                (
+                    new_wasm_hash.clone(),
+                    token_new_wasm_hash.clone(),
+                    gauge_new_wasm_hash.clone()
+                )
+                    .into_val(&setup.env),
             ),
         ]
     );
@@ -2435,7 +2438,12 @@ fn test_upgrade_events() {
         ]
     );
 
-    contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
+    contract.commit_upgrade(
+        &setup.admin,
+        &new_wasm_hash,
+        &token_new_wasm_hash,
+        &gauge_new_wasm_hash,
+    );
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
@@ -2490,13 +2498,14 @@ fn test_emergency_upgrade() {
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
 
     assert_eq!(contract.get_emergency_mode(), false);
     assert_ne!(contract.version(), 130);
     assert_ne!(token.version(), 130);
     contract.set_emergency_mode(&setup.emergency_admin, &true);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_gauge_wasm);
     contract.apply_upgrade(&setup.admin);
 
     assert_eq!(contract.version(), 130);
@@ -2511,7 +2520,8 @@ fn test_apply_emergency_upgrade_not_commited() {
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
-    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_gauge_wasm);
     contract.revert_upgrade(&setup.admin);
 
     contract.set_emergency_mode(&setup.emergency_admin, &true);
@@ -2529,13 +2539,14 @@ fn test_regular_upgrade_token() {
         .deployer()
         .upload_contract_wasm(token_share::token::WASM);
     let new_wasm = install_dummy_wasm(&setup.env);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
 
     // dummy wasm has version 130, everything else has greater version
     assert_eq!(contract.get_emergency_mode(), false);
     assert_ne!(contract.version(), 130);
     assert_ne!(token.version(), 130);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm, &token_wasm);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &token_wasm, &new_gauge_wasm);
     assert!(contract.try_apply_upgrade(&setup.admin).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert_eq!(
@@ -2555,13 +2566,14 @@ fn test_regular_upgrade_pool() {
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
 
     // dummy wasm has version 130, everything else has greater version
     assert_eq!(contract.get_emergency_mode(), false);
     assert_ne!(contract.version(), 130);
     assert_ne!(token.version(), 130);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_gauge_wasm);
     assert!(contract.try_apply_upgrade(&setup.admin).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert_eq!(
@@ -2702,6 +2714,7 @@ fn test_custom_protocol_fee() {
             &setup.reward_boost_feed.address,
             30,
             &setup.plane.address,
+            &setup.config_storage.address,
         );
         liqpool.set_protocol_fee_fraction(&setup.admin, &protocol_fee_fraction);
         liqpool.deposit(

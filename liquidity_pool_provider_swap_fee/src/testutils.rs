@@ -1,6 +1,7 @@
 #![cfg(test)]
 extern crate std;
 use crate::ProviderSwapFeeCollectorClient;
+use liquidity_pool_config_storage::testutils::deploy_config_storage;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -70,6 +71,7 @@ impl Setup<'_> {
         let boost_feed = create_reward_boost_feed_contract(&e, &admin);
         let router = deploy_liqpool_router_contract(e.clone());
         router.init_admin(&admin);
+        router.init_config_storage(&admin, &deploy_config_storage(&e, &admin, &admin).address);
         router.set_pool_hash(&admin, &pool_hash);
         router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&e));
         router.set_token_hash(&admin, &token_hash);

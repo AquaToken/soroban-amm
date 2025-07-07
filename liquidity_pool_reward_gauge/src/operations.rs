@@ -4,7 +4,7 @@ use crate::events::GaugeEvents;
 use crate::storage::{
     get_is_killed_gauges_claim, get_reward_gauges, set_is_killed_gauges_claim, set_reward_gauges,
 };
-use soroban_sdk::{panic_with_error, Address, Env, IntoVal, Map, Symbol, Val, Vec};
+use soroban_sdk::{panic_with_error, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec};
 
 pub fn add(e: &Env, gauge_address: Address) {
     let mut configured_gauges = get_reward_gauges(e);
@@ -25,6 +25,23 @@ pub fn remove(e: &Env, gauge_address: Address) {
         panic_with_error!(e, GaugeError::GaugeNotFound);
     }
     GaugeEvents::new(e).remove(gauge_address);
+}
+
+pub fn upgrade(e: &Env, admin: &Address, new_wasm: &BytesN<32>) {
+    for gauge in get_reward_gauges(e).iter() {
+        e.invoke_contract::<Val>(
+            &gauge,
+            &Symbol::new(&e, "upgrade"),
+            Vec::from_array(
+                &e,
+                [
+                    e.current_contract_address().to_val(),
+                    admin.to_val(),
+                    new_wasm.into_val(e),
+                ],
+            ),
+        );
+    }
 }
 
 pub fn kill_claim(e: &Env) {

@@ -22,11 +22,13 @@ members = [
     "integration_tests",
     "rewards_gauge",
     "liquidity_pool_reward_gauge",
+    "config_storage",
+    "liquidity_pool_config_storage",
 ]
 
 [workspace.package]
-version = "1.5.0"
-rust-version = "1.84"
+version = "1.7.0"
+rust-version = "1.87"
 
 [workspace.dependencies]
 soroban-sdk = { version = "22.0.6" }
@@ -41,6 +43,7 @@ upgrade = { path = "upgrade"}
 liquidity-pool-validation-errors = { path = "liquidity_pool_validation_errors" }
 liquidity-pool-events = { path = "liquidity_pool_events" }
 liqidity-pool-rewards-gauge = { path = "liquidity_pool_reward_gauge" }
+liquidity-pool-config-storage = { path = "liquidity_pool_config_storage" }
 
 [profile.release]
 opt-level = "z"

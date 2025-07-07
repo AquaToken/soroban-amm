@@ -3,6 +3,9 @@ extern crate std;
 use crate::plane::{pool_plane, PoolPlaneClient};
 use crate::LiquidityPoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
+use liquidity_pool_config_storage::{
+    testutils::deploy_config_storage, testutils::Client as ConfigStorageClient,
+};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
@@ -35,6 +38,7 @@ impl Default for TestConfig {
 
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
+    pub(crate) config_storage: ConfigStorageClient<'a>,
     pub(crate) router: Address,
     pub(crate) users: vec::Vec<Address>,
     pub(crate) token1: SorobanTokenClient<'a>,
@@ -85,6 +89,7 @@ impl Setup<'_> {
 
         let users = Self::generate_random_users(&e, config.users_count);
         let admin = users[0].clone();
+        let emergency_admin = Address::generate(&e);
         let rewards_admin = Address::generate(&e);
         let operations_admin = Address::generate(&e);
         let pause_admin = Address::generate(&e);
@@ -99,12 +104,8 @@ impl Setup<'_> {
             create_token_contract(&e, &admin)
         };
         let reward_boost_token = create_token_contract(&e, &admin);
-        let reward_boost_feed = create_reward_boost_feed_contract(
-            &e,
-            &admin,
-            &operations_admin,
-            &emergency_pause_admin,
-        );
+        let reward_boost_feed =
+            create_reward_boost_feed_contract(&e, &admin, &operations_admin, &emergency_admin);
 
         let plane = create_plane_contract(&e);
 
@@ -112,6 +113,7 @@ impl Setup<'_> {
         let token2_admin_client = get_token_admin_client(&e, &token2.address.clone());
         let token_reward_admin_client = get_token_admin_client(&e, &reward_token.address.clone());
 
+        let config_storage = deploy_config_storage(&e, &admin, &emergency_admin);
         let router = Address::generate(&e);
 
         let liq_pool = create_liqpool_contract(
@@ -125,6 +127,7 @@ impl Setup<'_> {
             &reward_boost_feed.address,
             config.liq_pool_fee,
             &plane.address,
+            &config_storage.address,
         );
         token_reward_admin_client.mint(&liq_pool.address, &config.rewards_count);
 
@@ -152,6 +155,7 @@ impl Setup<'_> {
 
         Self {
             env: e,
+            config_storage,
             router,
             users,
             token1,
@@ -255,6 +259,7 @@ pub fn create_liqpool_contract<'a>(
     reward_boost_feed: &Address,
     fee_fraction: u32,
     plane: &Address,
+    config_storage: &Address,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register(crate::LiquidityPool {}, ()));
     liqpool.initialize_all(
@@ -280,6 +285,7 @@ pub fn create_liqpool_contract<'a>(
             reward_boost_feed.clone(),
         ),
         plane,
+        config_storage,
     );
     liqpool
 }

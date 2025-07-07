@@ -11,6 +11,8 @@ tasks:
 
   build:
     cmds:
+      - task -d ../config_storage build || exit 1
+      - task -d ../rewards_gauge build || exit 1
       - task -d ../liquidity_pool build || exit 1
       - task -d ../liquidity_pool_stableswap build || exit 1
       - task -d ../liquidity_pool_liquidity_calculator build || exit 1

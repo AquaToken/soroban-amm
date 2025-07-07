@@ -1,20 +1,23 @@
 [package]
-name = "soroban-liquidity-pool-provider-swap-fee-contract"
+name = "liquidity-pool-config-storage"
 version.workspace = true
 edition = "2021"
 publish = false
 rust-version.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["rlib"]
+doctest = false
+
+[features]
+default = []
+testutils = []
 
 [dependencies]
 soroban-sdk = { workspace = true }
-paste = { workspace = true }
 utils = { workspace = true }
-soroban-fixed-point-math = { workspace = true }
+paste = { workspace = true}
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 utils = { workspace = true, features = ["testutils"] }
-liquidity-pool-config-storage = { workspace = true, features = ["testutils"] }

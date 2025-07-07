@@ -2,8 +2,9 @@
 extern crate std;
 
 use crate::LiquidityPoolRouterClient;
+use liquidity_pool_config_storage::testutils::deploy_config_storage;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Vec};
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
@@ -92,6 +93,18 @@ pub(crate) fn create_reward_boost_feed_contract<'a>(
     )
 }
 
+mod rewards_gauge {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm"
+    );
+}
+
+mod config_storage {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32v1-none/release/soroban_config_storage_contract.wasm"
+    );
+}
+
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
@@ -137,6 +150,7 @@ impl Default for Setup<'_> {
 
         let reward_admin = Address::generate(&env);
         let admin = Address::generate(&env);
+        let emergency_admin = Address::generate(&env);
         let payment_for_creation_address = Address::generate(&env);
 
         let reward_token = create_token_contract(&env, &reward_admin);
@@ -146,6 +160,10 @@ impl Default for Setup<'_> {
         let token_hash = install_token_wasm(&env);
         let router = create_liqpool_router_contract(&env);
         router.init_admin(&admin);
+        router.init_config_storage(
+            &admin,
+            &deploy_config_storage(&env, &admin, &emergency_admin).address,
+        );
         let rewards_admin = soroban_sdk::Address::generate(&env);
         let operations_admin = soroban_sdk::Address::generate(&env);
         let pause_admin = soroban_sdk::Address::generate(&env);
@@ -182,8 +200,11 @@ impl Default for Setup<'_> {
             &reward_boost_feed.address,
         );
         router.set_protocol_fee_fraction(&admin, &5000);
+        router.set_rewards_gauge_hash(
+            &admin,
+            &env.deployer().upload_contract_wasm(rewards_gauge::WASM),
+        );
 
-        let emergency_admin = Address::generate(&env);
         router.commit_transfer_ownership(
             &admin,
             &Symbol::new(&env, "EmergencyAdmin"),

@@ -5,16 +5,16 @@ use crate::plane_interface::Plane;
 use crate::pool;
 use crate::pool::{get_amount_out, get_amount_out_strict_receive};
 use crate::pool_interface::{
-    AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait,
-    UpgradeableContract, UpgradeableLPTokenTrait,
+    AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContract,
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_fee_fraction, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_plane,
-    get_protocol_fee_a, get_protocol_fee_b, get_protocol_fee_fraction, get_reserve_a,
-    get_reserve_b, get_router, get_token_a, get_token_b, get_token_future_wasm, has_plane,
-    put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a, put_token_b, set_is_killed_claim,
-    set_is_killed_deposit, set_is_killed_swap, set_plane, set_protocol_fee_a, set_protocol_fee_b,
+    get_fee_fraction, get_gauge_future_wasm, get_is_killed_claim, get_is_killed_deposit,
+    get_is_killed_swap, get_plane, get_protocol_fee_a, get_protocol_fee_b,
+    get_protocol_fee_fraction, get_reserve_a, get_reserve_b, get_router, get_token_a, get_token_b,
+    get_token_future_wasm, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a,
+    put_token_b, set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit,
+    set_is_killed_swap, set_plane, set_protocol_fee_a, set_protocol_fee_b,
     set_protocol_fee_fraction, set_router, set_token_future_wasm,
 };
 use crate::token::{create_contract, transfer_a, transfer_b};
@@ -34,6 +34,8 @@ use access_control::utils::{
 };
 use liqidity_pool_rewards_gauge as rewards_gauge;
 use liqidity_pool_rewards_gauge::interface::RewardsGaugeInterface;
+use liquidity_pool_config_storage as config_storage;
+use liquidity_pool_config_storage::interface::ConfigStorageInterface;
 use liquidity_pool_events::Events as PoolEvents;
 use liquidity_pool_events::LiquidityPoolEvents;
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
@@ -92,6 +94,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
     // *    `reward_boost_feed` - The address of the reward boost feed.
     // * )
     // * `plane` - The address of the plane.
+    // * `config_storage` - The address of the configuration storage.
     fn initialize_all(
         e: Env,
         admin: Address,
@@ -102,11 +105,13 @@ impl LiquidityPoolCrunch for LiquidityPool {
         fees_config: (u32, u32),
         reward_config: (Address, Address, Address),
         plane: Address,
+        config_storage: Address,
     ) {
         let (reward_token, reward_boost_token, reward_boost_feed) = reward_config;
 
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
+        config_storage::operations::init_config_storage(&e, &config_storage);
         Self::init_pools_plane(e.clone(), plane);
         Self::initialize(
             e.clone(),
@@ -1072,7 +1077,7 @@ impl UpgradeableContract for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        160
+        170
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -1084,21 +1089,24 @@ impl UpgradeableContract for LiquidityPool {
     // * `admin` - The address of the admin.
     // * `new_wasm_hash` - The new wasm hash to commit.
     // * `new_token_wasm_hash` - The new token wasm hash to commit.
+    // * `gauges_new_wasm_hash` - The new rewards gauge wasm hash to commit.
     fn commit_upgrade(
         e: Env,
         admin: Address,
         new_wasm_hash: BytesN<32>,
         token_new_wasm_hash: BytesN<32>,
+        gauges_new_wasm_hash: BytesN<32>,
     ) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         commit_upgrade(&e, &new_wasm_hash);
-        // handle token upgrade manually together with pool upgrade
+        // handle dependent contracts upgrade together with pool upgrade
         set_token_future_wasm(&e, &token_new_wasm_hash);
+        set_gauge_future_wasm(&e, &gauges_new_wasm_hash);
 
         UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(
             &e,
-            [new_wasm_hash.clone(), token_new_wasm_hash.clone()],
+            [new_wasm_hash, token_new_wasm_hash, gauges_new_wasm_hash],
         ));
     }
 
@@ -1114,6 +1122,7 @@ impl UpgradeableContract for LiquidityPool {
         let token_new_wasm_hash = get_token_future_wasm(&e);
         token_share::Client::new(&e, &get_token_share(&e))
             .upgrade(&e.current_contract_address(), &token_new_wasm_hash);
+        rewards_gauge::operations::upgrade(&e, &admin, &get_gauge_future_wasm(&e));
 
         UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(
             &e,
@@ -1158,21 +1167,6 @@ impl UpgradeableContract for LiquidityPool {
     // Returns the emergency mode flag value.
     fn get_emergency_mode(e: Env) -> bool {
         get_emergency_mode(&e)
-    }
-}
-
-#[contractimpl]
-impl UpgradeableLPTokenTrait for LiquidityPool {
-    // legacy upgrade. not compatible with token contract version 140+ due to different arguments
-    fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        e.invoke_contract::<()>(
-            &get_token_share(&e),
-            &symbol_short!("upgrade"),
-            Vec::from_array(&e, [new_token_wasm.to_val()]),
-        );
     }
 }
 
@@ -1702,5 +1696,14 @@ impl TransferableContract for LiquidityPool {
             },
             _ => access_control.get_future_address(&role),
         }
+    }
+}
+
+#[contractimpl]
+impl ConfigStorageInterface for LiquidityPool {
+    fn init_config_storage(e: Env, admin: Address, config_storage: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        config_storage::operations::init_config_storage(&e, &config_storage);
     }
 }

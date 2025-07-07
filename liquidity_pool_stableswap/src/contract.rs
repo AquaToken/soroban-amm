@@ -1,20 +1,22 @@
 use crate::pool_constants::{FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MIN_RAMP_TIME};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait, ManagedLiquidityPool,
-    RewardsTrait, UpgradeableContract, UpgradeableLPTokenTrait,
+    RewardsTrait, UpgradeableContract,
 };
 use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
     get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_gauges_claim, get_is_killed_swap, get_plane, get_precision, get_precision_mul,
-    get_protocol_fee_fraction, get_protocol_fees, get_reserves, get_router, get_token_future_wasm,
-    get_tokens, has_plane, put_admin_actions_deadline, put_decimals, put_fee, put_future_a,
-    put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees,
-    put_reserves, put_tokens, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
+    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_protocol_fee_fraction,
+    get_protocol_fees, get_reserves, get_router, get_token_future_wasm, get_tokens, has_plane,
+    put_admin_actions_deadline, put_decimals, put_fee, put_future_a, put_future_a_time,
+    put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees, put_reserves, put_tokens,
+    set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
     set_plane, set_protocol_fee_fraction, set_router, set_token_future_wasm,
 };
 use crate::token::create_contract;
 use liqidity_pool_rewards_gauge as rewards_gauge;
+use liquidity_pool_config_storage as config_storage;
+use liquidity_pool_config_storage::interface::ConfigStorageInterface;
 use token_share::{
     burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
     put_token_share, Client as LPToken,
@@ -1030,11 +1032,13 @@ impl ManagedLiquidityPool for LiquidityPool {
         fees_config: (u32, u32),
         reward_config: (Address, Address, Address),
         plane: Address,
+        config_storage: Address,
     ) {
         let (reward_token, reward_boost_token, reward_boost_feed) = reward_config;
 
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
+        config_storage::operations::init_config_storage(&e, &config_storage);
         Self::init_pools_plane(e.clone(), plane);
         Self::initialize(
             e.clone(),
@@ -1647,7 +1651,7 @@ impl UpgradeableContract for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        160
+        170
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -1659,21 +1663,24 @@ impl UpgradeableContract for LiquidityPool {
     // * `admin` - The address of the admin.
     // * `new_wasm_hash` - The new wasm hash to commit.
     // * `new_token_wasm_hash` - The new token wasm hash to commit.
+    // * `gauges_new_wasm_hash` - The new rewards gauge wasm hash to commit.
     fn commit_upgrade(
         e: Env,
         admin: Address,
         new_wasm_hash: BytesN<32>,
         token_new_wasm_hash: BytesN<32>,
+        gauges_new_wasm_hash: BytesN<32>,
     ) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         commit_upgrade(&e, &new_wasm_hash);
-        // handle token upgrade manually together with pool upgrade
+        // handle dependent contracts upgrade together with pool upgrade
         set_token_future_wasm(&e, &token_new_wasm_hash);
+        set_gauge_future_wasm(&e, &gauges_new_wasm_hash);
 
         UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(
             &e,
-            [new_wasm_hash.clone(), token_new_wasm_hash.clone()],
+            [new_wasm_hash, token_new_wasm_hash, gauges_new_wasm_hash],
         ));
     }
 
@@ -1733,21 +1740,6 @@ impl UpgradeableContract for LiquidityPool {
     // Returns the emergency mode flag value.
     fn get_emergency_mode(e: Env) -> bool {
         get_emergency_mode(&e)
-    }
-}
-
-#[contractimpl]
-impl UpgradeableLPTokenTrait for LiquidityPool {
-    // legacy upgrade. not compatible with token contract version 140+ due to different arguments
-    fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        e.invoke_contract::<()>(
-            &get_token_share(&e),
-            &symbol_short!("upgrade"),
-            Vec::from_array(&e, [new_token_wasm.to_val()]),
-        );
     }
 }
 
@@ -2277,5 +2269,14 @@ impl TransferableContract for LiquidityPool {
             },
             _ => access_control.get_future_address(&role),
         }
+    }
+}
+
+#[contractimpl]
+impl ConfigStorageInterface for LiquidityPool {
+    fn init_config_storage(e: Env, admin: Address, config_storage: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        config_storage::operations::init_config_storage(&e, &config_storage);
     }
 }
