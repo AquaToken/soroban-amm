@@ -1,5 +1,3 @@
-use access_control::access::AccessControl;
-use access_control::role::Role;
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
 
 pub trait AdminInterface {

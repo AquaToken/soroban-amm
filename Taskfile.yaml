@@ -14,6 +14,7 @@ tasks:
       - task: clean
       - task: fmt
       - task: build
+      - task: check_bindings
       - task: test
 
   build:
@@ -47,7 +48,7 @@ tasks:
   _check_bindings_tranfer_ownership:
     vars:
       WASMS:
-        sh: find ./contracts/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
+        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' -and -not -name 'soroban_rewards_gauge_contract.wasm' \)
     cmds:
       - for: { var: WASMS }
         cmd:
@@ -59,7 +60,7 @@ tasks:
   _check_bindings_delayed_upgrade:
     vars:
       WASMS:
-        sh: find ./contracts/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
+        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' -and -not -name 'soroban_rewards_gauge_contract.wasm' \)
     cmds:
       - for: { var: WASMS }
         cmd:
@@ -69,12 +70,12 @@ tasks:
           || exit 1
 
   _check_bindings_upgrade:
-    vars:
-      WASM: "./contracts/soroban_token_contract.wasm"
     cmds:
-      - echo "Checking upgrade bindings for {{ .WASM }}" && 
-        soroban contract info interface --wasm {{ .WASM }} | grep upgrade 
-        || exit 1
+      - for: ['./target/wasm32v1-none/release/soroban_token_contract.wasm', './target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm']
+        cmd:
+          echo "Checking upgrade bindings for {{ .ITEM }}" && 
+          soroban contract info interface --wasm {{ .ITEM }} | grep upgrade 
+          || exit 1
 
   check_bindings:
     cmds:
