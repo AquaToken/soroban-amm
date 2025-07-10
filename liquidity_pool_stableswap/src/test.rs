@@ -5443,6 +5443,23 @@ fn test_add_gauge_twice() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #305)")]
+fn test_add_gauges_over_max() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    for _ in 0..6 {
+        let gauge = deploy_rewards_gauge(
+            &setup.env,
+            &setup.liq_pool.address,
+            &gauge_operator,
+            &gauge_reward_token.address,
+        );
+        setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    }
+}
+
+#[test]
 fn test_remove_gauge() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
