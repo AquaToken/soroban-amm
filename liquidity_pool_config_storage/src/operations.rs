@@ -13,7 +13,7 @@ pub fn get_config_storage(e: &Env) -> Address {
     storage::get_config_storage(e)
 }
 
-pub fn get_value(e: &Env, key: Val) -> Option<Val> {
+pub fn get_value_safe(e: &Env, key: Val) -> Option<Val> {
     e.invoke_contract(
         &storage::get_config_storage(e),
         &Symbol::new(&e, "get_value"),
@@ -21,8 +21,8 @@ pub fn get_value(e: &Env, key: Val) -> Option<Val> {
     )
 }
 
-pub fn get_value_unchecked(e: &Env, key: Val) -> Val {
-    match get_value(e, key) {
+pub fn get_value(e: &Env, key: Val) -> Val {
+    match get_value_safe(e, key) {
         Some(val) => val,
         None => panic_with_error!(e, StorageError::ValueMissing),
     }

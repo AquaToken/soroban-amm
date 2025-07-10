@@ -14,8 +14,7 @@ pub(crate) fn deploy_rewards_gauge(
     salt.append(&operator.clone().to_xdr(e));
     salt.append(&reward_token.clone().to_xdr(e));
 
-    let gauge_wasm =
-        config_storage::operations::get_value_unchecked(e, DataKey::GaugeWASM.into_val(e));
+    let gauge_wasm = config_storage::operations::get_value(e, DataKey::GaugeWASM.into_val(e));
     let contract_id = e
         .deployer()
         .with_current_contract(e.crypto().sha256(&salt).to_bytes())

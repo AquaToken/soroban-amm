@@ -2998,10 +2998,6 @@ fn test_deploy_rewards_gauge() {
     let user1 = Address::generate(&e);
     setup.reward_token.mint(&user1, &10_0000000);
     let [token1, token2, _, _] = setup.tokens;
-
-    token1.mint(&user1, &1000000);
-    token2.mint(&user1, &1000000);
-
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
     let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
@@ -3018,5 +3014,9 @@ fn test_deploy_rewards_gauge() {
     assert_eq!(
         pool_client.get_gauges(),
         Vec::from_array(&e, [rewards_gauge.clone()])
+    );
+    assert_eq!(
+        testutils::rewards_gauge::Client::new(&e, &rewards_gauge).get_reward_token(),
+        gauge_token.address,
     );
 }

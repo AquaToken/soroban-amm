@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #![cfg(test)]
 extern crate std;
 use crate::ProviderSwapFeeFactoryClient;

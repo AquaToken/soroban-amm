@@ -1,10 +1,11 @@
+#![allow(dead_code)]
 #![cfg(test)]
 extern crate std;
 
 use crate::LiquidityPoolRouterClient;
 use liquidity_pool_config_storage::testutils::deploy_config_storage;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
@@ -84,11 +85,11 @@ pub(crate) fn create_reward_boost_feed_contract<'a>(
     )
 }
 
-mod rewards_gauge {
+pub(crate) mod rewards_gauge {
     soroban_sdk::contractimport!(file = "../contracts/soroban_rewards_gauge_contract.wasm");
 }
 
-mod config_storage {
+pub(crate) mod config_storage {
     soroban_sdk::contractimport!(file = "../contracts/soroban_config_storage_contract.wasm");
 }
 
