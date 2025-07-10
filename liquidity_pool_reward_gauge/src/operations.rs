@@ -8,6 +8,9 @@ use soroban_sdk::{panic_with_error, Address, BytesN, Env, IntoVal, Map, Symbol, 
 
 pub fn add(e: &Env, gauge_address: Address) {
     let mut configured_gauges = get_reward_gauges(e);
+    if configured_gauges.contains(&gauge_address) {
+        panic_with_error!(e, GaugeError::GaugeAlreadyExists);
+    }
     configured_gauges.push_back(gauge_address.clone());
     if configured_gauges.len() > MAX_GAUGES {
         panic_with_error!(e, GaugeError::GaugesOverMax);

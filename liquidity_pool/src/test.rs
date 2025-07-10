@@ -2808,3 +2808,193 @@ fn test_simple_reward_gauge() {
     );
     assert_eq!(gauge_reward_token.balance(&user) as u128, total_reward_1);
 }
+
+#[test]
+#[should_panic(expected = "Error(Contract, #401)")]
+fn test_add_gauge_twice() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+}
+
+#[test]
+fn test_remove_gauge() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.gauge_remove(&setup.admin, &gauge.address);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #404)")]
+fn test_remove_gauge_twice() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.gauge_remove(&setup.admin, &gauge.address);
+    setup.liq_pool.gauge_remove(&setup.admin, &gauge.address);
+}
+
+#[test]
+fn test_gauges_kill_claim() {
+    let setup = Setup::setup(&TestConfig::default());
+    let user = Address::generate(&setup.env);
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_ok());
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_err());
+}
+
+#[test]
+fn test_gauges_kill_claim_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.pause_admin);
+}
+
+#[test]
+fn test_gauges_kill_claim_emergency_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup
+        .liq_pool
+        .kill_gauges_claim(&setup.emergency_pause_admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_gauges_kill_claim_third_user() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup
+        .liq_pool
+        .kill_gauges_claim(&Address::generate(&setup.env));
+}
+
+#[test]
+fn test_gauges_unkill_claim() {
+    let setup = Setup::setup(&TestConfig::default());
+    let user = Address::generate(&setup.env);
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_ok());
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_err());
+    setup.liq_pool.unkill_gauges_claim(&setup.admin);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_ok());
+}
+
+#[test]
+fn test_gauges_unkill_claim_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.pause_admin);
+    setup.liq_pool.unkill_gauges_claim(&setup.pause_admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_gauges_unkill_claim_emergency_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    setup
+        .liq_pool
+        .unkill_gauges_claim(&setup.emergency_pause_admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_gauges_unkill_claim_third_user() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge_operator = Address::generate(&setup.env);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    setup
+        .liq_pool
+        .unkill_gauges_claim(&Address::generate(&setup.env));
+}

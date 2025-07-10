@@ -6,5 +6,6 @@ use soroban_sdk::contracterror;
 pub enum GaugeError {
     ClaimKilled = 207,
     GaugesOverMax = 305,
+    GaugeAlreadyExists = 401,
     GaugeNotFound = 404,
 }
