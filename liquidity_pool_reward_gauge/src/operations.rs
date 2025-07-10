@@ -37,11 +37,7 @@ pub fn upgrade(e: &Env, admin: &Address, new_wasm: &BytesN<32>) {
             &Symbol::new(&e, "upgrade"),
             Vec::from_array(
                 &e,
-                [
-                    e.current_contract_address().to_val(),
-                    admin.to_val(),
-                    new_wasm.into_val(e),
-                ],
+                [e.current_contract_address().to_val(), new_wasm.into_val(e)],
             ),
         );
     }

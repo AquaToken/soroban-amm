@@ -2563,6 +2563,12 @@ fn test_regular_upgrade_pool() {
     let setup = Setup::default();
     let contract = setup.liq_pool;
     let token = ShareTokenClient::new(&setup.env, &contract.share_id());
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &contract.address,
+        &setup.admin,
+        &setup.token_reward.address,
+    );
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
@@ -2572,7 +2578,10 @@ fn test_regular_upgrade_pool() {
     assert_eq!(contract.get_emergency_mode(), false);
     assert_ne!(contract.version(), 130);
     assert_ne!(token.version(), 130);
+    assert_ne!(gauge.version(), 130);
 
+    // add gauge to pool
+    contract.gauge_add(&setup.admin, &gauge.address);
     contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_gauge_wasm);
     assert!(contract.try_apply_upgrade(&setup.admin).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
@@ -2583,6 +2592,7 @@ fn test_regular_upgrade_pool() {
 
     assert_eq!(contract.version(), 130);
     assert_eq!(token.version(), 130);
+    assert_eq!(gauge.version(), 130);
 }
 
 #[test]

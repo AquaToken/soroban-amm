@@ -5,13 +5,13 @@ use crate::pool_interface::{
 };
 use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
-    get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_protocol_fee_fraction,
-    get_protocol_fees, get_reserves, get_router, get_token_future_wasm, get_tokens, has_plane,
-    put_admin_actions_deadline, put_decimals, put_fee, put_future_a, put_future_a_time,
-    put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees, put_reserves, put_tokens,
-    set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
-    set_plane, set_protocol_fee_fraction, set_router, set_token_future_wasm,
+    get_future_fee, get_gauge_future_wasm, get_initial_a, get_initial_a_time, get_is_killed_claim,
+    get_is_killed_deposit, get_is_killed_swap, get_plane, get_precision, get_precision_mul,
+    get_protocol_fee_fraction, get_protocol_fees, get_reserves, get_router, get_token_future_wasm,
+    get_tokens, has_plane, put_admin_actions_deadline, put_decimals, put_fee, put_future_a,
+    put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees,
+    put_reserves, put_tokens, set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit,
+    set_is_killed_swap, set_plane, set_protocol_fee_fraction, set_router, set_token_future_wasm,
 };
 use crate::token::create_contract;
 use liqidity_pool_rewards_gauge as rewards_gauge;
@@ -1696,6 +1696,7 @@ impl UpgradeableContract for LiquidityPool {
         let token_new_wasm_hash = get_token_future_wasm(&e);
         token_share::Client::new(&e, &get_token_share(&e))
             .upgrade(&e.current_contract_address(), &token_new_wasm_hash);
+        rewards_gauge::operations::upgrade(&e, &admin, &get_gauge_future_wasm(&e));
 
         UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(
             &e,
