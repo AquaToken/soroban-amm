@@ -186,22 +186,18 @@ impl RewardsGauge {
             if let Some(future_config) = get_future_reward_config(&e) {
                 // if future config is available and started, return it
                 if future_config.start_at <= now {
-                    reward_config = future_config;
+                    if future_config.expired_at < now {
+                        reward_config = RewardConfig::default();
+                    } else {
+                        reward_config = future_config;
+                    }
                 } else {
                     // if future config is not started yet, return empty config
-                    reward_config = RewardConfig {
-                        start_at: now,
-                        expired_at: now,
-                        tps: 0,
-                    };
+                    reward_config = RewardConfig::default();
                 }
             } else {
                 // if no future config, return empty config
-                reward_config = RewardConfig {
-                    start_at: now,
-                    expired_at: now,
-                    tps: 0,
-                };
+                reward_config = RewardConfig::default();
             }
         }
         reward_config

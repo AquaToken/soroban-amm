@@ -157,7 +157,7 @@ fn test_simple_scheduled_reward() {
     total_shares -= 1000_0000000;
 
     jump(&setup.env, 100);
-    assert_eq!(setup.contract.get_reward_config().tps, 0,);
+    assert_eq!(setup.contract.get_reward_config().tps, 0);
 
     // both claim rewards after reward period ends
     let user1_claim = setup
@@ -186,6 +186,42 @@ fn test_simple_scheduled_reward() {
     //  reward = 3.(3) + 35 = 38.(3)
     assert_eq!(user1_claim, 83333333);
     assert_eq!(user2_claim, 383333333);
+}
+
+#[test]
+fn test_get_config_expired_scheduled_reward() {
+    let setup = Setup::with_mocked_pool();
+
+    let reward_token_sac = StellarAssetClient::new(&setup.env, &setup.reward_token.address);
+    reward_token_sac.mint(&setup.operator, &1_000_000_0000000);
+
+    let mut total_shares = 0;
+
+    jump(&setup.env, 1);
+    setup
+        .contract
+        .checkpoint_user(&setup.pool_address, &setup.operator, &0, &total_shares);
+    total_shares = 1000_0000000;
+    // inv(1) = 0
+    jump(&setup.env, 1);
+
+    setup.contract.schedule_rewards_config(
+        &setup.pool_address,
+        &setup.operator,
+        &Some(11),
+        &91,
+        &1_0000000,
+        &total_shares,
+    );
+    // inv(2) = 0. config not started yet. No rewards yet generated
+    assert_eq!(setup.contract.get_reward_config().tps, 0,);
+
+    jump(&setup.env, 10);
+    assert_eq!(setup.contract.get_reward_config().tps, 1_0000000,);
+
+    // config expires. however there was no checkpoint yet, so it was not promoted to current config
+    jump(&setup.env, 100);
+    assert_eq!(setup.contract.get_reward_config().tps, 0);
 }
 
 #[test]

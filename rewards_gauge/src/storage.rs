@@ -13,7 +13,7 @@ use utils::{
 // ------------------------------------
 
 // Rewards configuration for a specific pool.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 #[contracttype]
 pub struct RewardConfig {
     pub start_at: u64,
@@ -61,11 +61,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     reward_config,
     DataKey::RewardConfig,
     RewardConfig,
-    RewardConfig {
-        start_at: 0,
-        tps: 0,
-        expired_at: 0,
-    }
+    RewardConfig::default()
 );
 generate_instance_storage_getter_and_setter_with_default!(
     future_reward_config,
