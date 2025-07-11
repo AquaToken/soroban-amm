@@ -1696,7 +1696,7 @@ impl UpgradeableContract for LiquidityPool {
         let token_new_wasm_hash = get_token_future_wasm(&e);
         token_share::Client::new(&e, &get_token_share(&e))
             .upgrade(&e.current_contract_address(), &token_new_wasm_hash);
-        rewards_gauge::operations::upgrade(&e, &admin, &get_gauge_future_wasm(&e));
+        rewards_gauge::operations::upgrade(&e, &get_gauge_future_wasm(&e));
 
         UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(
             &e,
@@ -2138,6 +2138,15 @@ impl RewardsGaugeInterface for LiquidityPool {
         user.require_auth();
 
         rewards_gauge::operations::claim(
+            &e,
+            &user,
+            get_user_balance_shares(&e, &user),
+            get_total_shares(&e),
+        )
+    }
+
+    fn gauges_get_reward_info(e: Env, user: Address) -> Map<Address, Map<Symbol, i128>> {
+        rewards_gauge::operations::get_rewards_info(
             &e,
             &user,
             get_user_balance_shares(&e, &user),

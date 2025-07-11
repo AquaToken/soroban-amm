@@ -3,6 +3,7 @@ use crate::errors::GaugeError;
 use crate::events::GaugeEvents;
 use crate::storage::{
     get_is_killed_gauges_claim, get_reward_gauges, set_is_killed_gauges_claim, set_reward_gauges,
+    RewardConfig,
 };
 use soroban_sdk::{panic_with_error, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec};
 
@@ -30,13 +31,13 @@ pub fn remove(e: &Env, gauge_address: Address) {
     GaugeEvents::new(e).remove(gauge_address);
 }
 
-pub fn upgrade(e: &Env, admin: &Address, new_wasm: &BytesN<32>) {
+pub fn upgrade(e: &Env, new_wasm: &BytesN<32>) {
     for gauge in get_reward_gauges(e).iter() {
         e.invoke_contract::<Val>(
             &gauge,
-            &Symbol::new(&e, "upgrade"),
+            &Symbol::new(e, "upgrade"),
             Vec::from_array(
-                &e,
+                e,
                 [e.current_contract_address().to_val(), new_wasm.into_val(e)],
             ),
         );
@@ -61,9 +62,9 @@ pub fn checkpoint_user(e: &Env, user: &Address, working_balance: u128, working_s
     for gauge in get_reward_gauges(e).iter() {
         e.invoke_contract::<Val>(
             &gauge,
-            &Symbol::new(&e, "checkpoint_user"),
+            &Symbol::new(e, "checkpoint_user"),
             Vec::from_array(
-                &e,
+                e,
                 [
                     e.current_contract_address().to_val(),
                     user.to_val(),
@@ -85,14 +86,14 @@ pub fn claim(
         panic_with_error!(e, GaugeError::ClaimKilled);
     }
 
-    let mut result = Map::new(&e);
+    let mut result = Map::new(e);
     for gauge in get_reward_gauges(e).iter() {
         let reward_token = crate::token::get_reward_token(e, &gauge);
         let claimed_amount = e.invoke_contract(
             &gauge,
-            &Symbol::new(&e, "claim"),
+            &Symbol::new(e, "claim"),
             Vec::from_array(
-                &e,
+                e,
                 [
                     e.current_contract_address().to_val(),
                     user.to_val(),
@@ -107,28 +108,42 @@ pub fn claim(
     result
 }
 
-pub fn get_user_rewards(
+pub fn get_rewards_info(
     e: &Env,
     user: &Address,
     working_balance: u128,
     working_supply: u128,
-) -> Map<Address, u128> {
-    let mut result = Map::new(&e);
+) -> Map<Address, Map<Symbol, i128>> {
+    let mut result = Map::new(e);
     for gauge in get_reward_gauges(e).iter() {
+        let reward_config: RewardConfig =
+            e.invoke_contract(&gauge, &Symbol::new(e, "get_reward_config"), Vec::new(e));
+        let user_reward: u128 = e.invoke_contract(
+            &gauge,
+            &Symbol::new(e, "get_user_reward"),
+            Vec::from_array(
+                e,
+                [
+                    e.current_contract_address().to_val(),
+                    user.to_val(),
+                    working_balance.into_val(e),
+                    working_supply.into_val(e),
+                ],
+            ),
+        );
+
         result.set(
             crate::token::get_reward_token(e, &gauge),
-            e.invoke_contract(
-                &gauge,
-                &Symbol::new(&e, "get_user_reward"),
-                Vec::from_array(
-                    &e,
-                    [
-                        e.current_contract_address().to_val(),
-                        user.to_val(),
-                        working_balance.into_val(e),
-                        working_supply.into_val(e),
-                    ],
-                ),
+            Map::from_array(
+                e,
+                [
+                    ("user_reward".into_val(e), (user_reward as i128).into_val(e)),
+                    ("tps".into_val(e), (reward_config.tps as i128).into_val(e)),
+                    (
+                        "expired_at".into_val(e),
+                        (reward_config.expired_at as i128).into_val(e),
+                    ),
+                ],
             ),
         );
     }
@@ -146,9 +161,9 @@ pub fn schedule_rewards_config(
 ) {
     e.invoke_contract::<()>(
         &gauge,
-        &Symbol::new(&e, "schedule_rewards_config"),
+        &Symbol::new(e, "schedule_rewards_config"),
         Vec::from_array(
-            &e,
+            e,
             [
                 e.current_contract_address().to_val(),
                 operator.to_val(),

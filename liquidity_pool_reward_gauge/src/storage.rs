@@ -7,6 +7,13 @@ use utils::{
     generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
+#[contracttype]
+pub struct RewardConfig {
+    pub start_at: u64,
+    pub tps: u128,
+    pub expired_at: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {

@@ -1,1 +1,1 @@
-pub const MAX_GAUGES: u32 = 5;
+pub const MAX_GAUGES: u32 = 4;

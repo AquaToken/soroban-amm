@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Map, Vec};
+use soroban_sdk::{Address, Env, Map, Symbol, Vec};
 
 pub trait RewardsGaugeInterface {
     // Admin functions
@@ -30,4 +30,7 @@ pub trait RewardsGaugeInterface {
 
     // Claims rewards for a user across all gauges.
     fn gauges_claim(e: Env, user: Address) -> Map<Address, u128>;
+
+    // Rewards info getter
+    fn gauges_get_reward_info(e: Env, user: Address) -> Map<Address, Map<Symbol, i128>>;
 }

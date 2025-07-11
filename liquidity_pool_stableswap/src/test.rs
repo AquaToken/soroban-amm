@@ -5437,6 +5437,63 @@ fn test_simple_reward_gauge() {
 }
 
 #[test]
+fn test_reward_info_getter() {
+    let setup = Setup::setup(&TestConfig::default());
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user = Address::generate(&env);
+
+    let epoch_start = env.ledger().timestamp();
+
+    let gauge_reward_token = create_token_contract(&env, &setup.admin);
+    let gauge_operator = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(
+        &env,
+        &liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // 10 seconds. user depositing
+    jump(&env, 10);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user, &100);
+    liq_pool.deposit(&user, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 20 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    get_token_admin_client(&env, &gauge_reward_token.address)
+        .mint(&gauge_operator, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(&gauge_operator, &gauge.address, &None, &60, &reward_1_tps);
+
+    jump(&env, 10);
+    let data = liq_pool.gauges_get_reward_info(&user);
+    assert_eq!(
+        data,
+        Map::from_array(
+            &env,
+            [(
+                gauge_reward_token.address.clone(),
+                Map::from_array(
+                    &env,
+                    [
+                        (Symbol::new(&env, "user_reward"), reward_1_tps as i128 * 10),
+                        (Symbol::new(&env, "tps"), reward_1_tps as i128),
+                        (
+                            Symbol::new(&env, "expired_at"),
+                            epoch_start as i128 + 80_i128
+                        ),
+                    ]
+                )
+            )]
+        )
+    );
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #401)")]
 fn test_add_gauge_twice() {
     let setup = Setup::setup(&TestConfig::default());

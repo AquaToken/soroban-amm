@@ -27,6 +27,8 @@ fn test_simple_reward() {
     // inv(1) = 0
     jump(&setup.env, 1);
 
+    assert_eq!(setup.contract.get_reward_config().tps, 0,);
+
     // rewards are scheduled for 2-102 seconds
     setup.contract.schedule_rewards_config(
         &setup.pool_address,
@@ -39,6 +41,7 @@ fn test_simple_reward() {
     // inv(2) = 0. no rewards yet generated
 
     jump(&setup.env, 10);
+    assert_eq!(setup.contract.get_reward_config().tps, 1_0000000,);
 
     // first user deposits after 10 seconds
     setup
@@ -125,8 +128,10 @@ fn test_simple_scheduled_reward() {
         &total_shares,
     );
     // inv(2) = 0. config not started yet. No rewards yet generated
+    assert_eq!(setup.contract.get_reward_config().tps, 0,);
 
     jump(&setup.env, 10);
+    assert_eq!(setup.contract.get_reward_config().tps, 1_0000000,);
     // first user deposits after 10 seconds. config started 1 second before
     setup
         .contract
@@ -152,6 +157,7 @@ fn test_simple_scheduled_reward() {
     total_shares -= 1000_0000000;
 
     jump(&setup.env, 100);
+    assert_eq!(setup.contract.get_reward_config().tps, 0,);
 
     // both claim rewards after reward period ends
     let user1_claim = setup

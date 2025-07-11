@@ -179,7 +179,32 @@ impl RewardsGauge {
     }
 
     pub fn get_reward_config(e: Env) -> RewardConfig {
-        get_reward_config(&e)
+        let now = e.ledger().timestamp();
+        let mut reward_config = get_reward_config(&e);
+        if reward_config.expired_at <= now {
+            // if config is expired, try to get future config
+            if let Some(future_config) = get_future_reward_config(&e) {
+                // if future config is available and started, return it
+                if future_config.start_at <= now {
+                    reward_config = future_config;
+                } else {
+                    // if future config is not started yet, return empty config
+                    reward_config = RewardConfig {
+                        start_at: now,
+                        expired_at: now,
+                        tps: 0,
+                    };
+                }
+            } else {
+                // if no future config, return empty config
+                reward_config = RewardConfig {
+                    start_at: now,
+                    expired_at: now,
+                    tps: 0,
+                };
+            }
+        }
+        reward_config
     }
 
     pub fn get_future_reward_config(e: Env) -> Option<RewardConfig> {
