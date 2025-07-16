@@ -1,5 +1,5 @@
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, U256};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
 use utils::{
@@ -26,7 +26,7 @@ pub struct RewardConfig {
 #[contracttype]
 pub struct GlobalRewardData {
     pub epoch: u64,
-    pub inv: u128,
+    pub inv: U256,
     pub accumulated: u128,
     pub claimed: u128,
 }
@@ -36,7 +36,7 @@ pub struct GlobalRewardData {
 #[contracttype]
 pub struct UserRewardData {
     pub epoch: u64,
-    pub last_inv: u128,
+    pub last_inv: U256,
     pub to_claim: u128,
 }
 
@@ -69,17 +69,24 @@ generate_instance_storage_getter_and_setter_with_default!(
     Option<RewardConfig>,
     None
 );
-generate_instance_storage_getter_and_setter_with_default!(
-    global_reward_data,
-    DataKey::GlobalRewardData,
-    GlobalRewardData,
-    GlobalRewardData {
-        inv: 0,
-        epoch: 0,
-        accumulated: 0,
-        claimed: 0,
-    }
-);
+
+pub(crate) fn set_global_reward_data(env: &Env, data: &GlobalRewardData) {
+    bump_instance(env);
+    env.storage().instance().set(&DataKey::GlobalRewardData, data);
+}
+
+pub(crate) fn get_global_reward_data(env: &Env) -> GlobalRewardData {
+    bump_instance(env);
+    env.storage()
+        .instance()
+        .get(&DataKey::GlobalRewardData)
+        .unwrap_or(GlobalRewardData {
+            epoch: 0,
+            inv: U256::from_u128(env, 0),
+            accumulated: 0,
+            claimed: 0,
+        })
+}
 
 pub(crate) fn set_user_reward_data(env: &Env, user: Address, data: &UserRewardData) {
     let key = DataKey::UserRewardData(user);

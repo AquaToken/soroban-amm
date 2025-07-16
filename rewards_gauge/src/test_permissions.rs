@@ -5,7 +5,7 @@ use crate::testutils::Setup;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::Address;
-use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump, time_warp};
+use utils::test_utils::install_dummy_wasm;
 
 #[test]
 fn test_checkpoint_pool() {

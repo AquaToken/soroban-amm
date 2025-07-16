@@ -4,7 +4,7 @@ use crate::storage::{
     set_future_reward_config, set_global_reward_data, set_reward_config, set_user_reward_data,
     GlobalRewardData, UserRewardData,
 };
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, U256};
 
 pub(crate) fn checkpoint_global(env: &Env, working_supply: u128) -> GlobalRewardData {
     let config = get_reward_config(env);
@@ -22,7 +22,7 @@ pub(crate) fn checkpoint_global(env: &Env, working_supply: u128) -> GlobalReward
 
         let new_data = GlobalRewardData {
             epoch: now,
-            inv: data.inv + reward_per_share,
+            inv: data.inv.add(&U256::from_u128(env, reward_per_share)),
             accumulated: data.accumulated + generated_tokens,
             claimed: data.claimed,
         };
@@ -38,7 +38,7 @@ pub(crate) fn checkpoint_global(env: &Env, working_supply: u128) -> GlobalReward
         };
         let new_data = GlobalRewardData {
             epoch: config.expired_at,
-            inv: data.inv + reward_per_share,
+            inv: data.inv.add(&U256::from_u128(env, reward_per_share)),
             accumulated: data.accumulated + generated_tokens,
             claimed: data.claimed,
         };
@@ -102,16 +102,16 @@ pub(crate) fn checkpoint_user(
             // No new reward
             let new_data = UserRewardData {
                 epoch: global_data.epoch,
-                last_inv: global_data.inv,
+                last_inv: global_data.inv.clone(),
                 to_claim: user_data.to_claim,
             };
             set_user_reward_data(env, user.clone(), &new_data);
             return new_data;
         }
 
-        let current_inv = global_data.inv;
+        let current_inv = global_data.inv.clone();
         let prev_inv = user_data.last_inv;
-        let reward = working_balance * (current_inv - prev_inv) / REWARD_PRECISION;
+        let reward = U256::from_u128(env, working_balance).mul(&current_inv.sub(&prev_inv)).div(&U256::from_u128(env, REWARD_PRECISION)).to_u128().unwrap();
         let new_data = UserRewardData {
             epoch: global_data.epoch,
             last_inv: current_inv,
@@ -122,7 +122,7 @@ pub(crate) fn checkpoint_user(
     } else {
         let new_data = UserRewardData {
             epoch: global_data.epoch,
-            last_inv: global_data.inv,
+            last_inv: global_data.inv.clone(),
             to_claim: 0,
         };
         set_user_reward_data(env, user.clone(), &new_data);
