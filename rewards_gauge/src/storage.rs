@@ -72,7 +72,9 @@ generate_instance_storage_getter_and_setter_with_default!(
 
 pub(crate) fn set_global_reward_data(env: &Env, data: &GlobalRewardData) {
     bump_instance(env);
-    env.storage().instance().set(&DataKey::GlobalRewardData, data);
+    env.storage()
+        .instance()
+        .set(&DataKey::GlobalRewardData, data);
 }
 
 pub(crate) fn get_global_reward_data(env: &Env) -> GlobalRewardData {

@@ -111,7 +111,11 @@ pub(crate) fn checkpoint_user(
 
         let current_inv = global_data.inv.clone();
         let prev_inv = user_data.last_inv;
-        let reward = U256::from_u128(env, working_balance).mul(&current_inv.sub(&prev_inv)).div(&U256::from_u128(env, REWARD_PRECISION)).to_u128().unwrap();
+        let reward = U256::from_u128(env, working_balance)
+            .mul(&current_inv.sub(&prev_inv))
+            .div(&U256::from_u128(env, REWARD_PRECISION))
+            .to_u128()
+            .unwrap();
         let new_data = UserRewardData {
             epoch: global_data.epoch,
             last_inv: current_inv,
