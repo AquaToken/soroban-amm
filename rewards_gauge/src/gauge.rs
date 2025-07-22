@@ -92,44 +92,41 @@ pub(crate) fn checkpoint_user(
     user: &Address,
     working_balance: u128,
 ) -> UserRewardData {
-    if let Some(user_data) = get_user_reward_data(env, user.clone()) {
-        // If no new accumulation, just return
-        if user_data.epoch == global_data.epoch {
-            return user_data;
-        }
+    // start user inv from zero to retroactively calculate rewards
+    let user_data = get_user_reward_data(env, user.clone()).unwrap_or(UserRewardData {
+        epoch: 0,
+        last_inv: U256::from_u32(env, 0),
+        to_claim: 0,
+    });
 
-        if working_balance == 0 {
-            // No new reward
-            let new_data = UserRewardData {
-                epoch: global_data.epoch,
-                last_inv: global_data.inv.clone(),
-                to_claim: user_data.to_claim,
-            };
-            set_user_reward_data(env, user.clone(), &new_data);
-            return new_data;
-        }
+    // If no new accumulation, just return
+    if user_data.epoch == global_data.epoch {
+        return user_data;
+    }
 
-        let current_inv = global_data.inv.clone();
-        let prev_inv = user_data.last_inv;
-        let reward = U256::from_u128(env, working_balance)
-            .mul(&current_inv.sub(&prev_inv))
-            .div(&U256::from_u128(env, REWARD_PRECISION))
-            .to_u128()
-            .unwrap();
-        let new_data = UserRewardData {
-            epoch: global_data.epoch,
-            last_inv: current_inv,
-            to_claim: user_data.to_claim + reward,
-        };
-        set_user_reward_data(env, user.clone(), &new_data);
-        new_data
-    } else {
+    if working_balance == 0 {
+        // No new reward
         let new_data = UserRewardData {
             epoch: global_data.epoch,
             last_inv: global_data.inv.clone(),
-            to_claim: 0,
+            to_claim: user_data.to_claim,
         };
         set_user_reward_data(env, user.clone(), &new_data);
-        new_data
+        return new_data;
     }
+
+    let current_inv = global_data.inv.clone();
+    let prev_inv = user_data.last_inv;
+    let reward = U256::from_u128(env, working_balance)
+        .mul(&current_inv.sub(&prev_inv))
+        .div(&U256::from_u128(env, REWARD_PRECISION))
+        .to_u128()
+        .unwrap();
+    let new_data = UserRewardData {
+        epoch: global_data.epoch,
+        last_inv: current_inv,
+        to_claim: user_data.to_claim + reward,
+    };
+    set_user_reward_data(env, user.clone(), &new_data);
+    new_data
 }

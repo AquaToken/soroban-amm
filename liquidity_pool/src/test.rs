@@ -2820,6 +2820,79 @@ fn test_simple_reward_gauge() {
 }
 
 #[test]
+fn test_retroactive_reward_gauge() {
+    let setup = Setup::setup(&TestConfig::default());
+    setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    setup.token1_admin_client.mint(&user1, &100);
+    setup.token2_admin_client.mint(&user1, &100);
+    setup.token1_admin_client.mint(&user2, &100);
+    setup.token2_admin_client.mint(&user2, &100);
+
+    // 10 seconds. first user depositing before gauge set up
+    jump(&env, 10);
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 20 seconds. gauge set up
+    jump(&env, 10);
+    let gauge_reward_token = create_token_contract(&env, &setup.admin);
+    let gauge_operator = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(
+        &env,
+        &liq_pool.address,
+        &gauge_operator,
+        &gauge_reward_token.address,
+    );
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // 30 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    get_token_admin_client(&env, &gauge_reward_token.address)
+        .mint(&gauge_operator, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(&gauge_operator, &gauge.address, &None, &60, &reward_1_tps);
+
+    // 40 seconds. second user depositing after gauge set up
+    jump(&env, 30);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 100 seconds. rewards ended.
+    jump(&env, 40);
+    // 110 seconds. user claims reward
+    jump(&env, 10);
+    assert_eq!(gauge_reward_token.balance(&user1), 0);
+    assert_eq!(gauge_reward_token.balance(&user2), 0);
+    // full reward should be available to users. first receives 3/4 of the reward, second receives 1/4 since it joined later
+    assert_eq!(
+        liq_pool.gauges_claim(&user1),
+        Map::from_array(
+            &env,
+            [(gauge_reward_token.address.clone(), total_reward_1 / 4 * 3)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&user2),
+        Map::from_array(
+            &env,
+            [(gauge_reward_token.address.clone(), total_reward_1 / 4)]
+        )
+    );
+    assert_eq!(
+        gauge_reward_token.balance(&user1) as u128,
+        total_reward_1 / 4 * 3
+    );
+    assert_eq!(
+        gauge_reward_token.balance(&user2) as u128,
+        total_reward_1 / 4
+    );
+}
+
+#[test]
 fn test_reward_info_getter() {
     let setup = Setup::setup(&TestConfig::default());
     setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
