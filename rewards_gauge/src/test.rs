@@ -114,13 +114,25 @@ fn test_retroactive_reward() {
 
     // 20 seconds. gauge set up
     jump(&env, 10);
-    let gauge = create_contract(&env, &setup.pool_address, &setup.operator, &setup.reward_token.address);
+    let gauge = create_contract(
+        &env,
+        &setup.pool_address,
+        &setup.operator,
+        &setup.reward_token.address,
+    );
 
     // 30 seconds. rewards set up for 60 seconds
     jump(&env, 10);
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
-    gauge.schedule_rewards_config(&setup.pool_address, &setup.operator, &None, &60, &reward_1_tps, &total_shares);
+    gauge.schedule_rewards_config(
+        &setup.pool_address,
+        &setup.operator,
+        &None,
+        &60,
+        &reward_1_tps,
+        &total_shares,
+    );
 
     // 40 seconds. second user depositing after gauge set up
     jump(&env, 30);
@@ -149,7 +161,6 @@ fn test_retroactive_reward() {
         total_reward_1 / 4
     );
 }
-
 
 #[test]
 fn test_simple_scheduled_reward() {

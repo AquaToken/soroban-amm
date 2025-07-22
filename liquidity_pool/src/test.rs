@@ -2822,23 +2822,34 @@ fn test_simple_reward_gauge() {
 #[test]
 fn test_retroactive_reward_gauge() {
     let setup = Setup::setup(&TestConfig::default());
-    setup.mint_tokens_for_users(TestConfig::default().mint_to_user);
     let env = setup.env;
     let liq_pool = setup.liq_pool;
 
     let user1 = Address::generate(&env);
     let user2 = Address::generate(&env);
-    setup.token1_admin_client.mint(&user1, &100);
-    setup.token2_admin_client.mint(&user1, &100);
-    setup.token1_admin_client.mint(&user2, &100);
-    setup.token2_admin_client.mint(&user2, &100);
+    let user3 = Address::generate(&env);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user1, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user1, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user2, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user2, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user3, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user3, &100);
 
     // 10 seconds. first user depositing before gauge set up
     jump(&env, 10);
     liq_pool.deposit(&user1, &Vec::from_array(&env, [100, 100]), &0);
+    liq_pool.deposit(&user3, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 15 seconds. third user withdrawing before gauge set up
+    jump(&env, 5);
+    liq_pool.withdraw(
+        &user3,
+        &(SorobanTokenClient::new(&env, &liq_pool.share_id()).balance(&user3) as u128),
+        &Vec::from_array(&env, [0, 0]),
+    );
 
     // 20 seconds. gauge set up
-    jump(&env, 10);
+    jump(&env, 5);
     let gauge_reward_token = create_token_contract(&env, &setup.admin);
     let gauge_operator = Address::generate(&env);
     let gauge = deploy_rewards_gauge(
@@ -2861,12 +2872,15 @@ fn test_retroactive_reward_gauge() {
     jump(&env, 30);
     liq_pool.deposit(&user2, &Vec::from_array(&env, [100, 100]), &0);
 
-    // 100 seconds. rewards ended.
+    // 100 seconds. rewards ended. third user depositing after rewards ended
     jump(&env, 40);
+    liq_pool.deposit(&user3, &Vec::from_array(&env, [100, 100]), &0);
+
     // 110 seconds. user claims reward
     jump(&env, 10);
     assert_eq!(gauge_reward_token.balance(&user1), 0);
     assert_eq!(gauge_reward_token.balance(&user2), 0);
+    assert_eq!(gauge_reward_token.balance(&user3), 0);
     // full reward should be available to users. first receives 3/4 of the reward, second receives 1/4 since it joined later
     assert_eq!(
         liq_pool.gauges_claim(&user1),
@@ -2883,6 +2897,10 @@ fn test_retroactive_reward_gauge() {
         )
     );
     assert_eq!(
+        liq_pool.gauges_claim(&user3),
+        Map::from_array(&env, [(gauge_reward_token.address.clone(), 0)])
+    );
+    assert_eq!(
         gauge_reward_token.balance(&user1) as u128,
         total_reward_1 / 4 * 3
     );
@@ -2890,6 +2908,7 @@ fn test_retroactive_reward_gauge() {
         gauge_reward_token.balance(&user2) as u128,
         total_reward_1 / 4
     );
+    assert_eq!(gauge_reward_token.balance(&user3) as u128, 0);
 }
 
 #[test]
