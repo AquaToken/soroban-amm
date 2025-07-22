@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::Setup;
+use crate::testutils::{create_contract, Setup};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::Address;
@@ -97,6 +97,59 @@ fn test_simple_reward() {
     assert_eq!(user1_claim, 83333333);
     assert_eq!(user2_claim, 383333333);
 }
+
+#[test]
+fn test_retroactive_reward() {
+    let setup = Setup::default();
+    let env = setup.env;
+    let reward_token_sac = StellarAssetClient::new(&env, &setup.reward_token.address);
+    reward_token_sac.mint(&setup.operator, &1_000_000_0000000);
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+
+    // 10 seconds. first user depositing before gauge set up
+    jump(&env, 10);
+    let mut total_shares = 100;
+
+    // 20 seconds. gauge set up
+    jump(&env, 10);
+    let gauge = create_contract(&env, &setup.pool_address, &setup.operator, &setup.reward_token.address);
+
+    // 30 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    gauge.schedule_rewards_config(&setup.pool_address, &setup.operator, &None, &60, &reward_1_tps, &total_shares);
+
+    // 40 seconds. second user depositing after gauge set up
+    jump(&env, 30);
+    gauge.checkpoint_user(&setup.pool_address, &user2, &0, &total_shares);
+    total_shares += 100;
+
+    // 100 seconds. rewards ended.
+    jump(&env, 40);
+    // 110 seconds. user claims reward
+    jump(&env, 10);
+    // full reward should be available to users. first receives 3/4 of the reward, second receives 1/4 since it joined later
+    assert_eq!(
+        gauge.claim(&setup.pool_address, &user1, &100, &total_shares),
+        total_reward_1 / 4 * 3
+    );
+    assert_eq!(
+        gauge.claim(&setup.pool_address, &user2, &100, &total_shares),
+        total_reward_1 / 4
+    );
+    assert_eq!(
+        setup.reward_token.balance(&user1) as u128,
+        total_reward_1 / 4 * 3
+    );
+    assert_eq!(
+        setup.reward_token.balance(&user2) as u128,
+        total_reward_1 / 4
+    );
+}
+
 
 #[test]
 fn test_simple_scheduled_reward() {
