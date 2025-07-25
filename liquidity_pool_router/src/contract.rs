@@ -11,6 +11,7 @@ use crate::pool_utils::{
     get_standard_pool_salt, get_tokens_salt, get_total_liquidity, validate_tokens_contracts,
 };
 use crate::rewards::get_rewards_manager;
+use crate::rewards_gauge::deploy_rewards_gauge;
 use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_init_pool_payment_address, get_init_pool_payment_token,
@@ -22,7 +23,7 @@ use crate::storage::{
     set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
     set_liquidity_calculator, set_pool_plane, set_protocol_fee_fraction, set_reward_tokens,
     set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash,
-    GlobalRewardsConfig, LiquidityPoolRewardInfo,
+    DataKey, GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -34,6 +35,8 @@ use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{require_operations_admin_or_owner, require_rewards_admin_or_owner};
+use liquidity_pool_config_storage as config_storage;
+use liquidity_pool_config_storage::interface::ConfigStorageInterface;
 use rewards::storage::{BoostFeedStorageTrait, BoostTokenStorageTrait, RewardTokenStorageTrait};
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -404,7 +407,7 @@ impl UpgradeableContract for LiquidityPoolRouter {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        160
+        170
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -590,6 +593,22 @@ impl AdminInterface for LiquidityPoolRouter {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_stableswap_pool_hash(&e, &new_hash);
+    }
+
+    // Sets the rewards gauge wasm hash.
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The new rewards gauge wasm hash.
+    fn set_rewards_gauge_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        config_storage::operations::set_value(
+            &e,
+            &admin,
+            DataKey::GaugeWASM.into_val(&e),
+            new_hash.into(),
+        );
     }
 
     // Configures the stableswap pool deployment payment.
@@ -1343,6 +1362,32 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     fn get_protocol_fee_fraction(e: Env) -> u32 {
         get_protocol_fee_fraction(&e)
     }
+
+    // Deploys a rewards gauge for a specific pool.
+    fn deploy_rewards_gauge(
+        e: Env,
+        admin: Address,
+        tokens: Vec<Address>,
+        pool_hash: BytesN<32>,
+        operator: Address,
+        reward_token: Address,
+    ) -> Address {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let pool = get_pool(&e, &tokens, pool_hash);
+        let rewards_gauge =
+            deploy_rewards_gauge(&e, pool.clone(), operator.clone(), reward_token.clone());
+
+        // attach deployed gauge to the pool
+        e.invoke_contract::<Val>(
+            &pool,
+            &symbol_short!("gauge_add"),
+            Vec::from_array(&e, [admin.to_val(), rewards_gauge.clone().into_val(&e)]),
+        );
+
+        rewards_gauge
+    }
 }
 
 // The `PoolPlaneInterface` trait provides the interface for interacting with a pool plane.
@@ -1763,5 +1808,14 @@ impl TransferableContract for LiquidityPoolRouter {
             },
             _ => access_control.get_future_address(&role),
         }
+    }
+}
+
+#[contractimpl]
+impl ConfigStorageInterface for LiquidityPoolRouter {
+    fn init_config_storage(e: Env, admin: Address, config_storage: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        config_storage::operations::init_config_storage(&e, &config_storage);
     }
 }

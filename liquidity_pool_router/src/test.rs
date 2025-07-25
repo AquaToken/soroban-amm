@@ -3,7 +3,7 @@ extern crate std;
 
 use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_POOLS};
 use crate::testutils;
-use crate::testutils::{create_plane_contract, test_token, Setup};
+use crate::testutils::{create_plane_contract, create_token_contract, test_token, Setup};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
     AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
@@ -3311,5 +3311,35 @@ fn test_boosted_rewards_abuse() {
         token_reward.balance(&stable_pool.address),
         stable_pool.get_reserves().get_unchecked(reward_token_idx) as i128
             + 1, // 1 comes from rewards rounding
+    );
+}
+
+#[test]
+fn test_deploy_rewards_gauge() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
+    let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
+    assert_eq!(pool_client.get_gauges(), Vec::new(&e),);
+    let gauge_operator = Address::generate(&e);
+    let gauge_token = create_token_contract(&e, &gauge_operator);
+    let rewards_gauge = setup.router.deploy_rewards_gauge(
+        &setup.operations_admin,
+        &tokens,
+        &pool_hash,
+        &gauge_operator,
+        &gauge_token.address,
+    );
+    assert_eq!(
+        pool_client.get_gauges(),
+        Vec::from_array(&e, [rewards_gauge.clone()])
+    );
+    assert_eq!(
+        testutils::rewards_gauge::Client::new(&e, &rewards_gauge).get_reward_token(),
+        gauge_token.address,
     );
 }

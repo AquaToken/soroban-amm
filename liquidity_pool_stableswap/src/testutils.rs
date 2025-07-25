@@ -1,9 +1,13 @@
+#![allow(dead_code)]
 #![cfg(test)]
 
 use crate::plane::pool_plane;
 use crate::plane::pool_plane::Client as PoolPlaneClient;
 use crate::LiquidityPoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
+use liquidity_pool_config_storage::{
+    testutils::deploy_config_storage, testutils::Client as ConfigStorageClient,
+};
 use soroban_sdk::testutils::arbitrary::std;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
@@ -40,6 +44,7 @@ pub fn create_liqpool_contract<'a>(
     reward_boost_token: &Address,
     reward_boost_feed: &Address,
     plane: &Address,
+    config_storage: &Address,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register(crate::LiquidityPool {}, ()));
     liqpool.initialize_all(
@@ -65,14 +70,13 @@ pub fn create_liqpool_contract<'a>(
             reward_boost_feed.clone(),
         ),
         plane,
+        config_storage,
     );
     liqpool
 }
 
 pub fn install_token_wasm(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_token_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_token_contract.wasm");
     e.deployer().upload_contract_wasm(WASM)
 }
 
@@ -93,9 +97,7 @@ pub fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 }
 
 mod reward_boost_feed {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_locker_feed_contract.wasm");
 }
 
 pub(crate) fn create_reward_boost_feed_contract<'a>(
@@ -109,6 +111,25 @@ pub(crate) fn create_reward_boost_feed_contract<'a>(
         &e.register(
             reward_boost_feed::WASM,
             reward_boost_feed::Args::__constructor(admin, operations_admin, emergency_admin),
+        ),
+    )
+}
+
+mod rewards_gauge {
+    soroban_sdk::contractimport!(file = "../contracts/soroban_rewards_gauge_contract.wasm");
+}
+
+pub(crate) fn deploy_rewards_gauge<'a>(
+    e: &Env,
+    pool: &Address,
+    operator: &Address,
+    reward_token: &Address,
+) -> rewards_gauge::Client<'a> {
+    rewards_gauge::Client::new(
+        e,
+        &e.register(
+            rewards_gauge::WASM,
+            rewards_gauge::Args::__constructor(pool, operator, reward_token),
         ),
     )
 }
@@ -136,6 +157,7 @@ impl Default for TestConfig {
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
+    pub(crate) config_storage: ConfigStorageClient<'a>,
     pub(crate) token1: SorobanTokenClient<'a>,
     pub(crate) token2: SorobanTokenClient<'a>,
     pub(crate) token_reward: SorobanTokenClient<'a>,
@@ -178,6 +200,7 @@ impl Setup<'_> {
         env.cost_estimate().budget().reset_unlimited();
 
         let admin = Address::generate(&env);
+        let emergency_admin = Address::generate(&env);
         let rewards_admin = Address::generate(&env);
         let operations_admin = Address::generate(&env);
         let pause_admin = Address::generate(&env);
@@ -198,14 +221,11 @@ impl Setup<'_> {
             create_token_contract(&env, &admin)
         };
         let reward_boost_token = create_token_contract(&env, &admin);
-        let reward_boost_feed = create_reward_boost_feed_contract(
-            &env,
-            &admin,
-            &operations_admin,
-            &emergency_pause_admin,
-        );
+        let reward_boost_feed =
+            create_reward_boost_feed_contract(&env, &admin, &operations_admin, &emergency_admin);
 
         let plane = create_plane_contract(&env);
+        let config_storage = deploy_config_storage(&env, &admin, &emergency_admin);
 
         let router = Address::generate(&env);
         let liq_pool = create_liqpool_contract(
@@ -220,6 +240,7 @@ impl Setup<'_> {
             &reward_boost_token.address.clone(),
             &reward_boost_feed.address.clone(),
             &plane.address,
+            &config_storage.address,
         );
 
         liq_pool.set_privileged_addrs(
@@ -231,7 +252,6 @@ impl Setup<'_> {
             &system_fee_admin.clone(),
         );
 
-        let emergency_admin = Address::generate(&env);
         liq_pool.commit_transfer_ownership(
             &admin,
             &Symbol::new(&env, "EmergencyAdmin"),
@@ -246,6 +266,7 @@ impl Setup<'_> {
 
         Setup {
             env,
+            config_storage,
             token1,
             token2,
             token_reward,
