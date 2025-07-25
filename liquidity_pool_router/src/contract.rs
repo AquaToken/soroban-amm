@@ -1066,8 +1066,10 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
                     &Symbol::new(&e, "get_protocol_fees"),
                     Vec::new(&e),
                 );
-                pool_reward_balance -= pool_reserves.get(i).unwrap();
-                pool_reward_balance -= protocol_fees.get(i).unwrap();
+                pool_reward_balance =
+                    pool_reward_balance.saturating_sub(pool_reserves.get(i).unwrap());
+                pool_reward_balance =
+                    pool_reward_balance.saturating_sub(protocol_fees.get(i).unwrap());
             }
             None => {}
         }

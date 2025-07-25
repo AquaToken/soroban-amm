@@ -3198,14 +3198,6 @@ fn test_boosted_rewards_abuse() {
     );
 
     assert_eq!(
-        standard_pool.claim_protocol_fees(&setup.admin, &setup.admin),
-        vec![&env, protocol_fee, protocol_fee]
-    );
-    assert_eq!(
-        stable_pool.claim_protocol_fees(&setup.admin, &setup.admin),
-        vec![&env, protocol_fee, protocol_fee]
-    );
-    assert_eq!(
         standard_pool.get_reserves(),
         vec![&env, 1331873465, 4313331118]
     );
@@ -3214,19 +3206,61 @@ fn test_boosted_rewards_abuse() {
         vec![&env, 1593773962, 3900180377]
     );
 
+    // second round of rewards configuration
+    setup.router.config_global_rewards(
+        &setup.admin,
+        &total_reward_tps,
+        &env.ledger().timestamp().saturating_add(duration_seconds),
+        &vec![
+            &env,
+            (
+                vec![&env, token_reward.address.clone(), token1.address.clone()],
+                0_5000000,
+            ),
+            (
+                vec![&env, token_reward.address.clone(), token2.address.clone()],
+                0_5000000,
+            ),
+        ],
+    );
+    setup.router.fill_liquidity(&vec![
+        &env,
+        token_reward.address.clone(),
+        token1.address.clone(),
+    ]);
+    setup.router.fill_liquidity(&vec![
+        &env,
+        token_reward.address.clone(),
+        token2.address.clone(),
+    ]);
+    setup.router.config_pool_rewards(
+        &vec![&env, token_reward.address.clone(), token1.address.clone()],
+        &standard_pool_hash,
+    );
+    setup.router.config_pool_rewards(
+        &vec![&env, token_reward.address.clone(), token2.address.clone()],
+        &stable_pool_hash,
+    );
+    token_reward.approve(
+        &setup.admin,
+        &setup.router.address,
+        &(total_reward_1 as i128),
+        &env.ledger().sequence(),
+    );
+    // just check the values, don't distribute rewards yet
     assert_eq!(
         setup.router.get_total_outstanding_reward(
             &vec![&env, token_reward.address.clone(), token1.address.clone()],
             &standard_pool_hash,
         ),
-        0
+        total_reward_per_pool,
     );
     assert_eq!(
         setup.router.get_total_outstanding_reward(
             &vec![&env, token_reward.address.clone(), token2.address.clone()],
             &stable_pool_hash,
         ),
-        0
+        total_reward_per_pool,
     );
 
     // balance cannot drop below reserve
@@ -3241,10 +3275,41 @@ fn test_boosted_rewards_abuse() {
     );
     assert_eq!(
         token_reward.balance(&standard_pool.address),
-        standard_pool.get_reserves().get_unchecked(reward_token_idx) as i128 + 1, // 1 comes from rewards rounding
+        standard_pool.get_reserves().get_unchecked(reward_token_idx) as i128
+            + protocol_fee as i128
+            + 1, // 1 comes from rewards rounding
     );
     assert_eq!(
         token_reward.balance(&stable_pool.address),
-        stable_pool.get_reserves().get_unchecked(reward_token_idx) as i128 + 1, // 1 comes from rewards rounding
+        stable_pool.get_reserves().get_unchecked(reward_token_idx) as i128
+            + protocol_fee as i128
+            + 1, // 1 comes from rewards rounding
+    );
+
+    assert_eq!(
+        standard_pool.claim_protocol_fees(&setup.admin, &setup.admin),
+        vec![&env, protocol_fee, protocol_fee]
+    );
+    assert_eq!(
+        stable_pool.claim_protocol_fees(&setup.admin, &setup.admin),
+        vec![&env, protocol_fee, protocol_fee]
+    );
+    assert!(
+        token_reward.balance(&standard_pool.address)
+            > standard_pool.get_reserves().get_unchecked(reward_token_idx) as i128
+    );
+    assert!(
+        token_reward.balance(&stable_pool.address)
+            > stable_pool.get_reserves().get_unchecked(reward_token_idx) as i128
+    );
+    assert_eq!(
+        token_reward.balance(&standard_pool.address),
+        standard_pool.get_reserves().get_unchecked(reward_token_idx) as i128
+            + 1, // 1 comes from rewards rounding
+    );
+    assert_eq!(
+        token_reward.balance(&stable_pool.address),
+        stable_pool.get_reserves().get_unchecked(reward_token_idx) as i128
+            + 1, // 1 comes from rewards rounding
     );
 }
