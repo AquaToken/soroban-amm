@@ -1483,6 +1483,7 @@ impl RewardsTrait for LiquidityPool {
         let tokens = Self::get_tokens(e.clone());
         let reward_token = rewards_storage.get_reward_token();
         let reserves = Self::get_reserves(e.clone());
+        let protocol_fees = Self::get_protocol_fees(e.clone());
 
         for i in 0..reserves.len() {
             let token = tokens.get(i).unwrap();
@@ -1492,7 +1493,7 @@ impl RewardsTrait for LiquidityPool {
 
             let balance = SorobanTokenClient::new(&e, &tokens.get(i).unwrap())
                 .balance(&e.current_contract_address()) as u128;
-            if reserves.get(i).unwrap() > balance {
+            if reserves.get_unchecked(i) + protocol_fees.get_unchecked(i) > balance {
                 panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
             }
         }

@@ -5213,3 +5213,108 @@ fn test_custom_protocol_fee() {
         );
     }
 }
+
+#[test]
+fn test_boosted_rewards_abuse() {
+    let setup = Setup::new_with_config(&TestConfig {
+        reward_token_in_pool: true,
+        liq_pool_fee: 100,
+        a: 1500,
+        ..TestConfig::default()
+    });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    assert_eq!(liq_pool.a(), 1500);
+    let token_reward = setup.token_reward;
+    let market_maker = Address::generate(&env);
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    for user in [&market_maker, &user1, &user2] {
+        SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(user, &(i128::MAX / 10));
+        SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(user, &(i128::MAX / 10));
+    }
+
+    let locked_token_admin_client = get_token_admin_client(&env, &setup.reward_boost_token.address);
+
+    let reward_tps = 1_0000000_u128;
+    let total_reward_1 = reward_tps * 70;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &env.ledger().timestamp().saturating_add(70),
+        &reward_tps,
+    );
+    let configured_reward = liq_pool.get_total_configured_reward();
+    let claimed_reward = liq_pool.get_total_claimed_reward();
+    let reward_to_fill = configured_reward - claimed_reward;
+    SorobanTokenAdminClient::new(&env, &token_reward.address)
+        .mint(&liq_pool.address, &(reward_to_fill as i128));
+
+    // first user deposits 100 tokens having 10k locked tokens out of 30k.
+    // second user deposits 100 tokens too. but without locked tokens.
+    locked_token_admin_client.mint(&user1, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &30_000_0000000);
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [100_0000000, 100_0000000]),
+        &0,
+    );
+    liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&env, [100_0000000, 100_0000000]),
+        &0,
+    );
+    jump(&env, 10);
+    jump(&env, 20);
+
+    // chain of swaps to generate protocol fees, then withdraw them
+    for i in 0..100 {
+        liq_pool.swap(&user1, &(i % 2), &((i + 1) % 2), &30_0000000, &0);
+    }
+
+    jump(&env, 50);
+
+    assert_eq!(liq_pool.get_reserves(), vec![&env, 2073526300, 2076466699]);
+    assert_eq!(
+        token_reward.balance(&liq_pool.address) as u128,
+        2073526300 + total_reward_1 + 75000000
+    );
+
+    let user1_claimed = liq_pool.claim(&user1);
+
+    jump(&env, 10);
+
+    // second user tries to abuse rewards by locking tokens and immediately claim, applying retroactive boost.
+    locked_token_admin_client.mint(&user2, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &40_000_0000000);
+    let user2_claimed = liq_pool.claim(&user2);
+
+    assert_eq!(user1_claimed, 419999999);
+    assert_eq!(user2_claimed, 280000000);
+    assert_eq!(user1_claimed + user2_claimed, total_reward_1 - 1,);
+    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(liq_pool.get_total_claimed_reward(), total_reward_1 - 1,);
+
+    assert_eq!(
+        liq_pool.claim_protocol_fees(&setup.admin, &setup.admin),
+        vec![&env, 75000000, 75000000]
+    );
+    assert_eq!(liq_pool.get_reserves(), vec![&env, 2073526300, 2076466699]);
+
+    // balance cannot drop below reserve
+    let reward_token_idx = liq_pool
+        .get_tokens()
+        .first_index_of(&token_reward.address)
+        .unwrap();
+    assert!(
+        token_reward.balance(&liq_pool.address)
+            > liq_pool.get_reserves().get_unchecked(reward_token_idx) as i128
+    );
+    assert_eq!(
+        token_reward.balance(&liq_pool.address),
+        liq_pool.get_reserves().get_unchecked(reward_token_idx) as i128 + 1, // 1 comes from rewards rounding
+    );
+}
