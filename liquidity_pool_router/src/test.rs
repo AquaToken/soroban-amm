@@ -3304,13 +3304,11 @@ fn test_boosted_rewards_abuse() {
     );
     assert_eq!(
         token_reward.balance(&standard_pool.address),
-        standard_pool.get_reserves().get_unchecked(reward_token_idx) as i128
-            + 1, // 1 comes from rewards rounding
+        standard_pool.get_reserves().get_unchecked(reward_token_idx) as i128 + 1, // 1 comes from rewards rounding
     );
     assert_eq!(
         token_reward.balance(&stable_pool.address),
-        stable_pool.get_reserves().get_unchecked(reward_token_idx) as i128
-            + 1, // 1 comes from rewards rounding
+        stable_pool.get_reserves().get_unchecked(reward_token_idx) as i128 + 1, // 1 comes from rewards rounding
     );
 }
 
