@@ -47,11 +47,12 @@ pub struct LiquidityPoolRewardInfo {
 
 #[derive(Clone)]
 #[contracttype]
-enum DataKey {
+pub(crate) enum DataKey {
     TokensSet(u128),
     TokensSetCounter,
     TokensSetPools(BytesN<32>),
     TokenHash,
+    GaugeWASM,
     InitPoolPaymentToken,
     InitStandardPoolPaymentAmount,
     InitStablePoolPaymentAmount,
