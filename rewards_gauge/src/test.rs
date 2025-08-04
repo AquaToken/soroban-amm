@@ -131,7 +131,7 @@ fn test_retroactive_reward() {
         &total_shares,
     );
 
-    // 40 seconds. second user depositing after gauge set up
+    // 60 seconds. second user depositing after gauge set up
     jump(&env, 30);
     gauge.checkpoint_user(&setup.pool_address, &user2, &0, &total_shares);
     total_shares += 100;

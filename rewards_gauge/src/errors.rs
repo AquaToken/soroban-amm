@@ -10,4 +10,5 @@ pub enum GaugeError {
     ConfigNotExpiredYet = 3001,
     StartNotInFuture = 3002,
     StartTooEarly = 3003,
+    TooManyConfigs = 3004,
 }

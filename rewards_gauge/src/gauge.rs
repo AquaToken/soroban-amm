@@ -1,89 +1,54 @@
 use crate::constants::REWARD_PRECISION;
 use crate::storage::{
-    get_future_reward_config, get_global_reward_data, get_reward_config, get_user_reward_data,
-    set_future_reward_config, set_global_reward_data, set_reward_config, set_user_reward_data,
-    GlobalRewardData, UserRewardData,
+    get_global_reward_data, get_reward_configs, get_user_reward_data, set_global_reward_data,
+    set_reward_configs, set_user_reward_data, GlobalRewardData, UserRewardData,
 };
-use soroban_sdk::{Address, Env, U256};
+use soroban_sdk::{Address, Env, Vec, U256};
 
 pub(crate) fn checkpoint_global(env: &Env, working_supply: u128) -> GlobalRewardData {
-    let config = get_reward_config(env);
-    let data = get_global_reward_data(env);
+    let configs = get_reward_configs(env);
+    let mut configs_updated = Vec::new(env);
+    let start_data = get_global_reward_data(env);
     let now = env.ledger().timestamp();
 
-    if now <= config.expired_at {
-        // config not expired yet, yield rewards
-        let generated_tokens = (now - data.epoch) as u128 * config.tps;
+    let mut new_data = start_data.clone();
+    new_data.epoch = now;
+
+    for config in configs {
+        if config.start_at > now {
+            // Config not started yet, so no yield generated. skip
+            configs_updated.push_back(config);
+            continue;
+        }
+
+        let reward_start = if config.start_at < start_data.epoch {
+            start_data.epoch
+        } else {
+            config.start_at
+        };
+        let reward_end = if config.expired_at > now {
+            now
+        } else {
+            config.expired_at
+        };
+
+        let generated_tokens = (reward_end - reward_start) as u128 * config.tps;
         let reward_per_share = if working_supply > 0 {
             REWARD_PRECISION * generated_tokens / working_supply
         } else {
             0
         };
 
-        let new_data = GlobalRewardData {
-            epoch: now,
-            inv: data.inv.add(&U256::from_u128(env, reward_per_share)),
-            accumulated: data.accumulated + generated_tokens,
-            claimed: data.claimed,
-        };
-        set_global_reward_data(env, &new_data);
-        new_data
-    } else {
-        // Already expired. yield up to expiration
-        let generated_tokens = (config.expired_at - data.epoch) as u128 * config.tps;
-        let reward_per_share = if working_supply > 0 {
-            REWARD_PRECISION * generated_tokens / working_supply
-        } else {
-            0
-        };
-        let new_data = GlobalRewardData {
-            epoch: config.expired_at,
-            inv: data.inv.add(&U256::from_u128(env, reward_per_share)),
-            accumulated: data.accumulated + generated_tokens,
-            claimed: data.claimed,
-        };
-        set_global_reward_data(env, &new_data);
-
-        // config expired, but there may be planned one. try to apply it if possible
-        let new_data = match get_future_reward_config(env) {
-            Some(future_config) => {
-                if future_config.start_at <= now {
-                    // future config already started, set it as current and checkpoint again
-                    sync_reward_global(&env, future_config.start_at);
-                    set_reward_config(env, &future_config);
-                    set_future_reward_config(env, &None);
-                    checkpoint_global(env, working_supply)
-                } else {
-                    // future config not yet started, keep it for later
-                    new_data
-                }
-            }
-            None => {
-                // no future config, reset current config
-                new_data
-            }
-        };
-
-        new_data
+        // store only active or future configs
+        if config.expired_at > now {
+            configs_updated.push_back(config);
+        }
+        new_data.inv = new_data.inv.add(&U256::from_u128(env, reward_per_share));
+        new_data.accumulated += generated_tokens;
     }
-}
-
-pub(crate) fn sync_reward_global(env: &Env, epoch: u64) -> GlobalRewardData {
-    let data = get_global_reward_data(env);
-
-    if data.epoch == epoch {
-        // snapshot already made
-        data
-    } else {
-        let new_data = GlobalRewardData {
-            epoch,
-            inv: data.inv,
-            accumulated: data.accumulated,
-            claimed: data.claimed,
-        };
-        set_global_reward_data(env, &new_data);
-        new_data
-    }
+    set_global_reward_data(env, &new_data);
+    set_reward_configs(env, configs_updated);
+    new_data
 }
 
 pub(crate) fn checkpoint_user(
