@@ -153,7 +153,7 @@ pub fn get_rewards_info(
 pub fn schedule_rewards_config(
     e: &Env,
     gauge: Address,
-    operator: Address,
+    distributor: Address,
     start_at: Option<u64>,
     duration: u64,
     tps: u128,
@@ -166,7 +166,7 @@ pub fn schedule_rewards_config(
             e,
             [
                 e.current_contract_address().to_val(),
-                operator.to_val(),
+                distributor.to_val(),
                 start_at.into_val(e),
                 duration.into_val(e),
                 tps.into_val(e),

@@ -3002,14 +3002,53 @@ fn test_deploy_rewards_gauge() {
     let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
     let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
     assert_eq!(pool_client.get_gauges(), Vec::new(&e),);
-    let gauge_operator = Address::generate(&e);
-    let gauge_token = create_token_contract(&e, &gauge_operator);
-    let rewards_gauge = setup.router.deploy_rewards_gauge(
-        &setup.operations_admin,
+    let distributor = Address::generate(&e);
+    let gauge_token = create_token_contract(&e, &distributor);
+    gauge_token.mint(&setup.admin, &1_000_0000000);
+
+    // create pool for gauge token vs reward token for swaps chain proof
+    let proof_tokens = match setup.reward_token.address < gauge_token.address {
+        false => vec![
+            &e,
+            gauge_token.address.clone(),
+            setup.reward_token.address.clone(),
+        ],
+        true => vec![
+            &e,
+            setup.reward_token.address.clone(),
+            gauge_token.address.clone(),
+        ],
+    };
+    setup.reward_token.mint(&setup.admin, &2_000_0000000);
+    let (proof_pool_hash, _proof_pool_address) =
+        setup
+            .router
+            .init_standard_pool(&setup.admin, &proof_tokens, &30);
+    setup.router.deposit(
+        &setup.admin,
+        &proof_tokens,
+        &proof_pool_hash,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    gauge_token.mint(&distributor, &(1200 * 7 * 24 * 60 * 60));
+    let rewards_gauge = setup.router.pool_gauge_schedule_reward(
+        &distributor,
         &tokens,
         &pool_hash,
-        &gauge_operator,
         &gauge_token.address,
+        &1173, // 10_1347200 / day. min amount to distribute considering the pool slippage
+        &None,
+        &(7 * 24 * 60 * 60), // 1 week
+        &vec![
+            &e,
+            (
+                proof_tokens,
+                proof_pool_hash,
+                setup.reward_token.address.clone(),
+            ),
+        ],
     );
     assert_eq!(
         pool_client.get_gauges(),

@@ -5184,12 +5184,7 @@ fn test_regular_upgrade_pool() {
     let setup = Setup::default();
     let contract = setup.liq_pool;
     let token = ShareTokenClient::new(&setup.env, &contract.share_id());
-    let gauge = deploy_rewards_gauge(
-        &setup.env,
-        &contract.address,
-        &setup.admin,
-        &setup.token_reward.address,
-    );
+    let gauge = deploy_rewards_gauge(&setup.env, &contract.address, &setup.token_reward.address);
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
@@ -5400,13 +5395,8 @@ fn test_simple_reward_gauge() {
     let user = Address::generate(&env);
 
     let gauge_reward_token = create_token_contract(&env, &setup.admin);
-    let gauge_operator = Address::generate(&env);
-    let gauge = deploy_rewards_gauge(
-        &env,
-        &liq_pool.address,
-        &gauge_operator,
-        &gauge_reward_token.address,
-    );
+    let distributor = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &gauge_reward_token.address);
     liq_pool.gauge_add(&setup.admin, &gauge.address);
 
     // 10 seconds. user depositing
@@ -5420,8 +5410,15 @@ fn test_simple_reward_gauge() {
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
     get_token_admin_client(&env, &gauge_reward_token.address)
-        .mint(&gauge_operator, &(total_reward_1 as i128));
-    liq_pool.gauge_schedule_reward(&gauge_operator, &gauge.address, &None, &60, &reward_1_tps);
+        .mint(&distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
 
     // 90 seconds. rewards ended.
     jump(&env, 70);
@@ -5468,13 +5465,8 @@ fn test_retroactive_reward_gauge() {
     // 20 seconds. gauge set up
     jump(&env, 5);
     let gauge_reward_token = create_token_contract(&env, &setup.admin);
-    let gauge_operator = Address::generate(&env);
-    let gauge = deploy_rewards_gauge(
-        &env,
-        &liq_pool.address,
-        &gauge_operator,
-        &gauge_reward_token.address,
-    );
+    let distributor = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &gauge_reward_token.address);
     liq_pool.gauge_add(&setup.admin, &gauge.address);
 
     // 30 seconds. rewards set up for 60 seconds
@@ -5482,8 +5474,15 @@ fn test_retroactive_reward_gauge() {
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
     get_token_admin_client(&env, &gauge_reward_token.address)
-        .mint(&gauge_operator, &(total_reward_1 as i128));
-    liq_pool.gauge_schedule_reward(&gauge_operator, &gauge.address, &None, &60, &reward_1_tps);
+        .mint(&distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
 
     // 40 seconds. second user depositing after gauge set up
     jump(&env, 30);
@@ -5538,13 +5537,8 @@ fn test_reward_info_getter() {
     let epoch_start = env.ledger().timestamp();
 
     let gauge_reward_token = create_token_contract(&env, &setup.admin);
-    let gauge_operator = Address::generate(&env);
-    let gauge = deploy_rewards_gauge(
-        &env,
-        &liq_pool.address,
-        &gauge_operator,
-        &gauge_reward_token.address,
-    );
+    let distributor = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &gauge_reward_token.address);
     liq_pool.gauge_add(&setup.admin, &gauge.address);
 
     // 10 seconds. user depositing
@@ -5558,8 +5552,15 @@ fn test_reward_info_getter() {
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
     get_token_admin_client(&env, &gauge_reward_token.address)
-        .mint(&gauge_operator, &(total_reward_1 as i128));
-    liq_pool.gauge_schedule_reward(&gauge_operator, &gauge.address, &None, &60, &reward_1_tps);
+        .mint(&distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
 
     jump(&env, 10);
     let data = liq_pool.gauges_get_reward_info(&user);
@@ -5590,11 +5591,9 @@ fn test_reward_info_getter() {
 fn test_add_gauge_twice() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5606,12 +5605,10 @@ fn test_add_gauge_twice() {
 fn test_add_gauges_over_max() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     for _ in 0..6 {
         let gauge = deploy_rewards_gauge(
             &setup.env,
             &setup.liq_pool.address,
-            &gauge_operator,
             &gauge_reward_token.address,
         );
         setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5622,11 +5619,9 @@ fn test_add_gauges_over_max() {
 fn test_remove_gauge() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5638,11 +5633,9 @@ fn test_remove_gauge() {
 fn test_remove_gauge_twice() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5655,11 +5648,9 @@ fn test_gauges_kill_claim() {
     let setup = Setup::setup(&TestConfig::default());
     let user = Address::generate(&setup.env);
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5672,11 +5663,9 @@ fn test_gauges_kill_claim() {
 fn test_gauges_kill_claim_pause_admin() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5687,11 +5676,9 @@ fn test_gauges_kill_claim_pause_admin() {
 fn test_gauges_kill_claim_emergency_pause_admin() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5705,11 +5692,9 @@ fn test_gauges_kill_claim_emergency_pause_admin() {
 fn test_gauges_kill_claim_third_user() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5723,11 +5708,9 @@ fn test_gauges_unkill_claim() {
     let setup = Setup::setup(&TestConfig::default());
     let user = Address::generate(&setup.env);
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5742,11 +5725,9 @@ fn test_gauges_unkill_claim() {
 fn test_gauges_unkill_claim_pause_admin() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5759,11 +5740,9 @@ fn test_gauges_unkill_claim_pause_admin() {
 fn test_gauges_unkill_claim_emergency_pause_admin() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
@@ -5778,11 +5757,9 @@ fn test_gauges_unkill_claim_emergency_pause_admin() {
 fn test_gauges_unkill_claim_third_user() {
     let setup = Setup::setup(&TestConfig::default());
     let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
-    let gauge_operator = Address::generate(&setup.env);
     let gauge = deploy_rewards_gauge(
         &setup.env,
         &setup.liq_pool.address,
-        &gauge_operator,
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);

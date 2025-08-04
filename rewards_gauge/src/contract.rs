@@ -14,28 +14,24 @@ pub struct RewardsGauge;
 
 #[contractimpl]
 impl RewardsGauge {
-    pub fn __constructor(e: Env, pool: Address, operator: Address, reward_token: Address) {
+    pub fn __constructor(e: Env, pool: Address, reward_token: Address) {
         set_pool(&e, &pool);
-        set_operator(&e, &operator);
         set_reward_token(&e, &reward_token);
     }
 
     pub fn schedule_rewards_config(
         e: Env,
         pool: Address,
-        operator: Address,
+        distributor: Address,
         start_at: Option<u64>,
         duration: u64,
         tps: u128,
         working_supply: u128,
     ) {
         pool.require_auth();
-        if get_pool(&e) != pool {
-            panic_with_error!(&e, GaugeError::Unauthorized);
-        }
+        distributor.require_auth();
 
-        operator.require_auth();
-        if get_operator(&e) != operator {
+        if get_pool(&e) != pool {
             panic_with_error!(&e, GaugeError::Unauthorized);
         }
 
@@ -46,7 +42,7 @@ impl RewardsGauge {
         let reward_token = Client::new(&e, &get_reward_token(&e));
         let new_reward = tps * duration as u128;
         reward_token.transfer(
-            &operator,
+            &distributor,
             &e.current_contract_address(),
             &(new_reward as i128),
         );
@@ -73,7 +69,7 @@ impl RewardsGauge {
                     let old_future_reward = future_reward.tps
                         * (future_reward.expired_at - future_reward.start_at) as u128;
                     reward_token.transfer(
-                        &operator,
+                        &distributor,
                         &e.current_contract_address(),
                         &(old_future_reward as i128),
                     );
