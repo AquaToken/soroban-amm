@@ -11,7 +11,11 @@ use crate::pool_utils::{
     get_standard_pool_salt, get_tokens_salt, get_total_liquidity, validate_tokens_contracts,
 };
 use crate::rewards::get_rewards_manager;
-use crate::rewards_gauge::deploy_rewards_gauge;
+use crate::rewards_gauge::{
+    calculate_equivalent_reward, deploy_rewards_gauge, gauge_get_reward_duration_threshold,
+    gauge_get_reward_per_day_threshold, gauge_set_reward_duration_threshold,
+    gauge_set_reward_per_day_threshold,
+};
 use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_init_pool_payment_address, get_init_pool_payment_token,
@@ -408,6 +412,11 @@ impl UpgradeableContract for LiquidityPoolRouter {
     // The version of the contract as a u32.
     fn version() -> u32 {
         170
+    }
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "AMMRouter")
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -1363,29 +1372,101 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         get_protocol_fee_fraction(&e)
     }
 
-    // Deploys a rewards gauge for a specific pool.
-    fn deploy_rewards_gauge(
+    // Set the reward thresholds for the pool gauge.
+    // When distributor schedules gauge reward, it should be greater than this value.
+    fn pool_gauge_set_reward_thresholds(
         e: Env,
         admin: Address,
-        tokens: Vec<Address>,
-        pool_hash: BytesN<32>,
-        operator: Address,
-        reward_token: Address,
-    ) -> Address {
+        min_reward_equivalent_day: u128,
+        min_duration_seconds: u64,
+    ) {
         admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
-        let pool = get_pool(&e, &tokens, pool_hash);
-        let rewards_gauge =
-            deploy_rewards_gauge(&e, pool.clone(), operator.clone(), reward_token.clone());
+        gauge_set_reward_per_day_threshold(&e, &admin, min_reward_equivalent_day);
+        gauge_set_reward_duration_threshold(&e, &admin, min_duration_seconds);
+    }
 
-        // attach deployed gauge to the pool
+    // Schedules an additional LP reward for a specific pool through rewards gauge.
+    fn pool_gauge_schedule_reward(
+        e: Env,
+        distributor: Address,
+        pool_tokens: Vec<Address>,
+        pool_hash: BytesN<32>,
+        distribute_token: Address,
+        tps: u128,
+        start_at: Option<u64>,
+        duration: u64,
+        swaps_chain_proof: Vec<(Vec<Address>, BytesN<32>, Address)>,
+    ) -> Address {
+        distributor.require_auth();
+
+        let pool = get_pool(&e, &pool_tokens, pool_hash);
+        let pool_gauges: Vec<Address> =
+            e.invoke_contract(&pool, &Symbol::new(&e, "get_gauges"), Vec::new(&e));
+        let rewards_gauge = match pool_gauges.first_index_of(distribute_token.clone()) {
+            Some(i) => pool_gauges.get_unchecked(i).clone(),
+            None => {
+                // deploy new gauge
+                let rewards_gauge =
+                    deploy_rewards_gauge(&e, pool.clone(), distribute_token.clone());
+
+                // attach deployed gauge to the pool
+                e.invoke_contract::<Val>(
+                    &pool,
+                    &symbol_short!("gauge_add"),
+                    Vec::from_array(
+                        &e,
+                        [
+                            e.current_contract_address().to_val(),
+                            rewards_gauge.clone().into_val(&e),
+                        ],
+                    ),
+                );
+                rewards_gauge
+            }
+        };
+
+        // verify duration against minimum threshold
+        if duration < gauge_get_reward_duration_threshold(&e) {
+            panic_with_error!(e, LiquidityPoolRouterError::RewardDurationTooShort);
+        }
+
+        // verify equivalent reward per day in reward token using swaps chain proof
+        let reward_equivalent_per_day = calculate_equivalent_reward(
+            &e,
+            &distribute_token,
+            tps * 86400, // reward per day
+            swaps_chain_proof,
+        );
+        if reward_equivalent_per_day < gauge_get_reward_per_day_threshold(&e) {
+            panic_with_error!(e, LiquidityPoolRouterError::RewardAmountTooLow);
+        }
+
+        // fn gauge_schedule_reward(
+        //         e: Env,
+        //         router: Address,
+        //         distributor: Address,
+        //         gauge: Address,
+        //         start_at: Option<u64>,
+        //         duration: u64,
+        //         tps: u128,
+        //     )
         e.invoke_contract::<Val>(
             &pool,
-            &symbol_short!("gauge_add"),
-            Vec::from_array(&e, [admin.to_val(), rewards_gauge.clone().into_val(&e)]),
+            &Symbol::new(&e, "gauge_schedule_reward"),
+            Vec::from_array(
+                &e,
+                [
+                    e.current_contract_address().to_val(),
+                    distributor.into_val(&e),
+                    rewards_gauge.into_val(&e),
+                    start_at.into_val(&e),
+                    duration.into_val(&e),
+                    tps.into_val(&e),
+                ],
+            ),
         );
-
         rewards_gauge
     }
 }

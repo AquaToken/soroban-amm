@@ -11,7 +11,8 @@ pub trait RewardsGaugeInterface {
     // Schedules a reward for a specific gauge.
     fn gauge_schedule_reward(
         e: Env,
-        gauge_operator: Address,
+        router: Address,
+        distributor: Address,
         gauge: Address,
         start_at: Option<u64>,
         duration: u64,

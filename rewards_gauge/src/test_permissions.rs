@@ -28,15 +28,6 @@ fn test_checkpoint_third_party_user() {
 }
 
 #[test]
-#[should_panic(expected = "#102")]
-fn test_checkpoint_operator() {
-    let setup = Setup::with_mocked_pool();
-    setup
-        .contract
-        .checkpoint_user(&setup.operator, &Address::generate(&setup.env), &0, &0);
-}
-
-#[test]
 fn test_claim_pool() {
     let setup = Setup::with_mocked_pool();
     setup
@@ -54,15 +45,6 @@ fn test_claim_third_party_user() {
         &0,
         &0,
     );
-}
-
-#[test]
-#[should_panic(expected = "#102")]
-fn test_claim_operator() {
-    let setup = Setup::with_mocked_pool();
-    setup
-        .contract
-        .claim(&setup.operator, &Address::generate(&setup.env), &0, &0);
 }
 
 #[test]
@@ -86,52 +68,29 @@ fn test_get_user_reward_third_party_user() {
 }
 
 #[test]
-#[should_panic(expected = "#102")]
-fn test_get_user_reward_operator() {
-    let setup = Setup::with_mocked_pool();
-    setup
-        .contract
-        .get_user_reward(&setup.operator, &Address::generate(&setup.env), &0, &0);
-}
-
-#[test]
 fn test_schedule_reward_pool() {
     let setup = Setup::with_mocked_pool();
-    StellarAssetClient::new(&setup.env, &setup.reward_token.address).mint(&setup.operator, &1000);
-    setup.contract.schedule_rewards_config(
-        &setup.pool_address,
-        &setup.operator,
-        &None,
-        &1000,
-        &1,
-        &0,
-    );
-}
-
-#[test]
-#[should_panic(expected = "#102")]
-fn test_schedule_reward_operator_not_pool() {
-    let setup = Setup::with_mocked_pool();
-    StellarAssetClient::new(&setup.env, &setup.reward_token.address).mint(&setup.operator, &1000);
-    setup.contract.schedule_rewards_config(
-        &Address::generate(&setup.env),
-        &setup.operator,
-        &None,
-        &1000,
-        &1,
-        &0,
-    );
-}
-
-#[test]
-#[should_panic(expected = "#102")]
-fn test_schedule_reward_pool_not_operator() {
-    let setup = Setup::with_mocked_pool();
-    let user = Address::generate(&setup.env);
-    StellarAssetClient::new(&setup.env, &setup.reward_token.address).mint(&user, &1000);
+    let distributor = Address::generate(&setup.env);
+    StellarAssetClient::new(&setup.env, &setup.reward_token.address).mint(&distributor, &1000);
     setup
         .contract
-        .schedule_rewards_config(&setup.pool_address, &user, &None, &1000, &1, &0);
+        .schedule_rewards_config(&setup.pool_address, &distributor, &None, &1000, &1, &0);
+}
+
+#[test]
+#[should_panic(expected = "#102")]
+fn test_schedule_reward_not_pool() {
+    let setup = Setup::with_mocked_pool();
+    let distributor = Address::generate(&setup.env);
+    StellarAssetClient::new(&setup.env, &setup.reward_token.address).mint(&distributor, &1000);
+    setup.contract.schedule_rewards_config(
+        &Address::generate(&setup.env),
+        &distributor,
+        &None,
+        &1000,
+        &1,
+        &0,
+    );
 }
 
 // upgrade

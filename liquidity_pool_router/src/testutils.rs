@@ -188,6 +188,12 @@ impl Default for Setup<'_> {
             &reward_boost_feed.address,
         );
         router.set_protocol_fee_fraction(&admin, &5000);
+        // min equivalent amount of 10 reward token per day. min tps is ~1157
+        router.pool_gauge_set_reward_thresholds(
+            &admin,
+            &10_0000000,
+            &(60 * 60 * 24), // 1 day in seconds
+        );
         router.set_rewards_gauge_hash(
             &admin,
             &env.deployer().upload_contract_wasm(rewards_gauge::WASM),

@@ -1080,6 +1080,11 @@ impl UpgradeableContract for LiquidityPool {
         170
     }
 
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "StandardLiquidityPool")
+    }
+
     // Commits a new wasm hash for a future upgrade.
     // The upgrade will be available through `apply_upgrade` after the standard upgrade delay
     // unless the system is in emergency mode.
@@ -1510,7 +1515,11 @@ impl RewardsTrait for LiquidityPool {
 impl RewardsGaugeInterface for LiquidityPool {
     fn gauge_add(e: Env, admin: Address, gauge_address: Address) {
         admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
+
+        // operations admin, owner and router are privileged to add gauges
+        if admin != get_router(&e) {
+            require_operations_admin_or_owner(&e, &admin);
+        }
 
         rewards_gauge::operations::add(&e, gauge_address);
     }
@@ -1524,18 +1533,24 @@ impl RewardsGaugeInterface for LiquidityPool {
 
     fn gauge_schedule_reward(
         e: Env,
-        gauge_operator: Address,
+        router: Address,
+        distributor: Address,
         gauge: Address,
         start_at: Option<u64>,
         duration: u64,
         tps: u128,
     ) {
-        gauge_operator.require_auth();
+        router.require_auth();
+        distributor.require_auth();
+
+        if router != get_router(&e) {
+            panic_with_error!(e, AccessControlError::Unauthorized)
+        }
 
         rewards_gauge::operations::schedule_rewards_config(
             &e,
             gauge,
-            gauge_operator,
+            distributor,
             start_at,
             duration,
             tps,

@@ -300,14 +300,13 @@ mod rewards_gauge {
 pub(crate) fn deploy_rewards_gauge<'a>(
     e: &Env,
     pool: &Address,
-    operator: &Address,
     reward_token: &Address,
 ) -> rewards_gauge::Client<'a> {
     rewards_gauge::Client::new(
         e,
         &e.register(
             rewards_gauge::WASM,
-            rewards_gauge::Args::__constructor(pool, operator, reward_token),
+            rewards_gauge::Args::__constructor(pool, reward_token),
         ),
     )
 }

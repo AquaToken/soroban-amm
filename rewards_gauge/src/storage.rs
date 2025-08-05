@@ -1,11 +1,10 @@
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env, U256};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec, U256};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
-    generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
+    generate_instance_storage_setter,
 };
 
 // ------------------------------------
@@ -44,10 +43,8 @@ pub struct UserRewardData {
 #[contracttype]
 enum DataKey {
     Pool,
-    Operator,
     RewardToken,
-    RewardConfig,
-    FutureRewardConfig,
+    RewardConfigs,
     GlobalRewardData,
 
     // User-level data
@@ -55,20 +52,22 @@ enum DataKey {
 }
 
 generate_instance_storage_getter_and_setter!(pool, DataKey::Pool, Address);
-generate_instance_storage_getter_and_setter!(operator, DataKey::Operator, Address);
 generate_instance_storage_getter_and_setter!(reward_token, DataKey::RewardToken, Address);
-generate_instance_storage_getter_and_setter_with_default!(
-    reward_config,
-    DataKey::RewardConfig,
-    RewardConfig,
-    RewardConfig::default()
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    future_reward_config,
-    DataKey::FutureRewardConfig,
-    Option<RewardConfig>,
-    None
-);
+
+pub(crate) fn get_reward_configs(env: &Env) -> Vec<RewardConfig> {
+    bump_instance(env);
+    env.storage()
+        .instance()
+        .get(&DataKey::RewardConfigs)
+        .unwrap_or(Vec::new(env))
+}
+
+pub(crate) fn set_reward_configs(env: &Env, configs: Vec<RewardConfig>) {
+    bump_instance(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::RewardConfigs, &configs);
+}
 
 pub(crate) fn set_global_reward_data(env: &Env, data: &GlobalRewardData) {
     bump_instance(env);

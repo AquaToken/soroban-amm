@@ -53,6 +53,8 @@ pub(crate) enum DataKey {
     TokensSetPools(BytesN<32>),
     TokenHash,
     GaugeWASM,
+    GaugeRewardMinDayAmt,
+    GaugeRewardMinDuration,
     InitPoolPaymentToken,
     InitStandardPoolPaymentAmount,
     InitStablePoolPaymentAmount,

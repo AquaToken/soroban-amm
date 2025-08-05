@@ -13,16 +13,17 @@ fn test_simple_reward() {
 
     let user1 = Address::generate(&setup.env);
     let user2 = Address::generate(&setup.env);
+    let distributor = Address::generate(&setup.env);
 
     let reward_token_sac = StellarAssetClient::new(&setup.env, &setup.reward_token.address);
-    reward_token_sac.mint(&setup.operator, &1_000_000_0000000);
+    reward_token_sac.mint(&distributor, &1_000_000_0000000);
 
     let mut total_shares = 0;
 
     jump(&setup.env, 1);
     setup
         .contract
-        .checkpoint_user(&setup.pool_address, &setup.operator, &0, &total_shares);
+        .checkpoint_user(&setup.pool_address, &distributor, &0, &total_shares);
     total_shares = 1000_0000000;
     // inv(1) = 0
     jump(&setup.env, 1);
@@ -32,7 +33,7 @@ fn test_simple_reward() {
     // rewards are scheduled for 2-102 seconds
     setup.contract.schedule_rewards_config(
         &setup.pool_address,
-        &setup.operator,
+        &distributor,
         &None,
         &100,
         &1_0000000,
@@ -102,8 +103,9 @@ fn test_simple_reward() {
 fn test_retroactive_reward() {
     let setup = Setup::default();
     let env = setup.env;
+    let distributor = Address::generate(&env);
     let reward_token_sac = StellarAssetClient::new(&env, &setup.reward_token.address);
-    reward_token_sac.mint(&setup.operator, &1_000_000_0000000);
+    reward_token_sac.mint(&distributor, &1_000_000_0000000);
 
     let user1 = Address::generate(&env);
     let user2 = Address::generate(&env);
@@ -114,12 +116,7 @@ fn test_retroactive_reward() {
 
     // 20 seconds. gauge set up
     jump(&env, 10);
-    let gauge = create_contract(
-        &env,
-        &setup.pool_address,
-        &setup.operator,
-        &setup.reward_token.address,
-    );
+    let gauge = create_contract(&env, &setup.pool_address, &setup.reward_token.address);
 
     // 30 seconds. rewards set up for 60 seconds
     jump(&env, 10);
@@ -127,14 +124,14 @@ fn test_retroactive_reward() {
     let total_reward_1 = reward_1_tps * 60;
     gauge.schedule_rewards_config(
         &setup.pool_address,
-        &setup.operator,
+        &distributor,
         &None,
         &60,
         &reward_1_tps,
         &total_shares,
     );
 
-    // 40 seconds. second user depositing after gauge set up
+    // 60 seconds. second user depositing after gauge set up
     jump(&env, 30);
     gauge.checkpoint_user(&setup.pool_address, &user2, &0, &total_shares);
     total_shares += 100;
@@ -168,16 +165,17 @@ fn test_simple_scheduled_reward() {
 
     let user1 = Address::generate(&setup.env);
     let user2 = Address::generate(&setup.env);
+    let distributor = Address::generate(&setup.env);
 
     let reward_token_sac = StellarAssetClient::new(&setup.env, &setup.reward_token.address);
-    reward_token_sac.mint(&setup.operator, &1_000_000_0000000);
+    reward_token_sac.mint(&distributor, &1_000_000_0000000);
 
     let mut total_shares = 0;
 
     jump(&setup.env, 1);
     setup
         .contract
-        .checkpoint_user(&setup.pool_address, &setup.operator, &0, &total_shares);
+        .checkpoint_user(&setup.pool_address, &distributor, &0, &total_shares);
     total_shares = 1000_0000000;
     // inv(1) = 0
     jump(&setup.env, 1);
@@ -185,7 +183,7 @@ fn test_simple_scheduled_reward() {
     // schedule rewards to start on 11th second. stop them on 102nd second to keep the same logic as in the previous test
     setup.contract.schedule_rewards_config(
         &setup.pool_address,
-        &setup.operator,
+        &distributor,
         &Some(11),
         &91,
         &1_0000000,
@@ -256,22 +254,23 @@ fn test_simple_scheduled_reward() {
 fn test_get_config_expired_scheduled_reward() {
     let setup = Setup::with_mocked_pool();
 
+    let distributor = Address::generate(&setup.env);
     let reward_token_sac = StellarAssetClient::new(&setup.env, &setup.reward_token.address);
-    reward_token_sac.mint(&setup.operator, &1_000_000_0000000);
+    reward_token_sac.mint(&distributor, &1_000_000_0000000);
 
     let mut total_shares = 0;
 
     jump(&setup.env, 1);
     setup
         .contract
-        .checkpoint_user(&setup.pool_address, &setup.operator, &0, &total_shares);
+        .checkpoint_user(&setup.pool_address, &distributor, &0, &total_shares);
     total_shares = 1000_0000000;
     // inv(1) = 0
     jump(&setup.env, 1);
 
     setup.contract.schedule_rewards_config(
         &setup.pool_address,
-        &setup.operator,
+        &distributor,
         &Some(11),
         &91,
         &1_0000000,
@@ -292,6 +291,7 @@ fn test_get_config_expired_scheduled_reward() {
 fn test_scheduled_reward() {
     let setup = Setup::with_mocked_pool();
 
+    let distributor = Address::generate(&setup.env);
     let day = 3600 * 24; // 1 day in seconds
     let week = day * 7; // 1 week in seconds
     let week1_start = 1751846400; // 7 july 2025
@@ -308,7 +308,7 @@ fn test_scheduled_reward() {
     let user_share = 100_0000000; // 100 shares
 
     let reward_token_sac = StellarAssetClient::new(&setup.env, &setup.reward_token.address);
-    reward_token_sac.mint(&setup.operator, &1_000_000_000_0000000);
+    reward_token_sac.mint(&distributor, &1_000_000_000_0000000);
     let operator_share = 1000_0000000; // 1000 shares
 
     let mut total_shares = 0;
@@ -318,13 +318,13 @@ fn test_scheduled_reward() {
     // operator deposits
     setup
         .contract
-        .checkpoint_user(&setup.pool_address, &setup.operator, &0, &total_shares);
+        .checkpoint_user(&setup.pool_address, &distributor, &0, &total_shares);
     total_shares = operator_share;
 
     // schedule weekly rewards for the next week. 1 token per second
     setup.contract.schedule_rewards_config(
         &setup.pool_address,
-        &setup.operator,
+        &distributor,
         &Some(week1_start),
         &week,
         &1_0000000,
@@ -357,7 +357,7 @@ fn test_scheduled_reward() {
     // one block after operator schedules rewards for the next week. 2 tokens per second
     setup.contract.schedule_rewards_config(
         &setup.pool_address,
-        &setup.operator,
+        &distributor,
         &Some(week2_start),
         &week,
         &2_0000000,
@@ -413,7 +413,7 @@ fn test_scheduled_reward() {
     jump(&setup.env, day);
     let operator_claim = setup.contract.claim(
         &setup.pool_address,
-        &setup.operator,
+        &distributor,
         &operator_share,
         &total_shares,
     );

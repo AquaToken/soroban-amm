@@ -246,14 +246,24 @@ pub trait PoolsManagementTrait {
     // Returns the protocol fee fraction.
     fn get_protocol_fee_fraction(e: Env) -> u32;
 
-    // Deploys a rewards gauge for a specific pool.
-    fn deploy_rewards_gauge(
+    fn pool_gauge_set_reward_thresholds(
         e: Env,
         admin: Address,
-        tokens: Vec<Address>,
+        min_reward_equivalent_day: u128,
+        min_duration_seconds: u64,
+    );
+
+    // Schedule an extra LP reward for the pool.
+    fn pool_gauge_schedule_reward(
+        e: Env,
+        distributor: Address,
+        pool_tokens: Vec<Address>,
         pool_hash: BytesN<32>,
-        operator: Address,
         reward_token: Address,
+        tps: u128,
+        start_at: Option<u64>,
+        duration: u64,
+        swaps_chain_proof: Vec<(Vec<Address>, BytesN<32>, Address)>,
     ) -> Address;
 }
 
