@@ -7,7 +7,7 @@ use crate::storage::{
     set_pool, set_reward_configs, set_reward_token, set_user_reward_data, RewardConfig,
 };
 use soroban_sdk::token::Client;
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 
 #[contract]
 pub struct RewardsGauge;
@@ -183,6 +183,11 @@ impl UpgradeableContract for RewardsGauge {
     // The version of the contract as a u32.
     fn version() -> u32 {
         170
+    }
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "RewardGauge")
     }
 
     fn upgrade(e: Env, pool: Address, new_wasm_hash: BytesN<32>) {

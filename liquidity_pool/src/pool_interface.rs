@@ -147,6 +147,9 @@ pub trait UpgradeableContract {
     // Get contract version
     fn version() -> u32;
 
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol;
+
     // Upgrade contract with new wasm code
     fn commit_upgrade(
         e: Env,

@@ -1654,6 +1654,11 @@ impl UpgradeableContract for LiquidityPool {
         170
     }
 
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "StableswapLiquidityPool")
+    }
+
     // Commits a new wasm hash for a future upgrade.
     // The upgrade will be available through `apply_upgrade` after the standard upgrade delay
     // unless the system is in emergency mode.
