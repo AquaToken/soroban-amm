@@ -5767,8 +5767,8 @@ fn test_add_gauge_twice() {
 #[should_panic(expected = "Error(Contract, #305)")]
 fn test_add_gauges_over_max() {
     let setup = Setup::setup(&TestConfig::default());
-    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
     for _ in 0..6 {
+        let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
         let gauge = deploy_rewards_gauge(
             &setup.env,
             &setup.liq_pool.address,
@@ -5787,8 +5787,19 @@ fn test_remove_gauge() {
         &setup.liq_pool.address,
         &gauge_reward_token.address,
     );
+    assert_eq!(setup.liq_pool.get_gauges(), Map::new(&setup.env));
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
-    setup.liq_pool.gauge_remove(&setup.admin, &gauge.address);
+    assert_eq!(
+        setup.liq_pool.get_gauges(),
+        Map::from_array(
+            &setup.env,
+            [(gauge_reward_token.address.clone(), gauge.address.clone())]
+        )
+    );
+    setup
+        .liq_pool
+        .gauge_remove(&setup.admin, &gauge_reward_token.address);
+    assert_eq!(setup.liq_pool.get_gauges(), Map::new(&setup.env));
 }
 
 #[test]
@@ -5802,8 +5813,12 @@ fn test_remove_gauge_twice() {
         &gauge_reward_token.address,
     );
     setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
-    setup.liq_pool.gauge_remove(&setup.admin, &gauge.address);
-    setup.liq_pool.gauge_remove(&setup.admin, &gauge.address);
+    setup
+        .liq_pool
+        .gauge_remove(&setup.admin, &gauge_reward_token.address);
+    setup
+        .liq_pool
+        .gauge_remove(&setup.admin, &gauge_reward_token.address);
 }
 
 #[test]

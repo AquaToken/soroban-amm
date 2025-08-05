@@ -463,3 +463,105 @@ fn test_scheduled_reward() {
     assert!(total_reward_planned >= total_reward);
     assert_approx_eq_abs(total_reward, total_reward_planned, 6);
 }
+
+#[test]
+fn test_multiple_rewards_sequence() {
+    let setup = Setup::with_mocked_pool();
+
+    let distributor = Address::generate(&setup.env);
+    let user = Address::generate(&setup.env);
+    let user_share = 100_0000000; // 100 shares
+
+    let reward_token_sac = StellarAssetClient::new(&setup.env, &setup.reward_token.address);
+    reward_token_sac.mint(&distributor, &1_000_000_000_0000000);
+    let operator_share = 1000_0000000; // 1000 shares
+
+    let mut total_shares = 0;
+
+    // operator deposits
+    setup
+        .contract
+        .checkpoint_user(&setup.pool_address, &distributor, &0, &total_shares);
+    total_shares += operator_share;
+
+    // user will join in the middle of the second reward period
+    for i in 0..10 {
+        setup.contract.schedule_rewards_config(
+            &setup.pool_address,
+            &distributor,
+            &if i == 0 { None } else { Some(10 * i) },
+            &10,
+            &1_0000000,
+            &total_shares,
+        );
+    }
+    jump(&setup.env, 15);
+
+    // user deposits after 15 seconds
+    setup
+        .contract
+        .checkpoint_user(&setup.pool_address, &user, &0, &total_shares);
+    total_shares += user_share;
+
+    // reward ends, user claims
+    jump(&setup.env, 100);
+    let user_claim = setup
+        .contract
+        .claim(&setup.pool_address, &user, &user_share, &total_shares);
+    // 1 token per second, 100 shares user, 1000 shares operator
+    assert_eq!(
+        user_claim,
+        1_0000000 * (100 - 15) * user_share / (user_share + operator_share)
+    );
+}
+
+#[test]
+fn test_multiple_rewards_parallel() {
+    let setup = Setup::with_mocked_pool();
+
+    let distributor = Address::generate(&setup.env);
+    let user = Address::generate(&setup.env);
+    let user_share = 100_0000000; // 100 shares
+
+    let reward_token_sac = StellarAssetClient::new(&setup.env, &setup.reward_token.address);
+    reward_token_sac.mint(&distributor, &1_000_000_000_0000000);
+    let operator_share = 1000_0000000; // 1000 shares
+
+    let mut total_shares = 0;
+
+    // operator deposits
+    setup
+        .contract
+        .checkpoint_user(&setup.pool_address, &distributor, &0, &total_shares);
+    total_shares += operator_share;
+
+    // user will join in the middle of reward period
+    for _ in 0..10 {
+        setup.contract.schedule_rewards_config(
+            &setup.pool_address,
+            &distributor,
+            &Some(10),
+            &10,
+            &1_0000000,
+            &total_shares,
+        );
+    }
+    jump(&setup.env, 15);
+
+    // user deposits after 15 seconds
+    setup
+        .contract
+        .checkpoint_user(&setup.pool_address, &user, &0, &total_shares);
+    total_shares += user_share;
+
+    // reward ends, user claims
+    jump(&setup.env, 100);
+    let user_claim = setup
+        .contract
+        .claim(&setup.pool_address, &user, &user_share, &total_shares);
+    // 10 configs, 1 token per second each, 5 seconds, 100 shares user, 1000 shares operator
+    assert_eq!(
+        user_claim,
+        10 * 1_0000000 * 5 * user_share / (user_share + operator_share)
+    );
+}

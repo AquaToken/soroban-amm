@@ -8,31 +8,35 @@ use crate::storage::{
 use soroban_sdk::{panic_with_error, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec};
 
 pub fn add(e: &Env, gauge_address: Address) {
+    let reward_token = crate::token::get_reward_token(e, &gauge_address);
     let mut configured_gauges = get_reward_gauges(e);
-    if configured_gauges.contains(&gauge_address) {
+    if configured_gauges.contains_key(reward_token.clone()) {
         panic_with_error!(e, GaugeError::GaugeAlreadyExists);
     }
-    configured_gauges.push_back(gauge_address.clone());
+    configured_gauges.set(reward_token.clone(), gauge_address.clone());
     if configured_gauges.len() > MAX_GAUGES {
         panic_with_error!(e, GaugeError::GaugesOverMax);
     }
     set_reward_gauges(e, &configured_gauges);
-    GaugeEvents::new(e).add(gauge_address);
+    GaugeEvents::new(e).add(reward_token, gauge_address);
 }
 
-pub fn remove(e: &Env, gauge_address: Address) {
+pub fn remove(e: &Env, reward_token: Address) {
     let mut configured_gauges = get_reward_gauges(e);
-    if let Some(index) = configured_gauges.first_index_of(&gauge_address) {
-        configured_gauges.remove(index);
+    let gauge_address = match configured_gauges.get(reward_token.clone()) {
+        Some(address) => address,
+        None => panic_with_error!(e, GaugeError::GaugeNotFound),
+    };
+    if let Some(_) = configured_gauges.remove(reward_token.clone()) {
         set_reward_gauges(e, &configured_gauges);
     } else {
         panic_with_error!(e, GaugeError::GaugeNotFound);
     }
-    GaugeEvents::new(e).remove(gauge_address);
+    GaugeEvents::new(e).remove(reward_token, gauge_address);
 }
 
 pub fn upgrade(e: &Env, new_wasm: &BytesN<32>) {
-    for gauge in get_reward_gauges(e).iter() {
+    for gauge in get_reward_gauges(e).values() {
         e.invoke_contract::<Val>(
             &gauge,
             &Symbol::new(e, "upgrade"),
@@ -54,12 +58,12 @@ pub fn unkill_claim(e: &Env) {
     GaugeEvents::new(e).unkill_claim();
 }
 
-pub fn list(e: &Env) -> Vec<Address> {
+pub fn list(e: &Env) -> Map<Address, Address> {
     get_reward_gauges(e)
 }
 
 pub fn checkpoint_user(e: &Env, user: &Address, working_balance: u128, working_supply: u128) {
-    for gauge in get_reward_gauges(e).iter() {
+    for gauge in get_reward_gauges(e).values() {
         e.invoke_contract::<Val>(
             &gauge,
             &Symbol::new(e, "checkpoint_user"),
@@ -87,8 +91,7 @@ pub fn claim(
     }
 
     let mut result = Map::new(e);
-    for gauge in get_reward_gauges(e).iter() {
-        let reward_token = crate::token::get_reward_token(e, &gauge);
+    for (reward_token, gauge) in get_reward_gauges(e) {
         let claimed_amount = e.invoke_contract(
             &gauge,
             &Symbol::new(e, "claim"),
@@ -115,7 +118,7 @@ pub fn get_rewards_info(
     working_supply: u128,
 ) -> Map<Address, Map<Symbol, i128>> {
     let mut result = Map::new(e);
-    for gauge in get_reward_gauges(e).iter() {
+    for (reward_token, gauge) in get_reward_gauges(e) {
         let reward_config: RewardConfig =
             e.invoke_contract(&gauge, &Symbol::new(e, "get_reward_config"), Vec::new(e));
         let user_reward: u128 = e.invoke_contract(
@@ -133,7 +136,7 @@ pub fn get_rewards_info(
         );
 
         result.set(
-            crate::token::get_reward_token(e, &gauge),
+            reward_token,
             Map::from_array(
                 e,
                 [

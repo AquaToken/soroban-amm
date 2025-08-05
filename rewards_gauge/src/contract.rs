@@ -3,8 +3,8 @@ use crate::errors::GaugeError;
 use crate::gauge::{checkpoint_global, checkpoint_user};
 use crate::interface::UpgradeableContract;
 use crate::storage::{
-    get_global_reward_data, get_pool, get_reward_configs, get_reward_token, set_global_reward_data,
-    set_pool, set_reward_configs, set_reward_token, set_user_reward_data, RewardConfig,
+    get_pool, get_reward_configs, get_reward_token, set_global_reward_data, set_pool,
+    set_reward_configs, set_reward_token, set_user_reward_data, RewardConfig,
 };
 use soroban_sdk::token::Client;
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec};

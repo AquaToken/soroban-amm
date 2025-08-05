@@ -14,16 +14,18 @@ impl GaugeEvents {
         GaugeEvents(env.clone())
     }
 
-    pub fn add(&self, gauge: Address) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "rewards_gauge_add"),), (gauge,))
+    pub fn add(&self, reward_token: Address, gauge: Address) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "rewards_gauge_add"),),
+            (reward_token, gauge),
+        )
     }
 
-    pub fn remove(&self, gauge: Address) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "rewards_gauge_remove"),), (gauge,))
+    pub fn remove(&self, reward_token: Address, gauge: Address) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "rewards_gauge_remove"),),
+            (reward_token, gauge),
+        )
     }
 
     pub fn kill_claim(&self) {

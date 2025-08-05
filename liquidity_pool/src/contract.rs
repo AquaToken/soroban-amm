@@ -1524,11 +1524,11 @@ impl RewardsGaugeInterface for LiquidityPool {
         rewards_gauge::operations::add(&e, gauge_address);
     }
 
-    fn gauge_remove(e: Env, admin: Address, gauge_address: Address) {
+    fn gauge_remove(e: Env, admin: Address, reward_token: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
-        rewards_gauge::operations::remove(&e, gauge_address);
+        rewards_gauge::operations::remove(&e, reward_token);
     }
 
     fn gauge_schedule_reward(
@@ -1572,7 +1572,7 @@ impl RewardsGaugeInterface for LiquidityPool {
         rewards_gauge::operations::unkill_claim(&e);
     }
 
-    fn get_gauges(e: Env) -> Vec<Address> {
+    fn get_gauges(e: Env) -> Map<Address, Address> {
         rewards_gauge::operations::list(&e)
     }
 

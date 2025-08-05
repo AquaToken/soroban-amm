@@ -1,6 +1,5 @@
 use paste::paste;
-use soroban_sdk::{contracttype, Address, Env, Vec};
-
+use soroban_sdk::{contracttype, Address, Env, Map};
 use utils::bump::bump_instance;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
@@ -17,7 +16,7 @@ pub struct RewardConfig {
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    RewardGauges,
+    RewardGaugesMap,
     IsKilledGaugesClaim,
 }
 
@@ -28,15 +27,15 @@ generate_instance_storage_getter_and_setter_with_default!(
     false
 );
 
-pub(crate) fn get_reward_gauges(e: &Env) -> Vec<Address> {
+pub(crate) fn get_reward_gauges(e: &Env) -> Map<Address, Address> {
     bump_instance(e);
     e.storage()
         .instance()
-        .get(&DataKey::RewardGauges)
-        .unwrap_or(Vec::new(e))
+        .get(&DataKey::RewardGaugesMap)
+        .unwrap_or(Map::new(e))
 }
 
-pub(crate) fn set_reward_gauges(e: &Env, value: &Vec<Address>) {
+pub(crate) fn set_reward_gauges(e: &Env, value: &Map<Address, Address>) {
     bump_instance(e);
-    e.storage().instance().set(&DataKey::RewardGauges, value)
+    e.storage().instance().set(&DataKey::RewardGaugesMap, value)
 }
