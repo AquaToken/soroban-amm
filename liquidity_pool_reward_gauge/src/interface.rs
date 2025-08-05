@@ -1,12 +1,12 @@
-use soroban_sdk::{Address, Env, Map, Symbol, Vec};
+use soroban_sdk::{Address, Env, Map, Symbol};
 
 pub trait RewardsGaugeInterface {
     // Admin functions
     // Adds a new rewards gauge to the contract.
     fn gauge_add(e: Env, admin: Address, gauge_address: Address);
 
-    // Removes a rewards gauge from the contract.
-    fn gauge_remove(e: Env, admin: Address, gauge_address: Address);
+    // Removes a rewards gauge from the contract by reward token address.
+    fn gauge_remove(e: Env, admin: Address, reward_token: Address);
 
     // Schedules a reward for a specific gauge.
     fn gauge_schedule_reward(
@@ -27,7 +27,7 @@ pub trait RewardsGaugeInterface {
 
     // Public functions
     // Lists all reward gauges.
-    fn get_gauges(e: Env) -> Vec<Address>;
+    fn get_gauges(e: Env) -> Map<Address, Address>;
 
     // Claims rewards for a user across all gauges.
     fn gauges_claim(e: Env, user: Address) -> Map<Address, u128>;

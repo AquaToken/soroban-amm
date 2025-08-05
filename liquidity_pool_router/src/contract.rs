@@ -1395,10 +1395,10 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         distributor.require_auth();
 
         let pool = get_pool(&e, &pool_tokens, pool_hash);
-        let pool_gauges: Vec<Address> =
+        let gauges_map: Map<Address, Address> =
             e.invoke_contract(&pool, &Symbol::new(&e, "get_gauges"), Vec::new(&e));
-        let rewards_gauge = match pool_gauges.first_index_of(distribute_token.clone()) {
-            Some(i) => pool_gauges.get_unchecked(i).clone(),
+        let rewards_gauge = match gauges_map.get(distribute_token.clone()) {
+            Some(gauge_address) => gauge_address,
             None => {
                 // deploy new gauge
                 let rewards_gauge =
