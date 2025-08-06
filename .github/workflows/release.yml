@@ -1,0 +1,130 @@
+name: Stellar Expert WASM Release
+
+permissions:
+  id-token: write
+  contents: write
+  attestations: write
+
+on:
+  push:
+    tags:
+      - 'v*'  # triggered whenever a new tag (previxed with "v") is pushed to the repository
+
+jobs:
+  release-contract-access-control:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Access Control Release'
+      package: 'access_control'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-config-storage:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Config Storage Release'
+      package: 'soroban_config_storage_contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-fees-collector:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Fees Collector Release'
+      package: 'soroban-fees-collector-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-liquidity-pool:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Standard Liquidity Pool Release'
+      package: 'soroban-liquidity-pool-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+
+  release-contract-liquidity-pool-liquidity-calculator:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Liquidity Calculator Release'
+      package: 'soroban-liquidity-pool-liquidity-calculator-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-pool-plane:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Pools Plane Release'
+      package: 'soroban-liquidity-pool-plane-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-swap-provider-fee:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Provider Swap Fee Release'
+      package: 'soroban-liquidity-pool-provider-swap-fee-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-swap-provider-fee-factory:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Provider Swap Fee Factory Release'
+      package: 'soroban-liquidity-pool-provider-swap-fee-factory-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-amm-router:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'AMM Router Release'
+      package: 'soroban-liquidity-pool-router-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-stableswap-pool:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Stableswap Pool Release'
+      package: 'soroban-liquidity-pool-stableswap-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-locker-feed:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'ICE Locker Feed Release'
+      package: 'soroban-locker-feed-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-rewards-gauge:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Rewards Gauge Release'
+      package: 'soroban-rewards-gauge-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-token:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Soroban Token Release'
+      package: 'soroban-token-contract'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
