@@ -791,13 +791,13 @@ fn test_simple_ongoing_reward() {
         &rewards,
     );
     e.cost_estimate().budget().reset_default();
-    router.fill_liquidity(&tokens);
+    router.fill_liquidity(&admin, &tokens);
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_default();
-    let standard_pool_tps = router.config_pool_rewards(&tokens, &standard_pool_hash);
+    let standard_pool_tps = router.config_pool_rewards(&admin, &tokens, &standard_pool_hash);
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_unlimited();
-    let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
+    let stable_pool_tps = router.config_pool_rewards(&admin, &tokens, &stable_pool_hash);
 
     assert_approx_eq_abs_u256(
         U256::from_u128(&e, total_reward_1)
@@ -1077,12 +1077,12 @@ fn test_rewards_distribution() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&tokens1);
-    router.fill_liquidity(&tokens2);
-    let standard_pool_tps1 = router.config_pool_rewards(&tokens1, &standard_pool_hash1);
-    let stable_pool_tps1 = router.config_pool_rewards(&tokens1, &stable_pool_hash1);
-    let standard_pool_tps2 = router.config_pool_rewards(&tokens2, &standard_pool_hash2);
-    let stable_pool_tps2 = router.config_pool_rewards(&tokens2, &stable_pool_hash2);
+    router.fill_liquidity(&admin, &tokens1);
+    router.fill_liquidity(&admin, &tokens2);
+    let standard_pool_tps1 = router.config_pool_rewards(&admin, &tokens1, &standard_pool_hash1);
+    let stable_pool_tps1 = router.config_pool_rewards(&admin, &tokens1, &stable_pool_hash1);
+    let standard_pool_tps2 = router.config_pool_rewards(&admin, &tokens2, &standard_pool_hash2);
+    let stable_pool_tps2 = router.config_pool_rewards(&admin, &tokens2, &stable_pool_hash2);
     assert_eq!(standard_pool_tps1, standard_pool_tps2);
     assert_eq!(stable_pool_tps1, stable_pool_tps2);
     let standard_pool_tps = standard_pool_tps1;
@@ -1334,9 +1334,9 @@ fn test_rewards_distribution_as_operator() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
-    let standard_pool_tps = router.config_pool_rewards(&tokens, &standard_pool_hash);
-    let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
+    router.fill_liquidity(&admin, &tokens);
+    let standard_pool_tps = router.config_pool_rewards(&admin, &tokens, &standard_pool_hash);
+    let stable_pool_tps = router.config_pool_rewards(&admin, &tokens, &stable_pool_hash);
 
     // 30 seconds passed, half of the reward is available for the user
     jump(&e, 30);
@@ -1439,9 +1439,9 @@ fn test_rewards_distribution_override() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
-    let standard_pool_tps = router.config_pool_rewards(&tokens, &standard_pool_hash);
-    let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
+    router.fill_liquidity(&admin, &tokens);
+    let standard_pool_tps = router.config_pool_rewards(&admin, &tokens, &standard_pool_hash);
+    let stable_pool_tps = router.config_pool_rewards(&admin, &tokens, &stable_pool_hash);
 
     // 30 seconds passed, half of the reward is available
     jump(&e, 30);
@@ -1480,9 +1480,9 @@ fn test_rewards_distribution_override() {
         &e.ledger().timestamp().saturating_add(10),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
-    router.config_pool_rewards(&tokens, &standard_pool_hash);
-    router.config_pool_rewards(&tokens, &stable_pool_hash);
+    router.fill_liquidity(&admin, &tokens);
+    router.config_pool_rewards(&admin, &tokens, &standard_pool_hash);
+    router.config_pool_rewards(&admin, &tokens, &stable_pool_hash);
 
     // half of the reward accumulated
     assert_eq!(
@@ -1583,7 +1583,7 @@ fn test_liqidity_not_filled() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.config_pool_rewards(&tokens, &standard_pool_hash);
+    router.config_pool_rewards(&admin, &tokens, &standard_pool_hash);
 }
 
 #[test]
@@ -1627,8 +1627,8 @@ fn test_fill_liqidity_reentrancy() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
-    router.fill_liquidity(&tokens);
+    router.fill_liquidity(&admin, &tokens);
+    router.fill_liquidity(&admin, &tokens);
 }
 
 #[test]
@@ -1672,9 +1672,9 @@ fn test_config_pool_rewards_reentrancy() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
-    router.config_pool_rewards(&tokens, &standard_pool_hash);
-    router.config_pool_rewards(&tokens, &standard_pool_hash);
+    router.fill_liquidity(&admin, &tokens);
+    router.config_pool_rewards(&admin, &tokens, &standard_pool_hash);
+    router.config_pool_rewards(&admin, &tokens, &standard_pool_hash);
 }
 
 #[test]
@@ -1717,8 +1717,11 @@ fn test_config_pool_rewards_after_new_global_config() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
-    assert_eq!(router.config_pool_rewards(&tokens, &standard_pool_hash), 1);
+    router.fill_liquidity(&admin, &tokens);
+    assert_eq!(
+        router.config_pool_rewards(&admin, &tokens, &standard_pool_hash),
+        1
+    );
 
     jump(&e, 300);
     router.config_global_rewards(
@@ -1727,8 +1730,11 @@ fn test_config_pool_rewards_after_new_global_config() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
-    assert_eq!(router.config_pool_rewards(&tokens, &standard_pool_hash), 1);
+    router.fill_liquidity(&admin, &tokens);
+    assert_eq!(
+        router.config_pool_rewards(&admin, &tokens, &standard_pool_hash),
+        1
+    );
 }
 
 #[test]
@@ -1774,9 +1780,9 @@ fn test_config_pool_after_liquidity_fill() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
+    router.fill_liquidity(&admin, &tokens);
     assert_eq!(
-        router.config_pool_rewards(&tokens, &standard_pool_1_hash),
+        router.config_pool_rewards(&admin, &tokens, &standard_pool_1_hash),
         1_0000000
     );
 
@@ -1790,7 +1796,7 @@ fn test_config_pool_after_liquidity_fill() {
         &0,
     );
     assert_eq!(
-        router.config_pool_rewards(&tokens, &standard_pool_2_hash),
+        router.config_pool_rewards(&admin, &tokens, &standard_pool_2_hash),
         0
     );
 }
@@ -1829,7 +1835,7 @@ fn test_fill_liquidity_no_config() {
         &Vec::from_array(&e, [1000, 1000]),
         &0,
     );
-    router.fill_liquidity(&tokens);
+    router.fill_liquidity(&admin, &tokens);
 }
 
 #[test]
@@ -1982,7 +1988,7 @@ fn test_config_rewards_no_pools_for_tokens() {
             [(tokens.clone(), (1_0000000, false, U256::from_u32(&e, 0)))],
         ),
     );
-    router.fill_liquidity(&tokens);
+    router.fill_liquidity(&admin, &tokens);
     assert_eq!(
         router.get_tokens_for_reward(),
         Map::from_array(
@@ -2092,8 +2098,8 @@ fn test_event_correct() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
-    router.config_pool_rewards(&tokens, &pool_hash);
+    router.fill_liquidity(&admin, &tokens);
+    router.config_pool_rewards(&admin, &tokens, &pool_hash);
 
     token1.mint(&user1, &1000);
     assert_eq!(token1.balance(&user1), 1000);
@@ -2671,8 +2677,8 @@ fn test_rewards_distribution_without_outstanding_rewards() {
         &rewards,
     );
 
-    router.fill_liquidity(&tokens);
-    router.config_pool_rewards(&tokens, &standard_pool_hash1);
+    router.fill_liquidity(&admin, &tokens);
+    router.config_pool_rewards(&admin, &tokens, &standard_pool_hash1);
 
     // check that we don't need to add rewards to pool
     assert_eq!(

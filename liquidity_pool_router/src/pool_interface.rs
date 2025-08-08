@@ -123,7 +123,7 @@ pub trait RewardsInterfaceTrait {
     //   The voting share is a value between 0 and 1, scaled by 1e7 for precision.
     fn config_global_rewards(
         e: Env,
-        user: Address,
+        admin: Address,
         reward_tps: u128,
         expired_at: u64,
         tokens_votes: Vec<(Vec<Address>, u32)>,
@@ -134,7 +134,7 @@ pub trait RewardsInterfaceTrait {
     // # Arguments
     //
     // * `tokens` - A vector of token addresses for which to fill the liquidity.
-    fn fill_liquidity(e: Env, tokens: Vec<Address>);
+    fn fill_liquidity(e: Env, admin: Address, tokens: Vec<Address>);
 
     // Configures the rewards for a specific pool.
     //
@@ -157,7 +157,12 @@ pub trait RewardsInterfaceTrait {
     // * The pool does not exist.
     // * The tokens are not found in the current rewards configuration.
     // * The liquidity for the tokens has not been filled.
-    fn config_pool_rewards(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+    fn config_pool_rewards(
+        e: Env,
+        admin: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128;
 
     // Get rewards status for the pool,
     // including amount available for the user
