@@ -3090,21 +3090,21 @@ fn test_boosted_rewards_abuse() {
             ),
         ],
     );
-    setup.router.fill_liquidity(&vec![
-        &env,
-        token_reward.address.clone(),
-        token1.address.clone(),
-    ]);
-    setup.router.fill_liquidity(&vec![
-        &env,
-        token_reward.address.clone(),
-        token2.address.clone(),
-    ]);
+    setup.router.fill_liquidity(
+        &setup.admin,
+        &vec![&env, token_reward.address.clone(), token1.address.clone()],
+    );
+    setup.router.fill_liquidity(
+        &setup.admin,
+        &vec![&env, token_reward.address.clone(), token2.address.clone()],
+    );
     setup.router.config_pool_rewards(
+        &setup.admin,
         &vec![&env, token_reward.address.clone(), token1.address.clone()],
         &standard_pool_hash,
     );
     setup.router.config_pool_rewards(
+        &setup.admin,
         &vec![&env, token_reward.address.clone(), token2.address.clone()],
         &stable_pool_hash,
     );
@@ -3229,21 +3229,21 @@ fn test_boosted_rewards_abuse() {
             ),
         ],
     );
-    setup.router.fill_liquidity(&vec![
-        &env,
-        token_reward.address.clone(),
-        token1.address.clone(),
-    ]);
-    setup.router.fill_liquidity(&vec![
-        &env,
-        token_reward.address.clone(),
-        token2.address.clone(),
-    ]);
+    setup.router.fill_liquidity(
+        &setup.admin,
+        &vec![&env, token_reward.address.clone(), token1.address.clone()],
+    );
+    setup.router.fill_liquidity(
+        &setup.admin,
+        &vec![&env, token_reward.address.clone(), token2.address.clone()],
+    );
     setup.router.config_pool_rewards(
+        &setup.admin,
         &vec![&env, token_reward.address.clone(), token1.address.clone()],
         &standard_pool_hash,
     );
     setup.router.config_pool_rewards(
+        &setup.admin,
         &vec![&env, token_reward.address.clone(), token2.address.clone()],
         &stable_pool_hash,
     );
