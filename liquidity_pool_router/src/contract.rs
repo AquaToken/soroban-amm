@@ -742,7 +742,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     //
     // # Arguments
     //
-    // * `user` - This user must be authenticated and have admin or operator privileges.
+    // * `admin` - This user must be authenticated and have admin or operator privileges.
     // * `reward_tps` - The rewards per second. This value is scaled by 1e7 for precision.
     // * `expired_at` - The timestamp at which the rewards configuration will expire.
     // * `tokens_votes` - A vector of tuples, where each tuple contains a vector of token addresses and a voting share.
@@ -792,8 +792,12 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     //
     // # Arguments
     //
+    // * `admin` - This user must be authenticated and have admin or operator privileges.
     // * `tokens` - A vector of token addresses for which to fill the liquidity.
-    fn fill_liquidity(e: Env, tokens: Vec<Address>) {
+    fn fill_liquidity(e: Env, admin: Address, tokens: Vec<Address>) {
+        admin.require_auth();
+        require_rewards_admin_or_owner(&e, &admin);
+
         assert_tokens_sorted(&e, &tokens);
         let tokens_salt = get_tokens_salt(&e, &tokens);
         let calculator = get_liquidity_calculator(&e);
@@ -826,6 +830,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     //
     // # Arguments
     //
+    // * `admin` - This user must be authenticated and have admin or operator privileges.
     // * `tokens` - A vector of token addresses that the pool consists of.
     // * `pool_index` - The index of the pool.
     //
@@ -840,7 +845,15 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
     // * The pool does not exist.
     // * The tokens are not found in the current rewards configuration.
     // * The liquidity for the tokens has not been filled.
-    fn config_pool_rewards(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+    fn config_pool_rewards(
+        e: Env,
+        admin: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128 {
+        admin.require_auth();
+        require_rewards_admin_or_owner(&e, &admin);
+
         assert_tokens_sorted(&e, &tokens);
         let pool_id = get_pool(&e, &tokens, pool_index.clone());
 

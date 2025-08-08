@@ -553,6 +553,74 @@ fn test_config_rewards() {
 }
 
 #[test]
+fn test_fill_liquidity() {
+    let setup = Setup::default();
+    let router = setup.router;
+    let user = Address::generate(&setup.env);
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]);
+    setup.reward_token.mint(&user, &1_0000000);
+    setup.reward_token.mint(&router.address, &1_0000000);
+    let (_pool_hash, _pool_address) = router.init_standard_pool(&user, &tokens, &10);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin.clone(), true),
+        (setup.emergency_admin, false),
+        (setup.rewards_admin, true),
+        (setup.operations_admin, false),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        router.config_global_rewards(
+            &setup.admin,
+            &1_0000000,
+            &setup.env.ledger().timestamp().saturating_add(60),
+            &Vec::from_array(&setup.env, [(tokens.clone(), 1_0000000)]),
+        );
+
+        assert_eq!(router.try_fill_liquidity(&addr, &tokens).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_config_pool_rewards() {
+    let setup = Setup::default();
+    let router = setup.router;
+    let user = Address::generate(&setup.env);
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]);
+    setup.reward_token.mint(&user, &1_0000000);
+    setup.reward_token.mint(&router.address, &1_0000000);
+    let (pool_hash, _pool_address) = router.init_standard_pool(&user, &tokens, &10);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin.clone(), true),
+        (setup.emergency_admin, false),
+        (setup.rewards_admin, true),
+        (setup.operations_admin, false),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        router.config_global_rewards(
+            &setup.admin,
+            &1_0000000,
+            &setup.env.ledger().timestamp().saturating_add(60),
+            &Vec::from_array(&setup.env, [(tokens.clone(), 1_0000000)]),
+        );
+        router.fill_liquidity(&setup.admin, &tokens);
+
+        assert_eq!(
+            router
+                .try_config_pool_rewards(&addr, &tokens, &pool_hash)
+                .is_ok(),
+            is_ok
+        );
+    }
+}
+
+#[test]
 fn test_distribute_rewards() {
     let setup = Setup::default();
     let router = setup.router;
@@ -578,8 +646,8 @@ fn test_distribute_rewards() {
             &setup.env.ledger().timestamp().saturating_add(60),
             &Vec::from_array(&setup.env, [(tokens.clone(), 1_0000000)]),
         );
-        router.fill_liquidity(&tokens);
-        router.config_pool_rewards(&tokens, &pool_hash);
+        router.fill_liquidity(&setup.admin, &tokens);
+        router.config_pool_rewards(&setup.admin, &tokens, &pool_hash);
 
         assert_eq!(
             router
