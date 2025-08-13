@@ -65,6 +65,7 @@ pub(crate) enum DataKey {
     PoolPlane,
     LiquidityCalculator,
     ProtocolFeeFraction,
+    GaugeRewardsEnabled(Address),
 
     // Temporary storage
     RewardsConfig,                          // Global reward config
@@ -317,5 +318,22 @@ pub fn get_tokens_set(e: &Env, index: u128) -> Vec<Address> {
 pub fn put_tokens_set(e: &Env, index: u128, tokens: &Vec<Address>) {
     let key = DataKey::TokensSet(index);
     e.storage().persistent().set(&key, tokens);
+    bump_persistent(e, &key);
+}
+
+pub fn get_gauge_rewards_enabled_for(e: &Env, token: Address) -> bool {
+    let key = DataKey::GaugeRewardsEnabled(token);
+    match e.storage().persistent().get(&key) {
+        Some(v) => {
+            bump_persistent(e, &key);
+            v
+        }
+        None => false,
+    }
+}
+
+pub fn set_gauge_rewards_enabled_for(e: &Env, token: Address, enabled: bool) {
+    let key = DataKey::GaugeRewardsEnabled(token);
+    e.storage().persistent().set(&key, &enabled);
     bump_persistent(e, &key);
 }

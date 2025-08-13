@@ -18,12 +18,12 @@ use crate::rewards_gauge::{
 };
 use crate::router_interface::AdminInterface;
 use crate::storage::{
-    get_init_pool_payment_address, get_init_pool_payment_token,
+    get_gauge_rewards_enabled_for, get_init_pool_payment_address, get_init_pool_payment_token,
     get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
     get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_protocol_fee_fraction,
     get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_tokens_set,
     get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_init_pool_payment_address, set_init_pool_payment_token,
+    set_gauge_rewards_enabled_for, set_init_pool_payment_address, set_init_pool_payment_token,
     set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
     set_liquidity_calculator, set_pool_plane, set_protocol_fee_fraction, set_reward_tokens,
     set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash,
@@ -1380,6 +1380,19 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         gauge_set_reward_duration_threshold(&e, &admin, min_duration_seconds);
     }
 
+    // Switches the rewards gauge for a specific pool token.
+    fn pool_gauge_switch_token(e: Env, admin: Address, token: Address, enabled: bool) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+        set_gauge_rewards_enabled_for(&e, token.clone(), enabled);
+        Events::new(&e).pool_gauge_switch_token(token, enabled);
+    }
+
+    // Checks if the rewards gauge is enabled for a specific pool token.
+    fn pool_gauge_token_enabled(e: Env, token: Address) -> bool {
+        get_gauge_rewards_enabled_for(&e, token)
+    }
+
     // Schedules an additional LP reward for a specific pool through rewards gauge.
     fn pool_gauge_schedule_reward(
         e: Env,
@@ -1395,6 +1408,13 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         distributor.require_auth();
 
         let pool = get_pool(&e, &pool_tokens, pool_hash);
+
+        for token in pool_tokens {
+            if !get_gauge_rewards_enabled_for(&e, token) {
+                panic_with_error!(&e, LiquidityPoolRouterError::GaugeRewardsDisabledForPool);
+            }
+        }
+
         let gauges_map: Map<Address, Address> =
             e.invoke_contract(&pool, &Symbol::new(&e, "get_gauges"), Vec::new(&e));
         let rewards_gauge = match gauges_map.get(distribute_token.clone()) {
