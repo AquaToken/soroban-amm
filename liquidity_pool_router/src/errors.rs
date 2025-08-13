@@ -21,6 +21,7 @@ pub enum LiquidityPoolRouterError {
     InvalidPoolType = 316,
     RewardDurationTooShort = 317, // reward duration is too short to be configured
     RewardAmountTooLow = 318,     // reward amount is too low to be distributed
+    GaugeRewardsDisabledForPool = 319, // rewards are disabled for this pool
 
     TokensNotSorted = 2002,
     InMaxNotSatisfied = 2020,
