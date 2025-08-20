@@ -25,7 +25,7 @@ pub fn get_deposit_amounts(
         (desired_a, amount_b)
     } else {
         let amount_a = desired_b.fixed_mul_floor(&e, &reserve_a, &reserve_b);
-        if amount_a > desired_a || desired_a < min_a {
+        if amount_a > desired_a || amount_a < min_a {
             panic_with_error!(e, LiquidityPoolValidationError::InvalidDepositAmount);
         }
         (amount_a, desired_b)
