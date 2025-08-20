@@ -565,7 +565,7 @@ fn test_stableswap_3_pool() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #317)")]
+#[should_panic(expected = "Error(Contract, #320)")]
 fn test_stableswap_4_pool_tokens_over_max() {
     let setup = Setup::default();
 
