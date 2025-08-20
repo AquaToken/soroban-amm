@@ -565,6 +565,26 @@ fn test_stableswap_3_pool() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #317)")]
+fn test_stableswap_4_pool_tokens_over_max() {
+    let setup = Setup::default();
+
+    let tokens = Vec::from_array(
+        &setup.env,
+        [
+            setup.tokens[0].address.clone(),
+            setup.tokens[1].address.clone(),
+            setup.tokens[2].address.clone(),
+            setup.tokens[3].address.clone(),
+        ],
+    );
+
+    let user1 = Address::generate(&setup.env);
+    setup.reward_token.mint(&user1, &10000000_0000000);
+    setup.router.init_stableswap_pool(&user1, &tokens, &30);
+}
+
+#[test]
 fn test_init_pool_twice() {
     let setup = Setup::default();
     let e = setup.env;
