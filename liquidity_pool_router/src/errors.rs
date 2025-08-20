@@ -19,6 +19,7 @@ pub enum LiquidityPoolRouterError {
     RewardsAlreadyConfigured = 314,
     DuplicatesNotAllowed = 315,
     InvalidPoolType = 316,
+    UnsupportedTokensNum = 317,
 
     TokensNotSorted = 2002,
     InMaxNotSatisfied = 2020,

@@ -1,4 +1,6 @@
-use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_MAX_FEE};
+use crate::constants::{
+    CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_MAX_FEE, STABLESWAP_MAX_TOKENS,
+};
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::liquidity_calculator::LiquidityCalculatorClient;
@@ -1222,6 +1224,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
         }
 
+        let n_tokens = tokens.len();
+        if n_tokens > STABLESWAP_MAX_TOKENS {
+            panic_with_error!(&e, LiquidityPoolRouterError::UnsupportedTokensNum);
+        }
+
         let salt = get_tokens_salt(&e, &tokens);
         let pools = get_pools_plain(&e, salt);
         let pool_index = get_stableswap_pool_salt(&e);
@@ -1243,8 +1250,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
                 // calculate amplification factor
                 // Amp = A*N**(N-1)
-                let n = tokens.len();
-                let amp = STABLESWAP_DEFAULT_A * (n as u128).pow(n - 1);
+                let amp = STABLESWAP_DEFAULT_A * (n_tokens as u128).pow(n_tokens - 1);
                 deploy_stableswap_pool(&e, &tokens, amp, fee_fraction)
             }
         }
