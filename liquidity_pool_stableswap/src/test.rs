@@ -3847,6 +3847,20 @@ fn test_kill_swap() {
             .unwrap_err(),
         Ok(Error::from_contract_error(206))
     );
+    // imbalanced withdraw also should be disabled. normal withdraw is not a subject for kill switch
+    assert_eq!(
+        liqpool
+            .try_remove_liquidity_imbalance(&user1, &vec![&e, 0, 0], &1)
+            .unwrap_err(),
+        Ok(Error::from_contract_error(206))
+    );
+    assert_eq!(
+        liqpool
+            .try_withdraw_one_coin(&user1, &0, &0, &0)
+            .unwrap_err(),
+        Ok(Error::from_contract_error(206))
+    );
+    liqpool.withdraw(&user1, &0, &vec![&e, 0, 0]);
     liqpool.unkill_swap(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],

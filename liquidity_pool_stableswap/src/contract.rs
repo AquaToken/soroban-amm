@@ -244,6 +244,11 @@ impl LiquidityPoolTrait for LiquidityPool {
     ) -> u128 {
         user.require_auth();
 
+        // imbalanced withdraw allows user to indirectly perform swaps; should be disabled
+        if get_is_killed_swap(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolSwapKilled);
+        }
+
         let tokens = get_tokens(&e);
         let n_coins = tokens.len();
 
@@ -396,6 +401,11 @@ impl LiquidityPoolTrait for LiquidityPool {
         min_amount: u128,
     ) -> Vec<u128> {
         user.require_auth();
+
+        // imbalanced withdraw allows user to indirectly perform swaps; should be disabled
+        if get_is_killed_swap(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolSwapKilled);
+        }
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let rewards = get_rewards_manager(&e);
