@@ -2864,6 +2864,7 @@ fn test_boosted_rewards_abuse() {
 #[test]
 fn test_fix_broken_claim() {
     let setup = Setup::new_with_config(&TestConfig {
+        rewards_count: 0,
         reward_tps: 0,
         ..TestConfig::default()
     });
@@ -2967,6 +2968,7 @@ fn test_fix_broken_claim() {
 #[test]
 fn test_fix_locked_reward_tokens() {
     let setup = Setup::new_with_config(&TestConfig {
+        rewards_count: 0,
         reward_tps: 0,
         ..TestConfig::default()
     });
