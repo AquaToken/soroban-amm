@@ -3083,14 +3083,11 @@ fn test_rewards_distribution_reward_token_lock() {
     // total accumlated_reward is 1000 since pool was empty between 0-50s and 100-150s
     assert_eq!(
         router.get_total_accumulated_reward(&tokens, &stable_pool_hash),
-        2000
+        1000
     );
-
-    // Total Unused rewards is 1000. to be available for the future distribution
-    //  or can be claimed by "return_unused_reward"
     assert_eq!(
         router.get_total_outstanding_reward(&tokens, &stable_pool_hash),
-        1000
+        0
     );
 
     // admin is able to get unused rewards from the pool
@@ -3112,7 +3109,11 @@ fn test_rewards_distribution_reward_token_lock() {
 
     let stable_pool_tps1 = router.config_pool_rewards(&tokens, &stable_pool_hash);
 
-    router.distribute_outstanding_reward(&admin, &router.address, &tokens, &stable_pool_hash);
+    // 1000 tokens transferred to the pool (2000 configured - 1000 remaining)
+    assert_eq!(
+        router.distribute_outstanding_reward(&admin, &router.address, &tokens, &stable_pool_hash),
+        1000
+    );
 
     // pool's balance = 2000(configured newly)
     assert_eq!(
