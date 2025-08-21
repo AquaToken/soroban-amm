@@ -969,10 +969,13 @@ fn test_liquidity_estimate_zero_in() {
     );
 
     setup.calculator.init_admin(&setup.admin);
-    setup.calculator.set_pools_plane(&setup.admin, &plane.address);
+    setup
+        .calculator
+        .set_pools_plane(&setup.admin, &plane.address);
 
-    let results =
-        setup.calculator.get_liquidity(&Vec::from_array(&e, [address1.clone()]));
+    let results = setup
+        .calculator
+        .get_liquidity(&Vec::from_array(&e, [address1.clone()]));
     assert_eq!(
         results,
         Vec::from_array(&e, [U256::from_u128(&e, 93380560)])
