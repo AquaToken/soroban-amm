@@ -620,11 +620,11 @@ fn test_simple_ongoing_reward() {
     // 10 seconds passed since config, user depositing
     jump(&env, 10);
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
     assert_eq!(
-        liq_pool.get_total_accumulated_reward(),
-        TestConfig::default().reward_tps * 10
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
     );
+    assert_eq!(liq_pool.get_total_accumulated_reward(), 0);
     assert_eq!(liq_pool.get_total_claimed_reward(), 0);
 
     liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
@@ -633,20 +633,26 @@ fn test_simple_ongoing_reward() {
     // 30 seconds passed, half of the reward is available for the user
     jump(&env, 30);
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
     assert_eq!(
         liq_pool.get_total_accumulated_reward(),
-        TestConfig::default().reward_tps * 40
+        TestConfig::default().reward_tps * 30
     );
     assert_eq!(liq_pool.get_total_claimed_reward(), 0);
 
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
     assert_eq!(token_reward.balance(&users[0]) as u128, total_reward_1 / 2);
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
     assert_eq!(
         liq_pool.get_total_accumulated_reward(),
-        TestConfig::default().reward_tps * 40
+        TestConfig::default().reward_tps * 30
     );
     assert_eq!(
         liq_pool.get_total_claimed_reward(),
@@ -657,8 +663,14 @@ fn test_simple_ongoing_reward() {
     //  5/6 of the reward is available for the user since he has missed first 10 seconds
     jump(&env, 40);
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_accumulated_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
     assert_eq!(
         liq_pool.get_total_claimed_reward(),
         TestConfig::default().reward_tps * 30
@@ -670,8 +682,14 @@ fn test_simple_ongoing_reward() {
         total_reward_1 * 5 / 6
     );
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_accumulated_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
     assert_eq!(
         liq_pool.get_total_claimed_reward(),
         TestConfig::default().reward_tps * 50
