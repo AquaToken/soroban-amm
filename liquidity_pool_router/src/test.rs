@@ -3642,9 +3642,10 @@ fn test_rewards_distribution_reward_token_lock() {
         &e.ledger().timestamp().saturating_add(200),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
+    router.fill_liquidity(&setup.rewards_admin, &tokens);
 
-    let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
+    let stable_pool_tps =
+        router.config_pool_rewards(&setup.rewards_admin, &tokens, &stable_pool_hash);
 
     assert_eq!(
         router.get_total_configured_reward(&tokens, &stable_pool_hash),
@@ -3714,9 +3715,10 @@ fn test_rewards_distribution_reward_token_lock() {
         &e.ledger().timestamp().saturating_add(200),
         &rewards,
     );
-    router.fill_liquidity(&tokens);
+    router.fill_liquidity(&setup.rewards_admin, &tokens);
 
-    let stable_pool_tps1 = router.config_pool_rewards(&tokens, &stable_pool_hash);
+    let stable_pool_tps1 =
+        router.config_pool_rewards(&setup.rewards_admin, &tokens, &stable_pool_hash);
 
     // 1000 tokens transferred to the pool (2000 configured - 1000 remaining)
     assert_eq!(
