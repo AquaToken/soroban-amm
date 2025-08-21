@@ -153,7 +153,11 @@ impl Manager {
 
         if now <= config.expired_at {
             // config not expired yet, yield rewards
-            let generated_tokens = (now - data.last_time) as u128 * config.tps;
+            let generated_tokens = if working_supply == 0 {
+                0
+            } else {
+                (now - data.last_time) as u128 * config.tps
+            };
             self.create_new_rewards_data(
                 generated_tokens,
                 working_supply,
@@ -168,7 +172,11 @@ impl Manager {
             // Already expired
             if data.last_time < config.expired_at {
                 // last snapshot was before config expiration - yield up to expiration
-                let generated_tokens = (config.expired_at - data.last_time) as u128 * config.tps;
+                let generated_tokens = if working_supply == 0 {
+                    0
+                } else {
+                    (config.expired_at - data.last_time) as u128 * config.tps
+                };
                 data = self.create_new_rewards_data(
                     generated_tokens,
                     working_supply,

@@ -2990,3 +2990,133 @@ fn test_protocol_fee_inheritance() {
     assert_eq!(pool1_client.get_protocol_fee_fraction(), 5000);
     assert_eq!(pool2_client.get_protocol_fee_fraction(), 1000);
 }
+
+#[test]
+fn test_rewards_distribution_reward_token_lock() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let router = setup.router;
+    let admin = setup.admin;
+    let [token1, token2, _, _] = setup.tokens;
+    let reward_token = setup.reward_token;
+
+    let user = Address::generate(&e);
+    router.configure_init_pool_payment(&admin, &reward_token.address, &0, &1000, &router.address);
+
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    reward_token.mint(&user, &10000);
+    reward_token.mint(&router.address, &10000);
+
+    let (stable_pool_hash, stable_pool_address) = router.init_stableswap_pool(&user, &tokens, &10);
+
+    let reward_tps = 10_u128;
+
+    token1.mint(&user, &1000);
+    token2.mint(&user, &1000);
+
+    // user deposit tokens
+    let (_, share_amount) = router.deposit(
+        &user,
+        &tokens,
+        &stable_pool_hash,
+        &Vec::from_array(&e, [500, 500]),
+        &0,
+    );
+    let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
+
+    // admin configure rewards with
+    //              tps = 10, expired_at = 200s from now
+    router.config_global_rewards(
+        &admin,
+        &reward_tps,
+        &e.ledger().timestamp().saturating_add(200),
+        &rewards,
+    );
+    router.fill_liquidity(&tokens);
+
+    let stable_pool_tps = router.config_pool_rewards(&tokens, &stable_pool_hash);
+
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 200
+    );
+
+    // admin distribute configured rewards to the pool
+    router.distribute_outstanding_reward(&admin, &router.address, &tokens, &stable_pool_hash);
+
+    // 50 seconds passed since config, user depositing
+    jump(&e, 50);
+
+    // user withdraw all share_amount.
+    // now working_supply = 0
+    router.withdraw(
+        &user,
+        &tokens,
+        &stable_pool_hash,
+        &share_amount,
+        &Vec::from_array(&e, [0, 0]),
+    );
+
+    // 100 seconds passed
+    jump(&e, 100);
+
+    // user deposit again
+    router.deposit(
+        &user,
+        &tokens,
+        &stable_pool_hash,
+        &Vec::from_array(&e, [500, 500]),
+        &0,
+    );
+
+    // 50 seconds passed
+    jump(&e, 50);
+
+    // User claimed his rewards and reward config is expired at 200s
+    // 10 * 100 = 1000
+    assert_eq!(
+        router.claim(&user, &tokens, &stable_pool_hash),
+        stable_pool_tps * 100
+    );
+
+    // total accumlated_reward is 1000 since pool was empty between 0-50s and 100-150s
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &stable_pool_hash),
+        2000
+    );
+
+    // Total Unused rewards is 1000. to be available for the future distribution
+    //  or can be claimed by "return_unused_reward"
+    assert_eq!(
+        router.get_total_outstanding_reward(&tokens, &stable_pool_hash),
+        1000
+    );
+
+    // admin is able to get unused rewards from the pool
+    let unused: u128 = e.invoke_contract(
+        &stable_pool_address,
+        &Symbol::new(&e, "get_unused_reward"),
+        Vec::new(&e),
+    );
+    assert_eq!(unused, 1000);
+
+    // Now admin set reward config again, and distribute configured rewards
+    router.config_global_rewards(
+        &admin,
+        &reward_tps,
+        &e.ledger().timestamp().saturating_add(200),
+        &rewards,
+    );
+    router.fill_liquidity(&tokens);
+
+    let stable_pool_tps1 = router.config_pool_rewards(&tokens, &stable_pool_hash);
+
+    router.distribute_outstanding_reward(&admin, &router.address, &tokens, &stable_pool_hash);
+
+    // pool's balance = 2000(configured newly)
+    assert_eq!(
+        reward_token.balance(&stable_pool_address) as u128,
+        stable_pool_tps1 * 200
+    );
+}
