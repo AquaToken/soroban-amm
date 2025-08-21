@@ -1442,6 +1442,21 @@ impl RewardsTrait for LiquidityPool {
         rewards.manager().get_total_configured_reward(total_shares)
     }
 
+    // Adjusts the total accumulated reward for the pool in case of reward tokens permalock
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `admin` - The address of the admin user.
+    // * `diff` - The difference to adjust the total accumulated reward by. Can be positive or negative.
+    fn adjust_total_accumulated_reward(e: Env, admin: Address, diff: i128) {
+        admin.require_auth();
+        require_rewards_admin_or_owner(&e, &admin);
+        get_rewards_manager(&e)
+            .manager()
+            .adjust_total_accumulated_reward(get_total_shares(&e), diff)
+    }
+
     // Returns the total amount of claimed reward for the pool.
     //
     // # Arguments

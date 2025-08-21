@@ -184,6 +184,9 @@ pub trait RewardsTrait {
     // Get total amount of generated plus configured reward for the pool
     fn get_total_configured_reward(e: Env) -> u128;
 
+    // Adjust total configured reward for the pool.
+    fn adjust_total_accumulated_reward(e: Env, admin: Address, diff: i128);
+
     // Get total amount of claimed reward for the pool
     fn get_total_claimed_reward(e: Env) -> u128;
 

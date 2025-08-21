@@ -1,12 +1,14 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::rewards::get_rewards_manager;
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
     create_token_contract, get_token_admin_client, install_token_wasm, Setup, TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use core::cmp::min;
+use rewards::storage::{PoolRewardsStorageTrait, UserRewardsStorageTrait};
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -2856,5 +2858,196 @@ fn test_boosted_rewards_abuse() {
     assert_eq!(
         token_reward.balance(&liq_pool.address),
         liq_pool.get_reserves().get_unchecked(reward_token_idx) as i128 + 1, // 1 comes from rewards rounding
+    );
+}
+
+#[test]
+fn test_fix_broken_claim() {
+    let setup = Setup::new_with_config(&TestConfig {
+        reward_tps: 0,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    // Mint pool tokens to both users and deposit equal amounts
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    setup.token1_admin_client.mint(&user1, &1_000_0000000);
+    setup.token2_admin_client.mint(&user1, &1_000_0000000);
+    setup.token1_admin_client.mint(&user2, &1_000_0000000);
+    setup.token2_admin_client.mint(&user2, &1_000_0000000);
+
+    let boost_admin = get_token_admin_client(&e, &setup.reward_boost_token.address);
+
+    // first user is regular depositor. uses lock tokens normally
+    boost_admin.mint(&user1, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &10_000_0000000);
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    // second user is the attacker
+    boost_admin.mint(&user2, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &(10_000_0000000 * 2));
+    liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    jump(&e, 1);
+
+    // Configure rewards for 60 seconds @ 1 token/sec and mint exact amount to pool
+    let tps = 1_0000000_u128;
+    let duration = 60_u64;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &e.ledger().timestamp().saturating_add(duration),
+        &tps,
+    );
+    setup.token_reward_admin_client.mint(
+        &liq_pool.address,
+        &((liq_pool.get_total_configured_reward() - liq_pool.get_total_claimed_reward()) as i128),
+    );
+
+    jump(&e, 1);
+    // attacher somehow manages to abuse the system, so reward of two is greater than total configured
+    e.as_contract(&liq_pool.address, || {
+        let storage = get_rewards_manager(&e).storage();
+        let mut user_data = storage.get_user_reward_data(&user2).unwrap();
+        user_data.to_claim += 1_0000000;
+        storage.set_user_reward_data(&user2, &user_data);
+    });
+
+    jump(&e, 60);
+
+    let to_claim1 = liq_pool.get_user_reward(&user1);
+    let to_claim2 = liq_pool.get_user_reward(&user2);
+    assert!(to_claim1 + to_claim2 > liq_pool.get_total_configured_reward());
+
+    // we've got broken rewards for one of the users.
+    // let's say we've fixed the root of the issue, but we still need to deal with consequences
+    assert!(to_claim1 + to_claim2 > tps * duration as u128);
+    // adjust amount to sync the reward
+    assert_ne!(
+        liq_pool.get_total_configured_reward(),
+        to_claim1 + to_claim2
+    );
+    liq_pool.adjust_total_accumulated_reward(
+        &setup.admin,
+        &((to_claim1 + to_claim2 - liq_pool.get_total_configured_reward()) as i128),
+    );
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        to_claim1 + to_claim2
+    );
+    setup.token_reward_admin_client.mint(
+        &liq_pool.address,
+        &(liq_pool.get_total_configured_reward() as i128
+            - setup.token_reward.balance(&liq_pool.address)),
+    );
+
+    // now both can claim
+    let to_claim1 = liq_pool.claim(&user1);
+    let to_claim2 = liq_pool.claim(&user2);
+    assert!(to_claim1 > 0 && to_claim2 > 0);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        liq_pool.get_total_claimed_reward(),
+    );
+}
+
+#[test]
+fn test_fix_locked_reward_tokens() {
+    let setup = Setup::new_with_config(&TestConfig {
+        reward_tps: 0,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    // Mint pool tokens to both users and deposit equal amounts
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    setup.token1_admin_client.mint(&user1, &1_000_0000000);
+    setup.token2_admin_client.mint(&user1, &1_000_0000000);
+    setup.token1_admin_client.mint(&user2, &1_000_0000000);
+    setup.token2_admin_client.mint(&user2, &1_000_0000000);
+
+    let boost_admin = get_token_admin_client(&e, &setup.reward_boost_token.address);
+
+    // pool reward is overinflated due to historical reasons. we've got 1 locked token we'd like to recover
+    e.as_contract(&liq_pool.address, || {
+        let storage = get_rewards_manager(&e).storage();
+        let mut pool_data = storage.get_pool_reward_data();
+        pool_data.accumulated += 1_0000000;
+        storage.set_pool_reward_data(&pool_data);
+    });
+
+    // users behave normally: simple deposit with boost due to locked tokens
+    boost_admin.mint(&user1, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &10_000_0000000);
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+    boost_admin.mint(&user2, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &(10_000_0000000 * 2));
+    liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    jump(&e, 1);
+
+    // Configure rewards for 60 seconds @ 1 token/sec and mint exact amount to pool
+    let tps = 1_0000000_u128;
+    let duration = 60_u64;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &e.ledger().timestamp().saturating_add(duration),
+        &tps,
+    );
+    setup.token_reward_admin_client.mint(
+        &liq_pool.address,
+        &((liq_pool.get_total_configured_reward() - liq_pool.get_total_claimed_reward()) as i128),
+    );
+
+    jump(&e, 60);
+
+    let claimed1 = liq_pool.claim(&user1);
+    let claimed2 = liq_pool.claim(&user2);
+    assert!(claimed1 + claimed2 < liq_pool.get_total_configured_reward());
+
+    // all users claimed their reward, leaving the frozen token in the pool which we cannot recover
+    assert!(liq_pool.get_total_configured_reward() > liq_pool.get_total_claimed_reward());
+    // the reward doesn't count as unused either
+    assert_eq!(liq_pool.get_unused_reward(), 0);
+    liq_pool.adjust_total_accumulated_reward(&setup.admin, &-1_0000000);
+    // now we see the reward as unused
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000);
+    // it may be used for the future reward distribution. configure reward for 1 second @ 1tps
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &e.ledger().timestamp().saturating_add(1),
+        &1_0000000,
+    );
+    assert_eq!(liq_pool.get_unused_reward(), 0);
+    assert_eq!(
+        liq_pool.get_total_configured_reward() - liq_pool.get_total_claimed_reward(),
+        1_0000000
     );
 }
