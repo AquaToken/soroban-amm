@@ -953,3 +953,28 @@ fn test_regular_upgrade() {
 
     assert_eq!(contract.version(), 130)
 }
+
+#[test]
+fn test_liquidity_estimate_zero_in() {
+    let setup = Setup::default();
+    let e = setup.env;
+
+    let address1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &address1,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [30_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [10000000000_u128, 1000000_u128]), // 1e10, 1e6
+    );
+
+    setup.calculator.init_admin(&setup.admin);
+    setup.calculator.set_pools_plane(&setup.admin, &plane.address);
+
+    let results =
+        setup.calculator.get_liquidity(&Vec::from_array(&e, [address1.clone()]));
+    assert_eq!(
+        results,
+        Vec::from_array(&e, [U256::from_u128(&e, 93380560)])
+    );
+}
