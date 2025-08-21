@@ -620,3 +620,25 @@ fn test_set_protocol_fee() {
         );
     }
 }
+
+#[test]
+fn test_adjust_total_accumulated_reward_permissions() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+        (setup.emergency_admin, false),
+        (setup.rewards_admin, true),
+        (setup.operations_admin, false),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(
+            pool.try_adjust_total_accumulated_reward(&addr, &0).is_ok(),
+            is_ok
+        );
+    }
+}
