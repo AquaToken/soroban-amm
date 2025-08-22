@@ -255,6 +255,10 @@ pub trait PoolsManagementTrait {
         min_duration_seconds: u64,
     );
 
+    // Getters for pool gauge reward thresholds
+    fn pool_gauge_get_min_daily_amount(e: Env) -> u128;
+    fn pool_gauge_get_min_duration(e: Env) -> u64;
+
     // Switches the rewards gauge for a specific pool token.
     fn pool_gauge_switch_token(e: Env, admin: Address, token: Address, enabled: bool);
 
