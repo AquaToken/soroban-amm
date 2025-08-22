@@ -23,6 +23,7 @@ pub enum LiquidityPoolRouterError {
     RewardAmountTooLow = 318,     // reward amount is too low to be distributed
     GaugeRewardsDisabledForPool = 319, // rewards are disabled for this pool
     UnsupportedTokensNum = 320,
+    PathMustEndWithRewardToken = 321,
 
     TokensNotSorted = 2002,
     InMaxNotSatisfied = 2020,
