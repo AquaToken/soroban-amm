@@ -3352,7 +3352,7 @@ fn test_pool_gauge_schedule_reward_empty_path_for_non_reward_token() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #320)")]
+#[should_panic(expected = "Error(Contract, #321)")]
 fn test_pool_gauge_schedule_reward_path_must_end_with_reward_token() {
     let setup = Setup::default();
     let e = setup.env;
