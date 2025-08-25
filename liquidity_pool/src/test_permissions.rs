@@ -268,6 +268,7 @@ fn test_commit_upgrade() {
     let pool = setup.liq_pool;
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
     let user = Address::generate(&setup.env);
 
     for (addr, is_ok) in [
@@ -280,7 +281,7 @@ fn test_commit_upgrade() {
         (setup.emergency_pause_admin, false),
     ] {
         assert_eq!(
-            pool.try_commit_upgrade(&addr, &new_wasm, &new_token_wasm)
+            pool.try_commit_upgrade(&addr, &new_wasm, &new_token_wasm, &new_gauge_wasm)
                 .is_ok(),
             is_ok
         );
@@ -296,6 +297,7 @@ fn test_apply_upgrade_third_party_user() {
         &setup.admin,
         &install_dummy_wasm(&setup.env),
         &install_dummy_wasm(&setup.env),
+        &install_dummy_wasm(&setup.env),
     );
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert!(pool.try_apply_upgrade(&user).is_err());
@@ -307,6 +309,7 @@ fn test_apply_upgrade_emergency_admin() {
     let pool = setup.liq_pool;
     pool.commit_upgrade(
         &setup.admin,
+        &install_dummy_wasm(&setup.env),
         &install_dummy_wasm(&setup.env),
         &install_dummy_wasm(&setup.env),
     );
@@ -321,11 +324,12 @@ fn test_apply_upgrade_admin() {
     let token = ShareTokenClient::new(&setup.env, &pool.share_id());
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
 
     assert_ne!(pool.version(), 130);
     assert_ne!(token.version(), 130);
 
-    pool.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    pool.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_gauge_wasm);
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert_eq!(pool.apply_upgrade(&setup.admin), (new_wasm, new_token_wasm));
 
@@ -344,14 +348,14 @@ fn test_set_emergency_mode_third_party_user() {
 }
 
 #[test]
-fn test_set_emergency_mode_emergency_admin() {
+fn test_set_emergency_mode_admin() {
     let setup = Setup::default();
     let pool = setup.liq_pool;
     assert!(pool.try_set_emergency_mode(&setup.admin, &false).is_err());
 }
 
 #[test]
-fn test_set_emergency_mode_admin() {
+fn test_set_emergency_mode_emergency_admin() {
     let setup = Setup::default();
     let pool = setup.liq_pool;
     assert!(pool

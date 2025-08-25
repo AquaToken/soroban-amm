@@ -1,0 +1,38 @@
+version: '3'
+tasks:
+  clean:
+    cmd: cargo clean
+
+  fmt:
+    cmd: cargo fmt --all
+
+  check:
+    cmd: cargo check
+
+  build:
+    cmds:
+      - task -d ../config_storage build || exit 1
+      - soroban contract build --package soroban-rewards-gauge-contract
+      - soroban contract optimize --wasm ../target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm --wasm-out ../contracts/soroban_rewards_gauge_contract.wasm
+      - ls -l ../contracts/*.wasm
+
+  test:
+    deps:
+      - build
+    cmd: cargo test
+
+  test_slow:
+    cmds:
+      - task: test
+
+  default:
+    cmds:
+      - task: build
+
+  all:
+    cmds:
+      - task: clean
+      - task: fmt
+      - task: build
+      - task: check
+      - task: test

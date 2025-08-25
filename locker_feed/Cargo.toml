@@ -1,5 +1,5 @@
 [package]
-name = "locker-feed"
+name = "soroban-locker-feed-contract"
 version.workspace = true
 edition = "2021"
 publish = false

@@ -1,19 +1,22 @@
 use crate::pool_constants::{FEE_DENOMINATOR, MAX_A, MAX_A_CHANGE, MIN_RAMP_TIME};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolInterfaceTrait, LiquidityPoolTrait, ManagedLiquidityPool,
-    RewardsTrait, UpgradeableContract, UpgradeableLPTokenTrait,
+    RewardsTrait, UpgradeableContract,
 };
 use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
-    get_future_fee, get_initial_a, get_initial_a_time, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_plane, get_precision, get_precision_mul, get_protocol_fee_fraction,
-    get_protocol_fees, get_reserves, get_router, get_token_future_wasm, get_tokens, has_plane,
-    put_admin_actions_deadline, put_decimals, put_fee, put_future_a, put_future_a_time,
-    put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees, put_reserves, put_tokens,
-    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane,
-    set_protocol_fee_fraction, set_router, set_token_future_wasm,
+    get_future_fee, get_gauge_future_wasm, get_initial_a, get_initial_a_time, get_is_killed_claim,
+    get_is_killed_deposit, get_is_killed_swap, get_plane, get_precision, get_precision_mul,
+    get_protocol_fee_fraction, get_protocol_fees, get_reserves, get_router, get_token_future_wasm,
+    get_tokens, has_plane, put_admin_actions_deadline, put_decimals, put_fee, put_future_a,
+    put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees,
+    put_reserves, put_tokens, set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit,
+    set_is_killed_swap, set_plane, set_protocol_fee_fraction, set_router, set_token_future_wasm,
 };
 use crate::token::create_contract;
+use liqidity_pool_rewards_gauge as rewards_gauge;
+use liquidity_pool_config_storage as config_storage;
+use liquidity_pool_config_storage::interface::ConfigStorageInterface;
 use token_share::{
     burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
     put_token_share, Client as LPToken,
@@ -40,6 +43,7 @@ use access_control::utils::{
     require_pause_or_emergency_pause_admin_or_owner, require_rewards_admin_or_owner,
     require_system_fee_admin_or_owner,
 };
+use liqidity_pool_rewards_gauge::interface::RewardsGaugeInterface;
 use liquidity_pool_events::{Events as PoolEvents, LiquidityPoolEvents};
 use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::events::Events as RewardEvents;
@@ -254,6 +258,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         let token_supply = get_total_shares(&e);
         if token_supply == 0 {
@@ -311,6 +316,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             total_shares - share_amount,
             user_shares - share_amount,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -363,6 +369,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         let (dy, _) = Self::_calc_withdraw_one_coin(&e, share_amount, i);
         if dy < min_amount {
@@ -386,6 +393,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             total_shares - share_amount,
             user_shares - share_amount,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1024,11 +1032,13 @@ impl ManagedLiquidityPool for LiquidityPool {
         fees_config: (u32, u32),
         reward_config: (Address, Address, Address),
         plane: Address,
+        config_storage: Address,
     ) {
         let (reward_token, reward_boost_token, reward_boost_feed) = reward_config;
 
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
+        config_storage::operations::init_config_storage(&e, &config_storage);
         Self::init_pools_plane(e.clone(), plane);
         Self::initialize(
             e.clone(),
@@ -1238,6 +1248,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         let amp = Self::a(e.clone());
 
@@ -1297,6 +1308,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             total_shares + mint_amount,
             user_shares + mint_amount,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1567,6 +1579,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         let total_supply = get_total_shares(&e);
         let mut amounts: Vec<u128> = Vec::new(&e);
@@ -1598,6 +1611,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             total_shares - share_amount,
             user_shares - share_amount,
         );
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -1637,7 +1651,12 @@ impl UpgradeableContract for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        160
+        170
+    }
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "StableswapLiquidityPool")
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -1649,21 +1668,24 @@ impl UpgradeableContract for LiquidityPool {
     // * `admin` - The address of the admin.
     // * `new_wasm_hash` - The new wasm hash to commit.
     // * `new_token_wasm_hash` - The new token wasm hash to commit.
+    // * `gauges_new_wasm_hash` - The new rewards gauge wasm hash to commit.
     fn commit_upgrade(
         e: Env,
         admin: Address,
         new_wasm_hash: BytesN<32>,
         token_new_wasm_hash: BytesN<32>,
+        gauges_new_wasm_hash: BytesN<32>,
     ) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         commit_upgrade(&e, &new_wasm_hash);
-        // handle token upgrade manually together with pool upgrade
+        // handle dependent contracts upgrade together with pool upgrade
         set_token_future_wasm(&e, &token_new_wasm_hash);
+        set_gauge_future_wasm(&e, &gauges_new_wasm_hash);
 
         UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(
             &e,
-            [new_wasm_hash.clone(), token_new_wasm_hash.clone()],
+            [new_wasm_hash, token_new_wasm_hash, gauges_new_wasm_hash],
         ));
     }
 
@@ -1679,6 +1701,7 @@ impl UpgradeableContract for LiquidityPool {
         let token_new_wasm_hash = get_token_future_wasm(&e);
         token_share::Client::new(&e, &get_token_share(&e))
             .upgrade(&e.current_contract_address(), &token_new_wasm_hash);
+        rewards_gauge::operations::upgrade(&e, &get_gauge_future_wasm(&e));
 
         UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(
             &e,
@@ -1723,21 +1746,6 @@ impl UpgradeableContract for LiquidityPool {
     // Returns the emergency mode flag value.
     fn get_emergency_mode(e: Env) -> bool {
         get_emergency_mode(&e)
-    }
-}
-
-#[contractimpl]
-impl UpgradeableLPTokenTrait for LiquidityPool {
-    // legacy upgrade. not compatible with token contract version 140+ due to different arguments
-    fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        e.invoke_contract::<()>(
-            &get_token_share(&e),
-            &symbol_short!("upgrade"),
-            Vec::from_array(&e, [new_token_wasm.to_val()]),
-        );
     }
 }
 
@@ -1960,6 +1968,7 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
     }
 
     // Checkpoints total working balance and the working balance for the user.
@@ -1981,6 +1990,7 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .update_working_balance(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.
@@ -2071,6 +2081,92 @@ impl RewardsTrait for LiquidityPool {
         RewardEvents::new(&e).claim(user, reward_token, reward);
 
         reward
+    }
+}
+
+#[contractimpl]
+impl RewardsGaugeInterface for LiquidityPool {
+    fn gauge_add(e: Env, admin: Address, gauge_address: Address) {
+        admin.require_auth();
+
+        // operations admin, owner and router are privileged to add gauges
+        if admin != get_router(&e) {
+            require_operations_admin_or_owner(&e, &admin);
+        }
+
+        rewards_gauge::operations::add(&e, gauge_address);
+    }
+
+    fn gauge_remove(e: Env, admin: Address, reward_token: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        rewards_gauge::operations::remove(&e, reward_token);
+    }
+
+    fn gauge_schedule_reward(
+        e: Env,
+        router: Address,
+        distributor: Address,
+        gauge: Address,
+        start_at: Option<u64>,
+        duration: u64,
+        tps: u128,
+    ) {
+        router.require_auth();
+        distributor.require_auth();
+
+        if router != get_router(&e) {
+            panic_with_error!(e, AccessControlError::Unauthorized)
+        }
+
+        rewards_gauge::operations::schedule_rewards_config(
+            &e,
+            gauge,
+            distributor,
+            start_at,
+            duration,
+            tps,
+            get_total_shares(&e),
+        );
+    }
+
+    fn kill_gauges_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
+
+        rewards_gauge::operations::kill_claim(&e);
+    }
+
+    fn unkill_gauges_claim(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_admin_or_owner(&e, &admin);
+
+        rewards_gauge::operations::unkill_claim(&e);
+    }
+
+    fn get_gauges(e: Env) -> Map<Address, Address> {
+        rewards_gauge::operations::list(&e)
+    }
+
+    fn gauges_claim(e: Env, user: Address) -> Map<Address, u128> {
+        user.require_auth();
+
+        rewards_gauge::operations::claim(
+            &e,
+            &user,
+            get_user_balance_shares(&e, &user),
+            get_total_shares(&e),
+        )
+    }
+
+    fn gauges_get_reward_info(e: Env, user: Address) -> Map<Address, Map<Symbol, i128>> {
+        rewards_gauge::operations::get_rewards_info(
+            &e,
+            &user,
+            get_user_balance_shares(&e, &user),
+            get_total_shares(&e),
+        )
     }
 }
 
@@ -2198,5 +2294,14 @@ impl TransferableContract for LiquidityPool {
             },
             _ => access_control.get_future_address(&role),
         }
+    }
+}
+
+#[contractimpl]
+impl ConfigStorageInterface for LiquidityPool {
+    fn init_config_storage(e: Env, admin: Address, config_storage: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        config_storage::operations::init_config_storage(&e, &config_storage);
     }
 }

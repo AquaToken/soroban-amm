@@ -1,8 +1,12 @@
+#![allow(dead_code)]
 #![cfg(test)]
 extern crate std;
 use crate::plane::{pool_plane, PoolPlaneClient};
 use crate::LiquidityPoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
+use liquidity_pool_config_storage::{
+    testutils::deploy_config_storage, testutils::Client as ConfigStorageClient,
+};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
@@ -35,6 +39,7 @@ impl Default for TestConfig {
 
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
+    pub(crate) config_storage: ConfigStorageClient<'a>,
     pub(crate) router: Address,
     pub(crate) users: vec::Vec<Address>,
     pub(crate) token1: SorobanTokenClient<'a>,
@@ -85,6 +90,7 @@ impl Setup<'_> {
 
         let users = Self::generate_random_users(&e, config.users_count);
         let admin = users[0].clone();
+        let emergency_admin = Address::generate(&e);
         let rewards_admin = Address::generate(&e);
         let operations_admin = Address::generate(&e);
         let pause_admin = Address::generate(&e);
@@ -99,12 +105,8 @@ impl Setup<'_> {
             create_token_contract(&e, &admin)
         };
         let reward_boost_token = create_token_contract(&e, &admin);
-        let reward_boost_feed = create_reward_boost_feed_contract(
-            &e,
-            &admin,
-            &operations_admin,
-            &emergency_pause_admin,
-        );
+        let reward_boost_feed =
+            create_reward_boost_feed_contract(&e, &admin, &operations_admin, &emergency_admin);
 
         let plane = create_plane_contract(&e);
 
@@ -112,6 +114,7 @@ impl Setup<'_> {
         let token2_admin_client = get_token_admin_client(&e, &token2.address.clone());
         let token_reward_admin_client = get_token_admin_client(&e, &reward_token.address.clone());
 
+        let config_storage = deploy_config_storage(&e, &admin, &emergency_admin);
         let router = Address::generate(&e);
 
         let liq_pool = create_liqpool_contract(
@@ -125,6 +128,7 @@ impl Setup<'_> {
             &reward_boost_feed.address,
             config.liq_pool_fee,
             &plane.address,
+            &config_storage.address,
         );
         token_reward_admin_client.mint(&liq_pool.address, &config.rewards_count);
 
@@ -152,6 +156,7 @@ impl Setup<'_> {
 
         Self {
             env: e,
+            config_storage,
             router,
             users,
             token1,
@@ -224,9 +229,7 @@ pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
 }
 
 mod reward_boost_feed {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_locker_feed_contract.wasm");
 }
 
 pub(crate) fn create_reward_boost_feed_contract<'a>(
@@ -255,6 +258,7 @@ pub fn create_liqpool_contract<'a>(
     reward_boost_feed: &Address,
     fee_fraction: u32,
     plane: &Address,
+    config_storage: &Address,
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register(crate::LiquidityPool {}, ()));
     liqpool.initialize_all(
@@ -280,6 +284,7 @@ pub fn create_liqpool_contract<'a>(
             reward_boost_feed.clone(),
         ),
         plane,
+        config_storage,
     );
     liqpool
 }
@@ -288,15 +293,20 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(WASM)
 }
 
-#[test]
-fn test() {
-    let config = TestConfig {
-        users_count: 2,
-        mint_to_user: 1000,
-        rewards_count: 1_000_000_0000000,
-        liq_pool_fee: 30,
-        reward_tps: 10_5000000_u128,
-        reward_token_in_pool: false,
-    };
-    let _setup = Setup::new_with_config(&config);
+mod rewards_gauge {
+    soroban_sdk::contractimport!(file = "../contracts/soroban_rewards_gauge_contract.wasm");
+}
+
+pub(crate) fn deploy_rewards_gauge<'a>(
+    e: &Env,
+    pool: &Address,
+    reward_token: &Address,
+) -> rewards_gauge::Client<'a> {
+    rewards_gauge::Client::new(
+        e,
+        &e.register(
+            rewards_gauge::WASM,
+            rewards_gauge::Args::__constructor(pool, reward_token),
+        ),
+    )
 }

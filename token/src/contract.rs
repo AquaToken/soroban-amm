@@ -171,7 +171,12 @@ impl UpgradeableContract for Token {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        160
+        170
+    }
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "Token")
     }
 
     fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {

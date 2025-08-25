@@ -14,9 +14,7 @@ enum DataKey {
 }
 
 pub mod token {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_token_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_token_contract.wasm");
 }
 pub use token::{self as token_contract, Client};
 use utils::storage_errors::StorageError;

@@ -68,9 +68,9 @@ fn test_integration() {
             ],
             &xlm.address,
             &10_0000000,
-            &2_8952731,
+            &2_8952734,
         ),
-        2_8952731,
+        2_8952734,
     );
 
     // deploy provider swap fee contract
@@ -96,9 +96,9 @@ fn test_integration() {
             ],
             &xlm.address,
             &10_0000000,
-            &2_8864195,
+            &2_8864200,
             &30,
         ),
-        2_8864195,
+        2_8864200,
     );
 }
