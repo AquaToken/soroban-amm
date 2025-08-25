@@ -328,14 +328,14 @@ fn test_set_emergency_mode_third_party_user() {
 }
 
 #[test]
-fn test_set_emergency_mode_emergency_admin() {
+fn test_set_emergency_mode_admin() {
     let setup = Setup::default();
     let plane = setup.plane;
     assert!(plane.try_set_emergency_mode(&setup.admin, &false).is_err());
 }
 
 #[test]
-fn test_set_emergency_mode_admin() {
+fn test_set_emergency_mode_emergency_admin() {
     let setup = Setup::default();
     let plane = setup.plane;
     assert!(plane

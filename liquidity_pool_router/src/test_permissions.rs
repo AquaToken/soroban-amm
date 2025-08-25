@@ -553,6 +553,31 @@ fn test_config_rewards() {
 }
 
 #[test]
+fn test_gauge_enable_token() {
+    let setup = Setup::default();
+    let router = setup.router;
+    let user = Address::generate(&setup.env);
+    let [token1, _, _, _] = setup.tokens;
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+        (setup.emergency_admin, false),
+        (setup.rewards_admin, false),
+        (setup.operations_admin, true),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(
+            router
+                .try_pool_gauge_switch_token(&addr, &token1.address, &true)
+                .is_ok(),
+            is_ok
+        );
+    }
+}
+
+#[test]
 fn test_fill_liquidity() {
     let setup = Setup::default();
     let router = setup.router;

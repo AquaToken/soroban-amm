@@ -72,6 +72,8 @@ pub(crate) trait LiquidityPoolRouterEvents {
     );
 
     fn set_protocol_fee_fraction(&self, fraction: u32);
+
+    fn pool_gauge_switch_token(&self, token: Address, enabled: bool);
 }
 
 impl LiquidityPoolRouterEvents for Events {
@@ -163,15 +165,24 @@ impl LiquidityPoolRouterEvents for Events {
     fn set_protocol_fee_fraction(&self, fraction: u32) {
         // topics
         // [
-        //   "set_protocol_fee": Symbol, // event identifier
+        //   "pool_gauge_switch_token": Symbol, // event identifier
+        //   token: Address, // token address
         // ]
         //
         // body
         // [
-        //   fraction: u32                          // new protocol fee fraction
+        //   enabled: bool
         // ]
         let e = self.env();
         e.events()
             .publish((Symbol::new(e, "set_protocol_fee"),), (fraction,));
+    }
+
+    fn pool_gauge_switch_token(&self, token: Address, enabled: bool) {
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "pool_gauge_switch_token"), token),
+            (enabled,),
+        )
     }
 }

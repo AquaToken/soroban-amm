@@ -10,6 +10,7 @@ use crate::storage::{
 use access_control::access::AccessControl;
 use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
 use access_control::role::Role;
+use liquidity_pool_config_storage::operations::get_config_storage;
 use rewards::storage::{BoostFeedStorageTrait, BoostTokenStorageTrait, RewardTokenStorageTrait};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
@@ -161,6 +162,7 @@ fn init_standard_pool(
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
+    let storage_config = get_config_storage(e);
 
     let protocol_fee_fraction = get_protocol_fee_fraction(&e);
 
@@ -195,6 +197,7 @@ fn init_standard_pool(
                 )
                     .into_val(e),
                 plane.into_val(e),
+                storage_config.into_val(e),
             ],
         ),
     );
@@ -234,6 +237,7 @@ fn init_stableswap_pool(
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
+    let storage_config = get_config_storage(e);
 
     let protocol_fee_fraction = get_protocol_fee_fraction(&e);
 
@@ -269,6 +273,7 @@ fn init_stableswap_pool(
                 )
                     .into_val(e),
                 plane.into_val(e),
+                storage_config.into_val(e),
             ],
         ),
     );

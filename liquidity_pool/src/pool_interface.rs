@@ -12,6 +12,7 @@ pub trait LiquidityPoolCrunch {
         fees_config: (u32, u32),
         reward_config: (Address, Address, Address),
         plane: Address,
+        config_storage: Address,
     );
 }
 
@@ -146,12 +147,16 @@ pub trait UpgradeableContract {
     // Get contract version
     fn version() -> u32;
 
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol;
+
     // Upgrade contract with new wasm code
     fn commit_upgrade(
         e: Env,
         admin: Address,
         new_wasm_hash: BytesN<32>,
         new_token_wasm_hash: BytesN<32>,
+        gauges_new_wasm_hash: BytesN<32>,
     );
     fn apply_upgrade(e: Env, admin: Address) -> (BytesN<32>, BytesN<32>);
     fn revert_upgrade(e: Env, admin: Address);
@@ -159,11 +164,6 @@ pub trait UpgradeableContract {
     // Emergency mode - bypass upgrade deadline
     fn set_emergency_mode(e: Env, admin: Address, value: bool);
     fn get_emergency_mode(e: Env) -> bool;
-}
-
-pub trait UpgradeableLPTokenTrait {
-    // legacy methods to upgrade token contract up to version 120. future versions will use commit_upgrade
-    fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>);
 }
 
 pub trait RewardsTrait {

@@ -50,6 +50,10 @@ pub trait LiquidityPoolEvents {
 
     fn unkill_claim(&self);
 
+    fn kill_gauges_claim(&self);
+
+    fn unkill_gauges_claim(&self);
+
     fn set_protocol_fee_fraction(&self, fraction: u32);
 
     fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128);
@@ -199,6 +203,18 @@ impl LiquidityPoolEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "unkill_claim"),), ())
+    }
+
+    fn kill_gauges_claim(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "kill_gauges_claim"),), ())
+    }
+
+    fn unkill_gauges_claim(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "unkill_gauges_claim"),), ())
     }
 
     fn set_protocol_fee_fraction(&self, fraction: u32) {

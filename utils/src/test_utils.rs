@@ -38,6 +38,20 @@ pub fn jump(e: &Env, time: u64) {
     });
 }
 
+pub fn time_warp(e: &Env, time: u64) {
+    assert!(e.ledger().timestamp() <= time, "Cannot warp to the past");
+    e.ledger().set(LedgerInfo {
+        timestamp: time,
+        protocol_version: e.ledger().protocol_version(),
+        sequence_number: e.ledger().sequence(),
+        network_id: Default::default(),
+        base_reserve: 10,
+        min_temp_entry_ttl: 999999,
+        min_persistent_entry_ttl: 999999,
+        max_entry_ttl: u32::MAX,
+    });
+}
+
 pub fn jump_sequence(e: &Env, sequence: u32) {
     e.ledger().set(LedgerInfo {
         timestamp: e.ledger().timestamp(),
