@@ -1,7 +1,9 @@
 use crate::errors::LiquidityPoolRouterError;
 use crate::pool_utils::assert_tokens_sorted;
+use crate::rewards::get_rewards_manager;
 use crate::storage::{get_pool, DataKey};
 use liquidity_pool_config_storage as config_storage;
+use rewards::storage::RewardTokenStorageTrait;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     panic_with_error, Address, Bytes, BytesN, Env, IntoVal, Symbol, TryFromVal, Vec,
@@ -73,6 +75,13 @@ pub(crate) fn calculate_equivalent_reward(
     let mut last_token_out: Option<Address> = None;
     let mut last_estimate = 0;
 
+    let reward_token = get_rewards_manager(&e).storage().get_reward_token();
+    if token_in == &reward_token {
+        // swaps chain not required if someone tries to distribute reward token directly.
+        // however, in this case, boosts won't work
+        return in_amount;
+    }
+
     if swaps_chain.len() == 0 {
         panic_with_error!(&e, LiquidityPoolRouterError::PathIsEmpty);
     }
@@ -117,6 +126,10 @@ pub(crate) fn calculate_equivalent_reward(
         );
 
         last_token_out = Some(token_out);
+    }
+
+    if last_token_out != Some(reward_token) {
+        panic_with_error!(&e, LiquidityPoolRouterError::PathMustEndWithRewardToken);
     }
 
     last_estimate

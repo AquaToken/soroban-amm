@@ -1406,6 +1406,15 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         gauge_set_reward_duration_threshold(&e, &admin, min_duration_seconds);
     }
 
+    // Getters for pool gauge reward thresholds
+    fn pool_gauge_get_min_daily_amount(e: Env) -> u128 {
+        gauge_get_reward_per_day_threshold(&e)
+    }
+
+    fn pool_gauge_get_min_duration(e: Env) -> u64 {
+        gauge_get_reward_duration_threshold(&e)
+    }
+
     // Switches the rewards gauge for a specific pool token.
     fn pool_gauge_switch_token(e: Env, admin: Address, token: Address, enabled: bool) {
         admin.require_auth();
