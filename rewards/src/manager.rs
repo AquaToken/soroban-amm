@@ -400,7 +400,7 @@ impl Manager {
         self.storage.set_working_supply(new_working_supply);
         self.storage.set_working_balance(user, working_balance);
 
-        (working_balance, new_working_supply)
+        (prev_working_balance, prev_working_supply)
     }
 
     // ------------------------------------

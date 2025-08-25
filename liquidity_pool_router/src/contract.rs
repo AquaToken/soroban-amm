@@ -1089,8 +1089,15 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             Some(i) => {
                 let pool_reserves: Vec<u128> =
                     e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e));
-                let reward_token_reserve = pool_reserves.get(i).unwrap();
-                pool_reward_balance -= reward_token_reserve;
+                let protocol_fees: Vec<u128> = e.invoke_contract(
+                    &pool_id,
+                    &Symbol::new(&e, "get_protocol_fees"),
+                    Vec::new(&e),
+                );
+                pool_reward_balance =
+                    pool_reward_balance.saturating_sub(pool_reserves.get(i).unwrap());
+                pool_reward_balance =
+                    pool_reward_balance.saturating_sub(protocol_fees.get(i).unwrap());
             }
             None => {}
         }
