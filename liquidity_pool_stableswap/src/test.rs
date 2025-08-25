@@ -2292,6 +2292,122 @@ fn test_remove_liquidity_imbalance_different_decimals() {
 }
 
 #[test]
+fn test_remove_liquidity_imbalance_zero_token() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.cost_estimate().budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        30,
+        &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
+        &plane.address,
+        &config_storage.address,
+    );
+
+    token1_admin_client.mint(&user1, &6);
+    token2_admin_client.mint(&user1, &6);
+
+    liqpool.deposit(&user1, &Vec::from_array(&e, [6, 6]), &0);
+    // both 5 and 6 lead to zero token reserve
+    assert_eq!(
+        liqpool
+            .try_remove_liquidity_imbalance(
+                &user1,
+                &Vec::from_array(&e, [5, 0]),
+                &(SorobanTokenClient::new(&e, &liqpool.share_id()).balance(&user1) as u128),
+            )
+            .unwrap_err(),
+        Ok(Error::from_contract_error(210))
+    );
+    assert_eq!(
+        liqpool
+            .try_remove_liquidity_imbalance(
+                &user1,
+                &Vec::from_array(&e, [6, 0]),
+                &(SorobanTokenClient::new(&e, &liqpool.share_id()).balance(&user1) as u128),
+            )
+            .unwrap_err(),
+        Ok(Error::from_contract_error(210))
+    );
+}
+
+#[test]
+fn test_withdraw_one_coin_full_share() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.cost_estimate().budget().reset_unlimited();
+
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
+
+    let token1 = create_token_contract(&e, &admin1);
+    let token2 = create_token_contract(&e, &admin2);
+    let token1_admin_client = get_token_admin_client(&e, &token1.address);
+    let token2_admin_client = get_token_admin_client(&e, &token2.address);
+    let token_reward = create_token_contract(&e, &admin1);
+    let user1 = Address::generate(&e);
+    let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
+    let liqpool = create_liqpool_contract(
+        &e,
+        &user1,
+        &Address::generate(&e),
+        &install_token_wasm(&e),
+        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+        10,
+        30,
+        &token_reward.address,
+        &create_token_contract(&e, &Address::generate(&e)).address,
+        &create_reward_boost_feed_contract(
+            &e,
+            &Address::generate(&e),
+            &Address::generate(&e),
+            &Address::generate(&e),
+        )
+        .address,
+        &plane.address,
+        &config_storage.address,
+    );
+
+    token1_admin_client.mint(&user1, &6);
+    token2_admin_client.mint(&user1, &6);
+
+    liqpool.deposit(&user1, &Vec::from_array(&e, [6, 6]), &0);
+    let results = liqpool.withdraw_one_coin(
+        &user1,
+        &(SorobanTokenClient::new(&e, &liqpool.share_id()).balance(&user1) as u128),
+        &0,
+        &0,
+    );
+    assert_eq!(results, vec![&e, 5, 0]);
+}
+
+#[test]
 fn test_simple_ongoing_reward() {
     let e = Env::default();
     e.mock_all_auths();
