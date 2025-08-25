@@ -1242,7 +1242,7 @@ fn test_zero_initial_deposit() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -1285,7 +1285,7 @@ fn test_zero_deposit_ok() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -1715,7 +1715,7 @@ fn test_withdraw_one_token() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -1747,9 +1747,12 @@ fn test_withdraw_one_token() {
     assert_eq!(token2.balance(&user1) as u128, 900_0000000);
     assert_eq!(token2.balance(&liqpool.address) as u128, 100_0000000);
 
+    // user withdraws 90_9485232 tokens
+    // protocol fee is 475188 being deducted on top of user withdrawal
+    // resulting reserve = 1000000000 - 909485232 - 475188 = 90039580
     assert_eq!(
         liqpool.withdraw_one_coin(&user1, &100_0000000, &0, &10_0000000),
-        Vec::from_array(&e, [91_0435607_u128, 0_u128]),
+        Vec::from_array(&e, [90_9485232_u128, 0_u128]),
     );
     let events = e.events().all();
     assert_eq!(
@@ -1764,18 +1767,23 @@ fn test_withdraw_one_token() {
                     token2.address.clone()
                 )
                     .into_val(&e),
-                (100_0000000_i128, 91_0435607_i128, 0_i128).into_val(&e),
+                (100_0000000_i128, 90_9485232_i128, 0_i128).into_val(&e),
             ),
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![&e, 8_9564393_i128, 100_0000000_i128,].to_val()
+                vec![&e, 9_0039580_i128, 100_0000000_i128,].to_val()
             ),
         ]
     );
 
-    assert_eq!(token1.balance(&user1) as u128, 991_0435607);
-    assert_eq!(token1.balance(&liqpool.address) as u128, 8_9564393);
+    assert_eq!(
+        liqpool.get_reserves(),
+        vec![&e, 9_0039580_u128, 100_0000000_u128],
+    );
+    assert_eq!(liqpool.get_protocol_fees(), vec![&e, 475188_u128, 0_u128],);
+    assert_eq!(token1.balance(&user1) as u128, 990_9485232);
+    assert_eq!(token1.balance(&liqpool.address) as u128, 9_0039580 + 475188);
     assert_eq!(token2.balance(&user1) as u128, 900_0000000);
     assert_eq!(token2.balance(&liqpool.address) as u128, 100_0000000);
     assert_eq!(token_share.balance(&user1) as u128, 100_0000000);
@@ -1806,7 +1814,7 @@ fn test_withdraw_one_token_different_decimals() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token18.address.clone(), token7.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -1847,13 +1855,21 @@ fn test_withdraw_one_token_different_decimals() {
 
     assert_eq!(
         liqpool.withdraw_one_coin(&user1, &100_000000000000000000, &0, &10_000000000000000000),
-        Vec::from_array(&e, [91_043560762610399983_u128, 0_u128]),
+        Vec::from_array(&e, [90_948523270188894390_u128, 0_u128]),
     );
 
-    assert_eq!(token18.balance(&user1) as u128, 991_043560762610399983);
+    assert_eq!(
+        liqpool.get_reserves(),
+        vec![&e, 9_003957983600352813_u128, 100_0000000_u128],
+    );
+    assert_eq!(
+        liqpool.get_protocol_fees(),
+        vec![&e, 47518746210752797_u128, 0_u128],
+    );
+    assert_eq!(token18.balance(&user1) as u128, 990_948523270188894390);
     assert_eq!(
         token18.balance(&liqpool.address) as u128,
-        8_956439237389600017
+        9_051476729811105610
     );
     assert_eq!(token7.balance(&user1) as u128, 900_0000000);
     assert_eq!(token7.balance(&liqpool.address) as u128, 100_0000000);
@@ -2006,7 +2022,7 @@ fn test_deposit_inequal() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2058,7 +2074,7 @@ fn test_deposit_inequal_different_decimals() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token7.address.clone(), token18.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2118,7 +2134,7 @@ fn test_remove_liquidity_imbalance() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2138,15 +2154,22 @@ fn test_remove_liquidity_imbalance() {
     token2_admin_client.mint(&user1, &1000_0000000);
 
     liqpool.deposit(&user1, &Vec::from_array(&e, [10_0000000, 100_0000000]), &0);
+    assert_eq!(
+        liqpool.get_reserves(),
+        vec![&e, 10_0000000_u128, 100_0000000_u128],
+    );
+    // no fee for the first deposit
+    assert_eq!(liqpool.get_protocol_fees(), vec![&e, 0_u128, 0_u128],);
     assert_eq!(token1.balance(&user1) as u128, 990_0000000);
     assert_eq!(token2.balance(&user1) as u128, 900_0000000);
     let token_share_amount = token_share.balance(&user1) as u128;
     assert_eq!(token_share_amount, 101_8767615);
-    liqpool.remove_liquidity_imbalance(
+    let shares_burned = liqpool.remove_liquidity_imbalance(
         &user1,
         &Vec::from_array(&e, [0_5000000, 99_0000000]),
         &token_share_amount,
     );
+    assert_eq!(shares_burned, 92_1457973);
     let events = e.events().all();
     assert_eq!(
         events.slice(events.len() - 2..events.len()),
@@ -2161,7 +2184,7 @@ fn test_remove_liquidity_imbalance() {
                 )
                     .into_val(&e),
                 (
-                    (token_share_amount - 9_7635378) as i128,
+                    (token_share_amount - 9_7309642) as i128,
                     0_5000000_i128,
                     99_0000000_i128
                 )
@@ -2170,16 +2193,24 @@ fn test_remove_liquidity_imbalance() {
             (
                 liqpool.address.clone(),
                 (Symbol::new(&e, "update_reserves"),).into_val(&e),
-                vec![&e, 9_5000000_i128, 1_0000000_i128,].to_val()
+                vec![&e, 9_4935937_i128, 9935622_i128].to_val()
             ),
         ]
+    );
+    assert_eq!(
+        liqpool.get_reserves(),
+        vec![&e, 9_4935937_u128, 9935622_u128],
+    );
+    assert_eq!(
+        liqpool.get_protocol_fees(),
+        vec![&e, 64063_u128, 64378_u128],
     );
     assert_eq!(token1.balance(&user1) as u128, 990_5000000);
     assert_eq!(token2.balance(&user1) as u128, 999_0000000);
     assert_eq!(token1.balance(&liqpool.address) as u128, 9_5000000);
     assert_eq!(token2.balance(&liqpool.address) as u128, 1_0000000);
     assert!((token_share.balance(&user1) as u128) < token_share_amount / 10); // more than 90% of the share were burned
-    assert_eq!(token_share.balance(&user1) as u128, 9_7635378); // control exact value
+    assert_eq!(token_share.balance(&user1) as u128, 9_7309642); // control exact value
 }
 
 #[test]
@@ -2206,7 +2237,7 @@ fn test_remove_liquidity_imbalance_different_decimals() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2239,6 +2270,14 @@ fn test_remove_liquidity_imbalance_different_decimals() {
         &Vec::from_array(&e, [0_500000000000000000, 99_0000000]),
         &token_share_amount,
     );
+    assert_eq!(
+        liqpool.get_reserves(),
+        vec![&e, 9_493593775642263081_u128, 9935622_u128],
+    );
+    assert_eq!(
+        liqpool.get_protocol_fees(),
+        vec![&e, 6406224357736919_u128, 64378_u128],
+    );
     assert_eq!(token1.balance(&user1) as u128, 990_500000000000000000);
     assert_eq!(token2.balance(&user1) as u128, 999_0000000);
     assert_eq!(
@@ -2247,7 +2286,7 @@ fn test_remove_liquidity_imbalance_different_decimals() {
     );
     assert_eq!(token2.balance(&liqpool.address) as u128, 1_0000000);
     assert!((token_share.balance(&user1) as u128) < token_share_amount / 10); // more than 90% of the share were burned
-    assert_eq!(token_share.balance(&user1) as u128, 9_763537957616772036); // control exact value
+    assert_eq!(token_share.balance(&user1) as u128, 9_730964436944999941); // control exact value
 }
 
 #[test]
@@ -2276,7 +2315,7 @@ fn test_simple_ongoing_reward() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2342,7 +2381,7 @@ fn test_simple_ongoing_reward_different_decimals() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token18.address.clone(), token7.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2408,7 +2447,7 @@ fn test_simple_reward() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2484,7 +2523,7 @@ fn test_two_users_rewards() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2726,7 +2765,7 @@ fn test_lazy_user_rewards() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2796,7 +2835,7 @@ fn test_config_rewards_not_admin() {
             ],
         ),
         10,
-        0,
+        30,
         &(create_token_contract(&e, &admin).address),
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2839,7 +2878,7 @@ fn test_config_rewards_router() {
             ],
         ),
         10,
-        0,
+        30,
         &(create_token_contract(&e, &admin).address),
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -2973,7 +3012,7 @@ fn test_transfer_ownership_too_early() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3024,7 +3063,7 @@ fn test_transfer_ownership_twice() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3075,7 +3114,7 @@ fn test_transfer_ownership_not_committed() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3119,7 +3158,7 @@ fn test_transfer_ownership_reverted() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3170,7 +3209,7 @@ fn test_transfer_ownership() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3221,7 +3260,7 @@ fn test_ramp_a_too_early() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3269,7 +3308,7 @@ fn test_ramp_a_too_short() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3317,7 +3356,7 @@ fn test_ramp_a_too_fast() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3364,7 +3403,7 @@ fn test_ramp_a() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3418,7 +3457,7 @@ fn test_deposit_min_mint() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3470,7 +3509,7 @@ fn test_deposit_inequal_ok() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3488,16 +3527,31 @@ fn test_deposit_inequal_ok() {
     token1_admin_client.mint(&user1, &i128::MAX);
     token2_admin_client.mint(&user1, &i128::MAX);
 
-    liqpool.deposit(&user1, &Vec::from_array(&e, [100, 100]), &0);
+    liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+    assert_eq!(liqpool.get_reserves(), vec![&e, 100_0000000, 100_0000000]);
+    assert_eq!(liqpool.get_protocol_fees(), Vec::from_array(&e, [0, 0]));
+
+    // second deposit with balanced amounts. no fee should be charged
+    liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
+    assert_eq!(liqpool.get_reserves(), vec![&e, 200_0000000, 200_0000000]);
+    assert_eq!(liqpool.get_protocol_fees(), Vec::from_array(&e, [0, 0]));
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
-    assert_eq!(token1.balance(&liqpool.address), 100);
-    assert_eq!(token2.balance(&liqpool.address), 100);
-    assert_eq!(token_share.balance(&user1), 200);
-    liqpool.deposit(&user1, &Vec::from_array(&e, [200, 100]), &0);
-    assert_eq!(token1.balance(&liqpool.address), 300);
-    assert_eq!(token2.balance(&liqpool.address), 200);
-    assert_eq!(token_share.balance(&user1), 499);
+    assert_eq!(token1.balance(&liqpool.address), 200_0000000);
+    assert_eq!(token2.balance(&liqpool.address), 200_0000000);
+    assert_eq!(token_share.balance(&user1), 400_0000000);
+
+    // deposit with unequal amounts. fee should be charged
+    liqpool.deposit(&user1, &Vec::from_array(&e, [200_0000000, 100_0000000]), &0);
+    assert_eq!(liqpool.get_reserves(), vec![&e, 399_9622520, 299_9627479]);
+    assert_eq!(
+        liqpool.get_protocol_fees(),
+        Vec::from_array(&e, [377480, 372521])
+    );
+    // pool balance equals to reserves + protocol fees
+    assert_eq!(token1.balance(&liqpool.address), 400_0000000);
+    assert_eq!(token2.balance(&liqpool.address), 300_0000000);
+    assert_eq!(token_share.balance(&user1), 699_1887788);
 }
 
 #[test]
@@ -3657,7 +3711,7 @@ fn test_kill_deposit() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3748,7 +3802,7 @@ fn test_kill_swap() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -3838,7 +3892,7 @@ fn test_kill_claim() {
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         10,
-        0,
+        30,
         &token_reward.address,
         &create_token_contract(&e, &Address::generate(&e)).address,
         &create_reward_boost_feed_contract(
@@ -5294,7 +5348,7 @@ fn test_deposit_and_withdraw_fee() {
     assert_eq!(setup.token2.balance(&setup.liq_pool.address), 2000_0000000);
     assert_eq!(
         setup.liq_pool.get_reserves(),
-        Vec::from_array(&setup.env, [1500_0000000, 2000_0000000])
+        Vec::from_array(&setup.env, [1499_8126589, 1999_8123410])
     );
 
     setup.liq_pool.withdraw(
@@ -5302,13 +5356,17 @@ fn test_deposit_and_withdraw_fee() {
         &(setup.token_share.balance(&user2) as u128),
         &Vec::from_array(&setup.env, [0, 0]),
     );
-    assert_eq!(setup.token1.balance(&user2), 1142_7533471);
-    assert_eq!(setup.token2.balance(&user2), 857_0044628);
-    assert_eq!(setup.token1.balance(&setup.liq_pool.address), 857_2466529);
-    assert_eq!(setup.token2.balance(&setup.liq_pool.address), 1142_9955372);
+    assert_eq!(setup.token1.balance(&user2), 1142_4893137);
+    assert_eq!(setup.token2.balance(&user2), 856_6790332);
+    assert_eq!(setup.token1.balance(&setup.liq_pool.address), 857_5106863);
+    assert_eq!(setup.token2.balance(&setup.liq_pool.address), 1143_3209668);
     assert_eq!(
         setup.liq_pool.get_reserves(),
-        Vec::from_array(&setup.env, [857_2466529, 1142_9955372])
+        Vec::from_array(&setup.env, [857_3233452, 1143_1333078])
+    );
+    assert_eq!(
+        setup.liq_pool.get_protocol_fees(),
+        Vec::from_array(&setup.env, [1873411, 1876590])
     );
 }
 
@@ -5782,4 +5840,87 @@ fn test_gauges_unkill_claim_third_user() {
     setup
         .liq_pool
         .unkill_gauges_claim(&Address::generate(&setup.env));
+}
+
+#[test]
+fn test_swap_through_imbalanced_withdraw() {
+    // we've got a highly imbalanced stable pool. let's say it's USDC/sUSD
+    // there are two options to swap tokens:
+    //  1. deposit one token and then withdraw another
+    //  2. swap directly
+    // they should give comparable results
+    let setup = Setup::setup(&TestConfig::default());
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let share_id = SorobanTokenClient::new(&env, &liq_pool.share_id());
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+
+    // 10 seconds. user depositing
+    jump(&env, 10);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user1, &(66914_0000000 * 4));
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user1, &(247574_0000000 * 4));
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user2, &100000_0000000);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user2, &100000_0000000);
+
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [66914_0000000, 247574_0000000]),
+        &0,
+    );
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [0, 1000_0000000]), &0);
+    // user2 wants to swap 1k sUSD to USDC with deposit + withdraw
+    assert_eq!(
+        liq_pool.withdraw_one_coin(&user2, &(share_id.balance(&user2) as u128), &0, &0),
+        vec![&env, 967_9583184, 0]
+    );
+
+    liq_pool.withdraw(
+        &user1,
+        &(share_id.balance(&user1) as u128),
+        &Vec::from_array(&env, [0, 0]),
+    );
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [66914_0000000, 247574_0000000]),
+        &0,
+    );
+    // user2 swaps 1k sUSD to USDC directly
+    assert_eq!(
+        liq_pool.swap(&user2, &1, &0, &1000_0000000, &0),
+        967_9584456,
+    );
+
+    liq_pool.withdraw(
+        &user1,
+        &(share_id.balance(&user1) as u128),
+        &Vec::from_array(&env, [0, 0]),
+    );
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [66914_0000000, 247574_0000000]),
+        &0,
+    );
+    // user2 wants to swap 1k USDC to sUSD with deposit + withdraw
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [1000_0000000, 0]), &0);
+    assert_eq!(
+        liq_pool.withdraw_one_coin(&user2, &(share_id.balance(&user2) as u128), &1, &0),
+        vec![&env, 0, 1025_9631986]
+    );
+
+    liq_pool.withdraw(
+        &user1,
+        &(share_id.balance(&user1) as u128),
+        &Vec::from_array(&env, [0, 0]),
+    );
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [66914_0000000, 247574_0000000]),
+        &0,
+    );
+    // user2 swaps 1k USDC to sUSD directly
+    assert_eq!(
+        liq_pool.swap(&user2, &0, &1, &1000_0000000, &0),
+        1025_9662952,
+    );
 }
