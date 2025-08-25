@@ -81,7 +81,12 @@ impl UpgradeableContract for LiquidityPoolPlane {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        160
+        170
+    }
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "PoolPlane")
     }
 
     // Commits a new wasm hash for a future upgrade.

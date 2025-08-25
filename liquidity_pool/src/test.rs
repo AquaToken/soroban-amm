@@ -1,18 +1,22 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::rewards::get_rewards_manager;
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
-    create_token_contract, get_token_admin_client, install_token_wasm, Setup, TestConfig,
+    create_token_contract, deploy_rewards_gauge, get_token_admin_client, install_token_wasm, Setup,
+    TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use core::cmp::min;
+use liquidity_pool_config_storage::testutils::deploy_config_storage;
+use rewards::storage::{PoolRewardsStorageTrait, UserRewardsStorageTrait};
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{
-    symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec,
+    symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Map, Symbol, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
 use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump};
@@ -509,32 +513,16 @@ fn initialize_already_initialized() {
 #[should_panic(expected = "Error(Contract, #202)")]
 fn initialize_already_initialized_plane() {
     let setup = Setup::default();
+    setup.liq_pool.init_pools_plane(&setup.plane.address);
+}
 
-    let users = Setup::generate_random_users(&setup.env, 3);
-    let token1 = create_token_contract(&setup.env, &users[1]);
-    let token2 = create_token_contract(&setup.env, &users[2]);
-
-    setup.liq_pool.initialize_all(
-        &users[0],
-        &(
-            users[0].clone(),
-            users[0].clone(),
-            users[0].clone(),
-            users[0].clone(),
-            Vec::new(&setup.env),
-            users[0].clone(),
-        ),
-        &users[0],
-        &install_token_wasm(&setup.env),
-        &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
-        &(10_u32, 5000_u32),
-        &(
-            setup.token_reward.address,
-            setup.reward_boost_token.address,
-            setup.reward_boost_feed.address,
-        ),
-        &setup.plane.address,
-    );
+#[test]
+#[should_panic(expected = "Error(Contract, #201)")]
+fn initialize_already_initialized_config_storage() {
+    let setup = Setup::default();
+    setup
+        .liq_pool
+        .init_config_storage(&setup.admin, &setup.plane.address);
 }
 
 #[test]
@@ -569,6 +557,7 @@ fn test_custom_fee() {
             &setup.reward_boost_feed.address,
             fee_config.0, // ten percent
             &setup.plane.address,
+            &setup.config_storage.address,
         );
         liqpool.deposit(
             &setup.users[0],
@@ -620,11 +609,11 @@ fn test_simple_ongoing_reward() {
     // 10 seconds passed since config, user depositing
     jump(&env, 10);
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
     assert_eq!(
-        liq_pool.get_total_accumulated_reward(),
-        TestConfig::default().reward_tps * 10
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
     );
+    assert_eq!(liq_pool.get_total_accumulated_reward(), 0);
     assert_eq!(liq_pool.get_total_claimed_reward(), 0);
 
     liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
@@ -633,20 +622,26 @@ fn test_simple_ongoing_reward() {
     // 30 seconds passed, half of the reward is available for the user
     jump(&env, 30);
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
     assert_eq!(
         liq_pool.get_total_accumulated_reward(),
-        TestConfig::default().reward_tps * 40
+        TestConfig::default().reward_tps * 30
     );
     assert_eq!(liq_pool.get_total_claimed_reward(), 0);
 
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
     assert_eq!(token_reward.balance(&users[0]) as u128, total_reward_1 / 2);
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
     assert_eq!(
         liq_pool.get_total_accumulated_reward(),
-        TestConfig::default().reward_tps * 40
+        TestConfig::default().reward_tps * 30
     );
     assert_eq!(
         liq_pool.get_total_claimed_reward(),
@@ -657,8 +652,14 @@ fn test_simple_ongoing_reward() {
     //  5/6 of the reward is available for the user since he has missed first 10 seconds
     jump(&env, 40);
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_accumulated_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
     assert_eq!(
         liq_pool.get_total_claimed_reward(),
         TestConfig::default().reward_tps * 30
@@ -670,8 +671,14 @@ fn test_simple_ongoing_reward() {
         total_reward_1 * 5 / 6
     );
 
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_accumulated_reward(), total_reward_1);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        total_reward_1 - TestConfig::default().reward_tps * 10
+    );
     assert_eq!(
         liq_pool.get_total_claimed_reward(),
         TestConfig::default().reward_tps * 50
@@ -1571,6 +1578,7 @@ fn test_withdraw_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
     let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
@@ -1672,6 +1680,7 @@ fn test_deposit_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
 
     liq_pool.set_rewards_config(
@@ -1734,6 +1743,7 @@ fn test_swap_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
     let liq_pool2 = create_liqpool_contract(
         &e,
@@ -1746,6 +1756,7 @@ fn test_swap_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
     token1_admin_client.mint(&user1, &200_0000000);
     token2_admin_client.mint(&user1, &200_0000000);
@@ -1855,6 +1866,7 @@ fn test_claim_rewards() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
 
     token1_admin_client.mint(&user1, &100_0000000);
@@ -1961,6 +1973,7 @@ fn test_drain_reserves() {
         &reward_boost_feed.address,
         30,
         &plane.address,
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
 
     liq_pool.set_rewards_config(
@@ -2407,8 +2420,14 @@ fn test_upgrade_events() {
     let contract = setup.liq_pool;
     let new_wasm_hash = install_dummy_wasm(&setup.env);
     let token_new_wasm_hash = install_dummy_wasm(&setup.env);
+    let gauge_new_wasm_hash = install_dummy_wasm(&setup.env);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
+    contract.commit_upgrade(
+        &setup.admin,
+        &new_wasm_hash,
+        &token_new_wasm_hash,
+        &gauge_new_wasm_hash,
+    );
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -2416,7 +2435,12 @@ fn test_upgrade_events() {
             (
                 contract.address.clone(),
                 (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
-                (new_wasm_hash.clone(), token_new_wasm_hash.clone()).into_val(&setup.env),
+                (
+                    new_wasm_hash.clone(),
+                    token_new_wasm_hash.clone(),
+                    gauge_new_wasm_hash.clone()
+                )
+                    .into_val(&setup.env),
             ),
         ]
     );
@@ -2434,7 +2458,12 @@ fn test_upgrade_events() {
         ]
     );
 
-    contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
+    contract.commit_upgrade(
+        &setup.admin,
+        &new_wasm_hash,
+        &token_new_wasm_hash,
+        &gauge_new_wasm_hash,
+    );
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
@@ -2489,13 +2518,14 @@ fn test_emergency_upgrade() {
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
 
     assert_eq!(contract.get_emergency_mode(), false);
     assert_ne!(contract.version(), 130);
     assert_ne!(token.version(), 130);
     contract.set_emergency_mode(&setup.emergency_admin, &true);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_gauge_wasm);
     contract.apply_upgrade(&setup.admin);
 
     assert_eq!(contract.version(), 130);
@@ -2510,7 +2540,8 @@ fn test_apply_emergency_upgrade_not_commited() {
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
-    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_gauge_wasm);
     contract.revert_upgrade(&setup.admin);
 
     contract.set_emergency_mode(&setup.emergency_admin, &true);
@@ -2528,13 +2559,14 @@ fn test_regular_upgrade_token() {
         .deployer()
         .upload_contract_wasm(token_share::token::WASM);
     let new_wasm = install_dummy_wasm(&setup.env);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
 
     // dummy wasm has version 130, everything else has greater version
     assert_eq!(contract.get_emergency_mode(), false);
     assert_ne!(contract.version(), 130);
     assert_ne!(token.version(), 130);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm, &token_wasm);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &token_wasm, &new_gauge_wasm);
     assert!(contract.try_apply_upgrade(&setup.admin).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert_eq!(
@@ -2551,16 +2583,21 @@ fn test_regular_upgrade_pool() {
     let setup = Setup::default();
     let contract = setup.liq_pool;
     let token = ShareTokenClient::new(&setup.env, &contract.share_id());
+    let gauge = deploy_rewards_gauge(&setup.env, &contract.address, &setup.token_reward.address);
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
 
     // dummy wasm has version 130, everything else has greater version
     assert_eq!(contract.get_emergency_mode(), false);
     assert_ne!(contract.version(), 130);
     assert_ne!(token.version(), 130);
+    assert_ne!(gauge.version(), 130);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    // add gauge to pool
+    contract.gauge_add(&setup.admin, &gauge.address);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_gauge_wasm);
     assert!(contract.try_apply_upgrade(&setup.admin).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert_eq!(
@@ -2570,6 +2607,7 @@ fn test_regular_upgrade_pool() {
 
     assert_eq!(contract.version(), 130);
     assert_eq!(token.version(), 130);
+    assert_eq!(gauge.version(), 130);
 }
 
 #[test]
@@ -2701,6 +2739,7 @@ fn test_custom_protocol_fee() {
             &setup.reward_boost_feed.address,
             30,
             &setup.plane.address,
+            &setup.config_storage.address,
         );
         liqpool.set_protocol_fee_fraction(&setup.admin, &protocol_fee_fraction);
         liqpool.deposit(
@@ -2750,4 +2789,701 @@ fn test_custom_protocol_fee() {
             protocol_fee_amount
         );
     }
+}
+
+#[test]
+fn test_boosted_rewards_abuse() {
+    let setup = Setup::new_with_config(&TestConfig {
+        reward_token_in_pool: true,
+        rewards_count: 0,
+        reward_tps: 0,
+        liq_pool_fee: 100,
+        ..TestConfig::default()
+    });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let market_maker = Address::generate(&env);
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    for user in [&market_maker, &user1, &user2] {
+        SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(user, &(i128::MAX / 10));
+        SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(user, &(i128::MAX / 10));
+    }
+
+    let locked_token_admin_client =
+        get_token_admin_client(&env, &setup.reward_boost_token.address.clone());
+
+    let reward_tps = 1_0000000_u128;
+    let total_reward_1 = reward_tps * 70;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &env.ledger().timestamp().saturating_add(70),
+        &reward_tps,
+    );
+    let configured_reward = liq_pool.get_total_configured_reward();
+    let claimed_reward = liq_pool.get_total_claimed_reward();
+    let reward_to_fill = configured_reward - claimed_reward;
+    setup
+        .token_reward_admin_client
+        .mint(&liq_pool.address, &(reward_to_fill as i128));
+
+    // first user deposits 100 tokens having 10k locked tokens out of 30k.
+    // second user deposits 100 tokens too. but without locked tokens.
+    locked_token_admin_client.mint(&user1, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &30_000_0000000);
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [100_0000000, 100_0000000]),
+        &0,
+    );
+    liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&env, [100_0000000, 100_0000000]),
+        &0,
+    );
+    jump(&env, 10);
+    jump(&env, 20);
+
+    // chain of swaps to generate protocol fees, then withdraw them
+    for i in 0..100 {
+        liq_pool.swap(&user1, &(i % 2), &((i + 1) % 2), &30_0000000, &0);
+    }
+
+    jump(&env, 50);
+
+    assert_eq!(liq_pool.get_reserves(), vec![&env, 1926153329, 2223956884]);
+    assert_eq!(
+        token_reward.balance(&liq_pool.address) as u128,
+        1926153329 + total_reward_1 + 75000000
+    );
+
+    let user1_claimed = liq_pool.claim(&user1);
+
+    jump(&env, 10);
+
+    // second user tries to abuse rewards by locking tokens and immediately claim, applying retroactive boost.
+    locked_token_admin_client.mint(&user2, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &40_000_0000000);
+    let user2_claimed = liq_pool.claim(&user2);
+
+    assert_eq!(user1_claimed, 419999999);
+    assert_eq!(user2_claimed, 280000000);
+    assert_eq!(user1_claimed + user2_claimed, total_reward_1 - 1,);
+    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(liq_pool.get_total_claimed_reward(), total_reward_1 - 1,);
+
+    assert_eq!(
+        liq_pool.claim_protocol_fees(&setup.admin, &setup.admin),
+        vec![&env, 75000000, 75000000]
+    );
+    assert_eq!(liq_pool.get_reserves(), vec![&env, 1926153329, 2223956884]);
+
+    // balance cannot drop below reserve
+    let reward_token_idx = liq_pool
+        .get_tokens()
+        .first_index_of(&token_reward.address)
+        .unwrap();
+    assert!(
+        token_reward.balance(&liq_pool.address)
+            > liq_pool.get_reserves().get_unchecked(reward_token_idx) as i128
+    );
+    assert_eq!(
+        token_reward.balance(&liq_pool.address),
+        liq_pool.get_reserves().get_unchecked(reward_token_idx) as i128 + 1, // 1 comes from rewards rounding
+    );
+}
+
+#[test]
+fn test_simple_reward_gauge() {
+    let setup = Setup::setup(&TestConfig::default());
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user = Address::generate(&env);
+
+    let gauge_reward_token = create_token_contract(&env, &setup.admin);
+    let distributor = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &gauge_reward_token.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // 10 seconds. user depositing
+    jump(&env, 10);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user, &100);
+    liq_pool.deposit(&user, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 20 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    get_token_admin_client(&env, &gauge_reward_token.address)
+        .mint(&distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
+
+    // 90 seconds. rewards ended.
+    jump(&env, 70);
+    // 100 seconds. user claim reward
+    jump(&env, 10);
+    assert_eq!(gauge_reward_token.balance(&user), 0);
+    // full reward should be available to the user
+    assert_eq!(
+        liq_pool.gauges_claim(&user),
+        Map::from_array(&env, [(gauge_reward_token.address.clone(), total_reward_1)])
+    );
+    assert_eq!(gauge_reward_token.balance(&user) as u128, total_reward_1);
+}
+
+#[test]
+fn test_retroactive_reward_gauge() {
+    let setup = Setup::setup(&TestConfig::default());
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user1, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user1, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user2, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user2, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user3, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user3, &100);
+
+    // 10 seconds. first user depositing before gauge set up
+    jump(&env, 10);
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [100, 100]), &0);
+    liq_pool.deposit(&user3, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 15 seconds. third user withdrawing before gauge set up
+    jump(&env, 5);
+    liq_pool.withdraw(
+        &user3,
+        &(SorobanTokenClient::new(&env, &liq_pool.share_id()).balance(&user3) as u128),
+        &Vec::from_array(&env, [0, 0]),
+    );
+
+    // 20 seconds. gauge set up
+    jump(&env, 5);
+    let gauge_reward_token = create_token_contract(&env, &setup.admin);
+    let distributor = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &gauge_reward_token.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // 30 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    get_token_admin_client(&env, &gauge_reward_token.address)
+        .mint(&distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
+
+    // 40 seconds. second user depositing after gauge set up
+    jump(&env, 30);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 100 seconds. rewards ended. third user depositing after rewards ended
+    jump(&env, 40);
+    liq_pool.deposit(&user3, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 110 seconds. user claims reward
+    jump(&env, 10);
+    assert_eq!(gauge_reward_token.balance(&user1), 0);
+    assert_eq!(gauge_reward_token.balance(&user2), 0);
+    assert_eq!(gauge_reward_token.balance(&user3), 0);
+    // full reward should be available to users. first receives 3/4 of the reward, second receives 1/4 since it joined later
+    assert_eq!(
+        liq_pool.gauges_claim(&user1),
+        Map::from_array(
+            &env,
+            [(gauge_reward_token.address.clone(), total_reward_1 / 4 * 3)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&user2),
+        Map::from_array(
+            &env,
+            [(gauge_reward_token.address.clone(), total_reward_1 / 4)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&user3),
+        Map::from_array(&env, [(gauge_reward_token.address.clone(), 0)])
+    );
+    assert_eq!(
+        gauge_reward_token.balance(&user1) as u128,
+        total_reward_1 / 4 * 3
+    );
+    assert_eq!(
+        gauge_reward_token.balance(&user2) as u128,
+        total_reward_1 / 4
+    );
+    assert_eq!(gauge_reward_token.balance(&user3) as u128, 0);
+}
+
+#[test]
+fn test_reward_info_getter() {
+    let setup = Setup::setup(&TestConfig::default());
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user = Address::generate(&env);
+
+    let epoch_start = env.ledger().timestamp();
+
+    let gauge_reward_token = create_token_contract(&env, &setup.admin);
+    let distributor = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &gauge_reward_token.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // 10 seconds. user depositing
+    jump(&env, 10);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user, &100);
+    liq_pool.deposit(&user, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 20 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    get_token_admin_client(&env, &gauge_reward_token.address)
+        .mint(&distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
+
+    jump(&env, 10);
+    let data = liq_pool.gauges_get_reward_info(&user);
+    assert_eq!(
+        data,
+        Map::from_array(
+            &env,
+            [(
+                gauge_reward_token.address.clone(),
+                Map::from_array(
+                    &env,
+                    [
+                        (Symbol::new(&env, "user_reward"), reward_1_tps as i128 * 10),
+                        (Symbol::new(&env, "tps"), reward_1_tps as i128),
+                        (
+                            Symbol::new(&env, "expired_at"),
+                            epoch_start as i128 + 80_i128
+                        ),
+                    ]
+                )
+            )]
+        )
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #401)")]
+fn test_add_gauge_twice() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #305)")]
+fn test_add_gauges_over_max() {
+    let setup = Setup::setup(&TestConfig::default());
+    for _ in 0..6 {
+        let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+        let gauge = deploy_rewards_gauge(
+            &setup.env,
+            &setup.liq_pool.address,
+            &gauge_reward_token.address,
+        );
+        setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    }
+}
+
+#[test]
+fn test_remove_gauge() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    assert_eq!(setup.liq_pool.get_gauges(), Map::new(&setup.env));
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    assert_eq!(
+        setup.liq_pool.get_gauges(),
+        Map::from_array(
+            &setup.env,
+            [(gauge_reward_token.address.clone(), gauge.address.clone())]
+        )
+    );
+    setup
+        .liq_pool
+        .gauge_remove(&setup.admin, &gauge_reward_token.address);
+    assert_eq!(setup.liq_pool.get_gauges(), Map::new(&setup.env));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #404)")]
+fn test_remove_gauge_twice() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup
+        .liq_pool
+        .gauge_remove(&setup.admin, &gauge_reward_token.address);
+    setup
+        .liq_pool
+        .gauge_remove(&setup.admin, &gauge_reward_token.address);
+}
+
+#[test]
+fn test_gauges_kill_claim() {
+    let setup = Setup::setup(&TestConfig::default());
+    let user = Address::generate(&setup.env);
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_ok());
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_err());
+}
+
+#[test]
+fn test_gauges_kill_claim_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.pause_admin);
+}
+
+#[test]
+fn test_gauges_kill_claim_emergency_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup
+        .liq_pool
+        .kill_gauges_claim(&setup.emergency_pause_admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_gauges_kill_claim_third_user() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup
+        .liq_pool
+        .kill_gauges_claim(&Address::generate(&setup.env));
+}
+
+#[test]
+fn test_gauges_unkill_claim() {
+    let setup = Setup::setup(&TestConfig::default());
+    let user = Address::generate(&setup.env);
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_ok());
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_err());
+    setup.liq_pool.unkill_gauges_claim(&setup.admin);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_ok());
+}
+
+#[test]
+fn test_gauges_unkill_claim_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.pause_admin);
+    setup.liq_pool.unkill_gauges_claim(&setup.pause_admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_gauges_unkill_claim_emergency_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    setup
+        .liq_pool
+        .unkill_gauges_claim(&setup.emergency_pause_admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_gauges_unkill_claim_third_user() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    setup
+        .liq_pool
+        .unkill_gauges_claim(&Address::generate(&setup.env));
+}
+
+#[test]
+fn test_fix_broken_claim() {
+    let setup = Setup::new_with_config(&TestConfig {
+        rewards_count: 0,
+        reward_tps: 0,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    // Mint pool tokens to both users and deposit equal amounts
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    setup.token1_admin_client.mint(&user1, &1_000_0000000);
+    setup.token2_admin_client.mint(&user1, &1_000_0000000);
+    setup.token1_admin_client.mint(&user2, &1_000_0000000);
+    setup.token2_admin_client.mint(&user2, &1_000_0000000);
+
+    let boost_admin = get_token_admin_client(&e, &setup.reward_boost_token.address);
+
+    // first user is regular depositor. uses lock tokens normally
+    boost_admin.mint(&user1, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &10_000_0000000);
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    // second user is the attacker
+    boost_admin.mint(&user2, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &(10_000_0000000 * 2));
+    liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    jump(&e, 1);
+
+    // Configure rewards for 60 seconds @ 1 token/sec and mint exact amount to pool
+    let tps = 1_0000000_u128;
+    let duration = 60_u64;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &e.ledger().timestamp().saturating_add(duration),
+        &tps,
+    );
+    setup.token_reward_admin_client.mint(
+        &liq_pool.address,
+        &((liq_pool.get_total_configured_reward() - liq_pool.get_total_claimed_reward()) as i128),
+    );
+
+    jump(&e, 1);
+    // attacher somehow manages to abuse the system, so reward of two is greater than total configured
+    e.as_contract(&liq_pool.address, || {
+        let storage = get_rewards_manager(&e).storage();
+        let mut user_data = storage.get_user_reward_data(&user2).unwrap();
+        user_data.to_claim += 1_0000000;
+        storage.set_user_reward_data(&user2, &user_data);
+    });
+
+    jump(&e, 60);
+
+    let to_claim1 = liq_pool.get_user_reward(&user1);
+    let to_claim2 = liq_pool.get_user_reward(&user2);
+    assert!(to_claim1 + to_claim2 > liq_pool.get_total_configured_reward());
+
+    // we've got broken rewards for one of the users.
+    // let's say we've fixed the root of the issue, but we still need to deal with consequences
+    assert!(to_claim1 + to_claim2 > tps * duration as u128);
+    // adjust amount to sync the reward
+    assert_ne!(
+        liq_pool.get_total_configured_reward(),
+        to_claim1 + to_claim2
+    );
+    liq_pool.adjust_total_accumulated_reward(
+        &setup.admin,
+        &((to_claim1 + to_claim2 - liq_pool.get_total_configured_reward()) as i128),
+    );
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        to_claim1 + to_claim2
+    );
+    setup.token_reward_admin_client.mint(
+        &liq_pool.address,
+        &(liq_pool.get_total_configured_reward() as i128
+            - setup.token_reward.balance(&liq_pool.address)),
+    );
+
+    // now both can claim
+    let to_claim1 = liq_pool.claim(&user1);
+    let to_claim2 = liq_pool.claim(&user2);
+    assert!(to_claim1 > 0 && to_claim2 > 0);
+    assert_eq!(
+        liq_pool.get_total_configured_reward(),
+        liq_pool.get_total_claimed_reward(),
+    );
+}
+
+#[test]
+fn test_fix_locked_reward_tokens() {
+    let setup = Setup::new_with_config(&TestConfig {
+        rewards_count: 0,
+        reward_tps: 0,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    // Mint pool tokens to both users and deposit equal amounts
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    setup.token1_admin_client.mint(&user1, &1_000_0000000);
+    setup.token2_admin_client.mint(&user1, &1_000_0000000);
+    setup.token1_admin_client.mint(&user2, &1_000_0000000);
+    setup.token2_admin_client.mint(&user2, &1_000_0000000);
+
+    let boost_admin = get_token_admin_client(&e, &setup.reward_boost_token.address);
+
+    // pool reward is overinflated due to historical reasons. we've got 1 locked token we'd like to recover
+    e.as_contract(&liq_pool.address, || {
+        let storage = get_rewards_manager(&e).storage();
+        let mut pool_data = storage.get_pool_reward_data();
+        pool_data.accumulated += 1_0000000;
+        storage.set_pool_reward_data(&pool_data);
+    });
+
+    // users behave normally: simple deposit with boost due to locked tokens
+    boost_admin.mint(&user1, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &10_000_0000000);
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+    boost_admin.mint(&user2, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &(10_000_0000000 * 2));
+    liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    jump(&e, 1);
+
+    // Configure rewards for 60 seconds @ 1 token/sec and mint exact amount to pool
+    let tps = 1_0000000_u128;
+    let duration = 60_u64;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &e.ledger().timestamp().saturating_add(duration),
+        &tps,
+    );
+    setup.token_reward_admin_client.mint(
+        &liq_pool.address,
+        &((liq_pool.get_total_configured_reward() - liq_pool.get_total_claimed_reward()) as i128),
+    );
+
+    jump(&e, 60);
+
+    let claimed1 = liq_pool.claim(&user1);
+    let claimed2 = liq_pool.claim(&user2);
+    assert!(claimed1 + claimed2 < liq_pool.get_total_configured_reward());
+
+    // all users claimed their reward, leaving the frozen token in the pool which we cannot recover
+    assert!(liq_pool.get_total_configured_reward() > liq_pool.get_total_claimed_reward());
+    // the reward doesn't count as unused either
+    assert_eq!(liq_pool.get_unused_reward(), 0);
+    liq_pool.adjust_total_accumulated_reward(&setup.admin, &-1_0000000);
+    // now we see the reward as unused
+    assert_eq!(liq_pool.get_unused_reward(), 1_0000000);
+    // it may be used for the future reward distribution. configure reward for 1 second @ 1tps
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &e.ledger().timestamp().saturating_add(1),
+        &1_0000000,
+    );
+    assert_eq!(liq_pool.get_unused_reward(), 0);
+    assert_eq!(
+        liq_pool.get_total_configured_reward() - liq_pool.get_total_claimed_reward(),
+        1_0000000
+    );
 }

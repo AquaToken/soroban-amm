@@ -1,10 +1,12 @@
 use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Vec};
+use utils::generate_instance_storage_getter;
 
 use crate::normalize;
 use rewards::utils::bump::bump_instance;
 use utils::storage_errors::StorageError;
 use utils::{
+    generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
@@ -27,9 +29,11 @@ enum DataKey {
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledClaim,
+    IsKilledGaugesClaim,
     Plane,
     Router,
     TokenFutureWASM,
+    GaugeFutureWASM,
 
     // Tokens precision
     Precision, // target precision for internal calculations. It's the maximum precision of all tokens.
@@ -39,6 +43,18 @@ enum DataKey {
     ProtocolFees,
 }
 
+generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
+generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
+generate_instance_storage_getter_and_setter!(
+    token_future_wasm,
+    DataKey::TokenFutureWASM,
+    BytesN<32>
+);
+generate_instance_storage_getter_and_setter!(
+    gauge_future_wasm,
+    DataKey::GaugeFutureWASM,
+    BytesN<32>
+);
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_swap,
     DataKey::IsKilledSwap,
@@ -54,6 +70,12 @@ generate_instance_storage_getter_and_setter_with_default!(
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_claim,
     DataKey::IsKilledClaim,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_gauges_claim,
+    DataKey::IsKilledGaugesClaim,
     bool,
     false
 );
@@ -207,38 +229,9 @@ pub fn put_admin_actions_deadline(e: &Env, value: &u64) {
         .set(&DataKey::AdminActionsDeadline, value);
 }
 
-// pool plane
-pub(crate) fn set_plane(e: &Env, plane: &Address) {
-    let key = DataKey::Plane;
-    bump_instance(e);
-    e.storage().instance().set(&key, plane);
-}
-
-pub(crate) fn get_plane(e: &Env) -> Address {
-    let key = DataKey::Plane;
-    match e.storage().instance().get(&key) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
 pub(crate) fn has_plane(e: &Env) -> bool {
     let key = DataKey::Plane;
     e.storage().instance().has(&key)
-}
-
-pub(crate) fn set_router(e: &Env, plane: &Address) {
-    let key = DataKey::Router;
-    bump_instance(e);
-    e.storage().instance().set(&key, plane);
-}
-
-pub(crate) fn get_router(e: &Env) -> Address {
-    let key = DataKey::Router;
-    match e.storage().instance().get(&key) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
 }
 
 // Tokens precision
@@ -275,19 +268,6 @@ pub fn get_precision_mul(e: &Env) -> Vec<u128> {
             set_precision_mul(e, &precision_mul);
             precision_mul
         }
-    }
-}
-
-pub(crate) fn set_token_future_wasm(e: &Env, value: &BytesN<32>) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::TokenFutureWASM, value)
-}
-
-pub(crate) fn get_token_future_wasm(e: &Env) -> BytesN<32> {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::TokenFutureWASM) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
     }
 }
 

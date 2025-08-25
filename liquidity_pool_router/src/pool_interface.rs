@@ -123,7 +123,7 @@ pub trait RewardsInterfaceTrait {
     //   The voting share is a value between 0 and 1, scaled by 1e7 for precision.
     fn config_global_rewards(
         e: Env,
-        user: Address,
+        admin: Address,
         reward_tps: u128,
         expired_at: u64,
         tokens_votes: Vec<(Vec<Address>, u32)>,
@@ -134,7 +134,7 @@ pub trait RewardsInterfaceTrait {
     // # Arguments
     //
     // * `tokens` - A vector of token addresses for which to fill the liquidity.
-    fn fill_liquidity(e: Env, tokens: Vec<Address>);
+    fn fill_liquidity(e: Env, admin: Address, tokens: Vec<Address>);
 
     // Configures the rewards for a specific pool.
     //
@@ -157,7 +157,12 @@ pub trait RewardsInterfaceTrait {
     // * The pool does not exist.
     // * The tokens are not found in the current rewards configuration.
     // * The liquidity for the tokens has not been filled.
-    fn config_pool_rewards(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+    fn config_pool_rewards(
+        e: Env,
+        admin: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128;
 
     // Get rewards status for the pool,
     // including amount available for the user
@@ -245,6 +250,34 @@ pub trait PoolsManagementTrait {
 
     // Returns the protocol fee fraction.
     fn get_protocol_fee_fraction(e: Env) -> u32;
+
+    // Set the reward thresholds for the pool gauge.
+    // When distributor schedules gauge reward, it should be greater than this value.
+    fn pool_gauge_set_reward_thresholds(
+        e: Env,
+        admin: Address,
+        min_reward_equivalent_day: u128,
+        min_duration_seconds: u64,
+    );
+
+    // Switches the rewards gauge for a specific pool token.
+    fn pool_gauge_switch_token(e: Env, admin: Address, token: Address, enabled: bool);
+
+    // Checks if the rewards gauge is enabled for a specific pool token.
+    fn pool_gauge_token_enabled(e: Env, token: Address) -> bool;
+
+    // Schedule an extra LP reward for the pool.
+    fn pool_gauge_schedule_reward(
+        e: Env,
+        distributor: Address,
+        pool_tokens: Vec<Address>,
+        pool_hash: BytesN<32>,
+        reward_token: Address,
+        tps: u128,
+        start_at: Option<u64>,
+        duration: u64,
+        swaps_chain_proof: Vec<(Vec<Address>, BytesN<32>, Address)>,
+    ) -> Address;
 }
 
 pub trait PoolPlaneInterface {

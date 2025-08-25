@@ -219,6 +219,10 @@ pub fn get_liquidity(
     let mut in_amt = get_max_reserve(&xp_norm) * 2;
 
     while !last_iteration {
+        if in_amt <= 1 {
+            // on zero in_amt price is zero. same for 1 because of integer fee on input
+            break;
+        }
         let mut depth = estimate_swap(
             e,
             fee_fraction,
@@ -229,8 +233,8 @@ pub fn get_liquidity(
             out_idx,
             in_amt,
         );
-        if in_amt == 0 || depth == 0 {
-            // on zero depth price is infinite, on zero in_amt price is zero. both are invalid
+        if depth == 0 {
+            // on zero depth price is infinite
             break;
         }
         let mut price = in_amt * PRECISION / depth;

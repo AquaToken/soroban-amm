@@ -153,7 +153,11 @@ impl Manager {
 
         if now <= config.expired_at {
             // config not expired yet, yield rewards
-            let generated_tokens = (now - data.last_time) as u128 * config.tps;
+            let generated_tokens = if working_supply == 0 {
+                0
+            } else {
+                (now - data.last_time) as u128 * config.tps
+            };
             self.create_new_rewards_data(
                 generated_tokens,
                 working_supply,
@@ -168,7 +172,11 @@ impl Manager {
             // Already expired
             if data.last_time < config.expired_at {
                 // last snapshot was before config expiration - yield up to expiration
-                let generated_tokens = (config.expired_at - data.last_time) as u128 * config.tps;
+                let generated_tokens = if working_supply == 0 {
+                    0
+                } else {
+                    (config.expired_at - data.last_time) as u128 * config.tps
+                };
                 data = self.create_new_rewards_data(
                     generated_tokens,
                     working_supply,
@@ -400,7 +408,7 @@ impl Manager {
         self.storage.set_working_supply(new_working_supply);
         self.storage.set_working_balance(user, working_balance);
 
-        (working_balance, new_working_supply)
+        (prev_working_balance, prev_working_supply)
     }
 
     // ------------------------------------
@@ -591,6 +599,18 @@ impl Manager {
         let working_supply = self.get_working_supply(total_shares);
         let data = self.update_rewards_data(working_supply);
         data.accumulated
+    }
+
+    // Adjusts the total accumulated reward for the pool.
+    pub fn adjust_total_accumulated_reward(&mut self, total_shares: u128, diff: i128) {
+        let working_supply = self.get_working_supply(total_shares);
+        let mut data = self.update_rewards_data(working_supply);
+        if diff >= 0 {
+            data.accumulated += diff as u128;
+        } else {
+            data.accumulated -= diff.abs() as u128
+        }
+        self.storage.set_pool_reward_data(&data);
     }
 
     pub fn get_total_claimed_reward(&mut self, total_shares: u128) -> u128 {
