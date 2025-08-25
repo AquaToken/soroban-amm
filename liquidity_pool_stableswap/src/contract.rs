@@ -279,6 +279,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let d0 = Self::_get_d(&e, &Self::_xp(&e, &old_balances), amp);
         for i in 0..n_coins {
             new_balances.set(i, new_balances.get(i).unwrap() - amounts.get(i).unwrap());
+            if new_balances.get_unchecked(i) == 0 {
+                panic_with_error!(&e, LiquidityPoolError::ZeroTokenNotAllowed);
+            }
         }
 
         let d1 = Self::_get_d(&e, &Self::_xp(&e, &new_balances), amp);
@@ -311,6 +314,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             protocol_fees.set(i, protocol_fees.get_unchecked(i) + protocol_fee);
             reserves.set(i, new_balance - protocol_fee);
             new_balances.set(i, new_balance - fee);
+            if new_balances.get_unchecked(i) == 0 {
+                panic_with_error!(&e, LiquidityPoolError::ZeroTokenNotAllowed);
+            }
         }
 
         put_reserves(&e, &reserves);
