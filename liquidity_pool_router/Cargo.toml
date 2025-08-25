@@ -16,8 +16,10 @@ utils = { workspace = true }
 rewards = { workspace = true }
 token_share = { workspace = true }
 liquidity-pool-validation-errors = { workspace = true }
+liquidity-pool-config-storage = { workspace = true }
 upgrade = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 utils = { workspace = true, features = ["testutils"] }
+liquidity-pool-config-storage = { workspace = true, features = ["testutils"] }

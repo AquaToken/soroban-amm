@@ -245,6 +245,38 @@ pub trait PoolsManagementTrait {
 
     // Returns the protocol fee fraction.
     fn get_protocol_fee_fraction(e: Env) -> u32;
+
+    // Set the reward thresholds for the pool gauge.
+    // When distributor schedules gauge reward, it should be greater than this value.
+    fn pool_gauge_set_reward_thresholds(
+        e: Env,
+        admin: Address,
+        min_reward_equivalent_day: u128,
+        min_duration_seconds: u64,
+    );
+
+    // Getters for pool gauge reward thresholds
+    fn pool_gauge_get_min_daily_amount(e: Env) -> u128;
+    fn pool_gauge_get_min_duration(e: Env) -> u64;
+
+    // Switches the rewards gauge for a specific pool token.
+    fn pool_gauge_switch_token(e: Env, admin: Address, token: Address, enabled: bool);
+
+    // Checks if the rewards gauge is enabled for a specific pool token.
+    fn pool_gauge_token_enabled(e: Env, token: Address) -> bool;
+
+    // Schedule an extra LP reward for the pool.
+    fn pool_gauge_schedule_reward(
+        e: Env,
+        distributor: Address,
+        pool_tokens: Vec<Address>,
+        pool_hash: BytesN<32>,
+        reward_token: Address,
+        tps: u128,
+        start_at: Option<u64>,
+        duration: u64,
+        swaps_chain_proof: Vec<(Vec<Address>, BytesN<32>, Address)>,
+    ) -> Address;
 }
 
 pub trait PoolPlaneInterface {

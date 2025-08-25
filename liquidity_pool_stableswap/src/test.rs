@@ -5,15 +5,16 @@ use crate::pool_constants::{FEE_DENOMINATOR, MIN_RAMP_TIME};
 use core::cmp::min;
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Address as _, Events};
-use soroban_sdk::{symbol_short, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec};
+use soroban_sdk::{symbol_short, vec, Address, Env, Error, IntoVal, Map, Symbol, Val, Vec};
 use token_share::Client as ShareTokenClient;
 
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
-    create_token_contract, get_token_admin_client, install_token_wasm,
+    create_token_contract, deploy_rewards_gauge, get_token_admin_client, install_token_wasm,
     install_token_wasm_with_decimal, Setup, TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
+use liquidity_pool_config_storage::testutils::deploy_config_storage;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
@@ -34,6 +35,7 @@ fn test_swap_empty_pool() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token_reward = create_token_contract(&e, &admin1);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
     let liqpool = create_liqpool_contract(
@@ -54,6 +56,7 @@ fn test_swap_empty_pool() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
     assert_eq!(liqpool.estimate_swap(&0, &1, &10_0000000), 0);
     token1_admin_client.mint(&user1, &10_0000000);
@@ -77,6 +80,7 @@ fn test_happy_flow() {
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -95,6 +99,7 @@ fn test_happy_flow() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -316,6 +321,7 @@ fn test_happy_flow_different_decimals() {
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -334,6 +340,7 @@ fn test_happy_flow_different_decimals() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -499,6 +506,7 @@ fn test_events_2_tokens() {
     let user1 = Address::generate(&e);
     let fee = 30_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -517,6 +525,7 @@ fn test_events_2_tokens() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token1_admin_client.mint(&user1, &1000_0000000);
@@ -632,6 +641,7 @@ fn test_events_3_tokens() {
     let user1 = Address::generate(&e);
     let fee = 30_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -653,6 +663,7 @@ fn test_events_3_tokens() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token1_admin_client.mint(&user1, &1000_0000000);
@@ -785,6 +796,7 @@ fn test_events_4_tokens() {
     let user1 = Address::generate(&e);
     let fee = 30_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -811,6 +823,7 @@ fn test_events_4_tokens() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token1_admin_client.mint(&user1, &1000_0000000);
@@ -964,6 +977,7 @@ fn test_pool_imbalance_draw_tokens() {
     let user1 = Address::generate(&e);
     let fee = 50_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -990,6 +1004,7 @@ fn test_pool_imbalance_draw_tokens() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token1_admin_client.mint(&user1, &8734464);
@@ -1030,6 +1045,7 @@ fn test_pool_imbalance_draw_tokens_different_decimals() {
     let user1 = Address::generate(&e);
     let fee = 50_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1056,6 +1072,7 @@ fn test_pool_imbalance_draw_tokens_different_decimals() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token1_admin_client.mint(&user1, &0_873446400000000000);
@@ -1120,6 +1137,7 @@ fn test_pool_zero_swap() {
     let user1 = Address::generate(&e);
     let fee = 50_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1146,6 +1164,7 @@ fn test_pool_zero_swap() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token1_admin_client.mint(&user1, &8734464);
@@ -1175,6 +1194,7 @@ fn test_bad_fee() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     create_liqpool_contract(
         &e,
         &user1,
@@ -1193,6 +1213,7 @@ fn test_bad_fee() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 }
 
@@ -1213,6 +1234,7 @@ fn test_zero_initial_deposit() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1231,6 +1253,7 @@ fn test_zero_initial_deposit() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
     token1_admin_client.mint(&user1, &1000_0000000);
     token2_admin_client.mint(&user1, &1000_0000000);
@@ -1254,6 +1277,7 @@ fn test_zero_deposit_ok() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1272,6 +1296,7 @@ fn test_zero_deposit_ok() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
     token1_admin_client.mint(&user1, &1000_0000000);
     token2_admin_client.mint(&user1, &1000_0000000);
@@ -1300,6 +1325,7 @@ fn test_happy_flow_3_tokens() {
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1325,6 +1351,7 @@ fn test_happy_flow_3_tokens() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -1451,6 +1478,7 @@ fn test_happy_flow_4_tokens() {
     let user1 = Address::generate(&e);
     let fee = 2000_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1477,6 +1505,7 @@ fn test_happy_flow_4_tokens() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -1594,6 +1623,7 @@ fn test_withdraw_partial() {
     let user1 = Address::generate(&e);
     let fee = 0_u128;
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1612,6 +1642,7 @@ fn test_withdraw_partial() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -1676,6 +1707,7 @@ fn test_withdraw_one_token() {
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1694,6 +1726,7 @@ fn test_withdraw_one_token() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -1773,6 +1806,7 @@ fn test_withdraw_one_token_different_decimals() {
     let token7_admin_client = get_token_admin_client(&e, &token7.address);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1791,6 +1825,7 @@ fn test_withdraw_one_token_different_decimals() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -1875,6 +1910,7 @@ fn test_custom_fee() {
         (3000, 6995548), // fee = 30%
     ] {
         let plane = create_plane_contract(&e);
+        let config_storage = deploy_config_storage(&e, &admin1, &admin1);
         let liqpool = create_liqpool_contract(
             &e,
             &user1,
@@ -1893,6 +1929,7 @@ fn test_custom_fee() {
             )
             .address,
             &plane.address,
+            &config_storage.address,
         );
         liqpool.deposit(&user1, &Vec::from_array(&e, [100_0000000, 100_0000000]), &0);
         assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.1);
@@ -1918,6 +1955,50 @@ fn test_custom_fee() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #201)")]
+fn initialize_already_initialized() {
+    let setup = Setup::default();
+
+    let user = Address::generate(&setup.env);
+
+    setup.liq_pool.initialize(
+        &user,
+        &(
+            user.clone(),
+            user.clone(),
+            user.clone(),
+            user.clone(),
+            Vec::from_array(&setup.env, [user.clone()]),
+            user.clone(),
+        ),
+        &user,
+        &install_token_wasm(&setup.env),
+        &Vec::from_array(
+            &setup.env,
+            [setup.token1.address.clone(), setup.token2.address.clone()],
+        ),
+        &10,
+        &(30, 5000),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #202)")]
+fn initialize_already_initialized_plane() {
+    let setup = Setup::default();
+    setup.liq_pool.init_pools_plane(&setup.plane.address);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #201)")]
+fn initialize_already_initialized_config_storage() {
+    let setup = Setup::default();
+    setup
+        .liq_pool
+        .init_config_storage(&setup.admin, &setup.plane.address);
+}
+
+#[test]
 fn test_deposit_inequal() {
     let e = Env::default();
     e.mock_all_auths();
@@ -1933,6 +2014,7 @@ fn test_deposit_inequal() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -1951,6 +2033,7 @@ fn test_deposit_inequal() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -1983,6 +2066,7 @@ fn test_deposit_inequal_different_decimals() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -2001,6 +2085,7 @@ fn test_deposit_inequal_different_decimals() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -2041,6 +2126,7 @@ fn test_remove_liquidity_imbalance() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -2059,6 +2145,7 @@ fn test_remove_liquidity_imbalance() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -2142,6 +2229,7 @@ fn test_remove_liquidity_imbalance_different_decimals() {
     let token_reward = create_token_contract(&e, &admin1);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -2160,6 +2248,7 @@ fn test_remove_liquidity_imbalance_different_decimals() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let token_share = SorobanTokenClient::new(&e, &liqpool.share_id());
@@ -2218,6 +2307,7 @@ fn test_simple_ongoing_reward() {
 
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -2236,6 +2326,7 @@ fn test_simple_ongoing_reward() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token_reward_admin_client.mint(&liqpool.address, &1_000_000_0000000);
@@ -2282,6 +2373,7 @@ fn test_simple_ongoing_reward_different_decimals() {
 
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -2300,6 +2392,7 @@ fn test_simple_ongoing_reward_different_decimals() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token_reward_admin_client.mint(&liqpool.address, &1_000_000_0000000);
@@ -2346,6 +2439,7 @@ fn test_simple_reward() {
 
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -2364,6 +2458,7 @@ fn test_simple_reward() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token1_admin_client.mint(&user1, &1000);
@@ -2420,6 +2515,7 @@ fn test_two_users_rewards() {
     let user2 = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -2438,6 +2534,7 @@ fn test_two_users_rewards() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token_reward_admin_client.mint(&liqpool.address, &1_000_000_0000000);
@@ -2660,6 +2757,7 @@ fn test_lazy_user_rewards() {
     let user2 = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &user1,
@@ -2678,6 +2776,7 @@ fn test_lazy_user_rewards() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token_reward_admin_client.mint(&liqpool.address, &1_000_000_0000000);
@@ -2747,6 +2846,7 @@ fn test_config_rewards_not_admin() {
         )
         .address,
         &(create_plane_contract(&e).address),
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
 
     liqpool.set_rewards_config(
@@ -2789,6 +2889,7 @@ fn test_config_rewards_router() {
         )
         .address,
         &(create_plane_contract(&e).address),
+        &deploy_config_storage(&e, &admin, &admin).address,
     );
 
     liqpool.set_rewards_config(&router, &e.ledger().timestamp().saturating_add(60), &1);
@@ -2811,6 +2912,7 @@ fn test_update_fee_too_early() {
     let pool_admin_original = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -2829,6 +2931,7 @@ fn test_update_fee_too_early() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     liqpool.commit_new_fee(&pool_admin_original, &30);
@@ -2853,6 +2956,7 @@ fn test_update_fee() {
     let pool_admin_original = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -2871,6 +2975,7 @@ fn test_update_fee() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     liqpool.commit_new_fee(&pool_admin_original, &30);
@@ -2899,6 +3004,7 @@ fn test_transfer_ownership_too_early() {
     let pool_admin_new = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -2917,6 +3023,7 @@ fn test_transfer_ownership_too_early() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     liqpool.commit_transfer_ownership(
@@ -2948,6 +3055,7 @@ fn test_transfer_ownership_twice() {
     let pool_admin_new = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -2966,6 +3074,7 @@ fn test_transfer_ownership_twice() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     liqpool.commit_transfer_ownership(
@@ -2997,6 +3106,7 @@ fn test_transfer_ownership_not_committed() {
     let pool_admin_original = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -3015,6 +3125,7 @@ fn test_transfer_ownership_not_committed() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     jump(&e, ADMIN_ACTIONS_DELAY + 1);
@@ -3039,6 +3150,7 @@ fn test_transfer_ownership_reverted() {
     let pool_admin_new = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -3057,6 +3169,7 @@ fn test_transfer_ownership_reverted() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     liqpool.commit_transfer_ownership(
@@ -3088,6 +3201,7 @@ fn test_transfer_ownership() {
     let pool_admin_new = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -3106,6 +3220,7 @@ fn test_transfer_ownership() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     liqpool.commit_transfer_ownership(
@@ -3137,6 +3252,7 @@ fn test_ramp_a_too_early() {
     let pool_admin_original = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -3155,6 +3271,7 @@ fn test_ramp_a_too_early() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     jump(&e, MIN_RAMP_TIME - 1);
@@ -3183,6 +3300,7 @@ fn test_ramp_a_too_short() {
     let pool_admin_original = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -3201,6 +3319,7 @@ fn test_ramp_a_too_short() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     jump(&e, MIN_RAMP_TIME + 1);
@@ -3229,6 +3348,7 @@ fn test_ramp_a_too_fast() {
     let pool_admin_original = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -3247,6 +3367,7 @@ fn test_ramp_a_too_fast() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     jump(&e, MIN_RAMP_TIME + 1);
@@ -3274,6 +3395,7 @@ fn test_ramp_a() {
     let pool_admin_original = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &pool_admin_original,
@@ -3292,6 +3414,7 @@ fn test_ramp_a() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     jump(&e, MIN_RAMP_TIME + 1);
@@ -3325,6 +3448,7 @@ fn test_deposit_min_mint() {
 
     let pool_admin = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
 
     let liqpool = create_liqpool_contract(
         &e,
@@ -3344,6 +3468,7 @@ fn test_deposit_min_mint() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let user1 = Address::generate(&e);
@@ -3375,6 +3500,7 @@ fn test_deposit_inequal_ok() {
 
     let pool_admin = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
 
     let liqpool = create_liqpool_contract(
         &e,
@@ -3394,6 +3520,7 @@ fn test_deposit_inequal_ok() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let user1 = Address::generate(&e);
@@ -3444,6 +3571,7 @@ fn test_large_numbers() {
 
     let pool_admin = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
 
     let liqpool = create_liqpool_contract(
         &e,
@@ -3463,6 +3591,7 @@ fn test_large_numbers() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     let user1 = Address::generate(&e);
@@ -3574,6 +3703,7 @@ fn test_kill_deposit() {
     let admin = Address::generate(&e);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &admin,
@@ -3592,6 +3722,7 @@ fn test_kill_deposit() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
     assert_eq!(liqpool.get_is_killed_swap(), false);
@@ -3663,6 +3794,7 @@ fn test_kill_swap() {
     let admin = Address::generate(&e);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &admin,
@@ -3681,6 +3813,7 @@ fn test_kill_swap() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
     assert_eq!(liqpool.get_is_killed_deposit(), false);
     assert_eq!(liqpool.get_is_killed_swap(), false);
@@ -3751,6 +3884,7 @@ fn test_kill_claim() {
     let admin = Address::generate(&e);
     let user1 = Address::generate(&e);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin1, &admin1);
     let liqpool = create_liqpool_contract(
         &e,
         &admin,
@@ -3769,6 +3903,7 @@ fn test_kill_claim() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     assert_eq!(liqpool.get_is_killed_deposit(), false);
@@ -3855,6 +3990,7 @@ fn test_withdraw_rewards() {
     let mut token2 = create_token_contract(&e, &admin);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
 
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
@@ -3883,6 +4019,7 @@ fn test_withdraw_rewards() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
     let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
@@ -3961,6 +4098,7 @@ fn test_deposit_rewards() {
     let mut token2 = create_token_contract(&e, &admin);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
 
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
@@ -3989,6 +4127,7 @@ fn test_deposit_rewards() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     liq_pool.set_rewards_config(
@@ -4022,6 +4161,7 @@ fn test_swap_rewards() {
     let mut token2 = create_token_contract(&e, &admin);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
 
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
@@ -4051,6 +4191,7 @@ fn test_swap_rewards() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
     let liq_pool2 = create_liqpool_contract(
         &e,
@@ -4070,6 +4211,7 @@ fn test_swap_rewards() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
     token1_admin_client.mint(&user1, &200_0000000);
     token2_admin_client.mint(&user1, &200_0000000);
@@ -4157,6 +4299,7 @@ fn test_decimals_in_swap_pool() {
     let mut token1 = install_token_wasm_with_decimal(&e, &admin, 18u32);
     let mut token2 = install_token_wasm_with_decimal(&e, &admin, 12u32);
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
 
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
@@ -4184,6 +4327,7 @@ fn test_decimals_in_swap_pool() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     assert_eq!(
@@ -4209,6 +4353,7 @@ fn test_claim_rewards() {
     let mut token2 = create_token_contract(&e, &admin);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
 
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
@@ -4237,6 +4382,7 @@ fn test_claim_rewards() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     token1_admin_client.mint(&user1, &100_0000000);
@@ -4275,6 +4421,7 @@ fn test_drain_reward() {
     let mut token2 = create_token_contract(&e, &admin);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
 
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
@@ -4307,6 +4454,7 @@ fn test_drain_reward() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
     let token_share = SorobanTokenClient::new(&e, &liq_pool.share_id());
 
@@ -4369,6 +4517,7 @@ fn test_drain_reserves() {
     let mut token2 = create_token_contract(&e, &admin);
 
     let plane = create_plane_contract(&e);
+    let config_storage = deploy_config_storage(&e, &admin, &admin);
 
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
@@ -4397,6 +4546,7 @@ fn test_drain_reserves() {
         )
         .address,
         &plane.address,
+        &config_storage.address,
     );
 
     liq_pool.set_rewards_config(
@@ -4928,8 +5078,14 @@ fn test_upgrade_events() {
     let contract = setup.liq_pool;
     let new_wasm_hash = install_dummy_wasm(&setup.env);
     let token_new_wasm_hash = install_dummy_wasm(&setup.env);
+    let gauge_new_wasm_hash = install_dummy_wasm(&setup.env);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
+    contract.commit_upgrade(
+        &setup.admin,
+        &new_wasm_hash,
+        &token_new_wasm_hash,
+        &gauge_new_wasm_hash,
+    );
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![
@@ -4937,7 +5093,12 @@ fn test_upgrade_events() {
             (
                 contract.address.clone(),
                 (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
-                (new_wasm_hash.clone(), token_new_wasm_hash.clone()).into_val(&setup.env),
+                (
+                    new_wasm_hash.clone(),
+                    token_new_wasm_hash.clone(),
+                    gauge_new_wasm_hash.clone()
+                )
+                    .into_val(&setup.env),
             ),
         ]
     );
@@ -4955,7 +5116,12 @@ fn test_upgrade_events() {
         ]
     );
 
-    contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
+    contract.commit_upgrade(
+        &setup.admin,
+        &new_wasm_hash,
+        &token_new_wasm_hash,
+        &gauge_new_wasm_hash,
+    );
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
@@ -5016,7 +5182,7 @@ fn test_emergency_upgrade() {
     assert_ne!(token.version(), 130);
     contract.set_emergency_mode(&setup.emergency_admin, &true);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_wasm);
     contract.apply_upgrade(&setup.admin);
 
     assert_eq!(contract.version(), 130);
@@ -5031,7 +5197,7 @@ fn test_apply_emergency_upgrade_not_commited() {
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
-    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_wasm);
     contract.revert_upgrade(&setup.admin);
 
     contract.set_emergency_mode(&setup.emergency_admin, &true);
@@ -5055,7 +5221,7 @@ fn test_regular_upgrade_token() {
     assert_ne!(contract.version(), 130);
     assert_ne!(token.version(), 130);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm, &token_wasm);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &token_wasm, &new_wasm);
     assert!(contract.try_apply_upgrade(&setup.admin).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert_eq!(
@@ -5072,16 +5238,21 @@ fn test_regular_upgrade_pool() {
     let setup = Setup::default();
     let contract = setup.liq_pool;
     let token = ShareTokenClient::new(&setup.env, &contract.share_id());
+    let gauge = deploy_rewards_gauge(&setup.env, &contract.address, &setup.token_reward.address);
 
     let new_wasm = install_dummy_wasm(&setup.env);
     let new_token_wasm = install_dummy_wasm(&setup.env);
+    let new_gauge_wasm = install_dummy_wasm(&setup.env);
 
     // dummy wasm has version 130, everything else has greater version
     assert_eq!(contract.get_emergency_mode(), false);
     assert_ne!(contract.version(), 130);
     assert_ne!(token.version(), 130);
+    assert_ne!(gauge.version(), 130);
 
-    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
+    // add gauge to pool
+    contract.gauge_add(&setup.admin, &gauge.address);
+    contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm, &new_gauge_wasm);
     assert!(contract.try_apply_upgrade(&setup.admin).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert_eq!(
@@ -5091,6 +5262,7 @@ fn test_regular_upgrade_pool() {
 
     assert_eq!(contract.version(), 130);
     assert_eq!(token.version(), 130);
+    assert_eq!(gauge.version(), 130);
 }
 
 #[test]
@@ -5226,6 +5398,7 @@ fn test_custom_protocol_fee() {
             &setup.reward_boost_token.address,
             &setup.reward_boost_feed.address,
             &setup.plane.address,
+            &setup.config_storage.address,
         );
         liqpool.set_protocol_fee_fraction(&setup.admin, &protocol_fee_fraction);
         liqpool.deposit(
@@ -5270,6 +5443,403 @@ fn test_custom_protocol_fee() {
             protocol_fee_amount
         );
     }
+}
+
+#[test]
+fn test_simple_reward_gauge() {
+    let setup = Setup::setup(&TestConfig::default());
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user = Address::generate(&env);
+
+    let gauge_reward_token = create_token_contract(&env, &setup.admin);
+    let distributor = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &gauge_reward_token.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // 10 seconds. user depositing
+    jump(&env, 10);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user, &100);
+    liq_pool.deposit(&user, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 20 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    get_token_admin_client(&env, &gauge_reward_token.address)
+        .mint(&distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
+
+    // 90 seconds. rewards ended.
+    jump(&env, 70);
+    // 100 seconds. user claim reward
+    jump(&env, 10);
+    assert_eq!(gauge_reward_token.balance(&user), 0);
+    // full reward should be available to the user
+    assert_eq!(
+        liq_pool.gauges_claim(&user),
+        Map::from_array(&env, [(gauge_reward_token.address.clone(), total_reward_1)])
+    );
+    assert_eq!(gauge_reward_token.balance(&user) as u128, total_reward_1);
+}
+
+#[test]
+fn test_retroactive_reward_gauge() {
+    let setup = Setup::setup(&TestConfig::default());
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user1, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user1, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user2, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user2, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user3, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user3, &100);
+
+    // 10 seconds. first user depositing before gauge set up
+    jump(&env, 10);
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [100, 100]), &0);
+    liq_pool.deposit(&user3, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 15 seconds. third user withdrawing before gauge set up
+    jump(&env, 5);
+    liq_pool.withdraw(
+        &user3,
+        &(SorobanTokenClient::new(&env, &liq_pool.share_id()).balance(&user3) as u128),
+        &Vec::from_array(&env, [0, 0]),
+    );
+
+    // 20 seconds. gauge set up
+    jump(&env, 5);
+    let gauge_reward_token = create_token_contract(&env, &setup.admin);
+    let distributor = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &gauge_reward_token.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // 30 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    get_token_admin_client(&env, &gauge_reward_token.address)
+        .mint(&distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
+
+    // 40 seconds. second user depositing after gauge set up
+    jump(&env, 30);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 100 seconds. rewards ended. third user depositing after rewards ended
+    jump(&env, 40);
+    liq_pool.deposit(&user3, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 110 seconds. user claims reward
+    jump(&env, 10);
+    assert_eq!(gauge_reward_token.balance(&user1), 0);
+    assert_eq!(gauge_reward_token.balance(&user2), 0);
+    assert_eq!(gauge_reward_token.balance(&user3), 0);
+    // full reward should be available to users. first receives 3/4 of the reward, second receives 1/4 since it joined later
+    assert_eq!(
+        liq_pool.gauges_claim(&user1),
+        Map::from_array(
+            &env,
+            [(gauge_reward_token.address.clone(), total_reward_1 / 4 * 3)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&user2),
+        Map::from_array(
+            &env,
+            [(gauge_reward_token.address.clone(), total_reward_1 / 4)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&user3),
+        Map::from_array(&env, [(gauge_reward_token.address.clone(), 0)])
+    );
+    assert_eq!(
+        gauge_reward_token.balance(&user1) as u128,
+        total_reward_1 / 4 * 3
+    );
+    assert_eq!(
+        gauge_reward_token.balance(&user2) as u128,
+        total_reward_1 / 4
+    );
+    assert_eq!(gauge_reward_token.balance(&user3) as u128, 0);
+}
+
+#[test]
+fn test_reward_info_getter() {
+    let setup = Setup::setup(&TestConfig::default());
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user = Address::generate(&env);
+
+    let epoch_start = env.ledger().timestamp();
+
+    let gauge_reward_token = create_token_contract(&env, &setup.admin);
+    let distributor = Address::generate(&env);
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &gauge_reward_token.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // 10 seconds. user depositing
+    jump(&env, 10);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user, &100);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user, &100);
+    liq_pool.deposit(&user, &Vec::from_array(&env, [100, 100]), &0);
+
+    // 20 seconds. rewards set up for 60 seconds
+    jump(&env, 10);
+    let reward_1_tps = 10_5000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    get_token_admin_client(&env, &gauge_reward_token.address)
+        .mint(&distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
+
+    jump(&env, 10);
+    let data = liq_pool.gauges_get_reward_info(&user);
+    assert_eq!(
+        data,
+        Map::from_array(
+            &env,
+            [(
+                gauge_reward_token.address.clone(),
+                Map::from_array(
+                    &env,
+                    [
+                        (Symbol::new(&env, "user_reward"), reward_1_tps as i128 * 10),
+                        (Symbol::new(&env, "tps"), reward_1_tps as i128),
+                        (
+                            Symbol::new(&env, "expired_at"),
+                            epoch_start as i128 + 80_i128
+                        ),
+                    ]
+                )
+            )]
+        )
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #401)")]
+fn test_add_gauge_twice() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #305)")]
+fn test_add_gauges_over_max() {
+    let setup = Setup::setup(&TestConfig::default());
+    for _ in 0..6 {
+        let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+        let gauge = deploy_rewards_gauge(
+            &setup.env,
+            &setup.liq_pool.address,
+            &gauge_reward_token.address,
+        );
+        setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    }
+}
+
+#[test]
+fn test_remove_gauge() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    assert_eq!(setup.liq_pool.get_gauges(), Map::new(&setup.env));
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    assert_eq!(
+        setup.liq_pool.get_gauges(),
+        Map::from_array(
+            &setup.env,
+            [(gauge_reward_token.address.clone(), gauge.address.clone())]
+        )
+    );
+    setup
+        .liq_pool
+        .gauge_remove(&setup.admin, &gauge_reward_token.address);
+    assert_eq!(setup.liq_pool.get_gauges(), Map::new(&setup.env));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #404)")]
+fn test_remove_gauge_twice() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup
+        .liq_pool
+        .gauge_remove(&setup.admin, &gauge_reward_token.address);
+    setup
+        .liq_pool
+        .gauge_remove(&setup.admin, &gauge_reward_token.address);
+}
+
+#[test]
+fn test_gauges_kill_claim() {
+    let setup = Setup::setup(&TestConfig::default());
+    let user = Address::generate(&setup.env);
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_ok());
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_err());
+}
+
+#[test]
+fn test_gauges_kill_claim_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.pause_admin);
+}
+
+#[test]
+fn test_gauges_kill_claim_emergency_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup
+        .liq_pool
+        .kill_gauges_claim(&setup.emergency_pause_admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_gauges_kill_claim_third_user() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup
+        .liq_pool
+        .kill_gauges_claim(&Address::generate(&setup.env));
+}
+
+#[test]
+fn test_gauges_unkill_claim() {
+    let setup = Setup::setup(&TestConfig::default());
+    let user = Address::generate(&setup.env);
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_ok());
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_err());
+    setup.liq_pool.unkill_gauges_claim(&setup.admin);
+    assert!(setup.liq_pool.try_gauges_claim(&user).is_ok());
+}
+
+#[test]
+fn test_gauges_unkill_claim_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.pause_admin);
+    setup.liq_pool.unkill_gauges_claim(&setup.pause_admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_gauges_unkill_claim_emergency_pause_admin() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    setup
+        .liq_pool
+        .unkill_gauges_claim(&setup.emergency_pause_admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn test_gauges_unkill_claim_third_user() {
+    let setup = Setup::setup(&TestConfig::default());
+    let gauge_reward_token = create_token_contract(&setup.env, &setup.admin);
+    let gauge = deploy_rewards_gauge(
+        &setup.env,
+        &setup.liq_pool.address,
+        &gauge_reward_token.address,
+    );
+    setup.liq_pool.gauge_add(&setup.admin, &gauge.address);
+    setup.liq_pool.kill_gauges_claim(&setup.admin);
+    setup
+        .liq_pool
+        .unkill_gauges_claim(&Address::generate(&setup.env));
 }
 
 #[test]

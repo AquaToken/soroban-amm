@@ -12,8 +12,8 @@ tasks:
   build:
     cmds:
       - soroban contract build --package soroban-fees-collector-contract
-      - soroban contract optimize --wasm ../target/wasm32v1-none/release/soroban_fees_collector_contract.wasm --wasm-out ../target/wasm32v1-none/release/soroban_fees_collector_contract.wasm
-      - ls -l ../target/wasm32v1-none/release/*.wasm
+      - soroban contract optimize --wasm ../target/wasm32v1-none/release/soroban_fees_collector_contract.wasm --wasm-out ../contracts/soroban_fees_collector_contract.wasm
+      - ls -l ../contracts/*.wasm
 
   test:
     deps:

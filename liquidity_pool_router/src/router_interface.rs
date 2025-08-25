@@ -27,6 +27,9 @@ pub trait AdminInterface {
     // Set stableswap pool wasm hash
     fn set_stableswap_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>);
 
+    // Set rewards gauge wasm hash
+    fn set_rewards_gauge_hash(e: Env, admin: Address, new_hash: BytesN<32>);
+
     // Configure stableswap init payment: token address, amount and destination address
     fn configure_init_pool_payment(
         e: Env,

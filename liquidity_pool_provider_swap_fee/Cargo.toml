@@ -17,3 +17,4 @@ soroban-fixed-point-math = { workspace = true }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 utils = { workspace = true, features = ["testutils"] }
+liquidity-pool-config-storage = { workspace = true, features = ["testutils"] }

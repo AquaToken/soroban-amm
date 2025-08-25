@@ -1,0 +1,10 @@
+[package]
+name = "liqidity-pool-rewards-gauge"
+edition = "2021"
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+soroban-sdk = {workspace = true}
+utils = {workspace = true}
+paste = {workspace = true}

@@ -120,7 +120,12 @@ impl UpgradeableContract for ProviderSwapFeeFactory {
     // Returns:
     //   - A u32 representing the version.
     fn version() -> u32 {
-        160
+        170
+    }
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "SwapFeeFactory")
     }
 
     // commit_upgrade
