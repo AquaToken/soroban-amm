@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "access_control"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "liquidity-pool-validation-errors",
  "soroban-sdk",
@@ -683,7 +683,7 @@ checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
 
 [[package]]
 name = "integration-tests"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "soroban-sdk",
 ]
@@ -746,28 +746,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 
 [[package]]
+name = "liqidity-pool-rewards-gauge"
+version = "1.7.0"
+dependencies = [
+ "paste",
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
+name = "liquidity-pool-config-storage"
+version = "1.7.0"
+dependencies = [
+ "paste",
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
 name = "liquidity-pool-events"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "soroban-sdk",
 ]
 
 [[package]]
 name = "liquidity-pool-validation-errors"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "soroban-sdk",
-]
-
-[[package]]
-name = "locker-feed"
-version = "1.5.0"
-dependencies = [
- "access_control",
- "paste",
- "soroban-sdk",
- "upgrade",
- "utils",
 ]
 
 [[package]]
@@ -932,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "rewards"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
@@ -1174,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-fees-collector-contract"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -1206,9 +1213,11 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-contract"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "access_control",
+ "liqidity-pool-rewards-gauge",
+ "liquidity-pool-config-storage",
  "liquidity-pool-events",
  "liquidity-pool-validation-errors",
  "paste",
@@ -1222,7 +1231,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-liquidity-calculator-contract"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "access_control",
  "soroban-fixed-point-math",
@@ -1232,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-plane-contract"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -1241,8 +1250,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-provider-swap-fee-contract"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
+ "liquidity-pool-config-storage",
  "paste",
  "soroban-fixed-point-math",
  "soroban-sdk",
@@ -1251,9 +1261,10 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-provider-swap-fee-factory-contract"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "access_control",
+ "liquidity-pool-config-storage",
  "paste",
  "soroban-sdk",
  "upgrade",
@@ -1262,9 +1273,10 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-router-contract"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "access_control",
+ "liquidity-pool-config-storage",
  "liquidity-pool-validation-errors",
  "paste",
  "rewards",
@@ -1276,9 +1288,11 @@ dependencies = [
 
 [[package]]
 name = "soroban-liquidity-pool-stableswap-contract"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "access_control",
+ "liqidity-pool-rewards-gauge",
+ "liquidity-pool-config-storage",
  "liquidity-pool-events",
  "liquidity-pool-validation-errors",
  "paste",
@@ -1286,6 +1300,28 @@ dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
+ "upgrade",
+ "utils",
+]
+
+[[package]]
+name = "soroban-locker-feed-contract"
+version = "1.7.0"
+dependencies = [
+ "access_control",
+ "paste",
+ "soroban-sdk",
+ "upgrade",
+ "utils",
+]
+
+[[package]]
+name = "soroban-rewards-gauge-contract"
+version = "1.7.0"
+dependencies = [
+ "access_control",
+ "paste",
+ "soroban-sdk",
  "upgrade",
  "utils",
 ]
@@ -1362,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-token-contract"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -1391,6 +1427,16 @@ dependencies = [
  "wasmi_arena",
  "wasmi_core",
  "wasmparser-nostd",
+]
+
+[[package]]
+name = "soroban_config_storage_contract"
+version = "1.7.0"
+dependencies = [
+ "access_control",
+ "soroban-sdk",
+ "upgrade",
+ "utils",
 ]
 
 [[package]]
@@ -1527,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "token_share"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "soroban-sdk",
  "utils",
@@ -1547,7 +1593,7 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 
 [[package]]
 name = "upgrade"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -1556,7 +1602,7 @@ dependencies = [
 
 [[package]]
 name = "utils"
-version = "1.5.0"
+version = "1.7.0"
 dependencies = [
  "soroban-sdk",
 ]

@@ -11,12 +11,14 @@ tasks:
 
   build:
     cmds:
+      - task -d ../config_storage build || exit 1
+      - task -d ../rewards_gauge build || exit 1
       - task -d ../liquidity_pool build || exit 1
       - task -d ../liquidity_pool_stableswap build || exit 1
       - task -d ../liquidity_pool_liquidity_calculator build || exit 1
       - soroban contract build --package soroban-liquidity-pool-router-contract
-      - soroban contract optimize --wasm ../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm --wasm-out ../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm
-      - ls -l ../target/wasm32v1-none/release/*.wasm
+      - soroban contract optimize --wasm ../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm --wasm-out ../contracts/soroban_liquidity_pool_router_contract.wasm
+      - ls -l ../contracts/*.wasm
 
   test:
     deps:

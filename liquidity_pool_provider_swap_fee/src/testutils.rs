@@ -1,6 +1,8 @@
+#![allow(dead_code)]
 #![cfg(test)]
 extern crate std;
 use crate::ProviderSwapFeeCollectorClient;
+use liquidity_pool_config_storage::testutils::deploy_config_storage;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -70,6 +72,7 @@ impl Setup<'_> {
         let boost_feed = create_reward_boost_feed_contract(&e, &admin);
         let router = deploy_liqpool_router_contract(e.clone());
         router.init_admin(&admin);
+        router.init_config_storage(&admin, &deploy_config_storage(&e, &admin, &admin).address);
         router.set_pool_hash(&admin, &pool_hash);
         router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&e));
         router.set_token_hash(&admin, &token_hash);
@@ -83,6 +86,7 @@ impl Setup<'_> {
             &router.address,
         );
         router.set_reward_boost_config(&admin, &token_a.address, &boost_feed.address);
+        router.set_protocol_fee_fraction(&admin, &5000);
 
         // create swap pool & deposit initial liquidity
         token_a_admin_client.mint(&admin, &10_0000000);
@@ -133,9 +137,7 @@ pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanToke
 }
 
 pub mod liquidity_pool {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_contract.wasm");
 }
 
 pub(crate) fn get_token_admin_client<'a>(
@@ -164,9 +166,7 @@ pub fn create_contract<'a>(
 }
 
 pub mod swap_router {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_router_contract.wasm");
 }
 
 fn deploy_liqpool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
@@ -174,37 +174,29 @@ fn deploy_liqpool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
 }
 
 fn install_token_wasm(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_token_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_token_contract.wasm");
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_contract.wasm");
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_stableswap_contract.wasm"
+        file = "../contracts/soroban_liquidity_pool_stableswap_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 fn deploy_plane_contract<'a>(e: &Env) -> Address {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_plane_contract.wasm");
     Client::new(e, &e.register(WASM, ())).address
 }
 
 mod reward_boost_feed {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../contracts/soroban_locker_feed_contract.wasm");
 }
 
 pub(crate) fn create_reward_boost_feed_contract<'a>(

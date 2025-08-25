@@ -3,7 +3,7 @@ extern crate std;
 
 use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_POOLS};
 use crate::testutils;
-use crate::testutils::{create_plane_contract, test_token, Setup};
+use crate::testutils::{create_plane_contract, create_token_contract, test_token, Setup};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
     AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
@@ -2989,6 +2989,550 @@ fn test_protocol_fee_inheritance() {
     let pool2_client = testutils::standard_pool::Client::new(&setup.env, &pool2_address);
     assert_eq!(pool1_client.get_protocol_fee_fraction(), 5000);
     assert_eq!(pool2_client.get_protocol_fee_fraction(), 1000);
+}
+
+#[test]
+fn test_setup_rewards_gauge() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
+    let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
+    assert_eq!(pool_client.get_gauges(), Map::new(&e),);
+    let distributor = Address::generate(&e);
+    let gauge_token = create_token_contract(&e, &distributor);
+    gauge_token.mint(&setup.admin, &1_000_0000000);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token1.address, &true);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token2.address, &true);
+
+    // create pool for gauge token vs reward token for swaps chain proof
+    let proof_tokens = match setup.reward_token.address < gauge_token.address {
+        false => vec![
+            &e,
+            gauge_token.address.clone(),
+            setup.reward_token.address.clone(),
+        ],
+        true => vec![
+            &e,
+            setup.reward_token.address.clone(),
+            gauge_token.address.clone(),
+        ],
+    };
+    setup.reward_token.mint(&setup.admin, &2_000_0000000);
+    let (proof_pool_hash, _proof_pool_address) =
+        setup
+            .router
+            .init_standard_pool(&setup.admin, &proof_tokens, &30);
+    setup.router.deposit(
+        &setup.admin,
+        &proof_tokens,
+        &proof_pool_hash,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    gauge_token.mint(&distributor, &(1200 * 7 * 24 * 60 * 60 * 2));
+    let rewards_gauge = setup.router.pool_gauge_schedule_reward(
+        &distributor,
+        &tokens,
+        &pool_hash,
+        &gauge_token.address,
+        &1173, // 10_1347200 / day. min amount to distribute considering the pool slippage
+        &None,
+        &(7 * 24 * 60 * 60), // 1 week
+        &vec![
+            &e,
+            (
+                proof_tokens.clone(),
+                proof_pool_hash.clone(),
+                setup.reward_token.address.clone(),
+            ),
+        ],
+    );
+    // configure again for the next week
+    assert_eq!(
+        setup.router.pool_gauge_schedule_reward(
+            &distributor,
+            &tokens,
+            &pool_hash,
+            &gauge_token.address,
+            &1173, // 10_1347200 / day. min amount to distribute considering the pool slippage
+            &Some(100), // overlapping reward starting from 100 second
+            &(7 * 24 * 60 * 60), // 1 week
+            &vec![
+                &e,
+                (
+                    proof_tokens,
+                    proof_pool_hash,
+                    setup.reward_token.address.clone(),
+                ),
+            ],
+        ),
+        rewards_gauge,
+    );
+    assert_eq!(
+        pool_client.get_gauges(),
+        Map::from_array(&e, [(gauge_token.address.clone(), rewards_gauge.clone())])
+    );
+    assert_eq!(
+        testutils::rewards_gauge::Client::new(&e, &rewards_gauge).get_reward_token(),
+        gauge_token.address,
+    );
+}
+
+#[test]
+fn test_pool_gauge_token_switch_events() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let [token1, _, _, _] = setup.tokens;
+    for val in [true, false] {
+        setup
+            .router
+            .pool_gauge_switch_token(&setup.admin, &token1.address, &val);
+        assert_eq!(
+            vec![&e, e.events().all().last().unwrap()],
+            vec![
+                &e,
+                (
+                    setup.router.address.clone(),
+                    (
+                        Symbol::new(&e, "pool_gauge_switch_token"),
+                        token1.address.clone(),
+                    )
+                        .into_val(&e),
+                    (val,).into_val(&e)
+                ),
+            ]
+        );
+    }
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #319)")]
+fn test_setup_rewards_gauge_token_not_enabled() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
+    let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
+    assert_eq!(pool_client.get_gauges(), Map::new(&e),);
+    let distributor = Address::generate(&e);
+    let gauge_token = create_token_contract(&e, &distributor);
+    gauge_token.mint(&setup.admin, &1_000_0000000);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token1.address, &true);
+    // token2 not enabled
+
+    // create pool for gauge token vs reward token for swaps chain proof
+    let proof_tokens = match setup.reward_token.address < gauge_token.address {
+        false => vec![
+            &e,
+            gauge_token.address.clone(),
+            setup.reward_token.address.clone(),
+        ],
+        true => vec![
+            &e,
+            setup.reward_token.address.clone(),
+            gauge_token.address.clone(),
+        ],
+    };
+    setup.reward_token.mint(&setup.admin, &2_000_0000000);
+    let (proof_pool_hash, _proof_pool_address) =
+        setup
+            .router
+            .init_standard_pool(&setup.admin, &proof_tokens, &30);
+    setup.router.deposit(
+        &setup.admin,
+        &proof_tokens,
+        &proof_pool_hash,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    gauge_token.mint(&distributor, &(1200 * 7 * 24 * 60 * 60 * 2));
+    setup.router.pool_gauge_schedule_reward(
+        &distributor,
+        &tokens,
+        &pool_hash,
+        &gauge_token.address,
+        &1173, // 10_1347200 / day. min amount to distribute considering the pool slippage
+        &None,
+        &(7 * 24 * 60 * 60), // 1 week
+        &vec![
+            &e,
+            (
+                proof_tokens.clone(),
+                proof_pool_hash.clone(),
+                setup.reward_token.address.clone(),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn test_deploy_multiple_rewards_gauges() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
+    let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
+    assert_eq!(pool_client.get_gauges(), Map::new(&e),);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token1.address, &true);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token2.address, &true);
+
+    let mut gauges_map = Map::new(&e);
+    for _ in 0..3 {
+        let distributor = Address::generate(&e);
+        let gauge_token = create_token_contract(&e, &distributor);
+        gauge_token.mint(&setup.admin, &1_000_0000000);
+
+        // create pool for gauge token vs reward token for swaps chain proof
+        let proof_tokens = match setup.reward_token.address < gauge_token.address {
+            false => vec![
+                &e,
+                gauge_token.address.clone(),
+                setup.reward_token.address.clone(),
+            ],
+            true => vec![
+                &e,
+                setup.reward_token.address.clone(),
+                gauge_token.address.clone(),
+            ],
+        };
+        setup.reward_token.mint(&setup.admin, &2_000_0000000);
+        let (proof_pool_hash, _proof_pool_address) =
+            setup
+                .router
+                .init_standard_pool(&setup.admin, &proof_tokens, &30);
+        setup.router.deposit(
+            &setup.admin,
+            &proof_tokens,
+            &proof_pool_hash,
+            &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+            &0,
+        );
+
+        gauge_token.mint(&distributor, &(1200 * 7 * 24 * 60 * 60));
+        let rewards_gauge = setup.router.pool_gauge_schedule_reward(
+            &distributor,
+            &tokens,
+            &pool_hash,
+            &gauge_token.address,
+            &1173, // 10_1347200 / day. min amount to distribute considering the pool slippage
+            &None,
+            &(7 * 24 * 60 * 60), // 1 week
+            &vec![
+                &e,
+                (
+                    proof_tokens,
+                    proof_pool_hash,
+                    setup.reward_token.address.clone(),
+                ),
+            ],
+        );
+        gauges_map.set(gauge_token.address, rewards_gauge);
+    }
+    assert_eq!(pool_client.get_gauges(), gauges_map);
+}
+
+#[test]
+fn test_pool_gauge_threshold_getters() {
+    let setup = Setup::default();
+    assert_eq!(setup.router.pool_gauge_get_min_daily_amount(), 10_0000000);
+    assert_eq!(setup.router.pool_gauge_get_min_duration(), 60 * 60 * 24);
+}
+
+#[test]
+fn test_pool_gauge_schedule_reward_with_reward_token_no_proof() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
+    let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
+
+    // enable gauge rewards for pool tokens
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token1.address, &true);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token2.address, &true);
+
+    // schedule rewarding directly with reward token; no swaps proof is required
+    let distributor = Address::generate(&e);
+    setup.reward_token.mint(&distributor, &1_000_000_0000000);
+
+    let min_duration = setup.router.pool_gauge_get_min_duration();
+    // choose tps so that tps * 86400 >= 10 tokens/day
+    let tps_ok = 1300_u128; // 1300 * 86400 > 10_0000000
+    let rewards_gauge = setup.router.pool_gauge_schedule_reward(
+        &distributor,
+        &tokens,
+        &pool_hash,
+        &setup.reward_token.address,
+        &tps_ok,
+        &None,
+        &min_duration,
+        &Vec::new(&e), // empty proof
+    );
+
+    assert_eq!(
+        pool_client
+            .get_gauges()
+            .contains_key(setup.reward_token.address.clone()),
+        true
+    );
+    assert_eq!(
+        testutils::rewards_gauge::Client::new(&e, &rewards_gauge).get_reward_token(),
+        setup.reward_token.address
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #307)")]
+fn test_pool_gauge_schedule_reward_empty_path_for_non_reward_token() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let (pool_hash, _pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
+
+    // enable gauge rewards for pool tokens
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token1.address, &true);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token2.address, &true);
+
+    // create a separate token to distribute via gauge
+    let distributor = Address::generate(&e);
+    let gauge_token = create_token_contract(&e, &distributor);
+    gauge_token.mint(&distributor, &1_000_0000000);
+
+    // duration ok, but proof path is empty and token_in != reward token -> should panic PathIsEmpty
+    let min_duration = setup.router.pool_gauge_get_min_duration();
+    setup.router.pool_gauge_schedule_reward(
+        &distributor,
+        &tokens,
+        &pool_hash,
+        &gauge_token.address,
+        &1_0000000, // any tps
+        &None,
+        &min_duration,
+        &Vec::new(&e), // empty proof
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #321)")]
+fn test_pool_gauge_schedule_reward_path_must_end_with_reward_token() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+
+    let (pool_hash, _pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
+
+    // enable gauge rewards for pool tokens
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token1.address, &true);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token2.address, &true);
+
+    let distributor = Address::generate(&e);
+    let gauge_token = create_token_contract(&e, &distributor);
+    gauge_token.mint(&setup.admin, &2_000_0000000);
+    setup.reward_token.mint(&setup.admin, &2_000_0000000);
+
+    // Create proof pool between gauge token and reward token (1:1 liquidity)
+    let proof_tokens = match setup.reward_token.address < gauge_token.address {
+        false => vec![
+            &e,
+            gauge_token.address.clone(),
+            setup.reward_token.address.clone(),
+        ],
+        true => vec![
+            &e,
+            setup.reward_token.address.clone(),
+            gauge_token.address.clone(),
+        ],
+    };
+    let (proof_pool_hash, _proof_pool_address) =
+        setup.router.init_standard_pool(&user1, &proof_tokens, &30);
+    setup.router.deposit(
+        &setup.admin,
+        &proof_tokens,
+        &proof_pool_hash,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    // Build a path that ends with gauge token instead of reward token (two hops on the same pool)
+    let hop_to_reward = (
+        proof_tokens.clone(),
+        proof_pool_hash.clone(),
+        setup.reward_token.address.clone(),
+    );
+    let hop_back_to_gauge = (
+        proof_tokens.clone(),
+        proof_pool_hash.clone(),
+        gauge_token.address.clone(),
+    );
+
+    let min_duration = setup.router.pool_gauge_get_min_duration();
+    gauge_token.mint(&distributor, &1_000_0000000);
+    setup.router.pool_gauge_schedule_reward(
+        &distributor,
+        &tokens,
+        &pool_hash,
+        &gauge_token.address,
+        &1_0000000,
+        &None,
+        &min_duration,
+        &vec![&e, hop_to_reward, hop_back_to_gauge],
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #318)")]
+fn test_pool_gauge_schedule_reward_amount_too_low() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let (pool_hash, _pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
+
+    // enable gauge rewards for pool tokens
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token1.address, &true);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token2.address, &true);
+
+    let distributor = Address::generate(&e);
+    let gauge_token = create_token_contract(&e, &distributor);
+    gauge_token.mint(&setup.admin, &2_000_0000000);
+    setup.reward_token.mint(&setup.admin, &2_000_0000000);
+
+    // Create proof pool between gauge token and reward token (1:1 liquidity)
+    let proof_tokens = match setup.reward_token.address < gauge_token.address {
+        false => vec![
+            &e,
+            gauge_token.address.clone(),
+            setup.reward_token.address.clone(),
+        ],
+        true => vec![
+            &e,
+            setup.reward_token.address.clone(),
+            gauge_token.address.clone(),
+        ],
+    };
+    let (proof_pool_hash, _proof_pool_address) =
+        setup.router.init_standard_pool(&user1, &proof_tokens, &30);
+    setup.router.deposit(
+        &setup.admin,
+        &proof_tokens,
+        &proof_pool_hash,
+        &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
+        &0,
+    );
+
+    // tps too low to satisfy min daily threshold
+    let tps_low = 100_u128; // 100 * 86400 = 8_640_000 < 10_000_000
+    let min_duration = setup.router.pool_gauge_get_min_duration();
+    gauge_token.mint(&distributor, &1_000_0000000);
+    setup.router.pool_gauge_schedule_reward(
+        &distributor,
+        &tokens,
+        &pool_hash,
+        &gauge_token.address,
+        &tps_low,
+        &None,
+        &min_duration,
+        &vec![
+            &e,
+            (
+                proof_tokens.clone(),
+                proof_pool_hash.clone(),
+                setup.reward_token.address.clone(),
+            ),
+        ],
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #317)")]
+fn test_pool_gauge_schedule_reward_duration_too_short() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let (pool_hash, _pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
+
+    // enable gauge rewards for pool tokens
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token1.address, &true);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token2.address, &true);
+
+    let distributor = Address::generate(&e);
+    setup.reward_token.mint(&distributor, &1_000_000_0000000);
+
+    // Use reward token directly; empty proof allowed, but duration is too short
+    let min_duration = setup.router.pool_gauge_get_min_duration();
+    let too_short = min_duration - 1;
+    setup.router.pool_gauge_schedule_reward(
+        &distributor,
+        &tokens,
+        &pool_hash,
+        &setup.reward_token.address,
+        &200_u128,
+        &None,
+        &too_short,
+        &Vec::new(&e),
+    );
 }
 
 #[test]
