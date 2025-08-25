@@ -6352,3 +6352,191 @@ fn test_fix_locked_reward_tokens() {
         1_0000000
     );
 }
+
+#[test]
+fn test_swap_through_imbalanced_withdraw() {
+    // we've got a highly imbalanced stable pool. let's say it's USDC/sUSD
+    // there are two options to swap tokens:
+    //  1. deposit one token and then withdraw another
+    //  2. swap directly
+    // they should give comparable results
+    let setup = Setup::setup(&TestConfig::default());
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let share_id = SorobanTokenClient::new(&env, &liq_pool.share_id());
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+
+    // 10 seconds. user depositing
+    jump(&env, 10);
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user1, &(66914_0000000 * 4));
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user1, &(247574_0000000 * 4));
+    SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(&user2, &100000_0000000);
+    SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(&user2, &100000_0000000);
+
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [66914_0000000, 247574_0000000]),
+        &0,
+    );
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [0, 1000_0000000]), &0);
+    // user2 wants to swap 1k sUSD to USDC with deposit + withdraw
+    assert_eq!(
+        liq_pool.withdraw_one_coin(&user2, &(share_id.balance(&user2) as u128), &0, &0),
+        vec![&env, 967_9583184, 0]
+    );
+
+    liq_pool.withdraw(
+        &user1,
+        &(share_id.balance(&user1) as u128),
+        &Vec::from_array(&env, [0, 0]),
+    );
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [66914_0000000, 247574_0000000]),
+        &0,
+    );
+    // user2 swaps 1k sUSD to USDC directly
+    assert_eq!(
+        liq_pool.swap(&user2, &1, &0, &1000_0000000, &0),
+        967_9584456,
+    );
+
+    liq_pool.withdraw(
+        &user1,
+        &(share_id.balance(&user1) as u128),
+        &Vec::from_array(&env, [0, 0]),
+    );
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [66914_0000000, 247574_0000000]),
+        &0,
+    );
+    // user2 wants to swap 1k USDC to sUSD with deposit + withdraw
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [1000_0000000, 0]), &0);
+    assert_eq!(
+        liq_pool.withdraw_one_coin(&user2, &(share_id.balance(&user2) as u128), &1, &0),
+        vec![&env, 0, 1025_9631986]
+    );
+
+    liq_pool.withdraw(
+        &user1,
+        &(share_id.balance(&user1) as u128),
+        &Vec::from_array(&env, [0, 0]),
+    );
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [66914_0000000, 247574_0000000]),
+        &0,
+    );
+    // user2 swaps 1k USDC to sUSD directly
+    assert_eq!(
+        liq_pool.swap(&user2, &0, &1, &1000_0000000, &0),
+        1025_9662952,
+    );
+}
+
+#[test]
+fn test_boosted_rewards_abuse() {
+    let setup = Setup::new_with_config(&TestConfig {
+        reward_token_in_pool: true,
+        liq_pool_fee: 100,
+        a: 1500,
+        ..TestConfig::default()
+    });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    assert_eq!(liq_pool.a(), 1500);
+    let token_reward = setup.token_reward;
+    let market_maker = Address::generate(&env);
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    for user in [&market_maker, &user1, &user2] {
+        SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(user, &(i128::MAX / 10));
+        SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(user, &(i128::MAX / 10));
+    }
+
+    let locked_token_admin_client = get_token_admin_client(&env, &setup.reward_boost_token.address);
+
+    let reward_tps = 1_0000000_u128;
+    let total_reward_1 = reward_tps * 70;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &env.ledger().timestamp().saturating_add(70),
+        &reward_tps,
+    );
+    let configured_reward = liq_pool.get_total_configured_reward();
+    let claimed_reward = liq_pool.get_total_claimed_reward();
+    let reward_to_fill = configured_reward - claimed_reward;
+    SorobanTokenAdminClient::new(&env, &token_reward.address)
+        .mint(&liq_pool.address, &(reward_to_fill as i128));
+
+    // first user deposits 100 tokens having 10k locked tokens out of 30k.
+    // second user deposits 100 tokens too. but without locked tokens.
+    locked_token_admin_client.mint(&user1, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &30_000_0000000);
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&env, [100_0000000, 100_0000000]),
+        &0,
+    );
+    liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&env, [100_0000000, 100_0000000]),
+        &0,
+    );
+    jump(&env, 10);
+    jump(&env, 20);
+
+    // chain of swaps to generate protocol fees, then withdraw them
+    for i in 0..100 {
+        liq_pool.swap(&user1, &(i % 2), &((i + 1) % 2), &30_0000000, &0);
+    }
+
+    jump(&env, 50);
+
+    assert_eq!(liq_pool.get_reserves(), vec![&env, 2073526300, 2076466699]);
+    assert_eq!(
+        token_reward.balance(&liq_pool.address) as u128,
+        2073526300 + total_reward_1 + 75000000
+    );
+
+    let user1_claimed = liq_pool.claim(&user1);
+
+    jump(&env, 10);
+
+    // second user tries to abuse rewards by locking tokens and immediately claim, applying retroactive boost.
+    locked_token_admin_client.mint(&user2, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &40_000_0000000);
+    let user2_claimed = liq_pool.claim(&user2);
+
+    assert_eq!(user1_claimed, 419999999);
+    assert_eq!(user2_claimed, 280000000);
+    assert_eq!(user1_claimed + user2_claimed, total_reward_1 - 1,);
+    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
+    assert_eq!(liq_pool.get_total_claimed_reward(), total_reward_1 - 1,);
+
+    assert_eq!(
+        liq_pool.claim_protocol_fees(&setup.admin, &setup.admin),
+        vec![&env, 75000000, 75000000]
+    );
+    assert_eq!(liq_pool.get_reserves(), vec![&env, 2073526300, 2076466699]);
+
+    // balance cannot drop below reserve
+    let reward_token_idx = liq_pool
+        .get_tokens()
+        .first_index_of(&token_reward.address)
+        .unwrap();
+    assert!(
+        token_reward.balance(&liq_pool.address)
+            > liq_pool.get_reserves().get_unchecked(reward_token_idx) as i128
+    );
+    assert_eq!(
+        token_reward.balance(&liq_pool.address),
+        liq_pool.get_reserves().get_unchecked(reward_token_idx) as i128 + 1, // 1 comes from rewards rounding
+    );
+}
