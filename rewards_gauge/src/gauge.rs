@@ -3,6 +3,7 @@ use crate::storage::{
     get_global_reward_data, get_reward_configs, get_user_reward_data, set_global_reward_data,
     set_reward_configs, set_user_reward_data, GlobalRewardData, UserRewardData,
 };
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Address, Env, Vec, U256};
 
 pub(crate) fn checkpoint_global(env: &Env, working_supply: u128) -> GlobalRewardData {
@@ -34,7 +35,7 @@ pub(crate) fn checkpoint_global(env: &Env, working_supply: u128) -> GlobalReward
 
         let generated_tokens = (reward_end - reward_start) as u128 * config.tps;
         let reward_per_share = if working_supply > 0 {
-            REWARD_PRECISION * generated_tokens / working_supply
+            generated_tokens.fixed_mul_floor(&env, &REWARD_PRECISION, &working_supply)
         } else {
             0
         };
