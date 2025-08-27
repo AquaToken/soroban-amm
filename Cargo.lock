@@ -1321,6 +1321,7 @@ version = "1.7.0"
 dependencies = [
  "access_control",
  "paste",
+ "soroban-fixed-point-math",
  "soroban-sdk",
  "upgrade",
  "utils",

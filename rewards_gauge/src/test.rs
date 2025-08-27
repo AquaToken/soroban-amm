@@ -1,10 +1,11 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::storage::{set_global_reward_data, set_reward_configs, GlobalRewardData, RewardConfig};
 use crate::testutils::{create_contract, Setup};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::Address;
+use soroban_sdk::{vec, Address, U256};
 use utils::test_utils::{assert_approx_eq_abs, jump, time_warp};
 
 #[test]
@@ -564,4 +565,50 @@ fn test_multiple_rewards_parallel() {
         user_claim,
         10 * 1_0000000 * 5 * user_share / (user_share + operator_share)
     );
+}
+
+#[test]
+fn test_reward_numeric_overflow() {
+    let setup = Setup::with_mocked_pool();
+    let e = setup.env;
+
+    let distributor = Address::generate(&e);
+    let user = Address::generate(&e);
+
+    let reward_token_sac = StellarAssetClient::new(&e, &setup.reward_token.address);
+    reward_token_sac.mint(&distributor, &1_000_000_000_0000000);
+
+    e.as_contract(&setup.contract.address, || {
+        set_global_reward_data(
+            &e,
+            &GlobalRewardData {
+                epoch: 1756199917,
+                inv: U256::from_u128(&e, 0),
+                accumulated: 0,
+                claimed: 0,
+            },
+        );
+        set_reward_configs(
+            &e,
+            vec![
+                &e,
+                RewardConfig {
+                    expired_at: 1756857600,
+                    start_at: 1756252800,
+                    tps: 1157407407407407,
+                },
+                RewardConfig {
+                    expired_at: 1756857600,
+                    start_at: 1756252800,
+                    tps: 636574074074074,
+                },
+            ],
+        );
+    });
+
+    jump(&e, 1756293155);
+
+    setup
+        .contract
+        .get_user_reward(&setup.pool_address, &user, &0, &282842712474);
 }
