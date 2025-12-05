@@ -56,6 +56,10 @@ enum DataKey {
     // Working balances
     WorkingBalance(Address),
     WorkingSupply,
+
+    // Excluded shares from rewards
+    ExcludedShares,
+    UserRewardsState(Address),
 }
 
 // ------------------------------------
@@ -371,5 +375,39 @@ impl RewardTokenStorageTrait for Storage {
 
     fn has_reward_token(&self) -> bool {
         self.env.storage().instance().has(&DataKey::RewardToken)
+    }
+}
+
+// Excluded shares for big liquidity providers to exclude themselves from receiving rewards
+impl Storage {
+    // excluded shares shouldn't be counted for rewards
+    pub fn get_total_excluded_shares(&self) -> u128 {
+        self.env
+            .storage()
+            .instance()
+            .get(&DataKey::ExcludedShares)
+            .unwrap_or(0)
+    }
+
+    pub fn put_total_excluded_shares(&self, value: u128) {
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::ExcludedShares, &value)
+    }
+
+    pub fn get_user_rewards_state(&self, user: &Address) -> bool {
+        self.env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserRewardsState(user.clone()))
+            .unwrap_or(true)
+    }
+
+    pub fn set_user_rewards_state(&self, user: &Address, value: bool) {
+        self.env
+            .storage()
+            .persistent()
+            .set(&DataKey::UserRewardsState(user.clone()), &value)
     }
 }

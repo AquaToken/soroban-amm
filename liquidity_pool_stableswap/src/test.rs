@@ -6352,3 +6352,94 @@ fn test_fix_locked_reward_tokens() {
         1_0000000
     );
 }
+
+#[test]
+fn test_rewards_state_opt_out_redirects_rewards() {
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let token1_admin_client = SorobanTokenAdminClient::new(&env, &setup.token1.address);
+    let token2_admin_client = SorobanTokenAdminClient::new(&env, &setup.token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&env, &setup.token_reward.address);
+    token1_admin_client.mint(&user1, &1_000_0000000);
+    token2_admin_client.mint(&user1, &1_000_0000000);
+    token1_admin_client.mint(&user2, &1_000_0000000);
+    token2_admin_client.mint(&user2, &1_000_0000000);
+
+    // configure rewards before users join
+    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
+    let reward_tps = 10_5000000_u128;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &env.ledger().timestamp().saturating_add(70),
+        &reward_tps,
+    );
+
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [500, 500]), &0);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [500, 500]), &0);
+
+    let reward_tps = 10_5000000_u128;
+    jump(&env, 10);
+    let user0_initial = liq_pool.claim(&user1);
+    let user1_initial = liq_pool.claim(&user2);
+    assert_eq!(user0_initial, reward_tps * 10 / 2);
+    assert_eq!(user1_initial, reward_tps * 10 / 2);
+
+    liq_pool.set_rewards_state(&user1, &false);
+    assert_eq!(liq_pool.get_reward_state(&user1), false);
+    assert_eq!(liq_pool.get_reward_state(&user2), true);
+
+    jump(&env, 10);
+    assert_eq!(liq_pool.claim(&user1), 0);
+    assert_eq!(setup.token_reward.balance(&user2) as u128, user0_initial);
+
+    // user1 should get all the rewards now
+    let user0_updated = liq_pool.claim(&user1);
+    let user1_updated = liq_pool.claim(&user2);
+    assert_eq!(user0_updated, 0);
+    assert_eq!(user1_updated, reward_tps * 10);
+}
+
+#[test]
+fn test_rewards_state_re_enable_resumes_accrual() {
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user = Address::generate(&env);
+    let token1_admin_client = SorobanTokenAdminClient::new(&env, &setup.token1.address);
+    let token2_admin_client = SorobanTokenAdminClient::new(&env, &setup.token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&env, &setup.token_reward.address);
+    token1_admin_client.mint(&user, &1_000_0000000);
+    token2_admin_client.mint(&user, &1_000_0000000);
+
+    // configure rewards before users join
+    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
+    let reward_tps = 10_5000000_u128;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &env.ledger().timestamp().saturating_add(70),
+        &reward_tps,
+    );
+
+    liq_pool.deposit(&user, &Vec::from_array(&env, [500, 500]), &0);
+
+    assert_eq!(liq_pool.get_reward_state(&user), true);
+    jump(&env, 10);
+    assert_eq!(liq_pool.claim(&user), reward_tps * 10);
+
+    // opt-out from rewards
+    liq_pool.set_rewards_state(&user, &false);
+    assert_eq!(liq_pool.get_reward_state(&user), false);
+
+    jump(&env, 10);
+    assert_eq!(liq_pool.claim(&user), 0);
+
+    // re-enable rewards
+    liq_pool.set_rewards_state(&user, &true);
+    assert_eq!(liq_pool.get_reward_state(&user), true);
+
+    jump(&env, 10);
+    assert_eq!(liq_pool.claim(&user), reward_tps * 10);
+}

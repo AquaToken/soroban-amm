@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::Env;
+use soroban_sdk::{Address, Env};
 
 pub mod boost_feed;
 mod constants;
@@ -18,18 +18,30 @@ pub struct RewardsConfig {
     page_size: u64,
 }
 
-#[derive(Clone)]
-pub struct Rewards {
-    env: Env,
-    config: RewardsConfig,
+pub trait RewardsContext {
+    fn get_total_shares(&self) -> u128;
+    fn get_user_shares(&self, user: &Address) -> u128;
 }
 
-impl Rewards {
+pub struct Rewards<Ctx>
+where
+    Ctx: RewardsContext + Clone,
+{
+    env: Env,
+    config: RewardsConfig,
+    context: Ctx,
+}
+
+impl<Ctx> Rewards<Ctx>
+where
+    Ctx: RewardsContext + Clone,
+{
     #[inline(always)]
-    pub fn new(env: &Env, page_size: u64) -> Rewards {
+    pub fn new(env: &Env, page_size: u64, context: Ctx) -> Rewards<Ctx> {
         Rewards {
             env: env.clone(),
             config: RewardsConfig { page_size },
+            context,
         }
     }
 
@@ -37,7 +49,12 @@ impl Rewards {
         Storage::new(&self.env)
     }
 
-    pub fn manager(&self) -> Manager {
-        Manager::new(&self.env, self.storage(), &self.config)
+    pub fn manager(&self) -> Manager<Ctx> {
+        Manager::new(
+            &self.env,
+            self.storage(),
+            &self.config,
+            self.context.clone(),
+        )
     }
 }

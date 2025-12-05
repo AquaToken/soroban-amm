@@ -193,6 +193,12 @@ pub trait RewardsTrait {
     // Claim reward as a user.
     // returns amount of tokens rewarded to the user
     fn claim(e: Env, user: Address) -> u128;
+
+    // Get rewards state
+    fn get_reward_state(e: Env, user: Address) -> bool;
+
+    // Toggle rewards state. if false - user doesn't receive aqua rewards
+    fn set_rewards_state(e: Env, user: Address, state: bool);
 }
 
 pub trait AdminInterfaceTrait {
