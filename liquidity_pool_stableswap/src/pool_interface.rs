@@ -199,6 +199,9 @@ pub trait RewardsTrait {
 
     // Toggle rewards state. if false - user doesn't receive aqua rewards
     fn set_rewards_state(e: Env, user: Address, state: bool);
+
+    // Admin can toggle rewards state for a user
+    fn admin_set_rewards_state(e: Env, admin: Address, user: Address, state: bool);
 }
 
 pub trait AdminInterfaceTrait {

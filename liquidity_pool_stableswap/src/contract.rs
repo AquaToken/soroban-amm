@@ -2216,8 +2216,18 @@ impl RewardsTrait for LiquidityPool {
     }
 
     fn set_rewards_state(e: Env, user: Address, state: bool) {
-        let rewards = get_rewards_manager(&e);
-        let mut manager = rewards.manager();
+        user.require_auth();
+
+        let mut manager = get_rewards_manager(&e).manager();
+        manager.set_user_rewards_state(&user, state);
+        manager.checkpoint_user(&user);
+    }
+
+    fn admin_set_rewards_state(e: Env, admin: Address, user: Address, state: bool) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let mut manager = get_rewards_manager(&e).manager();
         manager.set_user_rewards_state(&user, state);
         manager.checkpoint_user(&user);
     }
