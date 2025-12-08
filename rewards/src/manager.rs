@@ -1,76 +1,57 @@
-use crate::boost_feed::RewardBoostFeedClient;
 use crate::constants::REWARD_PRECISION;
 use crate::errors::RewardsError;
+use crate::locked_boost::manager::BoostManagerPlugin;
+use crate::opt_out::manager::OptOutManagerPlugin;
 use crate::storage::{
-    BoostFeedStorageTrait, BoostTokenStorageTrait, PoolRewardConfig, PoolRewardData,
-    PoolRewardsStorageTrait, RewardInvDataStorageTrait, RewardTokenStorageTrait, Storage,
-    UserRewardData, UserRewardsStorageTrait, WorkingBalancesStorageTrait,
+    PoolRewardConfig, PoolRewardData, PoolRewardsStorageTrait, RewardInvDataStorageTrait,
+    RewardTokenStorageTrait, Storage, UserRewardData, UserRewardsStorageTrait,
+    WorkingBalancesStorageTrait,
 };
-use crate::{RewardsConfig, RewardsContext};
-use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::token::TokenClient as SorobanTokenClient;
+use crate::RewardsConfig;
 use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec};
 use utils::bump::bump_instance;
 
 // `Manager` orchestrates the reward logic, pulling data and methods from `Storage`.
 // It relies on Storage sub-traits to handle actual storage I/O.
-pub struct Manager<Ctx>
-where
-    Ctx: RewardsContext,
-{
+pub struct Manager {
     env: Env,
     storage: Storage,
     config: RewardsConfig,
-    context: Ctx,
+
+    // plugins
+    boost_manager_plugin: BoostManagerPlugin,
+    opt_out_manager_plugin: OptOutManagerPlugin,
 }
 
-impl<Ctx> Manager<Ctx>
-where
-    Ctx: RewardsContext,
-{
-    pub fn new(env: &Env, storage: Storage, config: &RewardsConfig, context: Ctx) -> Self {
-        Self {
-            env: env.clone(),
+pub trait ManagerPlugin {
+    fn calculate_effective_balance(
+        &self,
+        storage: &Storage,
+        user: &Address,
+        share_balance: u128,
+        total_share: u128,
+    ) -> (u128, u128);
+}
+
+impl Manager {
+    pub fn new(e: &Env, storage: Storage, config: &RewardsConfig) -> Manager {
+        Manager {
+            env: e.clone(),
             storage,
             config: config.clone(),
-            context,
+            boost_manager_plugin: BoostManagerPlugin::new(e),
+            opt_out_manager_plugin: OptOutManagerPlugin,
         }
-    }
-
-    // ------------------------------------
-    // Basic getters for shares
-    // ------------------------------------
-    pub fn get_total_shares(&self) -> u128 {
-        self.context.get_total_shares()
-    }
-
-    pub fn get_user_shares(&self, user: &Address) -> u128 {
-        self.context.get_user_shares(user)
-    }
-
-    // Excluded shares
-    pub fn get_excluded_shares(&self) -> u128 {
-        self.storage.get_total_excluded_shares()
     }
 
     pub fn get_user_rewards_state(&self, user: &Address) -> bool {
-        self.storage.get_user_rewards_state(user)
+        self.opt_out_manager_plugin
+            .get_user_rewards_state(&self.storage, user)
     }
 
     pub fn set_user_rewards_state(&self, user: &Address, value: bool) {
-        self.storage.set_user_rewards_state(user, value)
-    }
-
-    // Effective shares (net after exclusion)
-    pub fn get_effective_total_shares(&self) -> u128 {
-        self.get_total_shares() - self.get_excluded_shares()
-    }
-
-    pub fn get_effective_user_shares(&self, user: &Address) -> u128 {
-        match self.get_user_rewards_state(user) {
-            true => self.get_user_shares(user),
-            false => 0,
-        }
+        self.opt_out_manager_plugin
+            .set_user_rewards_state(&self.storage, user, value)
     }
 
     // ------------------------------------
@@ -78,26 +59,12 @@ where
     // ------------------------------------
 
     pub fn get_user_boost_balance(&self, user: &Address) -> u128 {
-        if self.storage.has_reward_boost_token() {
-            match SorobanTokenClient::new(&self.env, &self.storage.get_reward_boost_token())
-                .try_balance(user)
-            {
-                Ok(balance) => balance.unwrap() as u128,
-                // if trustline is not established, return 0
-                Err(_) => 0,
-            }
-        } else {
-            0
-        }
+        self.boost_manager_plugin
+            .get_user_boost_balance(&self.storage, user)
     }
 
     pub fn get_total_locked(&self) -> u128 {
-        if self.storage.has_reward_boost_feed() {
-            RewardBoostFeedClient::new(&self.env, &self.storage.get_reward_boost_feed())
-                .total_supply()
-        } else {
-            0
-        }
+        self.boost_manager_plugin.get_total_locked(&self.storage)
     }
 
     // ------------------------------------
@@ -110,23 +77,22 @@ where
         share_balance: u128,
         total_share: u128,
     ) -> u128 {
-        // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
-        let lock_balance = self.get_user_boost_balance(&user);
-        let total_locked = self.get_total_locked();
-
-        let mut adjusted_balance = share_balance;
-        if total_locked > 0 {
-            adjusted_balance +=
-                3 * lock_balance.fixed_mul_floor(&self.env, &total_share, &total_locked) / 2;
-        }
-        let max_effective_balance = share_balance * 5 / 2;
-
-        // min(adjusted_balance, max_effective_balance)
-        if adjusted_balance > max_effective_balance {
-            max_effective_balance
-        } else {
-            adjusted_balance
-        }
+        // run plugins in order
+        // opt-out plugin changes total supply since user can opt-out of rewards, so it goes first
+        let (eff_balance, eff_supply) = self.opt_out_manager_plugin.calculate_effective_balance(
+            &self.storage,
+            user,
+            share_balance,
+            total_share,
+        );
+        // boost plugin doesn't change total supply directly, so it goes second
+        let (boosted_balance, _) = self.boost_manager_plugin.calculate_effective_balance(
+            &self.storage,
+            user,
+            eff_balance,
+            eff_supply,
+        );
+        boosted_balance
     }
 
     // ------------------------------------
@@ -137,13 +103,14 @@ where
     //
     // # Arguments
     //
+    // * `total_shares` - The total shares in the pool.
     // * `expired_at` - The expiration time for the reward configuration.
     // * `tps` - The number of tokens per second for the reward configuration.
     //
     // # Panics
     //
     // This method will panic if the expiration time is in the past or if the tokens per second is zero and the configuration has already expired.
-    pub fn set_reward_config(&mut self, mut expired_at: u64, tps: u128) {
+    pub fn set_reward_config(&mut self, total_shares: u128, mut expired_at: u64, tps: u128) {
         let now = self.env.ledger().timestamp();
         let old_config = self.storage.get_pool_reward_config();
         // if we stop rewards manually by setting tps to zero,
@@ -164,7 +131,7 @@ where
             return;
         }
 
-        let working_supply = self.get_working_supply();
+        let working_supply = self.get_working_supply(total_shares);
 
         // Bring pool data up-to-date
         self.update_rewards_data(working_supply);
@@ -184,7 +151,7 @@ where
     //
     // # Arguments
     //
-    // * `working_supply` - Total boosted shares amount
+    // * `total_shares` - The total shares in the pool.
     //
     // # Returns
     //
@@ -340,23 +307,36 @@ where
     // # Arguments
     //
     // * `user` - The address of the user for whom the reward is being calculated.
+    // * `total_shares` - The total shares in the pool.
+    // * `user_balance_shares` - The number of shares the user has in the pool.
     //
     // # Returns
     //
     // * The amount of reward the user is eligible to claim.
-    pub fn get_amount_to_claim(&mut self, user: &Address) -> u128 {
+    pub fn get_amount_to_claim(
+        &mut self,
+        user: &Address,
+        total_shares: u128,
+        user_balance_shares: u128,
+    ) -> u128 {
         // update pool data & calculate reward
-        self.checkpoint_user(user).to_claim
+        self.checkpoint_user(user, total_shares, user_balance_shares)
+            .to_claim
     }
 
     // Actually claims the user's reward and transfers tokens.
-    pub fn claim_reward(&mut self, user: &Address) -> u128 {
+    pub fn claim_reward(
+        &mut self,
+        user: &Address,
+        total_shares: u128,
+        user_balance_shares: u128,
+    ) -> u128 {
         // update pool data & calculate reward
         let UserRewardData {
             last_block,
             pool_accumulated,
             to_claim: reward_amount,
-        } = self.checkpoint_user(user);
+        } = self.checkpoint_user(user, total_shares, user_balance_shares);
 
         // Increase total claimed in the pool
         let mut pool_data = self.storage.get_pool_reward_data();
@@ -383,15 +363,17 @@ where
     }
 
     // Forces an update of the user's reward data based on the new working balance.
-    pub fn checkpoint_user(&mut self, user: &Address) -> UserRewardData {
-        let (prev_working_balance, prev_working_supply) = self.update_working_balance(
-            user,
-            self.get_effective_total_shares(),
-            self.get_effective_user_shares(user),
-        );
+    pub fn checkpoint_user(
+        &mut self,
+        user: &Address,
+        total_shares: u128,
+        user_balance_shares: u128,
+    ) -> UserRewardData {
+        let (working_balance, new_working_supply) =
+            self.update_working_balance(user, total_shares, user_balance_shares);
 
-        let pool_data = self.update_rewards_data(prev_working_supply);
-        let user_data = self.update_user_reward(&pool_data, user, prev_working_balance);
+        let pool_data = self.update_rewards_data(new_working_supply);
+        let user_data = self.update_user_reward(&pool_data, user, working_balance);
 
         // Bump storage for the user's data
         self.storage.bump_user_reward_data(user);
@@ -402,21 +384,19 @@ where
     // Working balance manipulation
     // ------------------------------------
 
-    pub fn get_working_supply(&mut self) -> u128 {
+    pub fn get_working_supply(&mut self, total_shares: u128) -> u128 {
         if self.storage.has_working_supply() {
             self.storage.get_working_supply()
         } else {
-            let total_shares = self.get_effective_total_shares();
             self.storage.set_working_supply(total_shares);
             total_shares
         }
     }
 
-    pub fn get_working_balance(&mut self, user: &Address) -> u128 {
+    pub fn get_working_balance(&mut self, user: &Address, user_balance_shares: u128) -> u128 {
         if self.storage.has_working_balance(user) {
             self.storage.get_working_balance(user)
         } else {
-            let user_balance_shares = self.get_effective_user_shares(user);
             self.storage.set_working_balance(user, user_balance_shares);
             user_balance_shares
         }
@@ -428,8 +408,8 @@ where
         total_shares: u128,
         user_balance_shares: u128,
     ) -> (u128, u128) {
-        let prev_working_balance = self.get_working_balance(user);
-        let prev_working_supply = self.get_working_supply();
+        let prev_working_balance = self.get_working_balance(user, user_balance_shares);
+        let prev_working_supply = self.get_working_supply(total_shares);
 
         let working_balance =
             self.calculate_effective_balance(user, user_balance_shares, total_shares);
@@ -625,15 +605,15 @@ where
     // Additional getters
     // ------------------------------------
 
-    pub fn get_total_accumulated_reward(&mut self) -> u128 {
-        let working_supply = self.get_working_supply();
+    pub fn get_total_accumulated_reward(&mut self, total_shares: u128) -> u128 {
+        let working_supply = self.get_working_supply(total_shares);
         let data = self.update_rewards_data(working_supply);
         data.accumulated
     }
 
     // Adjusts the total accumulated reward for the pool.
-    pub fn adjust_total_accumulated_reward(&mut self, diff: i128) {
-        let working_supply = self.get_working_supply();
+    pub fn adjust_total_accumulated_reward(&mut self, total_shares: u128, diff: i128) {
+        let working_supply = self.get_working_supply(total_shares);
         let mut data = self.update_rewards_data(working_supply);
         if diff >= 0 {
             data.accumulated += diff as u128;
@@ -643,15 +623,15 @@ where
         self.storage.set_pool_reward_data(&data);
     }
 
-    pub fn get_total_claimed_reward(&mut self) -> u128 {
-        let working_supply = self.get_working_supply();
+    pub fn get_total_claimed_reward(&mut self, total_shares: u128) -> u128 {
+        let working_supply = self.get_working_supply(total_shares);
         let data = self.update_rewards_data(working_supply);
         data.claimed
     }
 
-    pub fn get_total_configured_reward(&mut self) -> u128 {
+    pub fn get_total_configured_reward(&mut self, total_shares: u128) -> u128 {
         let config = self.storage.get_pool_reward_config();
-        let working_supply = self.get_working_supply();
+        let working_supply = self.get_working_supply(total_shares);
         let data = self.update_rewards_data(working_supply);
         let rewarded_amount = data.accumulated;
 
