@@ -384,7 +384,7 @@ impl Manager {
     // Working balance manipulation
     // ------------------------------------
 
-    pub fn get_working_supply(&mut self, total_shares: u128) -> u128 {
+    pub fn get_working_supply(&self, total_shares: u128) -> u128 {
         if self.storage.has_working_supply() {
             self.storage.get_working_supply()
         } else {
@@ -393,7 +393,7 @@ impl Manager {
         }
     }
 
-    pub fn get_working_balance(&mut self, user: &Address, user_balance_shares: u128) -> u128 {
+    pub fn get_working_balance(&self, user: &Address, user_balance_shares: u128) -> u128 {
         if self.storage.has_working_balance(user) {
             self.storage.get_working_balance(user)
         } else {

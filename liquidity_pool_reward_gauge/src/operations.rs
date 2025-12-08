@@ -5,7 +5,7 @@ use crate::storage::{
     get_is_killed_gauges_claim, get_reward_gauges, set_is_killed_gauges_claim, set_reward_gauges,
     RewardConfig,
 };
-use soroban_sdk::{panic_with_error, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec};
+use soroban_sdk::{log, panic_with_error, Address, BytesN, Env, IntoVal, Map, Symbol, Val, Vec};
 
 pub fn add(e: &Env, gauge_address: Address) {
     let reward_token = crate::token::get_reward_token(e, &gauge_address);
@@ -63,6 +63,7 @@ pub fn list(e: &Env) -> Map<Address, Address> {
 }
 
 pub fn checkpoint_user(e: &Env, user: &Address, working_balance: u128, working_supply: u128) {
+    log!(e, "Checkpoint", user, working_balance, working_supply);
     for gauge in get_reward_gauges(e).values() {
         e.invoke_contract::<Val>(
             &gauge,

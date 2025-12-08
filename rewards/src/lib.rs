@@ -5,8 +5,8 @@ use soroban_sdk::Env;
 mod constants;
 pub mod errors;
 pub mod events;
-pub mod manager;
 mod locked_boost;
+pub mod manager;
 mod opt_out;
 pub mod storage;
 

@@ -2720,12 +2720,31 @@ fn test_boosted_rewards() {
         &reward_1_tps,
     );
 
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &token_reward.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    // setup gauge rewards in parallel to pool rewards
+    let gauge_distributor = Address::generate(&env);
+    get_token_admin_client(&env, &token_reward.address)
+        .mint(&gauge_distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &gauge_distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
+
     // two users make deposit for equal value. second after 30 seconds after rewards start,
     //  so it gets only 1/4 of total reward
     liq_pool.deposit(&user1, &Vec::from_array(&env, [100, 100]), &0);
     jump(&env, 30);
     assert_eq!(liq_pool.claim(&user1), total_reward_1 / 2);
-
+    assert_eq!(
+        liq_pool.gauges_claim(&user1),
+        Map::from_array(&env, [(token_reward.address.clone(), total_reward_1 / 2)])
+    );
     // instead of simple deposit, second user locks tokens to boost rewards, then deposits
     // second user lock percentage is 50%. this is equilibrium point for 50% shareholder
     locked_token_admin_client.mint(&user2, &10_000_0000000);
@@ -2739,6 +2758,20 @@ fn test_boosted_rewards() {
     // first user gets ~28% of total reward, second ~72%
     assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 200 / 700);
     assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 500 / 700);
+    assert_eq!(
+        liq_pool.gauges_claim(&user1),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 100 / 350)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&user2),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 250 / 350)]
+        )
+    );
 
     // third user joins, depositing 50 tokens. no boost yet
     liq_pool.deposit(&user3, &Vec::from_array(&env, [50, 50]), &0);
@@ -2761,6 +2794,27 @@ fn test_boosted_rewards() {
     assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 200 / 800);
     assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 500 / 800);
     assert_eq!(liq_pool.claim(&user3), total_reward_1 / 6 * 100 / 800);
+    assert_eq!(
+        liq_pool.gauges_claim(&user1),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 100 / 400)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&user2),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 250 / 400)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&user3),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 50 / 400)]
+        )
+    );
 
     let user3_tokens_to_lock = 1_000_0000000;
     let new_locked_supply = 25_000_0000000;
@@ -2779,7 +2833,7 @@ fn test_boosted_rewards() {
     );
     let new_w_supply = old_w_supply + new_w_balance - old_w_balance;
     let total_reward_step3 = total_reward_1 / 6; // total reward for 10 seconds
-    let user2_expected_boosted_reward = new_w_balance * total_reward_step3 / new_w_supply;
+    let user3_expected_boosted_reward = new_w_balance * total_reward_step3 / new_w_supply;
 
     // third user locks tokens to boost rewards
     // effective boost is 1.3
@@ -2837,17 +2891,39 @@ fn test_boosted_rewards() {
     // total effective share now 200 + 200 * 2.5 + 130 = 830
     assert_eq!(liq_pool.claim(&user1), total_reward_1 / 6 * 200 / 830);
     assert_eq!(liq_pool.claim(&user2), total_reward_1 / 6 * 500 / 830);
+    assert_eq!(
+        liq_pool.gauges_claim(&user1),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 100 / 415)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&user2),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 250 / 415)]
+        )
+    );
     let user3_claim = liq_pool.claim(&user3);
     assert_eq!(user3_claim, total_reward_1 / 6 * 130 / 830);
-    assert_eq!(user3_claim, user2_expected_boosted_reward);
+    assert_eq!(user3_claim, user3_expected_boosted_reward);
+    assert_eq!(
+        liq_pool.gauges_claim(&user3),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), user3_expected_boosted_reward)]
+        )
+    );
 
     // total reward is distributed should be distributed to all three users. rounding occurs, so we check with delta
     assert_approx_eq_abs(
         token_reward.balance(&user1) as u128
             + token_reward.balance(&user2) as u128
             + token_reward.balance(&user3) as u128,
-        total_reward_1,
-        2,
+        // twice since gauge rewards are separate
+        total_reward_1 * 2,
+        4,
     );
 }
 
@@ -5597,6 +5673,9 @@ fn test_boosted_rewards_abuse() {
         SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(user, &(i128::MAX / 10));
     }
 
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &token_reward.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
     let locked_token_admin_client = get_token_admin_client(&env, &setup.reward_boost_token.address);
 
     let reward_tps = 1_0000000_u128;
@@ -5611,6 +5690,19 @@ fn test_boosted_rewards_abuse() {
     let reward_to_fill = configured_reward - claimed_reward;
     SorobanTokenAdminClient::new(&env, &token_reward.address)
         .mint(&liq_pool.address, &(reward_to_fill as i128));
+
+    // setup gauge rewards in parallel to pool rewards
+    let gauge_distributor = Address::generate(&env);
+    get_token_admin_client(&env, &token_reward.address)
+        .mint(&gauge_distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &gauge_distributor,
+        &gauge.address,
+        &None,
+        &70,
+        &reward_tps,
+    );
 
     // first user deposits 100 tokens having 10k locked tokens out of 30k.
     // second user deposits 100 tokens too. but without locked tokens.
@@ -5645,6 +5737,10 @@ fn test_boosted_rewards_abuse() {
     );
 
     let user1_claimed = liq_pool.claim(&user1);
+    assert_eq!(
+        liq_pool.gauges_claim(&user1),
+        Map::from_array(&env, [(token_reward.address.clone(), user1_claimed)])
+    );
 
     jump(&env, 10);
 
@@ -5654,6 +5750,10 @@ fn test_boosted_rewards_abuse() {
         .reward_boost_feed
         .set_total_supply(&setup.operations_admin, &40_000_0000000);
     let user2_claimed = liq_pool.claim(&user2);
+    assert_eq!(
+        liq_pool.gauges_claim(&user2),
+        Map::from_array(&env, [(token_reward.address.clone(), user2_claimed)])
+    );
 
     assert_eq!(user1_claimed, 419999999);
     assert_eq!(user2_claimed, 280000000);
