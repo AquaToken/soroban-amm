@@ -49,29 +49,28 @@ impl Manager {
             .get_user_rewards_state(&self.storage, user)
     }
 
-    pub fn set_user_rewards_state(&self, user: &Address, value: bool) {
-        let user_state = self.get_user_rewards_state(user);
+    pub fn set_user_rewards_state(&self, user: &Address, user_share_balance: u128, value: bool) {
+        let current_state = self
+            .opt_out_manager_plugin
+            .get_user_rewards_state(&self.storage, user);
 
-        self.opt_out_manager_plugin
-            .set_user_rewards_state(&self.storage, user, value);
-
-        if user_state == value {
-            // no change
+        if current_state == value {
             return;
         }
 
-        // update tracked excluded shares
-        let excluded = self
+        let mut total_excluded = self
             .opt_out_manager_plugin
             .get_total_excluded_shares(&self.storage);
-        let user_balance = self.storage.get_working_balance(user);
-        let new_excluded = if value {
-            excluded - user_balance
-        } else {
-            excluded + user_balance
-        };
+
+        match (current_state, value) {
+            (true, false) => total_excluded += user_share_balance,
+            (false, true) => total_excluded = total_excluded.saturating_sub(user_share_balance),
+            _ => {}
+        }
+
+        self.storage.set_total_excluded_shares(total_excluded);
         self.opt_out_manager_plugin
-            .set_total_excluded_shares(&self.storage, new_excluded);
+            .set_user_rewards_state(&self.storage, user, value)
     }
 
     // ------------------------------------
