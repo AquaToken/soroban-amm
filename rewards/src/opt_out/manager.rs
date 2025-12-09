@@ -16,6 +16,10 @@ impl OptOutManagerPlugin {
     pub fn get_total_excluded_shares(&self, storage: &Storage) -> u128 {
         storage.get_total_excluded_shares()
     }
+
+    pub fn set_total_excluded_shares(&self, storage: &Storage, value: u128) {
+        storage.set_total_excluded_shares(value)
+    }
 }
 
 impl ManagerPlugin for OptOutManagerPlugin {

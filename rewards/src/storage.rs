@@ -1,5 +1,4 @@
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
-use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
 
 // ------------------------------------
@@ -106,7 +105,6 @@ impl BoostTokenStorageTrait for Storage {
     }
 
     fn put_reward_boost_token(&self, contract: Address) {
-        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -140,7 +138,6 @@ impl BoostFeedStorageTrait for Storage {
     }
 
     fn put_reward_boost_feed(&self, contract: Address) {
-        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -185,7 +182,6 @@ impl WorkingBalancesStorageTrait for Storage {
     fn set_working_balance(&self, user: &Address, value: u128) {
         let key = DataKey::WorkingBalance(user.clone());
         self.env.storage().persistent().set(&key, &value);
-        bump_persistent(&self.env, &key);
     }
 
     fn get_working_supply(&self) -> u128 {
@@ -197,7 +193,6 @@ impl WorkingBalancesStorageTrait for Storage {
     }
 
     fn set_working_supply(&self, value: u128) {
-        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -271,7 +266,6 @@ impl PoolRewardsStorageTrait for Storage {
 pub trait UserRewardsStorageTrait {
     fn get_user_reward_data(&self, user: &Address) -> Option<UserRewardData>;
     fn set_user_reward_data(&self, user: &Address, config: &UserRewardData);
-    fn bump_user_reward_data(&self, user: &Address);
 }
 
 impl UserRewardsStorageTrait for Storage {
@@ -292,10 +286,6 @@ impl UserRewardsStorageTrait for Storage {
             .storage()
             .persistent()
             .set(&DataKey::UserRewardData(user.clone()), config);
-    }
-
-    fn bump_user_reward_data(&self, user: &Address) {
-        bump_persistent(&self.env, &DataKey::UserRewardData(user.clone()))
     }
 }
 
@@ -344,7 +334,6 @@ impl RewardInvDataStorageTrait for Storage {
         let key = DataKey::RewardInvDataV2(pow, page_number);
         self.inv_cache.set(key.clone(), value.clone());
         self.env.storage().persistent().set(&key, &value);
-        bump_persistent(&self.env, &key);
     }
 }
 
@@ -389,7 +378,7 @@ impl Storage {
             .unwrap_or(0)
     }
 
-    pub fn put_total_excluded_shares(&self, value: u128) {
+    pub fn set_total_excluded_shares(&self, value: u128) {
         self.env
             .storage()
             .instance()
