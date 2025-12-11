@@ -1453,6 +1453,34 @@ impl RewardsTrait for LiquidityPool {
         rewards_manager.checkpoint_user(&user, total_shares, user_shares);
     }
 
+    fn sync_excluded_on_transfer(
+        e: Env,
+        token_contract: Address,
+        from: Address,
+        to: Address,
+        amount: u128,
+    ) {
+        token_contract.require_auth();
+        if token_contract != get_token_share(&e) {
+            panic_with_error!(&e, AccessControlError::Unauthorized);
+        }
+
+        let rewards = get_rewards_manager(&e);
+        rewards
+            .manager()
+            .sync_excluded_on_transfer(&from, &to, amount);
+    }
+
+    fn sync_excluded_on_burn(e: Env, token_contract: Address, user: Address, amount: u128) {
+        token_contract.require_auth();
+        if token_contract != get_token_share(&e) {
+            panic_with_error!(&e, AccessControlError::Unauthorized);
+        }
+
+        let rewards = get_rewards_manager(&e);
+        rewards.manager().sync_excluded_on_burn(&user, amount);
+    }
+
     // Returns the total amount of accumulated reward for the pool.
     //
     // # Arguments
@@ -1583,7 +1611,7 @@ impl RewardsTrait for LiquidityPool {
             rewards_manager.get_working_balance(&user, user_shares),
             rewards_manager.get_working_supply(total_shares),
         );
-        rewards_manager.set_user_rewards_state(&user, state);
+        rewards_manager.set_user_rewards_state(&user, user_shares, state);
         rewards_manager.checkpoint_user(&user, total_shares, user_shares);
     }
 
@@ -1600,7 +1628,7 @@ impl RewardsTrait for LiquidityPool {
             rewards_manager.get_working_balance(&user, user_shares),
             rewards_manager.get_working_supply(total_shares),
         );
-        rewards_manager.set_user_rewards_state(&user, state);
+        rewards_manager.set_user_rewards_state(&user, user_shares, state);
         rewards_manager.checkpoint_user(&user, total_shares, user_shares);
     }
 }

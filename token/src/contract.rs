@@ -4,7 +4,10 @@ use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::errors::TokenError;
 use crate::interface::UpgradeableContract;
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
-use crate::pool::{checkpoint_user_rewards, checkpoint_user_working_balance};
+use crate::pool::{
+    checkpoint_user_rewards, checkpoint_user_working_balance, sync_excluded_on_burn,
+    sync_excluded_on_transfer,
+};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
@@ -99,6 +102,8 @@ impl token::Interface for Token {
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
 
+        sync_excluded_on_transfer(&e, from.clone(), to.clone(), amount as u128);
+
         checkpoint_user_working_balance(&e, from.clone());
         checkpoint_user_working_balance(&e, to.clone());
 
@@ -119,6 +124,8 @@ impl token::Interface for Token {
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
 
+        sync_excluded_on_transfer(&e, from.clone(), to.clone(), amount as u128);
+
         checkpoint_user_working_balance(&e, from.clone());
         checkpoint_user_working_balance(&e, to.clone());
 
@@ -133,6 +140,7 @@ impl token::Interface for Token {
         bump_instance(&e);
 
         spend_balance(&e, from.clone(), amount);
+        sync_excluded_on_burn(&e, from.clone(), amount as u128);
         TokenUtils::new(&e).events().burn(from, amount);
     }
 
@@ -145,6 +153,7 @@ impl token::Interface for Token {
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
+        sync_excluded_on_burn(&e, from.clone(), amount as u128);
         TokenUtils::new(&e).events().burn(from, amount)
     }
 

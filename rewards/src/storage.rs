@@ -60,6 +60,7 @@ enum DataKey {
     // Excluded shares from rewards
     ExcludedShares,
     UserRewardsState(Address),
+    UserShareBalance(Address),
 }
 
 // ------------------------------------
@@ -409,5 +410,20 @@ impl Storage {
             .storage()
             .persistent()
             .set(&DataKey::UserRewardsState(user.clone()), &value)
+    }
+
+    pub fn get_user_share_balance(&self, user: &Address) -> u128 {
+        self.env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserShareBalance(user.clone()))
+            .unwrap_or(0)
+    }
+
+    pub fn set_user_share_balance(&self, user: &Address, value: u128) {
+        self.env
+            .storage()
+            .persistent()
+            .set(&DataKey::UserShareBalance(user.clone()), &value)
     }
 }

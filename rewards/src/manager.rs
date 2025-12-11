@@ -49,7 +49,28 @@ impl Manager {
             .get_user_rewards_state(&self.storage, user)
     }
 
-    pub fn set_user_rewards_state(&self, user: &Address, value: bool) {
+    pub fn set_user_rewards_state(&self, user: &Address, user_share_balance: u128, value: bool) {
+        let current_state = self
+            .opt_out_manager_plugin
+            .get_user_rewards_state(&self.storage, user);
+
+        if current_state == value {
+            return;
+        }
+
+        let mut total_excluded = self
+            .opt_out_manager_plugin
+            .get_total_excluded_shares(&self.storage);
+
+        match (current_state, value) {
+            (true, false) => total_excluded += user_share_balance,
+            (false, true) => total_excluded = total_excluded.saturating_sub(user_share_balance),
+            _ => {}
+        }
+
+        self.storage.put_total_excluded_shares(total_excluded);
+        self.storage
+            .set_user_share_balance(user, user_share_balance);
         self.opt_out_manager_plugin
             .set_user_rewards_state(&self.storage, user, value)
     }
@@ -408,6 +429,7 @@ impl Manager {
         total_shares: u128,
         user_balance_shares: u128,
     ) -> (u128, u128) {
+        self.sync_excluded_for_balance(user, user_balance_shares);
         let prev_working_balance = self.get_working_balance(user, user_balance_shares);
         let prev_working_supply = self.get_working_supply(total_shares);
 
@@ -419,6 +441,47 @@ impl Manager {
         self.storage.set_working_balance(user, working_balance);
 
         (prev_working_balance, prev_working_supply)
+    }
+
+    // ------------------------------------
+    // Excluded share synchronization
+    // ------------------------------------
+
+    pub fn sync_excluded_for_balance(&self, user: &Address, new_share_balance: u128) {
+        let prev_share_balance = self.storage.get_user_share_balance(user);
+
+        if !self.storage.get_user_rewards_state(user) {
+            let mut excluded = self
+                .opt_out_manager_plugin
+                .get_total_excluded_shares(&self.storage);
+            if new_share_balance >= prev_share_balance {
+                excluded += new_share_balance - prev_share_balance;
+            } else {
+                excluded = excluded.saturating_sub(prev_share_balance - new_share_balance);
+            }
+
+            self.storage.put_total_excluded_shares(excluded);
+        }
+
+        self.storage.set_user_share_balance(user, new_share_balance);
+    }
+
+    pub fn sync_excluded_on_mint(&self, user: &Address, amount: u128) {
+        let prev_balance = self.storage.get_user_share_balance(user);
+        self.sync_excluded_for_balance(user, prev_balance + amount);
+    }
+
+    pub fn sync_excluded_on_burn(&self, user: &Address, amount: u128) {
+        let prev_balance = self.storage.get_user_share_balance(user);
+        self.sync_excluded_for_balance(user, prev_balance.saturating_sub(amount));
+    }
+
+    pub fn sync_excluded_on_transfer(&self, from: &Address, to: &Address, amount: u128) {
+        let from_prev = self.storage.get_user_share_balance(from);
+        let to_prev = self.storage.get_user_share_balance(to);
+
+        self.sync_excluded_for_balance(from, from_prev.saturating_sub(amount));
+        self.sync_excluded_for_balance(to, to_prev + amount);
     }
 
     // ------------------------------------

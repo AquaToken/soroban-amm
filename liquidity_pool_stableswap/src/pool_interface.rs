@@ -178,6 +178,19 @@ pub trait RewardsTrait {
         user_shares: u128,
     );
 
+    // Sync excluded supply updates on share token transfers.
+    // Can be called only by the token contract to notify pool external changes happened.
+    fn sync_excluded_on_transfer(
+        e: Env,
+        token_contract: Address,
+        from: Address,
+        to: Address,
+        amount: u128,
+    );
+
+    // Sync excluded supply updates when shares are burned outside pool entrypoints.
+    fn sync_excluded_on_burn(e: Env, token_contract: Address, user: Address, amount: u128);
+
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env) -> u128;
 
