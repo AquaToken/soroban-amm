@@ -9,6 +9,7 @@ use soroban_sdk::{symbol_short, vec, Address, Env, Error, IntoVal, Map, Symbol, 
 use token_share::{get_total_shares, get_user_balance_shares, Client as ShareTokenClient};
 
 use crate::rewards::get_rewards_manager;
+use crate::LiquidityPoolClient;
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
     create_token_contract, deploy_rewards_gauge, get_token_admin_client, install_token_wasm,
@@ -21,6 +22,26 @@ use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use utils::test_utils::{install_dummy_wasm, jump};
+
+fn configure_rewards(
+    env: &Env,
+    liq_pool: &LiquidityPoolClient,
+    reward_token: &SorobanTokenClient,
+    admin: &Address,
+    expires_in_secs: u64,
+    reward_tps: u128,
+) {
+    let reward_admin_client = SorobanTokenAdminClient::new(env, &reward_token.address);
+    reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
+    liq_pool.set_rewards_config(
+        admin,
+        &env
+            .ledger()
+            .timestamp()
+            .saturating_add(expires_in_secs),
+        &reward_tps,
+    );
+}
 
 #[test]
 #[should_panic(expected = "Error(Contract, #2010)")]
@@ -6462,20 +6483,13 @@ fn test_rewards_state_opt_out_redirects_rewards() {
     let user2 = Address::generate(&env);
     let token1_admin_client = SorobanTokenAdminClient::new(&env, &setup.token1.address);
     let token2_admin_client = SorobanTokenAdminClient::new(&env, &setup.token2.address);
-    let token_reward_admin_client = SorobanTokenAdminClient::new(&env, &setup.token_reward.address);
     token1_admin_client.mint(&user1, &1_000_0000000);
     token2_admin_client.mint(&user1, &1_000_0000000);
     token1_admin_client.mint(&user2, &1_000_0000000);
     token2_admin_client.mint(&user2, &1_000_0000000);
 
     // configure rewards before users join
-    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
-    let reward_tps = 10_5000000_u128;
-    liq_pool.set_rewards_config(
-        &setup.admin,
-        &env.ledger().timestamp().saturating_add(70),
-        &reward_tps,
-    );
+    configure_rewards(&env, &liq_pool, &setup.token_reward, &setup.admin, 70, 10_5000000_u128);
 
     liq_pool.deposit(&user1, &Vec::from_array(&env, [500, 500]), &0);
     liq_pool.deposit(&user2, &Vec::from_array(&env, [500, 500]), &0);
@@ -6555,18 +6569,19 @@ fn test_rewards_state_opt_out_tracks_excluded_shares_on_balance_change() {
 
     let token1_admin_client = SorobanTokenAdminClient::new(&env, &setup.token1.address);
     let token2_admin_client = SorobanTokenAdminClient::new(&env, &setup.token2.address);
-    let token_reward_admin_client = SorobanTokenAdminClient::new(&env, &setup.token_reward.address);
 
     token1_admin_client.mint(&user1, &1_000_0000000);
     token2_admin_client.mint(&user1, &1_000_0000000);
     token1_admin_client.mint(&user2, &1_000_0000000);
     token2_admin_client.mint(&user2, &1_000_0000000);
 
-    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
-    liq_pool.set_rewards_config(
+    configure_rewards(
+        &env,
+        &liq_pool,
+        &setup.token_reward,
         &setup.admin,
-        &env.ledger().timestamp().saturating_add(100),
-        &10_5000000_u128,
+        100,
+        10_5000000_u128,
     );
 
     liq_pool.deposit(&user1, &Vec::from_array(&env, [500, 500]), &0);
