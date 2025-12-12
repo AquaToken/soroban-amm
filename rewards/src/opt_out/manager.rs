@@ -34,7 +34,11 @@ impl ManagerPlugin for OptOutManagerPlugin {
             true => share_balance,
             false => 0,
         };
-        let effective_total_share = total_share - self.get_total_excluded_shares(storage);
-        (effective_balance, effective_total_share)
+
+        // Leave `total_share` unchanged so a user's working balance depends only on their
+        // position and boost, not on other accounts' opt-out status. Exclusion removes the
+        // account from rewards by zeroing `effective_balance`; working supply is adjusted
+        // through each user's own checkpoint instead of mutating the shared total.
+        (effective_balance, total_share)
     }
 }

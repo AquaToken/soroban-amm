@@ -24,6 +24,7 @@ impl DummyPool {
         _e: Env,
         token_contract: Address,
         _user: Address,
+        _prev_user_shares: u128,
         _user_shares: u128,
     ) {
         token_contract.require_auth();
