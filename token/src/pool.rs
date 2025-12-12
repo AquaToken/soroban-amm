@@ -30,7 +30,6 @@ pub fn checkpoint_user_rewards(e: &Env, user: Address) {
 pub fn checkpoint_user_working_balance(
     e: &Env,
     user: Address,
-    prev_balance: u128,
     new_balance: u128,
 ) {
     let access_control = AccessControl::new(&e);
@@ -49,32 +48,9 @@ pub fn checkpoint_user_working_balance(
             [
                 e.current_contract_address().to_val(),
                 user.clone().to_val(),
-                prev_balance.into_val(e),
                 new_balance.into_val(e),
             ],
         ),
     );
 }
 
-pub fn sync_excluded_on_burn(e: &Env, user: Address, prev_balance: u128, amount: u128) {
-    let access_control = AccessControl::new(&e);
-    let pool_address = access_control.get_role(&Role::Admin);
-
-    if user == pool_address {
-        return;
-    }
-
-    e.invoke_contract::<()>(
-        &pool_address,
-        &Symbol::new(&e, "sync_excluded_on_burn"),
-        Vec::from_array(
-            &e,
-            [
-                e.current_contract_address().to_val(),
-                user.to_val(),
-                prev_balance.into_val(e),
-                amount.into_val(e),
-            ],
-        ),
-    );
-}

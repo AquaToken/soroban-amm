@@ -285,7 +285,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             rewards_manager.get_working_balance(&user, user_shares),
             rewards_manager.get_working_supply(total_shares),
         );
-        rewards_manager.checkpoint_user(&user, total_shares, user_shares, user_shares);
+        rewards_manager.checkpoint_user(&user, total_shares, user_shares);
 
         let desired_a = desired_amounts.get(0).unwrap();
         let desired_b = desired_amounts.get(1).unwrap();
@@ -363,7 +363,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards_manager.update_working_balance(
             &user,
             new_total_shares,
-            user_shares,
             user_shares + shares_to_mint,
         );
 
@@ -774,7 +773,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             rewards_manager.get_working_balance(&user, user_shares),
             rewards_manager.get_working_supply(total_shares),
         );
-        rewards_manager.checkpoint_user(&user, total_shares, user_shares, user_shares);
+        rewards_manager.checkpoint_user(&user, total_shares, user_shares);
 
         burn_shares(&e, &user, share_amount);
 
@@ -809,7 +808,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards_manager.update_working_balance(
             &user,
             total_shares - share_amount,
-            user_shares,
             user_shares - share_amount,
         );
 
@@ -1368,7 +1366,7 @@ impl RewardsTrait for LiquidityPool {
         );
 
         // display actual values
-        let user_data = manager.checkpoint_user(&user, total_shares, user_shares, user_shares);
+        let user_data = manager.checkpoint_user(&user, total_shares, user_shares);
         let pool_data = storage.get_pool_reward_data();
 
         result.set(symbol_short!("acc"), pool_data.accumulated as i128);
@@ -1429,14 +1427,13 @@ impl RewardsTrait for LiquidityPool {
             rewards_manager.get_working_balance(&user, user_shares),
             rewards_manager.get_working_supply(total_shares),
         );
-        rewards_manager.checkpoint_user(&user, total_shares, user_shares, user_shares);
+        rewards_manager.checkpoint_user(&user, total_shares, user_shares);
     }
 
     fn checkpoint_working_balance(
         e: Env,
         token_contract: Address,
         user: Address,
-        prev_user_shares: u128,
         user_shares: u128,
     ) {
         // checkpoint working balance with provided values to avoid re-entrancy issue
@@ -1453,25 +1450,7 @@ impl RewardsTrait for LiquidityPool {
             rewards_manager.get_working_balance(&user, user_shares),
             rewards_manager.get_working_supply(total_shares),
         );
-        rewards_manager.checkpoint_user(&user, total_shares, prev_user_shares, user_shares);
-    }
-
-    fn sync_excluded_on_burn(
-        e: Env,
-        token_contract: Address,
-        user: Address,
-        prev_balance: u128,
-        amount: u128,
-    ) {
-        token_contract.require_auth();
-        if token_contract != get_token_share(&e) {
-            panic_with_error!(&e, AccessControlError::Unauthorized);
-        }
-
-        let rewards = get_rewards_manager(&e);
-        rewards
-            .manager()
-            .sync_excluded_on_burn(&user, prev_balance, amount);
+        rewards_manager.checkpoint_user(&user, total_shares, user_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.
@@ -1605,7 +1584,7 @@ impl RewardsTrait for LiquidityPool {
             rewards_manager.get_working_supply(total_shares),
         );
         rewards_manager.set_user_rewards_state(&user, user_shares, state);
-        rewards_manager.checkpoint_user(&user, total_shares, user_shares, user_shares);
+        rewards_manager.checkpoint_user(&user, total_shares, user_shares);
     }
 
     fn admin_set_rewards_state(e: Env, admin: Address, user: Address, state: bool) {
@@ -1622,7 +1601,7 @@ impl RewardsTrait for LiquidityPool {
             rewards_manager.get_working_supply(total_shares),
         );
         rewards_manager.set_user_rewards_state(&user, user_shares, state);
-        rewards_manager.checkpoint_user(&user, total_shares, user_shares, user_shares);
+        rewards_manager.checkpoint_user(&user, total_shares, user_shares);
     }
 }
 
