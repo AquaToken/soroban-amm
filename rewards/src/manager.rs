@@ -339,7 +339,8 @@ impl Manager {
         user_balance_shares: u128,
     ) -> u128 {
         // update pool data & calculate reward
-        self.checkpoint_user(user, total_shares, user_balance_shares).to_claim
+        self.checkpoint_user(user, total_shares, user_balance_shares)
+            .to_claim
     }
 
     // Actually claims the user's reward and transfers tokens.

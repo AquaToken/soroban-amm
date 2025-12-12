@@ -59,21 +59,6 @@ impl Token {
         receive_balance(&e, to.clone(), amount);
         TokenUtils::new(&e).events().mint(admin, to, amount);
     }
-
-    // Burn without invoking working-balance hooks. This entrypoint is restricted to the
-    // admin (pool) so share retirements can avoid re-entering the pool contract while
-    // still keeping total supply accurate.
-    pub fn burn_skip_hook(e: Env, admin: Address, from: Address, amount: i128) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        check_nonnegative_amount(&e, amount);
-        bump_instance(&e);
-
-        spend_balance(&e, from.clone(), amount);
-        TokenUtils::new(&e).events().burn(from, amount);
-    }
-
 }
 
 #[contractimpl]
@@ -108,21 +93,14 @@ impl token::Interface for Token {
 
         bump_instance(&e);
 
-        let from_prev = read_balance(&e, from.clone()) as u128;
-        let to_prev = read_balance(&e, to.clone()) as u128;
-
         checkpoint_user_rewards(&e, from.clone());
         checkpoint_user_rewards(&e, to.clone());
 
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
 
-        checkpoint_user_working_balance(
-            &e,
-            from.clone(),
-            from_prev.saturating_sub(amount as u128),
-        );
-        checkpoint_user_working_balance(&e, to.clone(), to_prev + amount as u128);
+        checkpoint_user_working_balance(&e, from.clone());
+        checkpoint_user_working_balance(&e, to.clone());
 
         TokenUtils::new(&e).events().transfer(from, to, amount);
     }
@@ -134,9 +112,6 @@ impl token::Interface for Token {
 
         bump_instance(&e);
 
-        let from_prev = read_balance(&e, from.clone()) as u128;
-        let to_prev = read_balance(&e, to.clone()) as u128;
-
         checkpoint_user_rewards(&e, from.clone());
         checkpoint_user_rewards(&e, to.clone());
 
@@ -144,12 +119,8 @@ impl token::Interface for Token {
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
 
-        checkpoint_user_working_balance(
-            &e,
-            from.clone(),
-            from_prev.saturating_sub(amount as u128),
-        );
-        checkpoint_user_working_balance(&e, to.clone(), to_prev + amount as u128);
+        checkpoint_user_working_balance(&e, from.clone());
+        checkpoint_user_working_balance(&e, to.clone());
 
         TokenUtils::new(&e).events().transfer(from, to, amount)
     }
