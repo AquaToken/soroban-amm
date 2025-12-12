@@ -6,22 +6,48 @@ use core::cmp::min;
 use rewards::utils::test_utils::assert_approx_eq_abs;
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{symbol_short, vec, Address, Env, Error, IntoVal, Map, Symbol, Val, Vec};
-use token_share::{get_total_shares, get_user_balance_shares, Client as ShareTokenClient};
+use token_share::Client as ShareTokenClient;
 
-use crate::rewards::get_rewards_manager;
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
     create_token_contract, deploy_rewards_gauge, get_token_admin_client, install_token_wasm,
     install_token_wasm_with_decimal, Setup, TestConfig,
 };
+use crate::rewards::get_rewards_manager;
 use crate::LiquidityPoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
+use access_control::utils::require_rewards_admin_or_owner;
 use liquidity_pool_config_storage::testutils::deploy_config_storage;
-use rewards::storage::{PoolRewardsStorageTrait, UserRewardsStorageTrait};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use utils::test_utils::{install_dummy_wasm, jump};
+use rewards::storage::{UserRewardData, UserRewardsStorageTrait};
+
+fn adjust_user_reward(e: &Env, admin: &Address, user: &Address, diff: i128) {
+    admin.require_auth();
+    require_rewards_admin_or_owner(e, admin);
+
+    let rewards = get_rewards_manager(e);
+    let storage = rewards.storage();
+    let mut user_data = storage.get_user_reward_data(user).unwrap_or(UserRewardData {
+        pool_accumulated: 0,
+        to_claim: 0,
+        last_block: 0,
+    });
+
+    if diff.is_positive() {
+        user_data.to_claim = user_data
+            .to_claim
+            .checked_add(diff as u128)
+            .expect("reward overflow");
+    } else {
+        let abs_diff = diff.unsigned_abs();
+        user_data.to_claim = user_data.to_claim.saturating_sub(abs_diff);
+    }
+
+    storage.set_user_reward_data(user, &user_data);
+}
 
 fn configure_rewards(
     env: &Env,
@@ -6337,12 +6363,9 @@ fn test_fix_broken_claim() {
     );
 
     jump(&e, 1);
-    // attacher somehow manages to abuse the system, so reward of two is greater than total configured
+    // attacker somehow manages to abuse the system, so reward of two is greater than total configured
     e.as_contract(&liq_pool.address, || {
-        let storage = get_rewards_manager(&e).storage();
-        let mut user_data = storage.get_user_reward_data(&user2).unwrap();
-        user_data.to_claim += 1_0000000;
-        storage.set_user_reward_data(&user2, &user_data);
+        adjust_user_reward(&e, &setup.admin, &user2, 1_0000000_i128);
     });
 
     jump(&e, 60);
@@ -6403,12 +6426,7 @@ fn test_fix_locked_reward_tokens() {
     let boost_admin = get_token_admin_client(&e, &setup.reward_boost_token.address);
 
     // pool reward is overinflated due to historical reasons. we've got 1 locked token we'd like to recover
-    e.as_contract(&liq_pool.address, || {
-        let storage = get_rewards_manager(&e).storage();
-        let mut pool_data = storage.get_pool_reward_data();
-        pool_data.accumulated += 1_0000000;
-        storage.set_pool_reward_data(&pool_data);
-    });
+    liq_pool.adjust_total_accumulated_reward(&setup.admin, &1_0000000_i128);
 
     // users behave normally: simple deposit with boost due to locked tokens
     boost_admin.mint(&user1, &10_000_0000000);
@@ -6591,19 +6609,8 @@ fn test_rewards_state_opt_out_tracks_excluded_shares_on_balance_change() {
     liq_pool.deposit(&user1, &Vec::from_array(&env, [500, 500]), &0);
     liq_pool.deposit(&user2, &Vec::from_array(&env, [500, 500]), &0);
 
-    let mut initial_shares_user1 = 0;
-    env.as_contract(&liq_pool.address, || {
-        initial_shares_user1 = get_user_balance_shares(&env, &user1);
-    });
-    let get_excluded = || {
-        let mut total = 0;
-        env.as_contract(&liq_pool.address, || {
-            total = get_rewards_manager(&env)
-                .storage()
-                .get_total_excluded_shares();
-        });
-        total
-    };
+    let initial_shares_user1 = liq_pool.get_user_shares(&user1);
+    let get_excluded = || liq_pool.get_total_excluded_shares();
     assert_eq!(get_excluded(), 0);
 
     liq_pool.set_rewards_state(&user1, &false);
@@ -6612,19 +6619,13 @@ fn test_rewards_state_opt_out_tracks_excluded_shares_on_balance_change() {
     let (_, minted_extra) = liq_pool.deposit(&user1, &Vec::from_array(&env, [200, 200]), &0);
     assert_eq!(get_excluded(), initial_shares_user1);
 
-    let mut total_shares = 0;
-    env.as_contract(&liq_pool.address, || {
-        total_shares = get_total_shares(&env);
-    });
+    let total_shares = liq_pool.get_total_shares();
     let withdraw_amount = minted_extra / 2;
     liq_pool.withdraw(&user1, &withdraw_amount, &Vec::from_array(&env, [0, 0]));
     assert_eq!(get_excluded(), initial_shares_user1);
 
     share_token.transfer(&user1, &user2, &(withdraw_amount as i128));
     assert_eq!(get_excluded(), initial_shares_user1);
-    let mut updated_total_shares = 0;
-    env.as_contract(&liq_pool.address, || {
-        updated_total_shares = get_total_shares(&env);
-    });
+    let updated_total_shares = liq_pool.get_total_shares();
     assert_eq!(updated_total_shares, total_shares - withdraw_amount);
 }

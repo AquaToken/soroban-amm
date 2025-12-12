@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::storage::{set_global_reward_data, set_reward_configs, GlobalRewardData, RewardConfig};
+use crate::storage::{GlobalRewardData, RewardConfig};
 use crate::testutils::{create_contract, Setup};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::StellarAssetClient;
@@ -578,33 +578,28 @@ fn test_reward_numeric_overflow() {
     let reward_token_sac = StellarAssetClient::new(&e, &setup.reward_token.address);
     reward_token_sac.mint(&distributor, &1_000_000_000_0000000);
 
-    e.as_contract(&setup.contract.address, || {
-        set_global_reward_data(
+    setup.contract.set_reward_state(
+        &setup.pool_address,
+        &GlobalRewardData {
+            epoch: 1756199917,
+            inv: U256::from_u128(&e, 0),
+            accumulated: 0,
+            claimed: 0,
+        },
+        &vec![
             &e,
-            &GlobalRewardData {
-                epoch: 1756199917,
-                inv: U256::from_u128(&e, 0),
-                accumulated: 0,
-                claimed: 0,
+            RewardConfig {
+                expired_at: 1756857600,
+                start_at: 1756252800,
+                tps: 1157407407407407,
             },
-        );
-        set_reward_configs(
-            &e,
-            vec![
-                &e,
-                RewardConfig {
-                    expired_at: 1756857600,
-                    start_at: 1756252800,
-                    tps: 1157407407407407,
-                },
-                RewardConfig {
-                    expired_at: 1756857600,
-                    start_at: 1756252800,
-                    tps: 636574074074074,
-                },
-            ],
-        );
-    });
+            RewardConfig {
+                expired_at: 1756857600,
+                start_at: 1756252800,
+                tps: 636574074074074,
+            },
+        ],
+    );
 
     jump(&e, 1756293155);
 
