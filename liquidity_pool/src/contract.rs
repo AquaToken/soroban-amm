@@ -1585,6 +1585,12 @@ impl RewardsTrait for LiquidityPool {
         );
         rewards_manager.set_user_rewards_state(&user, user_shares, state);
         rewards_manager.checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(
+            &e,
+            &user,
+            rewards_manager.get_working_balance(&user, user_shares),
+            rewards_manager.get_working_supply(total_shares),
+        );
     }
 
     fn admin_set_rewards_state(e: Env, admin: Address, user: Address, state: bool) {
@@ -1602,6 +1608,12 @@ impl RewardsTrait for LiquidityPool {
         );
         rewards_manager.set_user_rewards_state(&user, user_shares, state);
         rewards_manager.checkpoint_user(&user, total_shares, user_shares);
+        rewards_gauge::operations::checkpoint_user(
+            &e,
+            &user,
+            rewards_manager.get_working_balance(&user, user_shares),
+            rewards_manager.get_working_supply(total_shares),
+        );
     }
 }
 
