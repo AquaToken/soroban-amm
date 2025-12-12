@@ -1,16 +1,17 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::rewards::get_rewards_manager;
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_reward_boost_feed_contract,
     create_token_contract, deploy_rewards_gauge, get_token_admin_client, install_token_wasm, Setup,
     TestConfig,
 };
-use crate::rewards::get_rewards_manager;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use access_control::utils::require_rewards_admin_or_owner;
 use core::cmp::min;
 use liquidity_pool_config_storage::testutils::deploy_config_storage;
+use rewards::storage::{UserRewardData, UserRewardsStorageTrait};
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -19,7 +20,6 @@ use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Map, Symbol, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
-use rewards::storage::{UserRewardData, UserRewardsStorageTrait};
 use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump};
 
 fn adjust_user_reward(e: &Env, admin: &Address, user: &Address, diff: i128) {
@@ -28,11 +28,13 @@ fn adjust_user_reward(e: &Env, admin: &Address, user: &Address, diff: i128) {
 
     let rewards = get_rewards_manager(e);
     let storage = rewards.storage();
-    let mut user_data = storage.get_user_reward_data(user).unwrap_or(UserRewardData {
-        pool_accumulated: 0,
-        to_claim: 0,
-        last_block: 0,
-    });
+    let mut user_data = storage
+        .get_user_reward_data(user)
+        .unwrap_or(UserRewardData {
+            pool_accumulated: 0,
+            to_claim: 0,
+            last_block: 0,
+        });
 
     if diff.is_positive() {
         user_data.to_claim = user_data
