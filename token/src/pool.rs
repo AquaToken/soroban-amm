@@ -27,11 +27,7 @@ pub fn checkpoint_user_rewards(e: &Env, user: Address) {
     );
 }
 
-pub fn checkpoint_user_working_balance(
-    e: &Env,
-    user: Address,
-    new_balance: u128,
-) {
+pub fn checkpoint_user_working_balance(e: &Env, user: Address) {
     let access_control = AccessControl::new(&e);
     let pool_address = access_control.get_role(&Role::Admin);
 
@@ -48,9 +44,8 @@ pub fn checkpoint_user_working_balance(
             [
                 e.current_contract_address().to_val(),
                 user.clone().to_val(),
-                new_balance.into_val(e),
+                (read_balance(&e, user) as u128).into_val(e),
             ],
         ),
     );
 }
-
