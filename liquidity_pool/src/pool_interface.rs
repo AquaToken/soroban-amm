@@ -37,6 +37,9 @@ pub trait LiquidityPoolTrait {
     // Returns the total amount of shares
     fn get_total_shares(e: Env) -> u128;
 
+    // Returns the amount of shares owned by a specific user
+    fn get_user_shares(e: Env, user: Address) -> u128;
+
     fn get_tokens(e: Env) -> Vec<Address>;
 
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
@@ -101,6 +104,9 @@ pub trait LiquidityPoolTrait {
 
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> Map<Symbol, Val>;
+
+    // Get total excluded shares that are not eligible for rewards.
+    fn get_total_excluded_shares(e: Env) -> u128;
 }
 
 pub trait AdminInterfaceTrait {

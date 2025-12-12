@@ -1297,6 +1297,11 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         get_total_shares(&e)
     }
 
+    // Returns the number of pool shares owned by a user.
+    fn get_user_shares(e: Env, user: Address) -> u128 {
+        get_user_balance_shares(&e, &user)
+    }
+
     // Returns the pool's reserves.
     //
     // # Returns
@@ -1814,6 +1819,12 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         result.set(symbol_short!("a"), a.into_val(&e));
         result.set(symbol_short!("n_tokens"), (n_coins as u32).into_val(&e));
         result
+    }
+
+    fn get_total_excluded_shares(e: Env) -> u128 {
+        get_rewards_manager(&e)
+            .storage()
+            .get_total_excluded_shares()
     }
 }
 
