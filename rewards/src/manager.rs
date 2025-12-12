@@ -68,7 +68,8 @@ impl Manager {
             _ => {}
         }
 
-        self.storage.set_total_excluded_shares(total_excluded);
+        self.opt_out_manager_plugin
+            .set_total_excluded_shares(&self.storage, total_excluded);
         self.opt_out_manager_plugin
             .set_user_rewards_state(&self.storage, user, value)
     }
