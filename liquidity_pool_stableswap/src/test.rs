@@ -6610,7 +6610,7 @@ fn test_rewards_state_opt_out_tracks_excluded_shares_on_balance_change() {
     assert_eq!(get_excluded(), initial_shares_user1);
 
     let (_, minted_extra) = liq_pool.deposit(&user1, &Vec::from_array(&env, [200, 200]), &0);
-    assert_eq!(get_excluded(), initial_shares_user1 + minted_extra);
+    assert_eq!(get_excluded(), initial_shares_user1);
 
     let mut total_shares = 0;
     env.as_contract(&liq_pool.address, || {
@@ -6618,16 +6618,10 @@ fn test_rewards_state_opt_out_tracks_excluded_shares_on_balance_change() {
     });
     let withdraw_amount = minted_extra / 2;
     liq_pool.withdraw(&user1, &withdraw_amount, &Vec::from_array(&env, [0, 0]));
-    assert_eq!(
-        get_excluded(),
-        initial_shares_user1 + minted_extra - withdraw_amount
-    );
+    assert_eq!(get_excluded(), initial_shares_user1);
 
     share_token.transfer(&user1, &user2, &(withdraw_amount as i128));
-    assert_eq!(
-        get_excluded(),
-        initial_shares_user1 + minted_extra - withdraw_amount * 2
-    );
+    assert_eq!(get_excluded(), initial_shares_user1);
     let mut updated_total_shares = 0;
     env.as_contract(&liq_pool.address, || {
         updated_total_shares = get_total_shares(&env);

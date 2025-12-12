@@ -4,6 +4,11 @@ use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+
+pub mod token {
+    soroban_sdk::contractimport!(file = "../contracts/soroban_token_contract.wasm");
+}
+pub use token::{self as token_contract, Client, WASM};
 use utils::bump::bump_instance;
 
 #[derive(Clone)]
@@ -13,10 +18,6 @@ enum DataKey {
     TotalShares,
 }
 
-pub mod token {
-    soroban_sdk::contractimport!(file = "../contracts/soroban_token_contract.wasm");
-}
-pub use token::{self as token_contract, Client};
 use utils::storage_errors::StorageError;
 
 pub fn get_token_share(e: &Env) -> Address {
@@ -54,13 +55,7 @@ pub fn burn_shares(e: &Env, from: &Address, amount: u128) {
     put_total_shares(e, total_share - amount);
 
     let share_contract = get_token_share(e);
-    // Skip reward hooks when the pool (admin) retires shares to avoid re-entering the pool
-    // contract during burns.
-    token_contract::Client::new(e, &share_contract).burn_skip_hook(
-        &e.current_contract_address(),
-        from,
-        &(amount as i128),
-    );
+    SorobanTokenClient::new(e, &share_contract).burn(from, &(amount as i128));
 }
 
 pub fn mint_shares(e: &Env, to: &Address, amount: i128) {
