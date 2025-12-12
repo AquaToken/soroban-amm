@@ -59,6 +59,7 @@ impl Token {
         receive_balance(&e, to.clone(), amount);
         TokenUtils::new(&e).events().mint(admin, to, amount);
     }
+
 }
 
 #[contractimpl]
@@ -93,14 +94,22 @@ impl token::Interface for Token {
 
         bump_instance(&e);
 
+        let from_prev = read_balance(&e, from.clone()) as u128;
+        let to_prev = read_balance(&e, to.clone()) as u128;
+
         checkpoint_user_rewards(&e, from.clone());
         checkpoint_user_rewards(&e, to.clone());
 
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
 
-        checkpoint_user_working_balance(&e, from.clone());
-        checkpoint_user_working_balance(&e, to.clone());
+        checkpoint_user_working_balance(
+            &e,
+            from.clone(),
+            from_prev,
+            from_prev.saturating_sub(amount as u128),
+        );
+        checkpoint_user_working_balance(&e, to.clone(), to_prev, to_prev + amount as u128);
 
         TokenUtils::new(&e).events().transfer(from, to, amount);
     }
@@ -112,6 +121,9 @@ impl token::Interface for Token {
 
         bump_instance(&e);
 
+        let from_prev = read_balance(&e, from.clone()) as u128;
+        let to_prev = read_balance(&e, to.clone()) as u128;
+
         checkpoint_user_rewards(&e, from.clone());
         checkpoint_user_rewards(&e, to.clone());
 
@@ -119,8 +131,13 @@ impl token::Interface for Token {
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
 
-        checkpoint_user_working_balance(&e, from.clone());
-        checkpoint_user_working_balance(&e, to.clone());
+        checkpoint_user_working_balance(
+            &e,
+            from.clone(),
+            from_prev,
+            from_prev.saturating_sub(amount as u128),
+        );
+        checkpoint_user_working_balance(&e, to.clone(), to_prev, to_prev + amount as u128);
 
         TokenUtils::new(&e).events().transfer(from, to, amount)
     }

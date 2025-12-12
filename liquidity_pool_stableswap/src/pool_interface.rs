@@ -175,7 +175,17 @@ pub trait RewardsTrait {
         e: Env,
         token_contract: Address,
         user: Address,
+        prev_user_shares: u128,
         user_shares: u128,
+    );
+
+    // Sync excluded supply updates when shares are burned outside pool entrypoints.
+    fn sync_excluded_on_burn(
+        e: Env,
+        token_contract: Address,
+        user: Address,
+        prev_balance: u128,
+        amount: u128,
     );
 
     // Get total amount of accumulated reward for the pool

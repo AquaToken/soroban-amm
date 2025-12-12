@@ -49,7 +49,26 @@ impl Manager {
             .get_user_rewards_state(&self.storage, user)
     }
 
-    pub fn set_user_rewards_state(&self, user: &Address, value: bool) {
+    pub fn set_user_rewards_state(&self, user: &Address, user_share_balance: u128, value: bool) {
+        let current_state = self
+            .opt_out_manager_plugin
+            .get_user_rewards_state(&self.storage, user);
+
+        if current_state == value {
+            return;
+        }
+
+        let mut total_excluded = self
+            .opt_out_manager_plugin
+            .get_total_excluded_shares(&self.storage);
+
+        match (current_state, value) {
+            (true, false) => total_excluded += user_share_balance,
+            (false, true) => total_excluded = total_excluded.saturating_sub(user_share_balance),
+            _ => {}
+        }
+
+        self.storage.put_total_excluded_shares(total_excluded);
         self.opt_out_manager_plugin
             .set_user_rewards_state(&self.storage, user, value)
     }
@@ -320,7 +339,7 @@ impl Manager {
         user_balance_shares: u128,
     ) -> u128 {
         // update pool data & calculate reward
-        self.checkpoint_user(user, total_shares, user_balance_shares)
+        self.checkpoint_user(user, total_shares, user_balance_shares, user_balance_shares)
             .to_claim
     }
 
@@ -336,7 +355,7 @@ impl Manager {
             last_block,
             pool_accumulated,
             to_claim: reward_amount,
-        } = self.checkpoint_user(user, total_shares, user_balance_shares);
+        } = self.checkpoint_user(user, total_shares, user_balance_shares, user_balance_shares);
 
         // Increase total claimed in the pool
         let mut pool_data = self.storage.get_pool_reward_data();
@@ -367,10 +386,15 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
+        prev_user_balance_shares: u128,
         user_balance_shares: u128,
     ) -> UserRewardData {
-        let (working_balance, new_working_supply) =
-            self.update_working_balance(user, total_shares, user_balance_shares);
+        let (working_balance, new_working_supply) = self.update_working_balance(
+            user,
+            total_shares,
+            prev_user_balance_shares,
+            user_balance_shares,
+        );
 
         let pool_data = self.update_rewards_data(new_working_supply);
         let user_data = self.update_user_reward(&pool_data, user, working_balance);
@@ -406,19 +430,53 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128,
+        prev_share_balance: u128,
+        new_share_balance: u128,
     ) -> (u128, u128) {
-        let prev_working_balance = self.get_working_balance(user, user_balance_shares);
+        self.sync_excluded_for_balance(user, prev_share_balance, new_share_balance);
+        let prev_working_balance = self.get_working_balance(user, new_share_balance);
         let prev_working_supply = self.get_working_supply(total_shares);
 
         let working_balance =
-            self.calculate_effective_balance(user, user_balance_shares, total_shares);
+            self.calculate_effective_balance(user, new_share_balance, total_shares);
 
         let new_working_supply = prev_working_supply + working_balance - prev_working_balance;
         self.storage.set_working_supply(new_working_supply);
         self.storage.set_working_balance(user, working_balance);
 
         (prev_working_balance, prev_working_supply)
+    }
+
+    // ------------------------------------
+    // Excluded share synchronization
+    // ------------------------------------
+
+    pub fn sync_excluded_for_balance(
+        &self,
+        user: &Address,
+        prev_share_balance: u128,
+        new_share_balance: u128,
+    ) {
+        if !self.storage.get_user_rewards_state(user) {
+            let mut excluded = self
+                .opt_out_manager_plugin
+                .get_total_excluded_shares(&self.storage);
+            if new_share_balance >= prev_share_balance {
+                excluded += new_share_balance - prev_share_balance;
+            } else {
+                excluded = excluded.saturating_sub(prev_share_balance - new_share_balance);
+            }
+
+            self.storage.put_total_excluded_shares(excluded);
+        }
+    }
+
+    pub fn sync_excluded_on_mint(&self, user: &Address, prev_balance: u128, amount: u128) {
+        self.sync_excluded_for_balance(user, prev_balance, prev_balance + amount);
+    }
+
+    pub fn sync_excluded_on_burn(&self, user: &Address, prev_balance: u128, amount: u128) {
+        self.sync_excluded_for_balance(user, prev_balance, prev_balance.saturating_sub(amount));
     }
 
     // ------------------------------------
