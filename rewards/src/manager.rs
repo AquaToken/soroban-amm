@@ -30,7 +30,7 @@ pub trait ManagerPlugin {
         user: &Address,
         share_balance: u128,
         total_share: u128,
-    ) -> (u128, u128);
+    ) -> u128;
 }
 
 impl Manager {
@@ -98,19 +98,18 @@ impl Manager {
         total_share: u128,
     ) -> u128 {
         // run plugins in order
-        // opt-out plugin changes total supply since user can opt-out of rewards, so it goes first
-        let (eff_balance, eff_supply) = self.opt_out_manager_plugin.calculate_effective_balance(
+        // opt-out plugin affects user balance since user can opt out from rewards, so it goes first
+        let eff_balance = self.opt_out_manager_plugin.calculate_effective_balance(
             &self.storage,
             user,
             share_balance,
             total_share,
         );
-        // boost plugin doesn't change total supply directly, so it goes second
-        let (boosted_balance, _) = self.boost_manager_plugin.calculate_effective_balance(
+        let boosted_balance = self.boost_manager_plugin.calculate_effective_balance(
             &self.storage,
             user,
             eff_balance,
-            eff_supply,
+            total_share,
         );
         boosted_balance
     }

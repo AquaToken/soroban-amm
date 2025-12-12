@@ -48,7 +48,7 @@ impl ManagerPlugin for BoostManagerPlugin {
         user: &Address,
         share_balance: u128,
         total_share: u128,
-    ) -> (u128, u128) {
+    ) -> u128 {
         // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
         let lock_balance = self.get_user_boost_balance(storage, &user);
         let total_locked = self.get_total_locked(storage);
@@ -62,9 +62,9 @@ impl ManagerPlugin for BoostManagerPlugin {
 
         // min(adjusted_balance, max_effective_balance)
         if adjusted_balance > max_effective_balance {
-            (max_effective_balance, total_share)
+            max_effective_balance
         } else {
-            (adjusted_balance, total_share)
+            adjusted_balance
         }
     }
 }

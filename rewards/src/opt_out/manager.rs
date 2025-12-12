@@ -28,8 +28,8 @@ impl ManagerPlugin for OptOutManagerPlugin {
         storage: &Storage,
         user: &Address,
         share_balance: u128,
-        total_share: u128,
-    ) -> (u128, u128) {
+        _total_share: u128,
+    ) -> u128 {
         let effective_balance = match storage.get_user_rewards_state(user) {
             true => share_balance,
             false => 0,
@@ -39,6 +39,6 @@ impl ManagerPlugin for OptOutManagerPlugin {
         // position and boost, not on other accounts' opt-out status. Exclusion removes the
         // account from rewards by zeroing `effective_balance`; working supply is adjusted
         // through each user's own checkpoint instead of mutating the shared total.
-        (effective_balance, total_share)
+        effective_balance
     }
 }
