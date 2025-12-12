@@ -8,10 +8,9 @@ use crate::testutils::{
     TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use access_control::utils::require_rewards_admin_or_owner;
 use core::cmp::min;
 use liquidity_pool_config_storage::testutils::deploy_config_storage;
-use rewards::storage::{UserRewardData, UserRewardsStorageTrait};
+use rewards::storage::{PoolRewardsStorageTrait, UserRewardsStorageTrait};
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
@@ -21,33 +20,6 @@ use soroban_sdk::{
 };
 use token_share::Client as ShareTokenClient;
 use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump};
-
-fn adjust_user_reward(e: &Env, admin: &Address, user: &Address, diff: i128) {
-    admin.require_auth();
-    require_rewards_admin_or_owner(e, admin);
-
-    let rewards = get_rewards_manager(e);
-    let storage = rewards.storage();
-    let mut user_data = storage
-        .get_user_reward_data(user)
-        .unwrap_or(UserRewardData {
-            pool_accumulated: 0,
-            to_claim: 0,
-            last_block: 0,
-        });
-
-    if diff.is_positive() {
-        user_data.to_claim = user_data
-            .to_claim
-            .checked_add(diff as u128)
-            .expect("reward overflow");
-    } else {
-        let abs_diff = diff.unsigned_abs();
-        user_data.to_claim = user_data.to_claim.saturating_sub(abs_diff);
-    }
-
-    storage.set_user_reward_data(user, &user_data);
-}
 
 #[test]
 fn test() {
@@ -3485,7 +3457,10 @@ fn test_fix_broken_claim() {
     jump(&e, 1);
     // attacker somehow manages to abuse the system, so reward of two is greater than total configured
     e.as_contract(&liq_pool.address, || {
-        adjust_user_reward(&e, &setup.admin, &user2, 1_0000000_i128);
+        let storage = get_rewards_manager(&e).storage();
+        let mut user_data = storage.get_user_reward_data(&user2).unwrap();
+        user_data.to_claim += 1_0000000;
+        storage.set_user_reward_data(&user2, &user_data);
     });
 
     jump(&e, 60);
@@ -3547,7 +3522,12 @@ fn test_fix_locked_reward_tokens() {
     let boost_admin = get_token_admin_client(&e, &setup.reward_boost_token.address);
 
     // pool reward is overinflated due to historical reasons. we've got 1 locked token we'd like to recover
-    liq_pool.adjust_total_accumulated_reward(&setup.admin, &1_0000000_i128);
+    e.as_contract(&liq_pool.address, || {
+        let storage = get_rewards_manager(&e).storage();
+        let mut pool_data = storage.get_pool_reward_data();
+        pool_data.accumulated += 1_0000000;
+        storage.set_pool_reward_data(&pool_data);
+    });
 
     // users behave normally: simple deposit with boost due to locked tokens
     boost_admin.mint(&user1, &10_000_0000000);
