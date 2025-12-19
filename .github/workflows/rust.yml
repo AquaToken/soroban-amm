@@ -23,6 +23,9 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install Task
       uses: arduino/setup-task@v1
+    - uses: ConorMacBride/install-package@v1
+      with:
+        apt: libdbus-1-dev pkg-config
     - name: Install soroban-cli
       uses: baptiste0928/cargo-install@v3
       with:
