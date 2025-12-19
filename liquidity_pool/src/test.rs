@@ -997,6 +997,65 @@ fn test_boosted_rewards() {
 }
 
 #[test]
+fn test_gauge_checkpoint_recalculated_working_balance_on_claim() {
+    let setup = Setup::new_with_config(&TestConfig {
+        users_count: 2,
+        ..TestConfig::default()
+    });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let users = setup.users;
+
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &token_reward.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    for user in users.iter() {
+        liq_pool.deposit(user, &Vec::from_array(&env, [100, 100]), &0);
+    }
+
+    let gauge_distributor = Address::generate(&env);
+    let gauge_tps = 30_u128;
+    let gauge_duration = 100_u64;
+    let gauge_total_reward = gauge_tps * gauge_duration as u128;
+    get_token_admin_client(&env, &token_reward.address).mint(
+        &gauge_distributor,
+        &(gauge_total_reward as i128),
+    );
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &gauge_distributor,
+        &gauge.address,
+        &None,
+        &gauge_duration,
+        &gauge_tps,
+    );
+
+    jump(&env, 10);
+
+    get_token_admin_client(&env, &setup.reward_boost_token.address).mint(&users[0], &1);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &3);
+
+    jump(&env, 10);
+
+    liq_pool.claim(&users[0]);
+
+    let user0_gauge_reward = liq_pool
+        .gauges_claim(&users[0])
+        .get(token_reward.address.clone())
+        .unwrap();
+    let user1_gauge_reward = liq_pool
+        .gauges_claim(&users[1])
+        .get(token_reward.address.clone())
+        .unwrap();
+
+    assert_eq!(user0_gauge_reward, 300);
+    assert_eq!(user1_gauge_reward, 300);
+}
+
+#[test]
 fn test_lazy_user_rewards() {
     let setup = Setup::default();
     let env = setup.env;
