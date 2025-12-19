@@ -9,7 +9,6 @@ pub mod token {
     soroban_sdk::contractimport!(file = "../contracts/soroban_token_contract.wasm");
 }
 pub use token::{self as token_contract, Client, WASM};
-use utils::bump::bump_instance;
 
 #[derive(Clone)]
 #[contracttype]
@@ -21,7 +20,6 @@ enum DataKey {
 use utils::storage_errors::StorageError;
 
 pub fn get_token_share(e: &Env) -> Address {
-    bump_instance(e);
     match e.storage().instance().get(&DataKey::TokenShare) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
@@ -29,7 +27,6 @@ pub fn get_token_share(e: &Env) -> Address {
 }
 
 pub fn put_token_share(e: &Env, contract: Address) {
-    bump_instance(e);
     e.storage().instance().set(&DataKey::TokenShare, &contract)
 }
 
@@ -38,7 +35,6 @@ pub fn get_user_balance_shares(e: &Env, user: &Address) -> u128 {
 }
 
 pub fn get_total_shares(e: &Env) -> u128 {
-    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::TotalShares)
@@ -46,7 +42,6 @@ pub fn get_total_shares(e: &Env) -> u128 {
 }
 
 pub fn put_total_shares(e: &Env, value: u128) {
-    bump_instance(e);
     e.storage().instance().set(&DataKey::TotalShares, &value)
 }
 

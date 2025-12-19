@@ -5,7 +5,7 @@ use paste::paste;
 use soroban_sdk::{
     contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Vec, U256,
 };
-use utils::bump::{bump_instance, bump_persistent, bump_temporary};
+use utils::bump::bump_temporary;
 use utils::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
@@ -83,13 +83,7 @@ pub enum PoolError {
 
 fn get_pools(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
     let key = DataKey::TokensSetPools(salt);
-    match e.storage().persistent().get(&key) {
-        Some(value) => {
-            bump_persistent(e, &key);
-            value
-        }
-        None => Map::new(e),
-    }
+    e.storage().persistent().get(&key).unwrap_or(Map::new(e))
 }
 
 generate_instance_storage_getter_and_setter!(
@@ -203,7 +197,6 @@ pub fn set_reward_tokens_detailed(
 
 // pool hash
 pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
-    bump_instance(e);
     match e.storage().instance().get(&DataKey::StableSwapPoolHash) {
         Some(v) => v,
         None => panic_with_error!(&e, LiquidityPoolRouterError::StableswapHashMissing),
@@ -211,7 +204,6 @@ pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
 }
 
 pub fn set_stableswap_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
-    bump_instance(e);
     e.storage()
         .instance()
         .set(&DataKey::StableSwapPoolHash, pool_hash)
@@ -229,7 +221,6 @@ pub fn get_pools_plain(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, Address> {
 pub fn put_pools(e: &Env, salt: BytesN<32>, pools: &Map<BytesN<32>, LiquidityPoolData>) {
     let key = DataKey::TokensSetPools(salt);
     e.storage().persistent().set(&key, pools);
-    bump_persistent(e, &key);
 }
 
 pub fn has_pool(e: &Env, salt: BytesN<32>, pool_index: BytesN<32>) -> bool {
@@ -307,10 +298,7 @@ pub fn get_pool_next_counter(e: &Env) -> u128 {
 pub fn get_tokens_set(e: &Env, index: u128) -> Vec<Address> {
     let key = DataKey::TokensSet(index);
     match e.storage().persistent().get(&key) {
-        Some(v) => {
-            bump_persistent(e, &key);
-            v
-        }
+        Some(v) => v,
         None => panic_with_error!(&e, StorageError::ValueNotInitialized),
     }
 }
@@ -318,22 +306,14 @@ pub fn get_tokens_set(e: &Env, index: u128) -> Vec<Address> {
 pub fn put_tokens_set(e: &Env, index: u128, tokens: &Vec<Address>) {
     let key = DataKey::TokensSet(index);
     e.storage().persistent().set(&key, tokens);
-    bump_persistent(e, &key);
 }
 
 pub fn get_gauge_rewards_enabled_for(e: &Env, token: Address) -> bool {
     let key = DataKey::GaugeRewardsEnabled(token);
-    match e.storage().persistent().get(&key) {
-        Some(v) => {
-            bump_persistent(e, &key);
-            v
-        }
-        None => false,
-    }
+    e.storage().persistent().get(&key).unwrap_or(false)
 }
 
 pub fn set_gauge_rewards_enabled_for(e: &Env, token: Address, enabled: bool) {
     let key = DataKey::GaugeRewardsEnabled(token);
     e.storage().persistent().set(&key, &enabled);
-    bump_persistent(e, &key);
 }
