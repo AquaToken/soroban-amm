@@ -1018,10 +1018,8 @@ fn test_gauge_checkpoint_recalculated_working_balance_on_claim() {
     let gauge_tps = 30_u128;
     let gauge_duration = 100_u64;
     let gauge_total_reward = gauge_tps * gauge_duration as u128;
-    get_token_admin_client(&env, &token_reward.address).mint(
-        &gauge_distributor,
-        &(gauge_total_reward as i128),
-    );
+    get_token_admin_client(&env, &token_reward.address)
+        .mint(&gauge_distributor, &(gauge_total_reward as i128));
     liq_pool.gauge_schedule_reward(
         &setup.router,
         &gauge_distributor,
