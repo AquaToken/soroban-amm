@@ -13,7 +13,9 @@ use access_control::management::SingleAddressManagementTrait;
 use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
 use soroban_sdk::token::{self, Interface as _};
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{
+    contract, contractimpl, panic_with_error, Address, BytesN, Env, MuxedAddress, String, Symbol,
+};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
 
@@ -79,8 +81,9 @@ impl token::Interface for Token {
         read_balance(&e, id)
     }
 
-    fn transfer(e: Env, from: Address, to: Address, amount: i128) {
+    fn transfer(e: Env, from: Address, to: MuxedAddress, amount: i128) {
         from.require_auth();
+        let to = to.address();
 
         check_nonnegative_amount(&e, amount);
 
@@ -156,7 +159,7 @@ impl UpgradeableContract for Token {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        170
+        180
     }
 
     // Get contract type symbolic name

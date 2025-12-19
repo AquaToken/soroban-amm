@@ -157,7 +157,7 @@ impl UpgradeableContract for ConfigStorage {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        170
+        180
     }
 
     // Get contract type symbolic name

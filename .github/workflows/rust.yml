@@ -27,7 +27,7 @@ jobs:
       uses: baptiste0928/cargo-install@v3
       with:
         crate: soroban-cli
-        version: 22.8.0
+        version: 23.3.0
         features: opt
         locked: true
     - name: Check code formatting
