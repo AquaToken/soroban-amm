@@ -25,7 +25,7 @@ jobs:
       uses: arduino/setup-task@v1
     - uses: ConorMacBride/install-package@v1
       with:
-        apt: libdbus-1-dev pkg-config
+        apt: libdbus-1-dev pkg-config libudev
     - name: Install soroban-cli
       uses: baptiste0928/cargo-install@v3
       with:
