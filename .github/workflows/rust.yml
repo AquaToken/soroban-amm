@@ -28,6 +28,7 @@ jobs:
       with:
         crate: soroban-cli
         version: 23.3.0
+        features: additional-libs
         locked: true
     - name: Check code formatting
       run: task fmt && git diff --exit-code
