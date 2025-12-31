@@ -12,7 +12,7 @@ tasks:
   build:
     cmds:
       - stellar contract build --package soroban_config_storage_contract
-      - stellar contract build --optimize --wasm ../target/wasm32v1-none/release/soroban_config_storage_contract.wasm --wasm-out ../contracts/soroban_config_storage_contract.wasm
+      -   
       - ls -l ../contracts/*.wasm
 
   test:

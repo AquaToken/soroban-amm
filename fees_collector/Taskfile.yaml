@@ -12,7 +12,7 @@ tasks:
   build:
     cmds:
       - stellar contract build --package soroban-fees-collector-contract
-      - stellar contract build --optimize --wasm ../target/wasm32v1-none/release/soroban_fees_collector_contract.wasm --wasm-out ../contracts/soroban_fees_collector_contract.wasm
+      - stellar contract optimize --wasm ../target/wasm32v1-none/release/soroban_fees_collector_contract.wasm --wasm-out ../contracts/soroban_fees_collector_contract.wasm
       - ls -l ../contracts/*.wasm
 
   test:

@@ -13,7 +13,7 @@ tasks:
     cmds:
       - task -d ../config_storage build || exit 1
       - stellar contract build --package soroban-rewards-gauge-contract
-      - stellar contract build --optimize --wasm ../target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm --wasm-out ../contracts/soroban_rewards_gauge_contract.wasm
+      - stellar contract optimize --wasm ../target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm --wasm-out ../contracts/soroban_rewards_gauge_contract.wasm
       - ls -l ../contracts/*.wasm
 
   test:
