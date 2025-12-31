@@ -11,8 +11,8 @@ tasks:
 
   build:
     cmds:
-      - soroban contract build --package soroban-locker-feed-contract
-      - soroban contract optimize --wasm ../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm --wasm-out ../contracts/soroban_locker_feed_contract.wasm
+      - stellar contract build --package soroban-locker-feed-contract
+      - stellar contract build --optimize --wasm ../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm --wasm-out ../contracts/soroban_locker_feed_contract.wasm
       - ls -l ../contracts/*.wasm
 
   test:
