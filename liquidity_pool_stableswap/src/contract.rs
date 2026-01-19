@@ -102,6 +102,9 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // * The virtual price for 1 LP token.
     fn get_virtual_price(e: Env) -> u128 {
+        // sync reserves first
+        Self::_sync_reserves(&e);
+
         let d = Self::_get_d(&e, &Self::_xp(&e, &get_reserves(&e)), Self::a(e.clone()));
         // D is in the units similar to DAI (e.g. converted to precision 1e7)
         // When balanced, D = n * x_u - total virtual value of the portfolio
@@ -133,6 +136,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
+        // sync reserves first
+        Self::_sync_reserves(&e);
+
         let mut reserves = get_reserves(&e);
         let amp = Self::a(e.clone());
         let d0 = Self::_get_d(&e, &Self::_xp(&e, &reserves), amp);
@@ -149,80 +155,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         diff.fixed_mul_floor(&e, &U256::from_u128(&e, token_amount), &d0)
             .to_u128()
             .unwrap()
-    }
-
-    // Calculate the amount of token `j` that will be received for swapping `dx` of token `i`.
-    //
-    // # Arguments
-    //
-    // * `i` - The index of the token being swapped.
-    // * `j` - The index of the token being received.
-    // * `dx` - The amount of token `i` being swapped.
-    //
-    // # Returns
-    //
-    // * The amount of token `j` that will be received.
-    fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128 {
-        let dx_fee = dx.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
-
-        // dx and dy in c-units
-        let precision_mul = get_precision_mul(&e);
-        let xp = Self::_xp(&e, &get_reserves(&e));
-
-        let x = xp.get(i).unwrap() + (dx - dx_fee) * precision_mul.get(i).unwrap();
-        let y = Self::_get_y(&e, i, j, x, &xp);
-
-        if y == 0 {
-            // pool is empty
-            return 0;
-        }
-
-        let dy = (xp.get(j).unwrap() - y - 1) / precision_mul.get(j).unwrap();
-        dy
-    }
-
-    // Calculate the amount of token `i` that will be sent for swapping `dy` of token `j`.
-    //
-    // # Arguments
-    //
-    // * `i` - The index of the token being swapped.
-    // * `j` - The index of the token being received.
-    // * `dy` - The amount of token `j` being swapped.
-    //
-    // # Returns
-    //
-    // * The amount of token `i` that will be swapped.
-    fn get_dx(e: Env, i: u32, j: u32, dy: u128) -> u128 {
-        // dx and dy in c-units
-        let precision_mul = get_precision_mul(&e);
-        let xp = Self::_xp(&e, &get_reserves(&e));
-        let xp_buy = xp.get(j).unwrap();
-
-        let dy_scaled = dy * precision_mul.get(j).unwrap();
-
-        // if total value including fee is more than the reserve, math can't be done properly
-        if dy_scaled >= xp_buy {
-            panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
-        }
-
-        let y = match xp_buy.checked_sub(dy_scaled) {
-            Some(y) => y,
-            None => panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance),
-        };
-        let x = Self::_get_y(&e, j, i, y, &xp);
-
-        if x == 0 {
-            // pool is empty
-            return 0;
-        }
-
-        let dx = (x - xp.get(i).unwrap() + 1) / precision_mul.get(i).unwrap();
-        let dx_w_fee = dx.fixed_mul_ceil(
-            &e,
-            &(FEE_DENOMINATOR as u128),
-            &((FEE_DENOMINATOR - get_fee(&e)) as u128),
-        );
-        dx_w_fee
     }
 
     // Withdraw coins from the pool in an imbalanced amount.
@@ -255,6 +187,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         if amounts.len() != n_coins {
             panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
+
+        // sync reserves first
+        Self::_sync_reserves(&e);
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let rewards = get_rewards_manager(&e);
@@ -384,6 +319,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // * The amounts of tokens withdrawn.
     fn calc_withdraw_one_coin(e: Env, share_amount: u128, i: u32) -> u128 {
+        Self::_sync_reserves(&e);
         Self::_calc_withdraw_one_coin(&e, share_amount, i).0
     }
 
@@ -412,6 +348,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         if get_is_killed_swap(&e) {
             panic_with_error!(e, LiquidityPoolError::PoolSwapKilled);
         }
+
+        // sync reserves first
+        Self::_sync_reserves(&e);
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let rewards = get_rewards_manager(&e);
@@ -679,6 +618,80 @@ impl LiquidityPool {
         panic_with_error!(e, LiquidityPoolError::MaxIterationsReached);
     }
 
+    // Calculate the amount of token `j` that will be received for swapping `dx` of token `i`.
+    //
+    // # Arguments
+    //
+    // * `i` - The index of the token being swapped.
+    // * `j` - The index of the token being received.
+    // * `dx` - The amount of token `i` being swapped.
+    //
+    // # Returns
+    //
+    // * The amount of token `j` that will be received.
+    fn _get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128 {
+        let dx_fee = dx.fixed_mul_ceil(&e, &(get_fee(&e) as u128), &(FEE_DENOMINATOR as u128));
+
+        // dx and dy in c-units
+        let precision_mul = get_precision_mul(&e);
+        let xp = Self::_xp(&e, &get_reserves(&e));
+
+        let x = xp.get(i).unwrap() + (dx - dx_fee) * precision_mul.get(i).unwrap();
+        let y = Self::_get_y(&e, i, j, x, &xp);
+
+        if y == 0 {
+            // pool is empty
+            return 0;
+        }
+
+        let dy = (xp.get(j).unwrap() - y - 1) / precision_mul.get(j).unwrap();
+        dy
+    }
+
+    // Calculate the amount of token `i` that will be sent for swapping `dy` of token `j`.
+    //
+    // # Arguments
+    //
+    // * `i` - The index of the token being swapped.
+    // * `j` - The index of the token being received.
+    // * `dy` - The amount of token `j` being swapped.
+    //
+    // # Returns
+    //
+    // * The amount of token `i` that will be swapped.
+    fn _get_dx(e: Env, i: u32, j: u32, dy: u128) -> u128 {
+        // dx and dy in c-units
+        let precision_mul = get_precision_mul(&e);
+        let xp = Self::_xp(&e, &get_reserves(&e));
+        let xp_buy = xp.get(j).unwrap();
+
+        let dy_scaled = dy * precision_mul.get(j).unwrap();
+
+        // if total value including fee is more than the reserve, math can't be done properly
+        if dy_scaled >= xp_buy {
+            panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
+        }
+
+        let y = match xp_buy.checked_sub(dy_scaled) {
+            Some(y) => y,
+            None => panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance),
+        };
+        let x = Self::_get_y(&e, j, i, y, &xp);
+
+        if x == 0 {
+            // pool is empty
+            return 0;
+        }
+
+        let dx = (x - xp.get(i).unwrap() + 1) / precision_mul.get(i).unwrap();
+        let dx_w_fee = dx.fixed_mul_ceil(
+            &e,
+            &(FEE_DENOMINATOR as u128),
+            &((FEE_DENOMINATOR - get_fee(&e)) as u128),
+        );
+        dx_w_fee
+    }
+
     // Calculate the amount received when withdrawing a single coin.
     //
     // # Arguments
@@ -740,6 +753,53 @@ impl LiquidityPool {
         dy = (dy - 1) / token_idx_precision_mul; // Withdraw less to account for rounding errors
 
         (dy, dy_0 - dy)
+    }
+
+    // Sync the reserves to the actual token balances in the contract.
+    // Allows pool to work with tokens that can increase their balances via rebases.
+    // negative rebases / fee-on-transfer not supported.
+    fn _sync_reserves(e: &Env) {
+        let tokens = get_tokens(e);
+        let pool_address = e.current_contract_address();
+
+        let rewards = get_rewards_manager(e);
+        let reward_token = rewards.storage().get_reward_token();
+
+        let mut reserves = get_reserves(e);
+        let protocol_fees = get_protocol_fees(e);
+        let mut reserves_changed = false;
+
+        for (token_idx, ((token, reserve), protocol_fee)) in tokens
+            .iter()
+            .zip(reserves.clone())
+            .zip(protocol_fees)
+            .enumerate()
+        {
+            if token == reward_token {
+                // reward token cannot rebase to avoid complexity
+                //  it's being handled manually via configure/distribute functions
+                continue;
+            }
+
+            let mut available_balance =
+                SorobanTokenClient::new(e, &token).balance(&pool_address) as u128;
+
+            // dedict protocol fee
+            available_balance -= protocol_fee;
+
+            if available_balance > reserve {
+                reserves.set(token_idx as u32, available_balance);
+                PoolEvents::new(e).reserves_sync(token.clone(), reserve, available_balance);
+                reserves_changed = true;
+            }
+            // other possibilities: balance < reserve (should not happen), balance == reserve (do nothing)
+        }
+
+        if reserves_changed {
+            put_reserves(e, &reserves);
+            // update plane data for every pool update
+            update_plane(e);
+        }
     }
 }
 
@@ -1283,6 +1343,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     //
     // A vector of the pool's reserves.
     fn get_reserves(e: Env) -> Vec<u128> {
+        Self::_sync_reserves(&e);
         get_reserves(&e)
     }
 
@@ -1328,6 +1389,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         if amounts.len() != n_coins {
             panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
+
+        // sync reserves first
+        Self::_sync_reserves(&e);
 
         // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
         let rewards = get_rewards_manager(&e);
@@ -1483,6 +1547,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
+        // sync reserves first
+        Self::_sync_reserves(&e);
+
         let precision_mul = get_precision_mul(&e);
         let old_balances = get_reserves(&e);
         let xp = Self::_xp(&e, &old_balances);
@@ -1554,7 +1621,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     //
     // The estimated amount of the output token that would be received.
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
-        Self::get_dy(e, in_idx, out_idx, in_amount)
+        Self::_sync_reserves(&e);
+        Self::_get_dy(e, in_idx, out_idx, in_amount)
     }
 
     // Swaps tokens in the pool, receiving fixed amount of out tokens.
@@ -1586,6 +1654,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         if out_amount == 0 {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
+
+        // sync reserves first
+        Self::_sync_reserves(&e);
 
         let precision_mul = get_precision_mul(&e);
         let old_balances = get_reserves(&e);
@@ -1682,7 +1753,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
     //
     // The estimated amount of the input token that would be sent.
     fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128 {
-        Self::get_dx(e, in_idx, out_idx, out_amount)
+        Self::_sync_reserves(&e);
+        Self::_get_dx(e, in_idx, out_idx, out_amount)
     }
 
     // Withdraws tokens from the pool.
@@ -1705,6 +1777,9 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         if min_amounts.len() != n_coins {
             panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
+
+        // sync reserves first
+        Self::_sync_reserves(&e);
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let rewards = get_rewards_manager(&e);
@@ -2210,10 +2285,10 @@ impl RewardsTrait for LiquidityPool {
         let reward = rewards_manager.claim_reward(&user, total_shares, user_shares);
 
         // validate reserves after claim - they should be less than or equal to the balance
-        let tokens = Self::get_tokens(e.clone());
+        let tokens = get_tokens(&e);
         let reward_token = rewards_storage.get_reward_token();
-        let reserves = Self::get_reserves(e.clone());
-        let protocol_fees = Self::get_protocol_fees(e.clone());
+        let reserves = get_reserves(&e);
+        let protocol_fees = get_protocol_fees(&e);
 
         for i in 0..reserves.len() {
             let token = tokens.get(i).unwrap();
