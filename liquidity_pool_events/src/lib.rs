@@ -57,6 +57,8 @@ pub trait LiquidityPoolEvents {
     fn set_protocol_fee_fraction(&self, fraction: u32);
 
     fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128);
+
+    fn reserves_sync(&self, token: Address, old_reserve: u128, new_reserve: u128);
 }
 
 // This trait is used to emit events related to liquidity pool operations.
@@ -248,6 +250,25 @@ impl LiquidityPoolEvents for Events {
         e.events().publish(
             (Symbol::new(e, "claim_protocol_fee"), token),
             (destination, amount as i128),
+        );
+    }
+
+    fn reserves_sync(&self, token: Address, old_reserve: u128, new_reserve: u128) {
+        // topics
+        // [
+        //   "reserves_sync": Symbol,  // event identifier
+        //   asset: Address,           // contract address identifying asset whose reserve was synced
+        // ]
+        //
+        // body
+        // [
+        //   old_reserve: i128,        // previous reserve amount
+        //   new_reserve: i128         // updated reserve amount
+        // ]
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "reserves_sync"), token),
+            (old_reserve as i128, new_reserve as i128),
         );
     }
 }

@@ -66,6 +66,47 @@ contractmeta!(
 #[contract]
 pub struct LiquidityPool;
 
+impl LiquidityPool {
+    // Sync the reserves to the actual token balances in the contract.
+    // Allows pool to work with tokens that can increase their balances via rebases.
+    // negative rebases / fee-on-transfer not supported.
+    fn sync_reserves(e: &Env) {
+        let token_a = get_token_a(e);
+        let token_b = get_token_b(e);
+        let pool_address = e.current_contract_address();
+
+        let rewards = get_rewards_manager(e);
+        let reward_token = rewards.storage().get_reward_token();
+
+        for (token, reserve, protocol_fee) in [
+            (token_a.clone(), get_reserve_a(e), get_protocol_fee_a(&e)),
+            (token_b, get_reserve_b(e), get_protocol_fee_b(&e)),
+        ] {
+            if token == reward_token {
+                // reward token cannot rebase to avoid complexity
+                //  it's being handled manually via configure/distribute functions
+                continue;
+            }
+
+            let mut available_balance =
+                SorobanTokenClient::new(e, &token).balance(&pool_address) as u128;
+
+            // dedict protocol fee
+            available_balance -= protocol_fee;
+
+            if available_balance > reserve {
+                if token == token_a {
+                    put_reserve_a(&e, available_balance);
+                } else {
+                    put_reserve_b(&e, available_balance);
+                }
+                PoolEvents::new(e).reserves_sync(token.clone(), reserve, available_balance);
+            }
+            // other possibilities: balance < reserve (should not happen), balance == reserve (do nothing)
+        }
+    }
+}
+
 #[contractimpl]
 impl LiquidityPoolCrunch for LiquidityPool {
     // Initializes all the components of the liquidity pool.
@@ -272,6 +313,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
+        // sync reserves first
+        Self::sync_reserves(&e);
+
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
@@ -412,6 +456,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
+        // sync reserves first
+        Self::sync_reserves(&e);
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -534,6 +581,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
         }
 
+        // sync reserves first
+        Self::sync_reserves(&e);
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -586,6 +636,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         if out_amount == 0 {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
+
+        // sync reserves first
+        Self::sync_reserves(&e);
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -724,6 +777,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
         }
 
+        // sync reserves first
+        Self::sync_reserves(&e);
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -750,6 +806,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         if min_amounts.len() != 2 {
             panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
+
+        // sync reserves first
+        Self::sync_reserves(&e);
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let rewards = get_rewards_manager(&e);
@@ -810,6 +869,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // A vector of the pool's reserves.
     fn get_reserves(e: Env) -> Vec<u128> {
+        Self::sync_reserves(&e);
         Vec::from_array(&e, [get_reserve_a(&e), get_reserve_b(&e)])
     }
 
