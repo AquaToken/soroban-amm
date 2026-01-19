@@ -76,7 +76,10 @@ impl LiquidityPool {
         let pool_address = e.current_contract_address();
 
         let rewards = get_rewards_manager(e);
-        let reward_token = rewards.storage().get_reward_token();
+        let reward_token = match rewards.storage().has_reward_token() {
+            true => Some(rewards.storage().get_reward_token()),
+            false => None,
+        };
 
         let mut reserves = get_reserves(e);
         let protocol_fees = get_protocol_fees(e);
@@ -88,7 +91,7 @@ impl LiquidityPool {
             .zip(protocol_fees)
             .enumerate()
         {
-            if token == reward_token {
+            if Some(token.clone()) == reward_token {
                 // reward token cannot rebase to avoid complexity
                 //  it's being handled manually via configure/distribute functions
                 continue;
