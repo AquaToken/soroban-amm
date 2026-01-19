@@ -3497,9 +3497,15 @@ fn test_rebasing_token_increases_withdrawal_amounts() {
     });
     let e = setup.env;
     let liq_pool = setup.liq_pool;
-    let user = setup.users[0].clone();
+    let user = Address::generate(&e);
 
     let deposit_amount = 100_0000000_u128;
+    setup
+        .token1_admin_client
+        .mint(&user, &(deposit_amount as i128));
+    setup
+        .token2_admin_client
+        .mint(&user, &(deposit_amount as i128));
     liq_pool.deposit(
         &user,
         &Vec::from_array(&e, [deposit_amount, deposit_amount]),
@@ -3512,11 +3518,7 @@ fn test_rebasing_token_increases_withdrawal_amounts() {
         .token1_admin_client
         .mint(&liq_pool.address, &rebase_amount);
 
-    let withdrawn_amounts = liq_pool.withdraw(
-        &user,
-        &share_amount,
-        &Vec::from_array(&e, [0, 0]),
-    );
+    let withdrawn_amounts = liq_pool.withdraw(&user, &share_amount, &Vec::from_array(&e, [0, 0]));
 
     assert!(withdrawn_amounts.get(0).unwrap() > deposit_amount);
     assert_eq!(withdrawn_amounts.get(1).unwrap(), deposit_amount);
@@ -3532,8 +3534,12 @@ fn test_rebasing_token_does_not_mint_extra_shares_on_deposit() {
     let e = setup.env;
     let liq_pool = setup.liq_pool;
 
-    let user1 = setup.users[0].clone();
-    let user2 = setup.users[1].clone();
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    setup.token1_admin_client.mint(&user1, &100_0000000);
+    setup.token2_admin_client.mint(&user1, &100_0000000);
+    setup.token1_admin_client.mint(&user2, &100_0000000);
+    setup.token2_admin_client.mint(&user2, &100_0000000);
 
     let initial_deposit = 100_0000000_u128;
     liq_pool.deposit(
@@ -3558,8 +3564,7 @@ fn test_rebasing_token_does_not_mint_extra_shares_on_deposit() {
     let minted_shares = shares_after - shares_before;
 
     let rebase_amount_u128 = rebase_amount as u128;
-    let expected_shares =
-        initial_deposit * deposit_amount / (initial_deposit + rebase_amount_u128);
+    let expected_shares = initial_deposit * deposit_amount / (initial_deposit + rebase_amount_u128);
     assert_eq!(minted_shares, expected_shares);
 }
 
@@ -3572,9 +3577,15 @@ fn test_rebasing_token_updates_swap_quotes() {
     });
     let e = setup.env;
     let liq_pool = setup.liq_pool;
-    let user = setup.users[0].clone();
+    let user = Address::generate(&e);
 
     let deposit_amount = 100_0000000_u128;
+    setup
+        .token1_admin_client
+        .mint(&user, &(deposit_amount as i128));
+    setup
+        .token2_admin_client
+        .mint(&user, &(deposit_amount as i128));
     liq_pool.deposit(
         &user,
         &Vec::from_array(&e, [deposit_amount, deposit_amount]),
@@ -3582,6 +3593,9 @@ fn test_rebasing_token_updates_swap_quotes() {
     );
 
     let swap_amount = 10_0000000_u128;
+    setup
+        .token2_admin_client
+        .mint(&user, &(swap_amount as i128));
     let quote_before = liq_pool.estimate_swap(&1, &0, &swap_amount);
 
     let rebase_amount = 50_0000000_i128;
