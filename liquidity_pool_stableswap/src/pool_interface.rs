@@ -280,12 +280,6 @@ pub trait LiquidityPoolTrait:
     // Needed to prevent front-running, not for precise calculations!
     fn calc_token_amount(e: Env, amounts: Vec<u128>, deposit: bool) -> u128;
 
-    // Get the amount of coin j one would receive for swapping dx of coin i.
-    fn get_dy(e: Env, i: u32, j: u32, dx: u128) -> u128;
-
-    // Get the amount of coin i one would send to swap dy of coin j.
-    fn get_dx(e: Env, i: u32, j: u32, dy: u128) -> u128;
-
     // Withdraw coins from the pool in an imbalanced amount.
     // amounts: List of amounts of underlying coins to withdraw
     // max_burn_amount: Maximum amount of LP token to burn in the withdrawal

@@ -6683,3 +6683,150 @@ fn test_rewards_state_opt_out_tracks_excluded_shares_on_balance_change() {
     let updated_total_shares = liq_pool.get_total_shares();
     assert_eq!(updated_total_shares, total_shares - withdraw_amount);
 }
+
+#[test]
+fn test_rebasing_token_increases_withdrawal_amounts() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    let user = Address::generate(&e);
+    let token1_admin_client = SorobanTokenAdminClient::new(&e, &setup.token1.address);
+    let token2_admin_client = SorobanTokenAdminClient::new(&e, &setup.token2.address);
+
+    let deposit_amount = 100_0000000_i128;
+    token1_admin_client.mint(&user, &deposit_amount);
+    token2_admin_client.mint(&user, &deposit_amount);
+
+    liq_pool.deposit(
+        &user,
+        &Vec::from_array(&e, [deposit_amount as u128, deposit_amount as u128]),
+        &0,
+    );
+
+    let share_amount = setup.token_share.balance(&user) as u128;
+    let rebase_amount = 50_0000000_i128;
+    token1_admin_client.mint(&liq_pool.address, &rebase_amount);
+
+    let withdrawn_amounts = liq_pool.withdraw(&user, &share_amount, &Vec::from_array(&e, [0, 0]));
+
+    assert!(withdrawn_amounts.get(0).unwrap() > deposit_amount as u128);
+    assert_eq!(withdrawn_amounts.get(1).unwrap(), deposit_amount as u128);
+}
+
+#[test]
+fn test_rebasing_token_does_not_mint_extra_shares_on_deposit() {
+    let baseline_setup = Setup::default();
+    let baseline_env = baseline_setup.env;
+    let baseline_pool = baseline_setup.liq_pool;
+
+    let baseline_user1 = Address::generate(&baseline_env);
+    let baseline_user2 = Address::generate(&baseline_env);
+    let baseline_token1_admin =
+        SorobanTokenAdminClient::new(&baseline_env, &baseline_setup.token1.address);
+    let baseline_token2_admin =
+        SorobanTokenAdminClient::new(&baseline_env, &baseline_setup.token2.address);
+
+    let deposit_amount = 100_0000000_i128;
+    baseline_token1_admin.mint(&baseline_user1, &deposit_amount);
+    baseline_token2_admin.mint(&baseline_user1, &deposit_amount);
+    baseline_token1_admin.mint(&baseline_user2, &deposit_amount);
+    baseline_token2_admin.mint(&baseline_user2, &deposit_amount);
+
+    baseline_pool.deposit(
+        &baseline_user1,
+        &Vec::from_array(
+            &baseline_env,
+            [deposit_amount as u128, deposit_amount as u128],
+        ),
+        &0,
+    );
+
+    let baseline_shares_before = baseline_setup.token_share.balance(&baseline_user2) as u128;
+    baseline_pool.deposit(
+        &baseline_user2,
+        &Vec::from_array(
+            &baseline_env,
+            [deposit_amount as u128, deposit_amount as u128],
+        ),
+        &0,
+    );
+    let baseline_shares_after = baseline_setup.token_share.balance(&baseline_user2) as u128;
+    let baseline_minted_shares = baseline_shares_after - baseline_shares_before;
+
+    let rebased_setup = Setup::default();
+    let rebased_env = rebased_setup.env;
+    let rebased_pool = rebased_setup.liq_pool;
+
+    let rebased_user1 = Address::generate(&rebased_env);
+    let rebased_user2 = Address::generate(&rebased_env);
+    let rebased_token1_admin =
+        SorobanTokenAdminClient::new(&rebased_env, &rebased_setup.token1.address);
+    let rebased_token2_admin =
+        SorobanTokenAdminClient::new(&rebased_env, &rebased_setup.token2.address);
+
+    rebased_token1_admin.mint(&rebased_user1, &deposit_amount);
+    rebased_token2_admin.mint(&rebased_user1, &deposit_amount);
+    rebased_token1_admin.mint(&rebased_user2, &deposit_amount);
+    rebased_token2_admin.mint(&rebased_user2, &deposit_amount);
+
+    rebased_pool.deposit(
+        &rebased_user1,
+        &Vec::from_array(
+            &rebased_env,
+            [deposit_amount as u128, deposit_amount as u128],
+        ),
+        &0,
+    );
+
+    let rebase_amount = 50_0000000_i128;
+    rebased_token1_admin.mint(&rebased_pool.address, &rebase_amount);
+
+    let rebased_shares_before = rebased_setup.token_share.balance(&rebased_user2) as u128;
+    rebased_pool.deposit(
+        &rebased_user2,
+        &Vec::from_array(
+            &rebased_env,
+            [deposit_amount as u128, deposit_amount as u128],
+        ),
+        &0,
+    );
+    let rebased_shares_after = rebased_setup.token_share.balance(&rebased_user2) as u128;
+    let rebased_minted_shares = rebased_shares_after - rebased_shares_before;
+
+    assert!(rebased_minted_shares < baseline_minted_shares);
+}
+
+#[test]
+fn test_rebasing_token_updates_swap_quotes() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    let user = Address::generate(&e);
+    let token1_admin_client = SorobanTokenAdminClient::new(&e, &setup.token1.address);
+    let token2_admin_client = SorobanTokenAdminClient::new(&e, &setup.token2.address);
+
+    let deposit_amount = 100_0000000_i128;
+    token1_admin_client.mint(&user, &deposit_amount);
+    token2_admin_client.mint(&user, &deposit_amount);
+
+    liq_pool.deposit(
+        &user,
+        &Vec::from_array(&e, [deposit_amount as u128, deposit_amount as u128]),
+        &0,
+    );
+
+    let swap_amount = 10_0000000_i128;
+    token2_admin_client.mint(&user, &swap_amount);
+    let quote_before = liq_pool.estimate_swap(&1, &0, &(swap_amount as u128));
+
+    let rebase_amount = 50_0000000_i128;
+    token1_admin_client.mint(&liq_pool.address, &rebase_amount);
+
+    let quote_after = liq_pool.estimate_swap(&1, &0, &(swap_amount as u128));
+    assert!(quote_after > quote_before);
+
+    let out_amount = liq_pool.swap(&user, &1, &0, &(swap_amount as u128), &0);
+    assert_eq!(out_amount, quote_after);
+}

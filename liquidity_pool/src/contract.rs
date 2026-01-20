@@ -11,11 +11,12 @@ use crate::rewards::get_rewards_manager;
 use crate::storage::{
     get_fee_fraction, get_gauge_future_wasm, get_is_killed_claim, get_is_killed_deposit,
     get_is_killed_swap, get_plane, get_protocol_fee_a, get_protocol_fee_b,
-    get_protocol_fee_fraction, get_reserve_a, get_reserve_b, get_router, get_token_a, get_token_b,
-    get_token_future_wasm, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a,
-    put_token_b, set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit,
-    set_is_killed_swap, set_plane, set_protocol_fee_a, set_protocol_fee_b,
-    set_protocol_fee_fraction, set_router, set_token_future_wasm,
+    get_protocol_fee_fraction, get_protocol_fees, get_reserve_a, get_reserve_b, get_reserves,
+    get_router, get_token_a, get_token_b, get_token_future_wasm, get_tokens, has_plane,
+    put_fee_fraction, put_reserve_a, put_reserve_b, put_reserves, put_token_a, put_token_b,
+    set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
+    set_plane, set_protocol_fee_a, set_protocol_fee_b, set_protocol_fee_fraction, set_router,
+    set_token_future_wasm,
 };
 use crate::token::{create_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -65,6 +66,58 @@ contractmeta!(
 
 #[contract]
 pub struct LiquidityPool;
+
+impl LiquidityPool {
+    // Sync the reserves to the actual token balances in the contract.
+    // Allows pool to work with tokens that can increase their balances via rebases.
+    // negative rebases / fee-on-transfer not supported.
+    fn _sync_reserves(e: &Env) {
+        let tokens = get_tokens(e);
+        let pool_address = e.current_contract_address();
+
+        let rewards = get_rewards_manager(e);
+        let reward_token = match rewards.storage().has_reward_token() {
+            true => Some(rewards.storage().get_reward_token()),
+            false => None,
+        };
+
+        let mut reserves = get_reserves(e);
+        let protocol_fees = get_protocol_fees(e);
+        let mut reserves_changed = false;
+
+        for (token_idx, ((token, reserve), protocol_fee)) in tokens
+            .iter()
+            .zip(reserves.clone())
+            .zip(protocol_fees)
+            .enumerate()
+        {
+            if Some(token.clone()) == reward_token {
+                // reward token cannot rebase to avoid complexity
+                //  it's being handled manually via configure/distribute functions
+                continue;
+            }
+
+            let mut available_balance =
+                SorobanTokenClient::new(e, &token).balance(&pool_address) as u128;
+
+            // dedict protocol fee
+            available_balance -= protocol_fee;
+
+            if available_balance > reserve {
+                reserves.set(token_idx as u32, available_balance);
+                PoolEvents::new(e).reserves_sync(token.clone(), reserve, available_balance);
+                reserves_changed = true;
+            }
+            // other possibilities: balance < reserve (should not happen), balance == reserve (do nothing)
+        }
+
+        if reserves_changed {
+            put_reserves(e, &reserves);
+            // update plane data for every pool update
+            update_plane(e);
+        }
+    }
+}
 
 #[contractimpl]
 impl LiquidityPoolCrunch for LiquidityPool {
@@ -246,7 +299,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // A vector of token addresses.
     fn get_tokens(e: Env) -> Vec<Address> {
-        Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
+        get_tokens(&e)
     }
 
     // Deposits tokens into the pool.
@@ -276,6 +329,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         if desired_amounts.len() != 2 {
             panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
+
+        // sync reserves first
+        Self::_sync_reserves(&e);
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
@@ -375,11 +431,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         update_plane(&e);
 
         let amounts_vec = Vec::from_array(&e, [amounts.0, amounts.1]);
-        PoolEvents::new(&e).deposit_liquidity(
-            Self::get_tokens(e.clone()),
-            amounts_vec.clone(),
-            shares_to_mint,
-        );
+        PoolEvents::new(&e).deposit_liquidity(get_tokens(&e), amounts_vec.clone(), shares_to_mint);
         PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
         (amounts_vec, shares_to_mint)
@@ -428,10 +480,13 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
+        // sync reserves first
+        Self::_sync_reserves(&e);
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
-        let tokens = Self::get_tokens(e.clone());
+        let tokens = get_tokens(&e);
 
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
@@ -550,6 +605,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
         }
 
+        // sync reserves first
+        Self::_sync_reserves(&e);
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -603,10 +661,13 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
+        // sync reserves first
+        Self::_sync_reserves(&e);
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
-        let tokens = Self::get_tokens(e.clone());
+        let tokens = get_tokens(&e);
 
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
@@ -740,6 +801,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
         }
 
+        // sync reserves first
+        Self::_sync_reserves(&e);
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -766,6 +830,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         if min_amounts.len() != 2 {
             panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
+
+        // sync reserves first
+        Self::_sync_reserves(&e);
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let rewards = get_rewards_manager(&e);
@@ -821,7 +888,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let withdraw_amounts = Vec::from_array(&e, [out_a, out_b]);
         PoolEvents::new(&e).withdraw_liquidity(
-            Self::get_tokens(e.clone()),
+            get_tokens(&e),
             withdraw_amounts.clone(),
             share_amount,
         );
@@ -836,7 +903,8 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // A vector of the pool's reserves.
     fn get_reserves(e: Env) -> Vec<u128> {
-        Vec::from_array(&e, [get_reserve_a(&e), get_reserve_b(&e)])
+        Self::_sync_reserves(&e);
+        get_reserves(&e)
     }
 
     // Returns the pool's fee fraction.
@@ -1289,10 +1357,10 @@ impl RewardsTrait for LiquidityPool {
         let reward_balance = SorobanTokenClient::new(&e, &reward_token)
             .balance(&e.current_contract_address()) as u128;
 
-        match Self::get_tokens(e.clone()).first_index_of(reward_token) {
+        match get_tokens(&e).first_index_of(reward_token) {
             Some(idx) => {
                 // since reward token is in the reserves, we need to keep also the reserves value
-                reward_balance_to_keep += Self::get_reserves(e.clone()).get(idx).unwrap();
+                reward_balance_to_keep += get_reserves(&e).get(idx).unwrap();
             }
             None => {}
         };
@@ -1553,10 +1621,10 @@ impl RewardsTrait for LiquidityPool {
         let reward = rewards_manager.claim_reward(&user, total_shares, user_shares);
 
         // validate reserves after claim - they should be less than or equal to the balance
-        let tokens = Self::get_tokens(e.clone());
+        let tokens = get_tokens(&e);
         let reward_token = rewards_storage.get_reward_token();
-        let reserves = Self::get_reserves(e.clone());
-        let protocol_fees = Self::get_protocol_fees(e.clone());
+        let reserves = get_reserves(&e);
+        let protocol_fees = get_protocol_fees(&e);
 
         for i in 0..reserves.len() {
             let token = tokens.get(i).unwrap();

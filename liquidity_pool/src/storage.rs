@@ -1,5 +1,5 @@
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Vec};
 use utils::generate_instance_storage_getter;
 use utils::storage_errors::StorageError;
 use utils::{
@@ -137,4 +137,22 @@ pub fn put_fee_fraction(e: &Env, value: u32) {
 pub(crate) fn has_plane(e: &Env) -> bool {
     let key = DataKey::Plane;
     e.storage().instance().has(&key)
+}
+
+// utility helpers to unify logic across different pool types
+pub fn get_tokens(e: &Env) -> Vec<Address> {
+    Vec::from_array(e, [get_token_a(e), get_token_b(e)])
+}
+
+pub fn get_reserves(e: &Env) -> Vec<u128> {
+    Vec::from_array(e, [get_reserve_a(e), get_reserve_b(e)])
+}
+
+pub fn put_reserves(e: &Env, amounts: &Vec<u128>) {
+    put_reserve_a(e, amounts.get(0).unwrap());
+    put_reserve_b(e, amounts.get(1).unwrap());
+}
+
+pub fn get_protocol_fees(e: &Env) -> Vec<u128> {
+    Vec::from_array(e, [get_protocol_fee_a(e), get_protocol_fee_b(e)])
 }
