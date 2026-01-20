@@ -782,16 +782,37 @@ fn test_boosted_rewards() {
     let token_reward = setup.token_reward;
     let users = setup.users;
 
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &token_reward.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
     let locked_token_admin_client =
         get_token_admin_client(&env, &setup.reward_boost_token.address.clone());
 
-    let total_reward_1 = &TestConfig::default().reward_tps * 60;
+    let reward_1_tps = TestConfig::default().reward_tps;
+    let total_reward_1 = reward_1_tps * 60;
+
+    // setup gauge rewards in parallel to pool rewards
+    let gauge_distributor = Address::generate(&env);
+    get_token_admin_client(&env, &token_reward.address)
+        .mint(&gauge_distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &gauge_distributor,
+        &gauge.address,
+        &None,
+        &60,
+        &reward_1_tps,
+    );
 
     // two users make deposit for equal value. second after 30 seconds after rewards start,
     //  so it gets only 1/4 of total reward
     liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
     jump(&env, 30);
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
+    assert_eq!(
+        liq_pool.gauges_claim(&users[0]),
+        Map::from_array(&env, [(token_reward.address.clone(), total_reward_1 / 2)])
+    );
 
     // instead of simple deposit, second user locks tokens to boost rewards, then deposits
     // second user lock percentage is 50%. this is equilibrium point for 50% shareholder
@@ -806,6 +827,20 @@ fn test_boosted_rewards() {
     // first user gets ~28% of total reward, second ~72%
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 6 * 100 / 350);
     assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 6 * 250 / 350);
+    assert_eq!(
+        liq_pool.gauges_claim(&users[0]),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 100 / 350)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&users[1]),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 250 / 350)]
+        )
+    );
 
     // third user joins, depositing 50 tokens. no boost yet
     liq_pool.deposit(&users[2], &Vec::from_array(&env, [50, 50]), &0);
@@ -828,6 +863,27 @@ fn test_boosted_rewards() {
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 6 * 100 / 400);
     assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 6 * 250 / 400);
     assert_eq!(liq_pool.claim(&users[2]), total_reward_1 / 6 * 50 / 400);
+    assert_eq!(
+        liq_pool.gauges_claim(&users[0]),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 100 / 400)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&users[1]),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 250 / 400)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&users[2]),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 50 / 400)]
+        )
+    );
 
     let user3_tokens_to_lock = 1_000_0000000;
     let new_locked_supply = 25_000_0000000;
@@ -904,18 +960,97 @@ fn test_boosted_rewards() {
     // total effective share now 100 + 100 * 2.5 + 65 = 415
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 6 * 100 / 415);
     assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 6 * 250 / 415);
+    assert_eq!(
+        liq_pool.gauges_claim(&users[0]),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 100 / 415)]
+        )
+    );
+    assert_eq!(
+        liq_pool.gauges_claim(&users[1]),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), total_reward_1 / 6 * 250 / 415)]
+        )
+    );
     let user3_claim = liq_pool.claim(&users[2]);
     assert_eq!(user3_claim, total_reward_1 / 6 * 65 / 415);
     assert_eq!(user3_claim, user3_expected_boosted_reward);
+    assert_eq!(
+        liq_pool.gauges_claim(&users[2]),
+        Map::from_array(
+            &env,
+            [(token_reward.address.clone(), user3_expected_boosted_reward)]
+        )
+    );
 
     // total reward is distributed should be distributed to all three users. rounding occurs, so we check with delta
     assert_approx_eq_abs(
         token_reward.balance(&users[0]) as u128
             + token_reward.balance(&users[1]) as u128
             + token_reward.balance(&users[2]) as u128,
-        total_reward_1,
-        2,
+        // twice since gauge rewards are separate
+        total_reward_1 * 2,
+        4,
     );
+}
+
+#[test]
+fn test_gauge_checkpoint_recalculated_working_balance_on_claim() {
+    let setup = Setup::new_with_config(&TestConfig {
+        users_count: 2,
+        ..TestConfig::default()
+    });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let token_reward = setup.token_reward;
+    let users = setup.users;
+
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &token_reward.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
+    for user in users.iter() {
+        liq_pool.deposit(user, &Vec::from_array(&env, [100, 100]), &0);
+    }
+
+    let gauge_distributor = Address::generate(&env);
+    let gauge_tps = 30_u128;
+    let gauge_duration = 100_u64;
+    let gauge_total_reward = gauge_tps * gauge_duration as u128;
+    get_token_admin_client(&env, &token_reward.address)
+        .mint(&gauge_distributor, &(gauge_total_reward as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &gauge_distributor,
+        &gauge.address,
+        &None,
+        &gauge_duration,
+        &gauge_tps,
+    );
+
+    jump(&env, 10);
+
+    get_token_admin_client(&env, &setup.reward_boost_token.address).mint(&users[0], &1);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &3);
+
+    jump(&env, 10);
+
+    liq_pool.claim(&users[0]);
+
+    let user0_gauge_reward = liq_pool
+        .gauges_claim(&users[0])
+        .get(token_reward.address.clone())
+        .unwrap();
+    let user1_gauge_reward = liq_pool
+        .gauges_claim(&users[1])
+        .get(token_reward.address.clone())
+        .unwrap();
+
+    assert_eq!(user0_gauge_reward, 300);
+    assert_eq!(user1_gauge_reward, 300);
 }
 
 #[test]
@@ -2811,6 +2946,9 @@ fn test_boosted_rewards_abuse() {
         SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(user, &(i128::MAX / 10));
     }
 
+    let gauge = deploy_rewards_gauge(&env, &liq_pool.address, &token_reward.address);
+    liq_pool.gauge_add(&setup.admin, &gauge.address);
+
     let locked_token_admin_client =
         get_token_admin_client(&env, &setup.reward_boost_token.address.clone());
 
@@ -2827,6 +2965,19 @@ fn test_boosted_rewards_abuse() {
     setup
         .token_reward_admin_client
         .mint(&liq_pool.address, &(reward_to_fill as i128));
+
+    // setup gauge rewards in parallel to pool rewards
+    let gauge_distributor = Address::generate(&env);
+    get_token_admin_client(&env, &token_reward.address)
+        .mint(&gauge_distributor, &(total_reward_1 as i128));
+    liq_pool.gauge_schedule_reward(
+        &setup.router,
+        &gauge_distributor,
+        &gauge.address,
+        &None,
+        &70,
+        &reward_tps,
+    );
 
     // first user deposits 100 tokens having 10k locked tokens out of 30k.
     // second user deposits 100 tokens too. but without locked tokens.
@@ -2861,6 +3012,10 @@ fn test_boosted_rewards_abuse() {
     );
 
     let user1_claimed = liq_pool.claim(&user1);
+    assert_eq!(
+        liq_pool.gauges_claim(&user1),
+        Map::from_array(&env, [(token_reward.address.clone(), user1_claimed)])
+    );
 
     jump(&env, 10);
 
@@ -2870,6 +3025,10 @@ fn test_boosted_rewards_abuse() {
         .reward_boost_feed
         .set_total_supply(&setup.operations_admin, &40_000_0000000);
     let user2_claimed = liq_pool.claim(&user2);
+    assert_eq!(
+        liq_pool.gauges_claim(&user2),
+        Map::from_array(&env, [(token_reward.address.clone(), user2_claimed)])
+    );
 
     assert_eq!(user1_claimed, 419999999);
     assert_eq!(user2_claimed, 280000000);
@@ -3353,7 +3512,7 @@ fn test_fix_broken_claim() {
     );
 
     jump(&e, 1);
-    // attacher somehow manages to abuse the system, so reward of two is greater than total configured
+    // attacker somehow manages to abuse the system, so reward of two is greater than total configured
     e.as_contract(&liq_pool.address, || {
         let storage = get_rewards_manager(&e).storage();
         let mut user_data = storage.get_user_reward_data(&user2).unwrap();
@@ -3486,4 +3645,144 @@ fn test_fix_locked_reward_tokens() {
         liq_pool.get_total_configured_reward() - liq_pool.get_total_claimed_reward(),
         1_0000000
     );
+}
+
+#[test]
+fn test_rewards_state_opt_out_redirects_rewards() {
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let token1_admin_client = SorobanTokenAdminClient::new(&env, &setup.token1.address);
+    let token2_admin_client = SorobanTokenAdminClient::new(&env, &setup.token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&env, &setup.token_reward.address);
+    token1_admin_client.mint(&user1, &1_000_0000000);
+    token2_admin_client.mint(&user1, &1_000_0000000);
+    token1_admin_client.mint(&user2, &1_000_0000000);
+    token2_admin_client.mint(&user2, &1_000_0000000);
+
+    // configure rewards before users join
+    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
+    let reward_tps = 10_5000000_u128;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &env.ledger().timestamp().saturating_add(70),
+        &reward_tps,
+    );
+
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [500, 500]), &0);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [500, 500]), &0);
+
+    let reward_tps = 10_5000000_u128;
+    jump(&env, 10);
+    let user0_initial = liq_pool.claim(&user1);
+    let user1_initial = liq_pool.claim(&user2);
+    assert_eq!(user0_initial, reward_tps * 10 / 2);
+    assert_eq!(user1_initial, reward_tps * 10 / 2);
+
+    liq_pool.set_rewards_state(&user1, &false);
+    assert_eq!(liq_pool.get_reward_state(&user1), false);
+    assert_eq!(liq_pool.get_reward_state(&user2), true);
+
+    jump(&env, 10);
+    assert_eq!(liq_pool.claim(&user1), 0);
+    assert_eq!(setup.token_reward.balance(&user2) as u128, user0_initial);
+
+    // user1 should get all the rewards now
+    let user0_updated = liq_pool.claim(&user1);
+    let user1_updated = liq_pool.claim(&user2);
+    assert_eq!(user0_updated, 0);
+    assert_eq!(user1_updated, reward_tps * 10);
+}
+
+#[test]
+fn test_rewards_state_re_enable_resumes_accrual() {
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user = Address::generate(&env);
+    let token1_admin_client = SorobanTokenAdminClient::new(&env, &setup.token1.address);
+    let token2_admin_client = SorobanTokenAdminClient::new(&env, &setup.token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&env, &setup.token_reward.address);
+    token1_admin_client.mint(&user, &1_000_0000000);
+    token2_admin_client.mint(&user, &1_000_0000000);
+
+    // configure rewards before users join
+    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
+    let reward_tps = 10_5000000_u128;
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &env.ledger().timestamp().saturating_add(70),
+        &reward_tps,
+    );
+
+    liq_pool.deposit(&user, &Vec::from_array(&env, [500, 500]), &0);
+
+    assert_eq!(liq_pool.get_reward_state(&user), true);
+    jump(&env, 10);
+    assert_eq!(liq_pool.claim(&user), reward_tps * 10);
+
+    // opt-out from rewards
+    liq_pool.set_rewards_state(&user, &false);
+    assert_eq!(liq_pool.get_reward_state(&user), false);
+
+    jump(&env, 10);
+    assert_eq!(liq_pool.claim(&user), 0);
+
+    // re-enable rewards
+    liq_pool.set_rewards_state(&user, &true);
+    assert_eq!(liq_pool.get_reward_state(&user), true);
+
+    jump(&env, 10);
+    assert_eq!(liq_pool.claim(&user), reward_tps * 10);
+}
+
+#[test]
+fn test_rewards_state_opt_out_tracks_excluded_shares_on_balance_change() {
+    let setup = Setup::default();
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let token_share = setup.token_share;
+
+    let token1_admin_client = SorobanTokenAdminClient::new(&env, &setup.token1.address);
+    let token2_admin_client = SorobanTokenAdminClient::new(&env, &setup.token2.address);
+    let token_reward_admin_client = SorobanTokenAdminClient::new(&env, &setup.token_reward.address);
+
+    token1_admin_client.mint(&user1, &1_000_0000000);
+    token2_admin_client.mint(&user1, &1_000_0000000);
+    token1_admin_client.mint(&user2, &1_000_0000000);
+    token2_admin_client.mint(&user2, &1_000_0000000);
+
+    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
+    liq_pool.set_rewards_config(
+        &setup.admin,
+        &env.ledger().timestamp().saturating_add(100),
+        &10_5000000_u128,
+    );
+
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [500, 500]), &0);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [500, 500]), &0);
+
+    let initial_shares_user1 = liq_pool.get_user_shares(&user1);
+    let get_excluded = || liq_pool.get_total_excluded_shares();
+    assert_eq!(get_excluded(), 0);
+
+    liq_pool.set_rewards_state(&user1, &false);
+    assert_eq!(get_excluded(), initial_shares_user1);
+
+    let (_, minted_extra) = liq_pool.deposit(&user1, &Vec::from_array(&env, [200, 200]), &0);
+    assert_eq!(get_excluded(), initial_shares_user1);
+
+    let total_shares = liq_pool.get_total_shares();
+    let withdraw_amount = minted_extra / 2;
+    liq_pool.withdraw(&user1, &withdraw_amount, &Vec::from_array(&env, [0, 0]));
+    assert_eq!(get_excluded(), initial_shares_user1);
+
+    token_share.transfer(&user1, &user2, &(withdraw_amount as i128));
+    assert_eq!(get_excluded(), initial_shares_user1);
+    let updated_total_shares = liq_pool.get_total_shares();
+    assert_eq!(updated_total_shares, total_shares - withdraw_amount);
 }

@@ -1,6 +1,5 @@
 use paste::paste;
 use soroban_sdk::{contracttype, Address, Env, Map};
-use utils::bump::bump_instance;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default, generate_instance_storage_setter,
@@ -28,7 +27,6 @@ generate_instance_storage_getter_and_setter_with_default!(
 );
 
 pub(crate) fn get_reward_gauges(e: &Env) -> Map<Address, Address> {
-    bump_instance(e);
     e.storage()
         .instance()
         .get(&DataKey::RewardGaugesMap)
@@ -36,6 +34,5 @@ pub(crate) fn get_reward_gauges(e: &Env) -> Map<Address, Address> {
 }
 
 pub(crate) fn set_reward_gauges(e: &Env, value: &Map<Address, Address>) {
-    bump_instance(e);
     e.storage().instance().set(&DataKey::RewardGaugesMap, value)
 }

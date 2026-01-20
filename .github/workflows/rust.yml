@@ -23,12 +23,15 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install Task
       uses: arduino/setup-task@v1
+    - uses: ConorMacBride/install-package@v1
+      with:
+        apt: libdbus-1-dev pkg-config libudev-dev
     - name: Install soroban-cli
       uses: baptiste0928/cargo-install@v3
       with:
         crate: soroban-cli
-        version: 22.8.0
-        features: opt
+        version: 23.3.0
+        features: additional-libs
         locked: true
     - name: Check code formatting
       run: task fmt && git diff --exit-code
