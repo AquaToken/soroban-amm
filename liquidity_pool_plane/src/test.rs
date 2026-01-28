@@ -72,7 +72,7 @@ fn test_transfer_ownership_events() {
 
     plane.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -89,7 +89,7 @@ fn test_transfer_ownership_events() {
 
     plane.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -108,7 +108,7 @@ fn test_transfer_ownership_events() {
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     plane.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -132,7 +132,7 @@ fn test_upgrade_events() {
 
     contract.commit_upgrade(&setup.admin, &new_wasm_hash);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -145,7 +145,7 @@ fn test_upgrade_events() {
 
     contract.revert_upgrade(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -160,7 +160,7 @@ fn test_upgrade_events() {
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -179,7 +179,7 @@ fn test_emergency_mode_events() {
 
     contract.set_emergency_mode(&setup.emergency_admin, &true);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -191,7 +191,7 @@ fn test_emergency_mode_events() {
     );
     contract.set_emergency_mode(&setup.emergency_admin, &false);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (

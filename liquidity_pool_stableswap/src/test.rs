@@ -556,9 +556,9 @@ fn test_events_2_tokens() {
     assert_eq!(amounts.get(0).unwrap(), 1000000000);
     assert_eq!(amounts.get(1).unwrap(), 1000000000);
     assert_eq!(share_amt, 2000000000);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -581,9 +581,9 @@ fn test_events_2_tokens() {
 
     assert_eq!(liqpool.swap(&user1, &0, &1, &100, &95), 98);
     // assert_eq!(liqpool.get_reserves(), vec![&e, 1000000099, 999999902]);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -608,9 +608,9 @@ fn test_events_2_tokens() {
     let amounts_out = liqpool.withdraw(&user1, &200_0000000, &Vec::from_array(&e, [0, 0]));
     assert_eq!(amounts_out.get(0).unwrap(), 1000000099);
     assert_eq!(amounts_out.get(1).unwrap(), 999999902);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -699,9 +699,9 @@ fn test_events_3_tokens() {
     assert_eq!(amounts.get(1).unwrap(), 1000000000);
     assert_eq!(amounts.get(2).unwrap(), 1000000000);
     assert_eq!(share_amt, 3000000000);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -730,9 +730,9 @@ fn test_events_3_tokens() {
     );
 
     assert_eq!(liqpool.swap(&user1, &0, &1, &100, &95), 98);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -758,9 +758,9 @@ fn test_events_3_tokens() {
     assert_eq!(amounts_out.get(0).unwrap(), 1000000099);
     assert_eq!(amounts_out.get(1).unwrap(), 999999902);
     assert_eq!(amounts_out.get(2).unwrap(), 1000000000);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -861,9 +861,9 @@ fn test_events_4_tokens() {
     assert_eq!(amounts.get(2).unwrap(), 1000000000);
     assert_eq!(amounts.get(3).unwrap(), 1000000000);
     assert_eq!(share_amt, 4000000000);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -901,9 +901,9 @@ fn test_events_4_tokens() {
     );
 
     assert_eq!(liqpool.swap(&user1, &0, &1, &100, &95), 98);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -937,9 +937,9 @@ fn test_events_4_tokens() {
     assert_eq!(amounts_out.get(1).unwrap(), 999999902);
     assert_eq!(amounts_out.get(2).unwrap(), 1000000000);
     assert_eq!(amounts_out.get(3).unwrap(), 1000000000);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -1774,9 +1774,9 @@ fn test_withdraw_one_token() {
         liqpool.withdraw_one_coin(&user1, &100_0000000, &0, &10_0000000),
         Vec::from_array(&e, [90_9485232_u128, 0_u128]),
     );
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -2190,9 +2190,9 @@ fn test_remove_liquidity_imbalance() {
         &token_share_amount,
     );
     assert_eq!(shares_burned, 92_1457973);
-    let events = e.events().all();
+    let events = e.events().all().filter_by_contract(&liqpool.address);
     assert_eq!(
-        events.slice(events.len() - 2..events.len()),
+        events,
         vec![
             &e,
             (
@@ -4016,7 +4016,7 @@ fn test_kill_deposit() {
 
     liqpool.kill_deposit(&admin);
     assert_eq!(
-        vec![&e, e.events().all().last().unwrap()],
+        e.events().all(),
         vec![
             &e,
             (
@@ -4041,7 +4041,7 @@ fn test_kill_deposit() {
     );
     liqpool.unkill_deposit(&admin);
     assert_eq!(
-        vec![&e, e.events().all().last().unwrap()],
+        e.events().all(),
         vec![
             &e,
             (
@@ -4107,7 +4107,7 @@ fn test_kill_swap() {
 
     liqpool.kill_swap(&admin);
     assert_eq!(
-        vec![&e, e.events().all().last().unwrap()],
+        e.events().all(),
         vec![
             &e,
             (
@@ -4147,7 +4147,7 @@ fn test_kill_swap() {
     liqpool.withdraw(&user1, &0, &vec![&e, 0, 0]);
     liqpool.unkill_swap(&admin);
     assert_eq!(
-        vec![&e, e.events().all().last().unwrap()],
+        e.events().all(),
         vec![
             &e,
             (
@@ -4210,7 +4210,7 @@ fn test_kill_claim() {
 
     liqpool.kill_claim(&admin);
     assert_eq!(
-        vec![&e, e.events().all().last().unwrap()],
+        e.events().all(),
         vec![
             &e,
             (
@@ -4258,7 +4258,7 @@ fn test_kill_claim() {
 
     liqpool.unkill_claim(&admin);
     assert_eq!(
-        vec![&e, e.events().all().last().unwrap()],
+        e.events().all(),
         vec![
             &e,
             (
@@ -5050,7 +5050,7 @@ fn test_kill_deposit_event() {
 
     pool.kill_deposit(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5069,7 +5069,7 @@ fn test_kill_swap_event() {
 
     pool.kill_swap(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5088,7 +5088,7 @@ fn test_kill_claim_event() {
 
     pool.kill_claim(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5107,7 +5107,7 @@ fn test_unkill_deposit_event() {
 
     pool.unkill_deposit(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5126,7 +5126,7 @@ fn test_unkill_swap_event() {
 
     pool.unkill_swap(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5145,7 +5145,7 @@ fn test_unkill_claim_event() {
 
     pool.unkill_claim(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5172,7 +5172,7 @@ fn test_set_privileged_addresses_event() {
     );
 
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5203,7 +5203,7 @@ fn test_set_rewards_config() {
     );
 
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5227,7 +5227,7 @@ fn test_transfer_ownership_events() {
 
     pool.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5244,7 +5244,7 @@ fn test_transfer_ownership_events() {
 
     pool.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5263,7 +5263,7 @@ fn test_transfer_ownership_events() {
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     pool.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5291,7 +5291,7 @@ fn test_ramp_a_events() {
         &setup.env.ledger().timestamp().saturating_add(MIN_RAMP_TIME),
     );
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5310,7 +5310,7 @@ fn test_ramp_a_events() {
 
     pool.stop_ramp_a(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5330,7 +5330,7 @@ fn test_set_fee_events() {
 
     pool.commit_new_fee(&setup.admin, &8);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5343,7 +5343,7 @@ fn test_set_fee_events() {
 
     pool.revert_new_parameters(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5358,7 +5358,7 @@ fn test_set_fee_events() {
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     pool.apply_new_fee(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5385,7 +5385,7 @@ fn test_upgrade_events() {
         &gauge_new_wasm_hash,
     );
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5403,7 +5403,7 @@ fn test_upgrade_events() {
 
     contract.revert_upgrade(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5423,7 +5423,7 @@ fn test_upgrade_events() {
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5442,7 +5442,7 @@ fn test_emergency_mode_events() {
 
     contract.set_emergency_mode(&setup.emergency_admin, &true);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5454,7 +5454,7 @@ fn test_emergency_mode_events() {
     );
     contract.set_emergency_mode(&setup.emergency_admin, &false);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -5591,7 +5591,11 @@ fn test_claim_event() {
     liq_pool.claim(&user);
 
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup
+            .env
+            .events()
+            .all()
+            .filter_by_contract(&liq_pool.address),
         vec![
             &setup.env,
             (
