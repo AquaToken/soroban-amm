@@ -2,11 +2,12 @@
 
 use soroban_sdk::Env;
 
-pub mod boost_feed;
 mod constants;
 pub mod errors;
 pub mod events;
+mod locked_boost;
 pub mod manager;
+mod opt_out;
 pub mod storage;
 
 pub use manager::Manager;

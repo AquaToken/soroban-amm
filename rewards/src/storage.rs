@@ -1,5 +1,4 @@
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
-use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
 
 // ------------------------------------
@@ -56,6 +55,10 @@ enum DataKey {
     // Working balances
     WorkingBalance(Address),
     WorkingSupply,
+
+    // Excluded shares from rewards
+    ExcludedShares,
+    UserRewardsState(Address),
 }
 
 // ------------------------------------
@@ -102,7 +105,6 @@ impl BoostTokenStorageTrait for Storage {
     }
 
     fn put_reward_boost_token(&self, contract: Address) {
-        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -136,7 +138,6 @@ impl BoostFeedStorageTrait for Storage {
     }
 
     fn put_reward_boost_feed(&self, contract: Address) {
-        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -181,7 +182,6 @@ impl WorkingBalancesStorageTrait for Storage {
     fn set_working_balance(&self, user: &Address, value: u128) {
         let key = DataKey::WorkingBalance(user.clone());
         self.env.storage().persistent().set(&key, &value);
-        bump_persistent(&self.env, &key);
     }
 
     fn get_working_supply(&self) -> u128 {
@@ -193,7 +193,6 @@ impl WorkingBalancesStorageTrait for Storage {
     }
 
     fn set_working_supply(&self, value: u128) {
-        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -267,7 +266,6 @@ impl PoolRewardsStorageTrait for Storage {
 pub trait UserRewardsStorageTrait {
     fn get_user_reward_data(&self, user: &Address) -> Option<UserRewardData>;
     fn set_user_reward_data(&self, user: &Address, config: &UserRewardData);
-    fn bump_user_reward_data(&self, user: &Address);
 }
 
 impl UserRewardsStorageTrait for Storage {
@@ -288,10 +286,6 @@ impl UserRewardsStorageTrait for Storage {
             .storage()
             .persistent()
             .set(&DataKey::UserRewardData(user.clone()), config);
-    }
-
-    fn bump_user_reward_data(&self, user: &Address) {
-        bump_persistent(&self.env, &DataKey::UserRewardData(user.clone()))
     }
 }
 
@@ -340,7 +334,6 @@ impl RewardInvDataStorageTrait for Storage {
         let key = DataKey::RewardInvDataV2(pow, page_number);
         self.inv_cache.set(key.clone(), value.clone());
         self.env.storage().persistent().set(&key, &value);
-        bump_persistent(&self.env, &key);
     }
 }
 
@@ -371,5 +364,39 @@ impl RewardTokenStorageTrait for Storage {
 
     fn has_reward_token(&self) -> bool {
         self.env.storage().instance().has(&DataKey::RewardToken)
+    }
+}
+
+// Excluded shares for big liquidity providers to exclude themselves from receiving rewards
+impl Storage {
+    // excluded shares shouldn't be counted for rewards
+    pub fn get_total_excluded_shares(&self) -> u128 {
+        self.env
+            .storage()
+            .instance()
+            .get(&DataKey::ExcludedShares)
+            .unwrap_or(0)
+    }
+
+    pub fn set_total_excluded_shares(&self, value: u128) {
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::ExcludedShares, &value)
+    }
+
+    pub fn get_user_rewards_state(&self, user: &Address) -> bool {
+        self.env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserRewardsState(user.clone()))
+            .unwrap_or(true)
+    }
+
+    pub fn set_user_rewards_state(&self, user: &Address, value: bool) {
+        self.env
+            .storage()
+            .persistent()
+            .set(&DataKey::UserRewardsState(user.clone()), &value)
     }
 }
