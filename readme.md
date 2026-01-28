@@ -144,7 +144,7 @@ We plan to use Soroban to build Automated Market Maker (AMM) smart contracts and
 ### Prerequisites
 - [Task](https://taskfile.dev/) as task runner
 - installed latest Rust version
-- [soroban cli](https://github.com/stellar/soroban-tools)
+- [stellar cli](https://github.com/stellar/stellar-cli)
 
 ### Development setup
 
