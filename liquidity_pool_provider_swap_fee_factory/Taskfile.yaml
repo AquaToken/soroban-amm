@@ -11,8 +11,8 @@ tasks:
 
   build:
     cmds:
-      - soroban contract build --package soroban-liquidity-pool-provider-swap-fee-factory-contract
-      - soroban contract optimize --wasm ../target/wasm32v1-none/release/soroban_liquidity_pool_provider_swap_fee_factory_contract.wasm --wasm-out ../contracts/soroban_liquidity_pool_provider_swap_fee_factory_contract.wasm
+      - stellar contract build --package soroban-liquidity-pool-provider-swap-fee-factory-contract
+      - stellar contract optimize --wasm ../target/wasm32v1-none/release/soroban_liquidity_pool_provider_swap_fee_factory_contract.wasm --wasm-out ../contracts/soroban_liquidity_pool_provider_swap_fee_factory_contract.wasm
       - ls -l ../contracts/*.wasm
 
   test:

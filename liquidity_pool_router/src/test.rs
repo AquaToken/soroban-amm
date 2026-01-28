@@ -2063,14 +2063,14 @@ fn test_event_correct() {
     let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1];
 
     let (pool_hash, pool_address) = router.init_stableswap_pool(&user1, &tokens, &fee);
-    let init_stableswap_pool_event = e.events().all().last().unwrap();
+    let init_stableswap_pool_events = e.events().all().filter_by_contract(&router.address);
     assert_eq!(
         reward_token.balance(&payment_for_creation_address),
         1000_0000000
     );
 
     assert_eq!(
-        vec![&e, init_stableswap_pool_event],
+        init_stableswap_pool_events,
         vec![
             &e,
             (
@@ -2089,10 +2089,10 @@ fn test_event_correct() {
 
     let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &fee);
 
-    let init_pool_event = e.events().all().last().unwrap();
+    let init_pool_events = e.events().all().filter_by_contract(&router.address);
 
     assert_eq!(
-        vec![&e, init_pool_event],
+        init_pool_events,
         vec![
             &e,
             (
@@ -2133,13 +2133,13 @@ fn test_event_correct() {
     let desired_amounts = Vec::from_array(&e, [100, 100]);
 
     let (amounts, share_amount) = router.deposit(&user1, &tokens, &pool_hash, &desired_amounts, &0);
-    let deposit_event = e.events().all().last().unwrap();
+    let deposit_events = e.events().all().filter_by_contract(&router.address);
     assert_eq!(router.get_total_liquidity(&tokens), U256::from_u32(&e, 2));
 
     let pool_id = router.get_pool(&tokens, &pool_hash);
 
     assert_eq!(
-        vec![&e, deposit_event],
+        deposit_events,
         vec![
             &e,
             (
@@ -2159,10 +2159,10 @@ fn test_event_correct() {
         &97_u128,
         &48_u128,
     );
-    let swap_event = e.events().all().last().unwrap();
+    let swap_events = e.events().all().filter_by_contract(&router.address);
 
     assert_eq!(
-        vec![&e, swap_event],
+        swap_events,
         vec![
             &e,
             (
@@ -2187,10 +2187,10 @@ fn test_event_correct() {
         &100_u128,
         &Vec::from_array(&e, [197_u128, 51_u128]),
     );
-    let withdraw_event = e.events().all().last().unwrap();
+    let withdraw_events = e.events().all().filter_by_contract(&router.address);
 
     assert_eq!(
-        vec![&e, withdraw_event],
+        withdraw_events,
         vec![
             &e,
             (
@@ -2791,7 +2791,7 @@ fn test_set_privileged_addresses_event() {
     );
 
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -2818,7 +2818,7 @@ fn test_transfer_ownership_events() {
 
     router.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -2835,7 +2835,7 @@ fn test_transfer_ownership_events() {
 
     router.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -2854,7 +2854,7 @@ fn test_transfer_ownership_events() {
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     router.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -2878,7 +2878,7 @@ fn test_upgrade_events() {
 
     contract.commit_upgrade(&setup.admin, &new_wasm_hash);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -2891,7 +2891,7 @@ fn test_upgrade_events() {
 
     contract.revert_upgrade(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -2906,7 +2906,7 @@ fn test_upgrade_events() {
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -2925,7 +2925,7 @@ fn test_emergency_mode_events() {
 
     contract.set_emergency_mode(&setup.emergency_admin, &true);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -2937,7 +2937,7 @@ fn test_emergency_mode_events() {
     );
     contract.set_emergency_mode(&setup.emergency_admin, &false);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -3444,7 +3444,7 @@ fn test_pool_gauge_token_switch_events() {
             .router
             .pool_gauge_switch_token(&setup.admin, &token1.address, &val);
         assert_eq!(
-            vec![&e, e.events().all().last().unwrap()],
+            e.events().all(),
             vec![
                 &e,
                 (

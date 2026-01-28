@@ -5,7 +5,8 @@ use crate::testutils::{create_dummy_pool, create_token, Setup};
 use crate::{contract::Token, TokenClient};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
-    Address as _, AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
+    Address as _, AuthorizedFunction, AuthorizedInvocation, ContractEvents, Events, MockAuth,
+    MockAuthInvoke,
 };
 use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol, Vec};
 use utils::test_utils::jump;
@@ -287,7 +288,7 @@ fn test_transfer_ownership_events() {
 
     token.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -304,7 +305,7 @@ fn test_transfer_ownership_events() {
 
     token.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
@@ -323,7 +324,7 @@ fn test_transfer_ownership_events() {
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     token.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
+        setup.env.events().all(),
         vec![
             &setup.env,
             (
