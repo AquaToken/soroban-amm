@@ -1,16 +1,14 @@
-use crate::boost_feed::RewardBoostFeedClient;
 use crate::constants::REWARD_PRECISION;
 use crate::errors::RewardsError;
+use crate::locked_boost::manager::BoostManagerPlugin;
+use crate::opt_out::manager::OptOutManagerPlugin;
 use crate::storage::{
-    BoostFeedStorageTrait, BoostTokenStorageTrait, PoolRewardConfig, PoolRewardData,
-    PoolRewardsStorageTrait, RewardInvDataStorageTrait, RewardTokenStorageTrait, Storage,
-    UserRewardData, UserRewardsStorageTrait, WorkingBalancesStorageTrait,
+    PoolRewardConfig, PoolRewardData, PoolRewardsStorageTrait, RewardInvDataStorageTrait,
+    RewardTokenStorageTrait, Storage, UserRewardData, UserRewardsStorageTrait,
+    WorkingBalancesStorageTrait,
 };
 use crate::RewardsConfig;
-use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec};
-use utils::bump::bump_instance;
 
 // `Manager` orchestrates the reward logic, pulling data and methods from `Storage`.
 // It relies on Storage sub-traits to handle actual storage I/O.
@@ -18,6 +16,20 @@ pub struct Manager {
     env: Env,
     storage: Storage,
     config: RewardsConfig,
+
+    // plugins
+    boost_manager_plugin: BoostManagerPlugin,
+    opt_out_manager_plugin: OptOutManagerPlugin,
+}
+
+pub trait ManagerPlugin {
+    fn calculate_effective_balance(
+        &self,
+        storage: &Storage,
+        user: &Address,
+        share_balance: u128,
+        total_share: u128,
+    ) -> u128;
 }
 
 impl Manager {
@@ -26,7 +38,39 @@ impl Manager {
             env: e.clone(),
             storage,
             config: config.clone(),
+            boost_manager_plugin: BoostManagerPlugin::new(e),
+            opt_out_manager_plugin: OptOutManagerPlugin,
         }
+    }
+
+    pub fn get_user_rewards_state(&self, user: &Address) -> bool {
+        self.opt_out_manager_plugin
+            .get_user_rewards_state(&self.storage, user)
+    }
+
+    pub fn set_user_rewards_state(&self, user: &Address, user_share_balance: u128, value: bool) {
+        let current_state = self
+            .opt_out_manager_plugin
+            .get_user_rewards_state(&self.storage, user);
+
+        if current_state == value {
+            return;
+        }
+
+        let mut total_excluded = self
+            .opt_out_manager_plugin
+            .get_total_excluded_shares(&self.storage);
+
+        match (current_state, value) {
+            (true, false) => total_excluded += user_share_balance,
+            (false, true) => total_excluded = total_excluded.saturating_sub(user_share_balance),
+            _ => {}
+        }
+
+        self.opt_out_manager_plugin
+            .set_total_excluded_shares(&self.storage, total_excluded);
+        self.opt_out_manager_plugin
+            .set_user_rewards_state(&self.storage, user, value)
     }
 
     // ------------------------------------
@@ -34,26 +78,12 @@ impl Manager {
     // ------------------------------------
 
     pub fn get_user_boost_balance(&self, user: &Address) -> u128 {
-        if self.storage.has_reward_boost_token() {
-            match SorobanTokenClient::new(&self.env, &self.storage.get_reward_boost_token())
-                .try_balance(user)
-            {
-                Ok(balance) => balance.unwrap() as u128,
-                // if trustline is not established, return 0
-                Err(_) => 0,
-            }
-        } else {
-            0
-        }
+        self.boost_manager_plugin
+            .get_user_boost_balance(&self.storage, user)
     }
 
     pub fn get_total_locked(&self) -> u128 {
-        if self.storage.has_reward_boost_feed() {
-            RewardBoostFeedClient::new(&self.env, &self.storage.get_reward_boost_feed())
-                .total_supply()
-        } else {
-            0
-        }
+        self.boost_manager_plugin.get_total_locked(&self.storage)
     }
 
     // ------------------------------------
@@ -66,23 +96,21 @@ impl Manager {
         share_balance: u128,
         total_share: u128,
     ) -> u128 {
-        // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
-        let lock_balance = self.get_user_boost_balance(&user);
-        let total_locked = self.get_total_locked();
-
-        let mut adjusted_balance = share_balance;
-        if total_locked > 0 {
-            adjusted_balance +=
-                3 * lock_balance.fixed_mul_floor(&self.env, &total_share, &total_locked) / 2;
-        }
-        let max_effective_balance = share_balance * 5 / 2;
-
-        // min(adjusted_balance, max_effective_balance)
-        if adjusted_balance > max_effective_balance {
-            max_effective_balance
-        } else {
-            adjusted_balance
-        }
+        // run plugins in order
+        // opt-out plugin affects user balance since user can opt out from rewards, so it goes first
+        let eff_balance = self.opt_out_manager_plugin.calculate_effective_balance(
+            &self.storage,
+            user,
+            share_balance,
+            total_share,
+        );
+        let boosted_balance = self.boost_manager_plugin.calculate_effective_balance(
+            &self.storage,
+            user,
+            eff_balance,
+            total_share,
+        );
+        boosted_balance
     }
 
     // ------------------------------------
@@ -129,7 +157,6 @@ impl Manager {
 
         let config = PoolRewardConfig { tps, expired_at };
 
-        bump_instance(&self.env);
         self.storage.set_pool_reward_config(&config);
     }
 
@@ -365,8 +392,6 @@ impl Manager {
         let pool_data = self.update_rewards_data(new_working_supply);
         let user_data = self.update_user_reward(&pool_data, user, working_balance);
 
-        // Bump storage for the user's data
-        self.storage.bump_user_reward_data(user);
         user_data
     }
 
@@ -374,7 +399,7 @@ impl Manager {
     // Working balance manipulation
     // ------------------------------------
 
-    pub fn get_working_supply(&mut self, total_shares: u128) -> u128 {
+    pub fn get_working_supply(&self, total_shares: u128) -> u128 {
         if self.storage.has_working_supply() {
             self.storage.get_working_supply()
         } else {
@@ -383,7 +408,7 @@ impl Manager {
         }
     }
 
-    pub fn get_working_balance(&mut self, user: &Address, user_balance_shares: u128) -> u128 {
+    pub fn get_working_balance(&self, user: &Address, user_balance_shares: u128) -> u128 {
         if self.storage.has_working_balance(user) {
             self.storage.get_working_balance(user)
         } else {
@@ -396,13 +421,13 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128,
+        new_share_balance: u128,
     ) -> (u128, u128) {
-        let prev_working_balance = self.get_working_balance(user, user_balance_shares);
+        let prev_working_balance = self.get_working_balance(user, new_share_balance);
         let prev_working_supply = self.get_working_supply(total_shares);
 
         let working_balance =
-            self.calculate_effective_balance(user, user_balance_shares, total_shares);
+            self.calculate_effective_balance(user, new_share_balance, total_shares);
 
         let new_working_supply = prev_working_supply + working_balance - prev_working_balance;
         self.storage.set_working_supply(new_working_supply);

@@ -45,6 +45,9 @@ pub trait LiquidityPoolInterfaceTrait {
     // Returns the total amount of shares
     fn get_total_shares(e: Env) -> u128;
 
+    // Returns the amount of shares owned by a specific user
+    fn get_user_shares(e: Env, user: Address) -> u128;
+
     // Getter for the pool balances array.
     fn get_reserves(e: Env) -> Vec<u128>;
 
@@ -107,6 +110,9 @@ pub trait LiquidityPoolInterfaceTrait {
 
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> Map<Symbol, Val>;
+
+    // Get total excluded shares that are not eligible for rewards.
+    fn get_total_excluded_shares(e: Env) -> u128;
 }
 
 pub trait UpgradeableContract {
@@ -193,6 +199,15 @@ pub trait RewardsTrait {
     // Claim reward as a user.
     // returns amount of tokens rewarded to the user
     fn claim(e: Env, user: Address) -> u128;
+
+    // Get rewards state
+    fn get_reward_state(e: Env, user: Address) -> bool;
+
+    // Toggle rewards state. if false - user doesn't receive aqua rewards
+    fn set_rewards_state(e: Env, user: Address, state: bool);
+
+    // Admin can toggle rewards state for a user
+    fn admin_set_rewards_state(e: Env, admin: Address, user: Address, state: bool);
 }
 
 pub trait AdminInterfaceTrait {

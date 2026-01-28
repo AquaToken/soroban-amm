@@ -3,8 +3,9 @@ use crate::errors::GaugeError;
 use crate::gauge::{checkpoint_global, checkpoint_user};
 use crate::interface::UpgradeableContract;
 use crate::storage::{
-    get_pool, get_reward_configs, get_reward_token, set_global_reward_data, set_pool,
-    set_reward_configs, set_reward_token, set_user_reward_data, RewardConfig,
+    get_global_reward_data, get_pool, get_reward_configs, get_reward_token, set_global_reward_data,
+    set_pool, set_reward_configs, set_reward_token, set_user_reward_data, GlobalRewardData,
+    RewardConfig,
 };
 use soroban_sdk::token::Client;
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec};
@@ -136,6 +137,29 @@ impl RewardsGauge {
         user_data.to_claim
     }
 
+    pub fn set_reward_state(
+        e: Env,
+        pool: Address,
+        global_data: GlobalRewardData,
+        configs: Vec<RewardConfig>,
+    ) {
+        pool.require_auth();
+        if get_pool(&e) != pool {
+            panic_with_error!(&e, GaugeError::Unauthorized);
+        }
+
+        set_global_reward_data(&e, &global_data);
+        set_reward_configs(&e, configs);
+    }
+
+    pub fn get_reward_state(e: Env) -> GlobalRewardData {
+        get_global_reward_data(&e)
+    }
+
+    pub fn get_reward_configs_raw(e: Env) -> Vec<RewardConfig> {
+        get_reward_configs(&e)
+    }
+
     pub fn get_reward_token(e: Env) -> Address {
         get_reward_token(&e)
     }
@@ -182,7 +206,7 @@ impl UpgradeableContract for RewardsGauge {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        170
+        180
     }
 
     // Get contract type symbolic name
