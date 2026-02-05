@@ -39,4 +39,20 @@ impl Events {
             (amount as i128,),
         );
     }
+
+    pub fn set_rewards_state(&self, user: Address, state: bool) {
+        // topics
+        // [
+        //   "set_rewards_state": Symbol,       // event identifier
+        //   user: Address,                     // address of account/contract whose rewards state is being set
+        // ]
+        // body
+        // [
+        //   state: bool,                       // state of rewards (enabled/disabled)
+        // ]
+        self.env().events().publish(
+            (Symbol::new(self.env(), "set_rewards_state"), user),
+            (state,),
+        )
+    }
 }
