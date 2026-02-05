@@ -2490,6 +2490,27 @@ fn test_set_rewards_config() {
 }
 
 #[test]
+fn test_set_rewards_state_event() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+    let user = Address::generate(&setup.env);
+
+    pool.set_rewards_state(&user, &false);
+
+    assert_eq!(
+        setup.env.events().all(),
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "set_rewards_state"), user.clone(),).into_val(&setup.env),
+                (false,).into_val(&setup.env),
+            ),
+        ]
+    );
+}
+
+#[test]
 fn test_transfer_ownership_events() {
     let setup = Setup::default();
     let pool = setup.liq_pool;
@@ -3686,8 +3707,8 @@ fn test_rewards_state_opt_out_redirects_rewards() {
     assert_eq!(user1_initial, reward_tps * 10 / 2);
 
     liq_pool.set_rewards_state(&user1, &false);
-    assert_eq!(liq_pool.get_reward_state(&user1), false);
-    assert_eq!(liq_pool.get_reward_state(&user2), true);
+    assert_eq!(liq_pool.get_rewards_state(&user1), false);
+    assert_eq!(liq_pool.get_rewards_state(&user2), true);
 
     jump(&env, 10);
     assert_eq!(liq_pool.claim(&user1), 0);
@@ -3723,20 +3744,20 @@ fn test_rewards_state_re_enable_resumes_accrual() {
 
     liq_pool.deposit(&user, &Vec::from_array(&env, [500, 500]), &0);
 
-    assert_eq!(liq_pool.get_reward_state(&user), true);
+    assert_eq!(liq_pool.get_rewards_state(&user), true);
     jump(&env, 10);
     assert_eq!(liq_pool.claim(&user), reward_tps * 10);
 
     // opt-out from rewards
     liq_pool.set_rewards_state(&user, &false);
-    assert_eq!(liq_pool.get_reward_state(&user), false);
+    assert_eq!(liq_pool.get_rewards_state(&user), false);
 
     jump(&env, 10);
     assert_eq!(liq_pool.claim(&user), 0);
 
     // re-enable rewards
     liq_pool.set_rewards_state(&user, &true);
-    assert_eq!(liq_pool.get_reward_state(&user), true);
+    assert_eq!(liq_pool.get_rewards_state(&user), true);
 
     jump(&env, 10);
     assert_eq!(liq_pool.claim(&user), reward_tps * 10);

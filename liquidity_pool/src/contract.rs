@@ -1644,7 +1644,7 @@ impl RewardsTrait for LiquidityPool {
         reward
     }
 
-    fn get_reward_state(e: Env, user: Address) -> bool {
+    fn get_rewards_state(e: Env, user: Address) -> bool {
         get_rewards_manager(&e)
             .manager()
             .get_user_rewards_state(&user)
@@ -1670,6 +1670,7 @@ impl RewardsTrait for LiquidityPool {
             rewards_manager.get_working_balance(&user, user_shares),
             rewards_manager.get_working_supply(total_shares),
         );
+        RewardEvents::new(&e).set_rewards_state(user, state);
     }
 
     fn admin_set_rewards_state(e: Env, admin: Address, user: Address, state: bool) {
