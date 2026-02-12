@@ -90,7 +90,7 @@ impl Manager {
     // Effective balance logic
     // ------------------------------------
 
-    fn calculate_effective_balance(
+    pub fn calculate_effective_balance(
         &self,
         user: &Address,
         share_balance: u128,
