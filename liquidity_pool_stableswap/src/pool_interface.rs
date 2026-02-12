@@ -67,6 +67,9 @@ pub trait LiquidityPoolInterfaceTrait {
         min_shares: u128,
     ) -> (Vec<u128>, u128);
 
+    // Estimate amount of shares to mint using deposit function.
+    fn estimate_deposit(e: Env, desired_amounts: Vec<u128>) -> u128;
+
     // Perform an exchange between two coins.
     // in_idx: Index value for the coin to send
     // out_idx: Index value of the coin to receive
@@ -168,6 +171,9 @@ pub trait RewardsTrait {
 
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
+
+    // Estimates working balance and working supply for resulting total user shares after deposit.
+    fn estimate_working_balance(e: Env, user: Address, new_user_shares: u128) -> (u128, u128);
 
     // Checkpoints the reward for the user.
     // Useful when user moves funds by itself to avoid re-entrancy issue.

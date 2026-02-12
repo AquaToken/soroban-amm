@@ -437,6 +437,45 @@ impl LiquidityPoolTrait for LiquidityPool {
         (amounts_vec, shares_to_mint)
     }
 
+    // Estimates how many pool shares would be minted by a deposit.
+    fn estimate_deposit(e: Env, desired_amounts: Vec<u128>) -> u128 {
+        if desired_amounts.len() != 2 {
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
+        }
+
+        // sync reserves first
+        Self::_sync_reserves(&e);
+
+        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        let desired_a = desired_amounts.get(0).unwrap();
+        let desired_b = desired_amounts.get(1).unwrap();
+
+        if (reserve_a == 0 && reserve_b == 0) && (desired_a == 0 || desired_b == 0) {
+            panic_with_error!(&e, LiquidityPoolValidationError::AllCoinsRequired);
+        }
+
+        let amounts =
+            pool::get_deposit_amounts(&e, desired_a, 0, desired_b, 0, reserve_a, reserve_b);
+
+        let new_reserve_a = reserve_a + amounts.0;
+        let new_reserve_b = reserve_b + amounts.1;
+        let total_shares = get_total_shares(&e);
+
+        let new_total_shares = if reserve_a > 0 && reserve_b > 0 {
+            let shares_a = new_reserve_a.fixed_mul_floor(&e, &total_shares, &reserve_a);
+            let shares_b = new_reserve_b.fixed_mul_floor(&e, &total_shares, &reserve_b);
+            shares_a.min(shares_b)
+        } else {
+            U256::from_u128(&e, new_reserve_a)
+                .mul(&U256::from_u128(&e, new_reserve_b))
+                .sqrt()
+                .to_u128()
+                .unwrap()
+        };
+
+        new_total_shares - total_shares
+    }
+
     // Swaps tokens in the pool.
     //
     // # Arguments
@@ -1489,6 +1528,23 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .get_amount_to_claim(&user, total_shares, user_shares)
+    }
+
+    // Returns the estimated working balance after deposit for the user.
+    // `new_user_shares` is the resulting total amount of user shares after deposit.
+    fn estimate_working_balance(e: Env, user: Address, new_user_shares: u128) -> (u128, u128) {
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+
+        let new_total_shares = total_shares + (new_user_shares - user_shares);
+        let rewards_manager = get_rewards_manager(&e).manager();
+        let prev_working_balance = rewards_manager.get_working_balance(&user, user_shares);
+        let prev_working_supply = rewards_manager.get_working_supply(total_shares);
+
+        let new_working_balance =
+            rewards_manager.calculate_effective_balance(&user, new_user_shares, new_total_shares);
+        let new_working_supply = prev_working_supply + new_working_balance - prev_working_balance;
+        (new_working_balance, new_working_supply)
     }
 
     fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128) {

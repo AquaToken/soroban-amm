@@ -1555,6 +1555,79 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         (amounts, mint_amount)
     }
 
+    // Estimates how many pool shares would be minted by a deposit.
+    fn estimate_deposit(e: Env, amounts: Vec<u128>) -> u128 {
+        let tokens = get_tokens(&e);
+        let n_coins = tokens.len();
+
+        if amounts.len() != n_coins {
+            panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
+        }
+
+        // sync reserves first
+        Self::_sync_reserves(&e);
+
+        let amp = Self::a(e.clone());
+        let token_supply = get_total_shares(&e);
+        let old_balances = get_reserves(&e);
+        let mut d0 = U256::from_u32(&e, 0);
+
+        if token_supply > 0 {
+            d0 = Self::_get_d(&e, &Self::_xp(&e, &old_balances), amp);
+        }
+
+        let mut new_balances: Vec<u128> = old_balances.clone();
+        for i in 0..n_coins {
+            let in_amount = amounts.get(i).unwrap();
+            if token_supply == 0 && in_amount == 0 {
+                panic_with_error!(e, LiquidityPoolValidationError::AllCoinsRequired);
+            }
+            new_balances.set(i, old_balances.get(i).unwrap() + in_amount);
+        }
+
+        let d1 = Self::_get_d(&e, &Self::_xp(&e, &new_balances), amp);
+        if d1 <= d0 {
+            panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
+        }
+
+        let d2 = if token_supply > 0 {
+            for i in 0..n_coins {
+                let new_balance = new_balances.get(i).unwrap();
+                let ideal_balance = d1
+                    .mul(&U256::from_u128(&e, old_balances.get(i).unwrap()))
+                    .div(&d0)
+                    .to_u128()
+                    .unwrap();
+                let difference = if ideal_balance > new_balance {
+                    ideal_balance - new_balance
+                } else {
+                    new_balance - ideal_balance
+                };
+
+                let fee = difference.fixed_mul_ceil(
+                    &e,
+                    &(get_fee(&e) as u128 * n_coins as u128),
+                    &(FEE_DENOMINATOR as u128 * 4 * (n_coins as u128 - 1)),
+                );
+
+                new_balances.set(i, new_balances.get(i).unwrap() - fee);
+            }
+            Self::_get_d(&e, &Self::_xp(&e, &new_balances), amp)
+        } else {
+            d1.clone()
+        };
+
+        if token_supply == 0 {
+            d1.to_u128().unwrap()
+        } else {
+            U256::from_u128(&e, token_supply)
+                .mul(&d2.sub(&d0))
+                .div(&d0)
+                .to_u128()
+                .unwrap()
+        }
+    }
+
     // Swaps tokens in the pool.
     //
     // # Arguments
@@ -2227,6 +2300,23 @@ impl RewardsTrait for LiquidityPool {
         rewards
             .manager()
             .get_amount_to_claim(&user, total_shares, user_shares)
+    }
+
+    // Returns the estimated working balance after deposit for the user.
+    // `new_user_shares` is the resulting total amount of user shares after deposit.
+    fn estimate_working_balance(e: Env, user: Address, new_user_shares: u128) -> (u128, u128) {
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+
+        let new_total_shares = total_shares + (new_user_shares - user_shares);
+        let rewards_manager = get_rewards_manager(&e).manager();
+        let prev_working_balance = rewards_manager.get_working_balance(&user, user_shares);
+        let prev_working_supply = rewards_manager.get_working_supply(total_shares);
+
+        let new_working_balance =
+            rewards_manager.calculate_effective_balance(&user, new_user_shares, new_total_shares);
+        let new_working_supply = prev_working_supply + new_working_balance - prev_working_balance;
+        (new_working_balance, new_working_supply)
     }
 
     fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128) {
