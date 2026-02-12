@@ -206,7 +206,7 @@ pub trait RewardsTrait {
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
 
-    // Estimates working balance and working supply for resulting total user shares after deposit.
+    // Estimates working balance and working supply for resulting total user shares after a balance change.
     fn estimate_working_balance(e: Env, user: Address, new_user_shares: u128) -> (u128, u128);
 
     // Checkpoints the reward for the user.

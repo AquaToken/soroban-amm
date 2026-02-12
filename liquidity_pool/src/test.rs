@@ -3984,3 +3984,99 @@ fn test_estimate_deposit_and_working_balance() {
             .unwrap() as u128,
     );
 }
+
+#[test]
+fn test_estimate_working_balance_lower_share_value() {
+    let setup = Setup::new_with_config(&TestConfig {
+        users_count: 2,
+        ..TestConfig::default()
+    });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
+
+    let user1 = users[0].clone();
+    let user2 = users[1].clone();
+
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [100, 100]), &0);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [20, 20]), &0);
+
+    let user2_shares = liq_pool.get_user_shares(&user2);
+    let burned_shares = 5;
+    let estimated_total_user_shares = user2_shares - burned_shares;
+
+    let (estimated_working_balance, estimated_working_supply) =
+        liq_pool.estimate_working_balance(&user2, &estimated_total_user_shares);
+
+    liq_pool.withdraw(&user2, &burned_shares, &Vec::from_array(&env, [0, 0]));
+
+    assert_eq!(
+        liq_pool.get_user_shares(&user2),
+        estimated_total_user_shares
+    );
+
+    let rewards_info = liq_pool.get_rewards_info(&user2);
+    assert_eq!(
+        estimated_working_balance,
+        rewards_info
+            .get(Symbol::new(&env, "working_balance"))
+            .unwrap() as u128,
+    );
+    assert_eq!(
+        estimated_working_supply,
+        rewards_info
+            .get(Symbol::new(&env, "working_supply"))
+            .unwrap() as u128,
+    );
+}
+
+#[test]
+fn test_estimate_working_balance_lower_share_value_with_boost() {
+    let setup = Setup::new_with_config(&TestConfig {
+        users_count: 2,
+        ..TestConfig::default()
+    });
+    let env = setup.env;
+    let liq_pool = setup.liq_pool;
+    let users = setup.users;
+
+    let user1 = users[0].clone();
+    let user2 = users[1].clone();
+
+    liq_pool.deposit(&user1, &Vec::from_array(&env, [100, 100]), &0);
+    liq_pool.deposit(&user2, &Vec::from_array(&env, [20, 20]), &0);
+
+    let boost_admin = get_token_admin_client(&env, &setup.reward_boost_token.address);
+    boost_admin.mint(&user2, &10_000_0000000);
+    setup
+        .reward_boost_feed
+        .set_total_supply(&setup.operations_admin, &20_000_0000000);
+
+    let user2_shares = liq_pool.get_user_shares(&user2);
+    let burned_shares = 5;
+    let estimated_total_user_shares = user2_shares - burned_shares;
+
+    let (estimated_working_balance, estimated_working_supply) =
+        liq_pool.estimate_working_balance(&user2, &estimated_total_user_shares);
+
+    liq_pool.withdraw(&user2, &burned_shares, &Vec::from_array(&env, [0, 0]));
+
+    assert_eq!(
+        liq_pool.get_user_shares(&user2),
+        estimated_total_user_shares
+    );
+
+    let rewards_info = liq_pool.get_rewards_info(&user2);
+    assert_eq!(
+        estimated_working_balance,
+        rewards_info
+            .get(Symbol::new(&env, "working_balance"))
+            .unwrap() as u128,
+    );
+    assert_eq!(
+        estimated_working_supply,
+        rewards_info
+            .get(Symbol::new(&env, "working_supply"))
+            .unwrap() as u128,
+    );
+}

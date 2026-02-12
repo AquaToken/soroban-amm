@@ -1530,13 +1530,17 @@ impl RewardsTrait for LiquidityPool {
             .get_amount_to_claim(&user, total_shares, user_shares)
     }
 
-    // Returns the estimated working balance after deposit for the user.
-    // `new_user_shares` is the resulting total amount of user shares after deposit.
+    // Returns the estimated working balance for a hypothetical resulting user share balance.
+    // `new_user_shares` is the resulting total amount of user shares after a balance change.
     fn estimate_working_balance(e: Env, user: Address, new_user_shares: u128) -> (u128, u128) {
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
 
-        let new_total_shares = total_shares + (new_user_shares - user_shares);
+        let new_total_shares = if new_user_shares >= user_shares {
+            total_shares + (new_user_shares - user_shares)
+        } else {
+            total_shares - (user_shares - new_user_shares)
+        };
         let rewards_manager = get_rewards_manager(&e).manager();
         let prev_working_balance = rewards_manager.get_working_balance(&user, user_shares);
         let prev_working_supply = rewards_manager.get_working_supply(total_shares);
