@@ -204,19 +204,22 @@ pub fn amount0_delta(
         return Err(Error::InvalidSqrtPrice);
     }
 
-    // Rearranged to avoid large intermediate multiplication:
-    // amount0 = liquidity * ((sb - sa) * Q96 / sb) / sa
-    let price_ratio_q96 = if round_up {
-        u256_mul_div(e, &sb.sub(&sa), &u256_q96(e), &sb, true)?
-    } else {
-        u256_mul_div(e, &sb.sub(&sa), &u256_q96(e), &sb, false)?
-    };
-
+    // amount0 = L * Q96 * (sb - sa) / (sa * sb)
+    // Matches Uniswap V3's two-step approach:
+    //   temp = mulDiv(L * Q96, sb - sa, sb)   [U512 intermediate for ~384-bit product]
+    //   amount0 = temp / sa                    [or divRoundingUp]
+    let diff = sb.sub(&sa);
     let liquidity_u256 = u256_from_u128(e, liquidity);
+    let numerator1 = liquidity_u256.mul(&u256_q96(e)); // L * Q96, ~224 bits, fits U256
+
+    // Step 1: numerator1 * diff / sb (uses U512 for ~384-bit intermediate)
+    let temp = u512_mul_div(e, &numerator1, &diff, &sb, round_up);
+
+    // Step 2: temp / sa
     let amount_u256 = if round_up {
-        u256_div_round_up(e, &liquidity_u256.mul(&price_ratio_q96), &sa)?
+        u256_div_round_up(e, &temp, &sa)?
     } else {
-        liquidity_u256.fixed_mul_floor(e, &price_ratio_q96, &sa)
+        temp.div(&sa)
     };
 
     u256_to_u128(&amount_u256)
@@ -239,21 +242,12 @@ pub fn amount1_delta(
         core::mem::swap(&mut sa, &mut sb);
     }
 
-    // Use an intermediate 2^64 scale to preserve precision while avoiding overflow.
-    let scale_q64 = u256_one(e).shl(64);
+    // amount1 = L * (sb - sa) / Q96
+    // Uses U512 intermediate for L * diff product (~128 + 160 = 288 bits).
+    // Matches Uniswap V3: FullMath.mulDiv(liquidity, sqrtRatioBX96 - sqrtRatioAX96, Q96)
     let diff = sb.sub(&sa);
-    let diff_ratio_q64 = if round_up {
-        u256_mul_div(e, &diff, &scale_q64, &u256_q96(e), true)?
-    } else {
-        u256_mul_div(e, &diff, &scale_q64, &u256_q96(e), false)?
-    };
-
     let liquidity_u256 = u256_from_u128(e, liquidity);
-    let amount_u256 = if round_up {
-        u256_mul_div(e, &liquidity_u256, &diff_ratio_q64, &scale_q64, true)?
-    } else {
-        u256_mul_div(e, &liquidity_u256, &diff_ratio_q64, &scale_q64, false)?
-    };
+    let amount_u256 = u512_mul_div(e, &liquidity_u256, &diff, &u256_q96(e), round_up);
 
     u256_to_u128(&amount_u256)
 }
@@ -308,6 +302,78 @@ pub fn mul_div_fee_growth(
     )?;
 
     u256_to_u128(&value)
+}
+
+/// Compute maximum liquidity mintable from a given amount of token0.
+///
+/// Inverse of amount0_delta:
+///   L = amount0 * sqrtA * sqrtB / (Q96 * (sqrtB - sqrtA))
+///
+/// Computed as: L = amount0 * mulDiv(sqrtA, sqrtB, Q96) / (sqrtB - sqrtA)
+/// Uses U512 intermediates to avoid overflow.
+pub fn liquidity_for_amount0(
+    e: &Env,
+    sqrt_price_a_x96: &U256,
+    sqrt_price_b_x96: &U256,
+    amount0: u128,
+) -> Result<u128, Error> {
+    if amount0 == 0 {
+        return Ok(0);
+    }
+
+    let mut sa = sqrt_price_a_x96.clone();
+    let mut sb = sqrt_price_b_x96.clone();
+    if sa > sb {
+        core::mem::swap(&mut sa, &mut sb);
+    }
+
+    let diff = sb.sub(&sa);
+    if diff == u256_zero(e) {
+        return Ok(0);
+    }
+
+    // intermediate = sqrtA * sqrtB / Q96 (via U512 to handle ~320-bit product)
+    let intermediate = u512_mul_div(e, &sa, &sb, &u256_q96(e), false);
+
+    // L = amount0 * intermediate / diff (round down)
+    let amount_u256 = u256_from_u128(e, amount0);
+    let result = u512_mul_div(e, &amount_u256, &intermediate, &diff, false);
+
+    u256_to_u128(&result)
+}
+
+/// Compute maximum liquidity mintable from a given amount of token1.
+///
+/// Inverse of amount1_delta:
+///   L = amount1 * Q96 / (sqrtB - sqrtA)
+///
+/// Uses U512 intermediate for amount1 * Q96 product (~224 bits).
+pub fn liquidity_for_amount1(
+    e: &Env,
+    sqrt_price_a_x96: &U256,
+    sqrt_price_b_x96: &U256,
+    amount1: u128,
+) -> Result<u128, Error> {
+    if amount1 == 0 {
+        return Ok(0);
+    }
+
+    let mut sa = sqrt_price_a_x96.clone();
+    let mut sb = sqrt_price_b_x96.clone();
+    if sa > sb {
+        core::mem::swap(&mut sa, &mut sb);
+    }
+
+    let diff = sb.sub(&sa);
+    if diff == u256_zero(e) {
+        return Ok(0);
+    }
+
+    // L = amount1 * Q96 / diff (round down)
+    let amount_u256 = u256_from_u128(e, amount1);
+    let result = u512_mul_div(e, &amount_u256, &u256_q96(e), &diff, false);
+
+    u256_to_u128(&result)
 }
 
 /// Compute next sqrt price given token0 input/output amount.
@@ -405,18 +471,14 @@ pub fn get_next_sqrt_price_from_amount1(
     let q96 = u256_q96(e);
     let amt = u256_from_u128(e, amount);
 
-    // quotient = amount * Q96 / L (use U512 for the intermediate)
-    let quotient = if add {
-        // Round down for add (gives lower sqrt, conservative for protocol)
-        u512_mul_div(e, &amt, &q96, &liq, false)
-    } else {
-        // Round up for sub (gives higher sqrt, conservative for protocol)
-        u512_mul_div(e, &amt, &q96, &liq, true)
-    };
-
+    // Matches Uniswap V3's getNextSqrtPriceFromAmount1RoundingDown:
+    // - add:      quotient rounds DOWN → result (sqrt + q) rounds DOWN
+    // - subtract: quotient rounds UP   → result (sqrt - q) rounds DOWN
     if add {
+        let quotient = u512_mul_div(e, &amt, &q96, &liq, false);
         Ok(sqrt_price_x96.add(&quotient))
     } else {
+        let quotient = u512_mul_div(e, &amt, &q96, &liq, true);
         if *sqrt_price_x96 <= quotient {
             return Err(Error::PriceOutOfBounds);
         }

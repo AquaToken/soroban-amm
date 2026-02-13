@@ -87,24 +87,53 @@ impl ConcentratedLiquidityPool {
     }
 
     pub(super) fn find_prev_set_bit(word: &[u8; 32], from_bit: u32) -> Option<u32> {
-        let mut bit = from_bit.min(255) as i32;
-        while bit >= 0 {
-            if Self::bit_is_set(word, bit as u32) {
-                return Some(bit as u32);
-            }
-            bit -= 1;
+        let from_bit = from_bit.min(255);
+        // Big-endian: byte 0 = bits 255..248, byte 31 = bits 7..0
+        let start_byte = (255 - from_bit) / 8;
+        let start_bit_in_byte = from_bit % 8;
+
+        // Check the first (partial) byte — mask off bits above from_bit
+        let mask = ((1u16 << (start_bit_in_byte + 1)) - 1) as u8;
+        let masked = word[start_byte as usize] & mask;
+        if masked != 0 {
+            let top_bit = 7 - masked.leading_zeros();
+            return Some((31 - start_byte) * 8 + top_bit);
         }
+
+        // Scan remaining bytes downward (higher byte index = lower bits)
+        for byte_idx in (start_byte + 1)..32 {
+            if word[byte_idx as usize] != 0 {
+                let top_bit = 7 - word[byte_idx as usize].leading_zeros();
+                return Some((31 - byte_idx) * 8 + top_bit);
+            }
+        }
+
         None
     }
 
     pub(super) fn find_next_set_bit(word: &[u8; 32], from_bit: u32) -> Option<u32> {
-        let mut bit = from_bit.min(255);
-        while bit < 256 {
-            if Self::bit_is_set(word, bit) {
-                return Some(bit);
-            }
-            bit += 1;
+        let from_bit = from_bit.min(255);
+        let start_byte = (255 - from_bit) / 8;
+        let start_bit_in_byte = from_bit % 8;
+
+        // Check the first (partial) byte — mask off bits below from_bit
+        let mask = !((1u8 << start_bit_in_byte).wrapping_sub(1));
+        let masked = word[start_byte as usize] & mask;
+        if masked != 0 {
+            let low_bit = masked.trailing_zeros();
+            return Some((31 - start_byte) * 8 + low_bit);
         }
+
+        // Scan remaining bytes upward (lower byte index = higher bits)
+        if start_byte > 0 {
+            for byte_idx in (0..start_byte).rev() {
+                if word[byte_idx as usize] != 0 {
+                    let low_bit = word[byte_idx as usize].trailing_zeros();
+                    return Some((31 - byte_idx) * 8 + low_bit);
+                }
+            }
+        }
+
         None
     }
 
@@ -770,29 +799,24 @@ impl ConcentratedLiquidityPool {
         }
 
         let slot = get_slot0(e);
-        let mut liquidity = if desired_amount0 == 0 {
-            desired_amount1
-        } else if desired_amount1 == 0 {
-            desired_amount0
+        let sqrt_lower = sqrt_ratio_at_tick(e, tick_lower)?;
+        let sqrt_upper = sqrt_ratio_at_tick(e, tick_upper)?;
+
+        // Analytical formulas (inverse of amount0_delta / amount1_delta):
+        // - Below range:  only token0 needed → L = liquidity_for_amount0(sqrtLower, sqrtUpper, amount0)
+        // - Above range:  only token1 needed → L = liquidity_for_amount1(sqrtLower, sqrtUpper, amount1)
+        // - In range:     L = min(L0_from_current_to_upper, L1_from_lower_to_current)
+        if slot.sqrt_price_x96 <= sqrt_lower {
+            liquidity_for_amount0(e, &sqrt_lower, &sqrt_upper, desired_amount0)
+        } else if slot.sqrt_price_x96 >= sqrt_upper {
+            liquidity_for_amount1(e, &sqrt_lower, &sqrt_upper, desired_amount1)
         } else {
-            desired_amount0.min(desired_amount1)
-        };
-
-        while liquidity > 0 {
-            match Self::amounts_for_liquidity(e, &slot, tick_lower, tick_upper, liquidity, true) {
-                Ok((amount0, amount1))
-                    if amount0 <= desired_amount0 && amount1 <= desired_amount1 =>
-                {
-                    return Ok(liquidity);
-                }
-                _ => {
-                    // Conservative fallback to avoid overflow-prone upper-bound search.
-                    liquidity >>= 1;
-                }
-            }
+            let l0 =
+                liquidity_for_amount0(e, &slot.sqrt_price_x96, &sqrt_upper, desired_amount0)?;
+            let l1 =
+                liquidity_for_amount1(e, &sqrt_lower, &slot.sqrt_price_x96, desired_amount1)?;
+            Ok(l0.min(l1))
         }
-
-        Ok(0)
     }
 
     pub(super) fn simulate_swap_amounts(

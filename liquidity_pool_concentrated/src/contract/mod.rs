@@ -1,8 +1,9 @@
 use crate::errors::Error;
 use crate::math::{
     amount0_delta, amount1_delta, fee_growth_delta_x128, get_next_sqrt_price_from_input,
-    get_next_sqrt_price_from_output, max_sqrt_ratio, min_sqrt_ratio, mul_div_fee_growth,
-    mul_div_u128, sqrt_ratio_at_tick, tick_at_sqrt_ratio, wrapping_sub_u256,
+    get_next_sqrt_price_from_output, liquidity_for_amount0, liquidity_for_amount1,
+    max_sqrt_ratio, min_sqrt_ratio, mul_div_fee_growth, mul_div_u128, sqrt_ratio_at_tick,
+    tick_at_sqrt_ratio, wrapping_sub_u256,
 };
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;

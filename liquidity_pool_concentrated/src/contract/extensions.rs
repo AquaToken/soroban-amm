@@ -333,4 +333,22 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     fn get_total_raw_liquidity(e: Env) -> u128 {
         get_total_raw_liquidity(&e)
     }
+
+    fn get_tick_bitmap_batch(e: Env, start_word: i32, count: u32) -> Vec<U256> {
+        let count = count.min(100);
+        let mut result = Vec::new(&e);
+        for i in 0..count {
+            result.push_back(get_tick_bitmap_word(&e, start_word + i as i32));
+        }
+        result
+    }
+
+    fn get_ticks_batch(e: Env, ticks: Vec<i32>) -> Vec<TickInfo> {
+        let max_ticks = ticks.len().min(100);
+        let mut result = Vec::new(&e);
+        for i in 0..max_ticks {
+            result.push_back(get_tick(&e, ticks.get(i).unwrap()));
+        }
+        result
+    }
 }
