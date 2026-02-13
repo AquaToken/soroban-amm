@@ -3435,6 +3435,72 @@ fn test_setup_rewards_gauge() {
 }
 
 #[test]
+fn test_setup_rewards_gauge_concentrated_pool() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let user1 = Address::generate(&e);
+    setup.reward_token.mint(&user1, &10_0000000);
+    let [token1, token2, _, _] = setup.tokens;
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let (pool_hash, pool_address) = setup
+        .router
+        .init_concentrated_pool(&user1, &tokens, &30, &1);
+    let gauges_before: Map<Address, Address> =
+        e.invoke_contract(&pool_address, &Symbol::new(&e, "get_gauges"), Vec::new(&e));
+    assert_eq!(gauges_before, Map::new(&e));
+
+    let distributor = Address::generate(&e);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token1.address, &true);
+    setup
+        .router
+        .pool_gauge_switch_token(&setup.admin, &token2.address, &true);
+
+    let tps = 1173u128; // 10_1347200 / day. minimum with configured threshold
+    let duration = 7 * 24 * 60 * 60u64;
+    let total_reward = tps * duration as u128;
+    setup
+        .reward_token
+        .mint(&distributor, &(total_reward as i128 * 2));
+
+    let rewards_gauge = setup.router.pool_gauge_schedule_reward(
+        &distributor,
+        &tokens,
+        &pool_hash,
+        &setup.reward_token.address,
+        &tps,
+        &None,
+        &duration,
+        &vec![&e],
+    );
+    assert_eq!(
+        setup.router.pool_gauge_schedule_reward(
+            &distributor,
+            &tokens,
+            &pool_hash,
+            &setup.reward_token.address,
+            &tps,
+            &Some(100),
+            &duration,
+            &vec![&e],
+        ),
+        rewards_gauge,
+    );
+    assert_eq!(
+        e.invoke_contract::<Map<Address, Address>>(
+            &pool_address,
+            &Symbol::new(&e, "get_gauges"),
+            Vec::new(&e),
+        ),
+        Map::from_array(
+            &e,
+            [(setup.reward_token.address.clone(), rewards_gauge.clone())]
+        )
+    );
+}
+
+#[test]
 fn test_pool_gauge_token_switch_events() {
     let setup = Setup::default();
     let e = setup.env;

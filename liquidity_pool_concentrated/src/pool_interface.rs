@@ -78,13 +78,26 @@ pub trait LiquidityPoolInterfaceTrait {
 pub trait RewardsTrait {
     fn initialize_rewards_config(e: Env, reward_token: Address);
     fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address);
+    fn set_reward_boost_config(
+        e: Env,
+        admin: Address,
+        reward_boost_token: Address,
+        reward_boost_feed: Address,
+    );
     fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128);
+    fn get_unused_reward(e: Env) -> u128;
+    fn return_unused_reward(e: Env, admin: Address) -> u128;
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
     fn get_user_reward(e: Env, user: Address) -> u128;
+    fn estimate_working_balance(e: Env, user: Address, new_user_shares: u128) -> (u128, u128);
     fn get_total_accumulated_reward(e: Env) -> u128;
     fn get_total_configured_reward(e: Env) -> u128;
+    fn adjust_total_accumulated_reward(e: Env, admin: Address, diff: i128);
     fn get_total_claimed_reward(e: Env) -> u128;
     fn claim(e: Env, user: Address) -> u128;
+    fn get_rewards_state(e: Env, user: Address) -> bool;
+    fn set_rewards_state(e: Env, user: Address, state: bool);
+    fn admin_set_rewards_state(e: Env, admin: Address, user: Address, state: bool);
 }
 
 pub trait AdminInterfaceTrait {
@@ -141,6 +154,25 @@ pub trait UpgradeableContract {
 
     fn set_emergency_mode(e: Env, emergency_admin: Address, value: bool);
     fn get_emergency_mode(e: Env) -> bool;
+}
+
+pub trait RewardsGaugeInterfaceTrait {
+    fn gauge_add(e: Env, admin: Address, gauge_address: Address);
+    fn gauge_remove(e: Env, admin: Address, reward_token: Address);
+    fn gauge_schedule_reward(
+        e: Env,
+        router: Address,
+        distributor: Address,
+        gauge: Address,
+        start_at: Option<u64>,
+        duration: u64,
+        tps: u128,
+    );
+    fn kill_gauges_claim(e: Env, admin: Address);
+    fn unkill_gauges_claim(e: Env, admin: Address);
+    fn get_gauges(e: Env) -> Map<Address, Address>;
+    fn gauges_claim(e: Env, user: Address) -> Map<Address, u128>;
+    fn gauges_get_reward_info(e: Env, user: Address) -> Map<Address, Map<Symbol, i128>>;
 }
 
 pub trait ConcentratedPoolExtensionsTrait {
@@ -203,10 +235,4 @@ pub trait ConcentratedPoolExtensionsTrait {
     fn get_user_position_snapshot(e: Env, user: Address) -> UserPositionSnapshot;
     fn get_total_weighted_liquidity(e: Env) -> u128;
     fn get_total_raw_liquidity(e: Env) -> u128;
-
-    fn gauges_add(e: Env, admin: Address, gauge_address: Address);
-    fn gauges_remove(e: Env, admin: Address, reward_token: Address);
-    fn gauges_list(e: Env) -> Map<Address, Address>;
-    fn gauges_claim(e: Env, user: Address) -> Map<Address, u128>;
-    fn gauges_get_rewards_info(e: Env, user: Address) -> Map<Address, Map<Symbol, i128>>;
 }

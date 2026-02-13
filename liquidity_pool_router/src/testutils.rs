@@ -48,6 +48,13 @@ pub fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(stableswap_pool::WASM)
 }
 
+pub const CONCENTRATED_POOL_WASM: &[u8] =
+    include_bytes!("../../contracts/soroban_liquidity_pool_concentrated_contract.wasm");
+
+pub fn install_concentrated_liq_pool_hash(e: &Env) -> BytesN<32> {
+    e.deployer().upload_contract_wasm(CONCENTRATED_POOL_WASM)
+}
+
 mod pool_plane {
     soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_plane_contract.wasm");
 }
@@ -173,6 +180,7 @@ impl Default for Setup<'_> {
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&env));
+        router.set_concentrated_pool_hash(&admin, &install_concentrated_liq_pool_hash(&env));
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &reward_token.address);
         router.configure_init_pool_payment(

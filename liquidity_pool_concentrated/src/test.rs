@@ -199,7 +199,7 @@ fn test_boosted_native_rewards_and_gauge() {
         .set_rewards_config(&setup.admin, &reward_expired_at, &reward_tps);
 
     let gauge = deploy_rewards_gauge(&setup.env, &setup.pool.address, &setup.reward_token.address);
-    setup.pool.gauges_add(&setup.admin, &gauge.address);
+    setup.pool.gauge_add(&setup.admin, &gauge.address);
 
     let gauge_distributor = Address::generate(&setup.env);
     get_token_admin_client(&setup.env, &setup.reward_token.address)
@@ -256,5 +256,106 @@ fn test_boosted_native_rewards_and_gauge() {
             &setup.env,
             [(setup.reward_token.address.clone(), expected_user2)]
         )
+    );
+}
+
+#[test]
+fn test_router_compatible_gauge_schedule_reward() {
+    let setup = Setup::default();
+    let user = setup.user.clone();
+
+    setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
+    setup.pool.initialize_boost_config(
+        &setup.reward_boost_token.address,
+        &setup.reward_boost_feed.address,
+    );
+    setup
+        .pool
+        .initialize_rewards_config(&setup.reward_token.address);
+    setup.pool.deposit(
+        &user,
+        &Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]),
+        &0,
+    );
+
+    let gauge = deploy_rewards_gauge(&setup.env, &setup.pool.address, &setup.reward_token.address);
+    setup.pool.gauge_add(&setup.router, &gauge.address);
+    assert_eq!(
+        setup.pool.get_gauges(),
+        Map::from_array(
+            &setup.env,
+            [(setup.reward_token.address.clone(), gauge.address.clone())]
+        )
+    );
+
+    let tps = 2_100u128;
+    let duration = 60u64;
+    let total_reward = tps * duration as u128;
+    let distributor = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.reward_token.address)
+        .mint(&distributor, &(total_reward as i128));
+
+    setup.pool.gauge_schedule_reward(
+        &setup.router,
+        &distributor,
+        &gauge.address,
+        &None,
+        &duration,
+        &tps,
+    );
+
+    jump(&setup.env, 30);
+    assert_eq!(
+        setup.pool.gauges_claim(&user),
+        Map::from_array(
+            &setup.env,
+            [(setup.reward_token.address.clone(), total_reward / 2)]
+        )
+    );
+}
+
+#[test]
+fn test_kill_and_unkill_gauges_claim() {
+    let setup = Setup::default();
+    let user = setup.user.clone();
+
+    setup.pool.kill_gauges_claim(&setup.admin);
+    assert!(setup.pool.try_gauges_claim(&user).is_err());
+
+    setup.pool.unkill_gauges_claim(&setup.admin);
+    assert!(setup.pool.try_gauges_claim(&user).is_ok());
+}
+
+#[test]
+fn test_get_and_return_unused_reward() {
+    let setup = Setup::default();
+
+    setup.pool.initialize_boost_config(
+        &setup.reward_boost_token.address,
+        &setup.reward_boost_feed.address,
+    );
+    setup
+        .pool
+        .initialize_rewards_config(&setup.reward_token.address);
+
+    let tps = 100u128;
+    let duration = 10u64;
+    let configured_reward = tps * duration as u128;
+    let extra_reward = 250u128;
+    get_token_admin_client(&setup.env, &setup.reward_token.address).mint(
+        &setup.pool.address,
+        &((configured_reward + extra_reward) as i128),
+    );
+    setup.pool.set_rewards_config(
+        &setup.admin,
+        &(setup.env.ledger().timestamp() + duration),
+        &tps,
+    );
+
+    assert_eq!(setup.pool.get_unused_reward(), extra_reward);
+    assert_eq!(setup.pool.return_unused_reward(&setup.admin), extra_reward);
+    assert_eq!(
+        setup.reward_token.balance(&setup.router) as u128,
+        extra_reward
     );
 }
