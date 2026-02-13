@@ -3,6 +3,9 @@ use super::*;
 #[contractimpl]
 impl Plane for ConcentratedLiquidityPool {
     fn init_pools_plane(e: Env, plane: Address) {
+        if crate::storage::has_plane(&e) {
+            panic_with_error!(&e, Error::PlaneAlreadyInitialized);
+        }
         set_plane(&e, &plane);
     }
 

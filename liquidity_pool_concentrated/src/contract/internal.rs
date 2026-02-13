@@ -541,10 +541,10 @@ impl ConcentratedLiquidityPool {
 
         let growth_delta = fee_growth_delta_x128(e, fee_amount_for_lp, liquidity)?;
         if zero_for_one {
-            let next = get_fee_growth_global_0_x128(e).add(&growth_delta);
+            let next = wrapping_add_u256(e, &get_fee_growth_global_0_x128(e), &growth_delta);
             set_fee_growth_global_0_x128(e, &next);
         } else {
-            let next = get_fee_growth_global_1_x128(e).add(&growth_delta);
+            let next = wrapping_add_u256(e, &get_fee_growth_global_1_x128(e), &growth_delta);
             set_fee_growth_global_1_x128(e, &next);
         }
 

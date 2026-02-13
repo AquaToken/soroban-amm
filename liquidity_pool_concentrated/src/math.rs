@@ -78,6 +78,21 @@ pub fn wrapping_sub_u256(e: &Env, a: &U256, b: &U256) -> U256 {
     }
 }
 
+/// Wrapping addition for fee_growth accumulators.
+/// Returns (a + b) mod 2^256, matching Uniswap V3 semantics where
+/// fee_growth counters intentionally overflow.
+pub fn wrapping_add_u256(e: &Env, a: &U256, b: &U256) -> U256 {
+    let max = u256_max(e);
+    // If a + b would overflow: max - a < b
+    let remaining = max.sub(a);
+    if remaining >= *b {
+        a.add(b)
+    } else {
+        // (a + b) mod 2^256 = b - (max - a) - 1
+        b.sub(&remaining).sub(&u256_one(e))
+    }
+}
+
 fn u256_to_u128(value: &U256) -> Result<u128, Error> {
     value.to_u128().ok_or(Error::LiquidityOverflow)
 }
@@ -526,7 +541,7 @@ pub fn get_next_sqrt_price_from_output(
 mod test {
     use super::{
         max_sqrt_ratio, min_sqrt_ratio, sqrt_ratio_at_tick, tick_at_sqrt_ratio, u256_max,
-        u256_one, wrapping_sub_u256,
+        u256_one, wrapping_add_u256, wrapping_sub_u256,
     };
     use soroban_sdk::{Env, U256};
 
@@ -613,5 +628,63 @@ mod test {
             wrapping_sub_u256(&e, &zero, &max),
             U256::from_u32(&e, 1)
         );
+    }
+
+    #[test]
+    fn wrapping_add_no_overflow() {
+        let e = Env::default();
+        let a = U256::from_u128(&e, 100);
+        let b = U256::from_u128(&e, 200);
+        assert_eq!(wrapping_add_u256(&e, &a, &b), U256::from_u128(&e, 300));
+    }
+
+    #[test]
+    fn wrapping_add_zero() {
+        let e = Env::default();
+        let a = U256::from_u128(&e, 42);
+        let zero = U256::from_u32(&e, 0);
+        assert_eq!(wrapping_add_u256(&e, &a, &zero), a);
+        assert_eq!(wrapping_add_u256(&e, &zero, &a), a);
+    }
+
+    #[test]
+    fn wrapping_add_overflow() {
+        let e = Env::default();
+        let max = u256_max(&e);
+        let one = u256_one(&e);
+        // MAX + 1 mod 2^256 = 0
+        assert_eq!(
+            wrapping_add_u256(&e, &max, &one),
+            U256::from_u32(&e, 0)
+        );
+    }
+
+    #[test]
+    fn wrapping_add_overflow_both_large() {
+        let e = Env::default();
+        let max = u256_max(&e);
+        // MAX + MAX mod 2^256 = (2^256 - 1) + (2^256 - 1) mod 2^256 = 2^257 - 2 mod 2^256 = 2^256 - 2
+        let expected = max.sub(&u256_one(&e)); // MAX - 1
+        assert_eq!(wrapping_add_u256(&e, &max, &max), expected);
+    }
+
+    #[test]
+    fn wrapping_add_sub_roundtrip() {
+        let e = Env::default();
+        let a = U256::from_u128(&e, 12345);
+        let b = U256::from_u128(&e, 67890);
+        // (a + b) - b = a
+        let sum = wrapping_add_u256(&e, &a, &b);
+        assert_eq!(wrapping_sub_u256(&e, &sum, &b), a);
+    }
+
+    #[test]
+    fn wrapping_add_sub_roundtrip_overflow() {
+        let e = Env::default();
+        let max = u256_max(&e);
+        let val = U256::from_u128(&e, 100);
+        // (MAX + val) wraps, then subtract val should give MAX
+        let sum = wrapping_add_u256(&e, &max, &val);
+        assert_eq!(wrapping_sub_u256(&e, &sum, &val), max);
     }
 }

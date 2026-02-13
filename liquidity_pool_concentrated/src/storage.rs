@@ -51,6 +51,10 @@ pub enum DataKey {
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
 generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
+
+pub fn has_plane(e: &Env) -> bool {
+    e.storage().instance().has(&DataKey::Plane)
+}
 generate_instance_storage_getter_and_setter!(token0, DataKey::Token0, Address);
 generate_instance_storage_getter_and_setter!(token1, DataKey::Token1, Address);
 generate_instance_storage_getter_and_setter!(fee, DataKey::Fee, u32);

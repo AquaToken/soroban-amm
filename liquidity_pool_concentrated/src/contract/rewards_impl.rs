@@ -184,7 +184,31 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         );
         let reward = manager.claim_reward(&user, total_weighted, user_weighted);
 
-        RewardEvents::new(&e).claim(user.clone(), rewards.storage().get_reward_token(), reward);
+        // Validate reserves after claim — prevent reward distribution from draining
+        // tokens that back liquidity positions. Matches standard/stableswap pools.
+        let reward_token = rewards.storage().get_reward_token();
+        let token0 = get_token0(&e);
+        let token1 = get_token1(&e);
+        let contract = e.current_contract_address();
+        let protocol_fees = get_protocol_fees(&e);
+
+        if reward_token == token0 {
+            let balance =
+                SorobanTokenClient::new(&e, &token0).balance(&contract) as u128;
+            let reserve = Self::get_reserves(e.clone()).get_unchecked(0);
+            if reserve + protocol_fees.token0 > balance {
+                panic_with_error!(&e, Error::InsufficientToken0);
+            }
+        } else if reward_token == token1 {
+            let balance =
+                SorobanTokenClient::new(&e, &token1).balance(&contract) as u128;
+            let reserve = Self::get_reserves(e.clone()).get_unchecked(1);
+            if reserve + protocol_fees.token1 > balance {
+                panic_with_error!(&e, Error::InsufficientToken1);
+            }
+        }
+
+        RewardEvents::new(&e).claim(user.clone(), reward_token, reward);
 
         let manager_after = rewards.manager();
         rewards_gauge::operations::checkpoint_user(
