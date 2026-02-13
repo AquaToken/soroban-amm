@@ -880,6 +880,7 @@ cd liquidity_pool && cargo build --release --target wasm32v1-none
 2. **Explicit error handling** - Use `panic_with_error!` with typed errors
 3. **Minimize storage operations** - Batch reads/writes for Soroban costs
 4. **Use shared helpers** from `utils` and `access_control`
+5. **Code comments must be in English only** - Do not add non-English comments in source code
 
 ### Adding Dependencies
 
@@ -1202,4 +1203,3 @@ fn assert_tokens_sorted(e: &Env, tokens: &Vec<Address>)
 
 - No external price oracles for pool math
 - `locker_feed` is admin-updated, not real-time
-

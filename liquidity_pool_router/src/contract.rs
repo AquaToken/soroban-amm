@@ -9,8 +9,9 @@ use crate::pool_interface::{
     RewardsInterfaceTrait,
 };
 use crate::pool_utils::{
-    assert_tokens_sorted, deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt,
-    get_standard_pool_salt, get_tokens_salt, get_total_liquidity, validate_tokens_contracts,
+    assert_tokens_sorted, deploy_concentrated_pool, deploy_stableswap_pool, deploy_standard_pool,
+    get_concentrated_pool_salt, get_stableswap_pool_salt, get_standard_pool_salt, get_tokens_salt,
+    get_total_liquidity, validate_tokens_contracts,
 };
 use crate::rewards::get_rewards_manager;
 use crate::rewards_gauge::{
@@ -20,12 +21,13 @@ use crate::rewards_gauge::{
 };
 use crate::router_interface::AdminInterface;
 use crate::storage::{
-    get_gauge_rewards_enabled_for, get_init_pool_payment_address, get_init_pool_payment_token,
-    get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
-    get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_protocol_fee_fraction,
-    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_tokens_set,
-    get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_gauge_rewards_enabled_for, set_init_pool_payment_address, set_init_pool_payment_token,
+    get_concentrated_pool_hash, get_gauge_rewards_enabled_for, get_init_pool_payment_address,
+    get_init_pool_payment_token, get_init_stable_pool_payment_amount,
+    get_init_standard_pool_payment_amount, get_liquidity_calculator, get_pool, get_pool_plane,
+    get_pools_plain, get_protocol_fee_fraction, get_reward_tokens, get_reward_tokens_detailed,
+    get_rewards_config, get_tokens_set, get_tokens_set_count, has_pool, remove_pool,
+    set_concentrated_pool_hash, set_constant_product_pool_hash, set_gauge_rewards_enabled_for,
+    set_init_pool_payment_address, set_init_pool_payment_token,
     set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
     set_liquidity_calculator, set_pool_plane, set_protocol_fee_fraction, set_reward_tokens,
     set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash,
@@ -604,6 +606,17 @@ impl AdminInterface for LiquidityPoolRouter {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_stableswap_pool_hash(&e, &new_hash);
+    }
+
+    // Sets the concentrated pool wasm hash.
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The new concentrated pool wasm hash.
+    fn set_concentrated_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_concentrated_pool_hash(&e, &new_hash);
     }
 
     // Sets the rewards gauge wasm hash.
@@ -1300,6 +1313,65 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
                 // Amp = A*N**(N-1)
                 let amp = STABLESWAP_DEFAULT_A * (n_tokens as u128).pow(n_tokens - 1);
                 deploy_stableswap_pool(&e, &tokens, amp, fee_fraction)
+            }
+        }
+    }
+
+    // Initializes a concentrated pool with custom arguments.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user initializing the pool.
+    // * `tokens` - Exactly two token addresses of the pool.
+    // * `fee` - Fee tier in denominator 10000 (e.g. 5 = 0.05%, 30 = 0.3%, 100 = 1%).
+    // * `tick_spacing` - Tick spacing for the pool.
+    //
+    // # Returns
+    //
+    // A tuple containing:
+    // * The pool index hash.
+    // * The address of the pool.
+    fn init_concentrated_pool(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        fee: u32,
+        tick_spacing: i32,
+    ) -> (BytesN<32>, Address) {
+        user.require_auth();
+        validate_tokens_contracts(&e, &tokens);
+        assert_tokens_sorted(&e, &tokens);
+
+        if tokens.len() != 2 {
+            panic_with_error!(&e, LiquidityPoolRouterError::UnsupportedTokensNum);
+        }
+        if fee == 0 || fee > 1_000 {
+            panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
+        }
+        if tick_spacing <= 0 {
+            panic_with_error!(&e, LiquidityPoolRouterError::InvalidPoolType);
+        }
+
+        let _hash = get_concentrated_pool_hash(&e);
+        let salt = get_tokens_salt(&e, &tokens);
+        let pools = get_pools_plain(&e, salt);
+        let pool_index = get_concentrated_pool_salt(&e, &fee, &tick_spacing);
+
+        match pools.get(pool_index.clone()) {
+            Some(pool_address) => (pool_index, pool_address),
+            None => {
+                let init_pool_token = get_init_pool_payment_token(&e);
+                let init_pool_amount = get_init_standard_pool_payment_amount(&e);
+                let init_pool_address = get_init_pool_payment_address(&e);
+                if init_pool_amount > 0 {
+                    SorobanTokenClient::new(&e, &init_pool_token).transfer(
+                        &user,
+                        &init_pool_address,
+                        &(init_pool_amount as i128),
+                    );
+                }
+
+                deploy_concentrated_pool(&e, &tokens, fee, tick_spacing)
             }
         }
     }

@@ -1,3 +1,4 @@
+use crate::concentrated_weight::{apply_multiplier, position_multiplier_bps, DistanceWeightConfig};
 use crate::constants::REWARD_PRECISION;
 use crate::errors::RewardsError;
 use crate::locked_boost::manager::BoostManagerPlugin;
@@ -111,6 +112,37 @@ impl Manager {
             total_share,
         );
         boosted_balance
+    }
+
+    pub fn calculate_effective_balance_with_multiplier(
+        &self,
+        user: &Address,
+        share_balance: u128,
+        total_share: u128,
+        multiplier_bps: u32,
+    ) -> u128 {
+        let effective_balance = self.calculate_effective_balance(user, share_balance, total_share);
+        apply_multiplier(effective_balance, multiplier_bps)
+    }
+
+    pub fn calculate_effective_balance_for_tick_range(
+        &self,
+        user: &Address,
+        share_balance: u128,
+        total_share: u128,
+        tick_current: i32,
+        tick_lower: i32,
+        tick_upper: i32,
+        distance_weight_config: DistanceWeightConfig,
+    ) -> u128 {
+        let multiplier =
+            position_multiplier_bps(tick_current, tick_lower, tick_upper, distance_weight_config);
+        self.calculate_effective_balance_with_multiplier(
+            user,
+            share_balance,
+            total_share,
+            multiplier,
+        )
     }
 
     // ------------------------------------

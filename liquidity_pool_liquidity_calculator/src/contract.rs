@@ -1,7 +1,9 @@
 use crate::interface::Calculator;
-use crate::plane::{parse_stableswap_data, parse_standard_data, PoolPlaneClient};
+use crate::plane::{
+    parse_concentrated_data, parse_stableswap_data, parse_standard_data, PoolPlaneClient,
+};
 use crate::storage::{get_plane, set_plane};
-use crate::{stableswap_pool, standard_pool};
+use crate::{concentrated_pool, stableswap_pool, standard_pool};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
@@ -100,6 +102,16 @@ impl Calculator for LiquidityPoolLiquidityCalculator {
                     data.future_a_time,
                 );
                 out = stableswap_pool::get_pool_liquidity(&e, data.fee, amp, &data.xp);
+            } else if pool_type == Symbol::new(&e, "concentrated") {
+                let data = parse_concentrated_data(init_args, reserves);
+                out = out.add(&U256::from_u128(
+                    &e,
+                    concentrated_pool::get_liquidity(&e, &data, 0, 1),
+                ));
+                out = out.add(&U256::from_u128(
+                    &e,
+                    concentrated_pool::get_liquidity(&e, &data, 1, 0),
+                ));
             } else {
                 panic!("unknown pool type");
             };

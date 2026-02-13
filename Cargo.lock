@@ -1415,6 +1415,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "soroban-liquidity-pool-concentrated-contract"
+version = "1.8.0"
+dependencies = [
+ "access_control",
+ "liqidity-pool-rewards-gauge",
+ "liquidity-pool-validation-errors",
+ "paste",
+ "rewards",
+ "soroban-fixed-point-math",
+ "soroban-sdk",
+ "upgrade",
+ "utils",
+]
+
+[[package]]
 name = "soroban-liquidity-pool-contract"
 version = "1.8.0"
 dependencies = [

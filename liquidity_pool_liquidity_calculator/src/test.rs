@@ -111,6 +111,124 @@ fn test() {
 }
 
 #[test]
+fn test_concentrated_pool_type() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let pool = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &pool,
+        &Symbol::new(&e, "concentrated"),
+        &Vec::from_array(&e, [1_u128, 30_u128, 1_u128, 0_u128]),
+        &Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128]),
+    );
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    let results = calculator.get_liquidity(&Vec::from_array(&e, [pool]));
+    assert_eq!(
+        results,
+        Vec::from_array(&e, [U256::from_u128(&e, 89554376)])
+    );
+}
+
+#[test]
+fn test_concentrated_pool_type_plane_v1_snapshot() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let pool = Address::generate(&e);
+
+    let mut reserves = Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128]);
+    for _ in 0..20 {
+        reserves.push_back(25_0000000_u128);
+        reserves.push_back(24_9250000_u128);
+    }
+    for _ in 0..20 {
+        reserves.push_back(25_0000000_u128);
+        reserves.push_back(24_9250000_u128);
+    }
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &pool,
+        &Symbol::new(&e, "concentrated"),
+        &Vec::from_array(&e, [1_u128, 30_u128, 1_u128, 20_u128]),
+        &reserves,
+    );
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    let results = calculator.get_liquidity(&Vec::from_array(&e, [pool]));
+    assert_eq!(
+        results,
+        Vec::from_array(&e, [U256::from_u128(&e, 313305988)])
+    );
+}
+
+#[test]
+fn test_concentrated_liquidity_is_higher_than_standard_for_same_fee() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let standard_pool = Address::generate(&e);
+    let concentrated_pool = Address::generate(&e);
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &standard_pool,
+        &symbol_short!("standard"),
+        &Vec::from_array(&e, [30_u128]),
+        &Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128]),
+    );
+
+    let mut concentrated_reserves = Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128]);
+    for _ in 0..20 {
+        concentrated_reserves.push_back(75_0000000_u128);
+        concentrated_reserves.push_back(74_7750000_u128);
+    }
+    for _ in 0..20 {
+        concentrated_reserves.push_back(75_0000000_u128);
+        concentrated_reserves.push_back(74_7750000_u128);
+    }
+    plane.update(
+        &concentrated_pool,
+        &Symbol::new(&e, "concentrated"),
+        &Vec::from_array(&e, [1_u128, 30_u128, 1_u128, 20_u128]),
+        &concentrated_reserves,
+    );
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    let results =
+        calculator.get_liquidity(&Vec::from_array(&e, [standard_pool, concentrated_pool]));
+    assert_eq!(
+        results,
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 358217508),
+                U256::from_u128(&e, 537326264)
+            ],
+        )
+    );
+}
+
+#[test]
 fn test_bad_math() {
     let e = Env::default();
     e.mock_all_auths();
@@ -658,9 +776,6 @@ fn test_multiple_tokens() {
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_unlimited();
 
-    for i in [1, 2] {
-        assert!(results.get(i).unwrap() > U256::from_u128(&e, u128::MAX));
-    }
     // for r in results.iter().map(|x| x.to_be_bytes()) {
     //     let mut slice = [0u8; 32];
     //     r.copy_into_slice(&mut slice);

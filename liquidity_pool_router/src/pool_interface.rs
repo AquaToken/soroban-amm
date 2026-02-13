@@ -224,6 +224,16 @@ pub trait PoolsManagementTrait {
         fee_fraction: u32,
     ) -> (BytesN<32>, Address);
 
+    // Initialize concentrated pool with custom arguments.
+    // fee has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%.
+    fn init_concentrated_pool(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        fee: u32,
+        tick_spacing: i32,
+    ) -> (BytesN<32>, Address);
+
     // Get pools for given pair
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address>;
 
