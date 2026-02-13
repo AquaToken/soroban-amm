@@ -18,6 +18,7 @@ access_control = { workspace = true }
 upgrade = { workspace = true }
 utils = { workspace = true }
 paste = { workspace = true }
+liquidity-pool-events = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

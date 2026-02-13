@@ -112,7 +112,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick)?;
         position.liquidity = position.liquidity.saturating_add(amount);
         set_position(&e, &recipient, tick_lower, tick_upper, &position);
-        Self::ensure_user_range_exists(&e, &recipient, tick_lower, tick_upper);
+        Self::ensure_user_range_exists(&e, &recipient, tick_lower, tick_upper)?;
 
         Self::update_tick_liquidity(&e, tick_lower, amount as i128, false)?;
         Self::update_tick_liquidity(&e, tick_upper, amount as i128, true)?;
@@ -125,6 +125,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Self::recompute_user_weighted_liquidity(&e, &recipient);
         Self::rewards_refresh_working_balance(&e, &recipient);
         update_plane(&e);
+
+        let tokens = Vec::from_array(&e, [token0, token1]);
+        let amounts = Vec::from_array(&e, [amount0, amount1]);
+        PoolEvents::new(&e).deposit_liquidity(tokens, amounts, amount);
 
         Ok((amount0, amount1))
     }
@@ -204,6 +208,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Self::recompute_user_weighted_liquidity(&e, &owner);
         Self::rewards_refresh_working_balance(&e, &owner);
         update_plane(&e);
+
+        let tokens = Vec::from_array(&e, [get_token0(&e), get_token1(&e)]);
+        let amounts = Vec::from_array(&e, [amount0, amount1]);
+        PoolEvents::new(&e).withdraw_liquidity(tokens, amounts, amount);
 
         Ok((amount0, amount1))
     }

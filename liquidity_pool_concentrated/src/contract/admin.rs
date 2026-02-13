@@ -88,36 +88,42 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
         set_is_killed_deposit(&e, &true);
+        PoolEvents::new(&e).kill_deposit();
     }
 
     fn kill_swap(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
         set_is_killed_swap(&e, &true);
+        PoolEvents::new(&e).kill_swap();
     }
 
     fn kill_claim(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
         set_claim_killed(&e, &true);
+        PoolEvents::new(&e).kill_claim();
     }
 
     fn unkill_deposit(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_admin_or_owner(&e, &admin);
         set_is_killed_deposit(&e, &false);
+        PoolEvents::new(&e).unkill_deposit();
     }
 
     fn unkill_swap(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_admin_or_owner(&e, &admin);
         set_is_killed_swap(&e, &false);
+        PoolEvents::new(&e).unkill_swap();
     }
 
     fn unkill_claim(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_admin_or_owner(&e, &admin);
         set_claim_killed(&e, &false);
+        PoolEvents::new(&e).unkill_claim();
     }
 
     fn get_is_killed_deposit(e: Env) -> bool {
@@ -139,6 +145,7 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, Error::InvalidFee);
         }
         set_protocol_fee_fraction(&e, &new_fraction);
+        PoolEvents::new(&e).set_protocol_fee_fraction(new_fraction);
     }
 
     fn get_protocol_fees(e: Env) -> Vec<u128> {
@@ -158,21 +165,29 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         }
 
         let contract = e.current_contract_address();
+        let token0 = get_token0(&e);
+        let token1 = get_token1(&e);
         if amount0 > 0 {
-            SorobanTokenClient::new(&e, &get_token0(&e)).transfer(
+            SorobanTokenClient::new(&e, &token0).transfer(
                 &contract,
                 &destination,
                 &(amount0 as i128),
             );
             fees.token0 = 0;
+            PoolEvents::new(&e).claim_protocol_fee(
+                token0,
+                destination.clone(),
+                amount0,
+            );
         }
         if amount1 > 0 {
-            SorobanTokenClient::new(&e, &get_token1(&e)).transfer(
+            SorobanTokenClient::new(&e, &token1).transfer(
                 &contract,
                 &destination,
                 &(amount1 as i128),
             );
             fees.token1 = 0;
+            PoolEvents::new(&e).claim_protocol_fee(token1, destination, amount1);
         }
         set_protocol_fees(&e, &fees);
         update_plane(&e);

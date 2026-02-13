@@ -36,4 +36,5 @@ pub enum Error {
     InsufficientToken0 = 2116,
     InsufficientToken1 = 2117,
     InvalidFeeProtocol = 2118,
+    TooManyPositions = 2119,
 }

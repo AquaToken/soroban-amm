@@ -1420,6 +1420,7 @@ version = "1.8.0"
 dependencies = [
  "access_control",
  "liqidity-pool-rewards-gauge",
+ "liquidity-pool-events",
  "liquidity-pool-validation-errors",
  "paste",
  "rewards",
