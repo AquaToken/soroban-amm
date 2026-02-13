@@ -190,7 +190,7 @@ impl ConcentratedLiquidityPool {
         (word_pos, bit_pos)
     }
 
-    pub(crate) fn flip_tick(e: &Env, tick_idx: i32, spacing: i32, initialized: bool) {
+    fn set_tick_bitmap_bit(e: &Env, tick_idx: i32, spacing: i32, initialized: bool) {
         let compressed = Self::compress_tick(tick_idx, spacing);
         let (word_pos, bit_pos) = Self::position(compressed);
 
@@ -199,12 +199,7 @@ impl ConcentratedLiquidityPool {
         set_tick_bitmap_word(e, word_pos, &Self::u256_from_array(e, &word));
     }
 
-    pub(crate) fn next_initialized_tick_within_one_word(
-        e: &Env,
-        tick: i32,
-        spacing: i32,
-        lte: bool,
-    ) -> (i32, bool) {
+    fn find_initialized_tick_in_word(e: &Env, tick: i32, spacing: i32, lte: bool) -> (i32, bool) {
         let compressed = Self::compress_tick(tick, spacing);
 
         let (next_compressed, initialized) = if lte {
@@ -273,9 +268,9 @@ impl ConcentratedLiquidityPool {
                 tick.fee_growth_outside_0_x128 = get_fee_growth_global_0_x128(e);
                 tick.fee_growth_outside_1_x128 = get_fee_growth_global_1_x128(e);
             }
-            Self::flip_tick(e, tick_idx, get_tick_spacing(e), true);
+            Self::set_tick_bitmap_bit(e, tick_idx, get_tick_spacing(e), true);
         } else if prev_initialized && !tick.initialized {
-            Self::flip_tick(e, tick_idx, get_tick_spacing(e), false);
+            Self::set_tick_bitmap_bit(e, tick_idx, get_tick_spacing(e), false);
         }
 
         set_tick(e, tick_idx, &tick);
@@ -952,12 +947,8 @@ impl ConcentratedLiquidityPool {
                 break;
             }
 
-            let (next_tick, next_tick_initialized) = Self::next_initialized_tick_within_one_word(
-                e,
-                slot.tick,
-                tick_spacing,
-                zero_for_one,
-            );
+            let (next_tick, next_tick_initialized) =
+                Self::find_initialized_tick_in_word(e, slot.tick, tick_spacing, zero_for_one);
             let next_tick_price = sqrt_ratio_at_tick(e, next_tick)?;
 
             let sqrt_target = if zero_for_one {
@@ -1105,12 +1096,8 @@ impl ConcentratedLiquidityPool {
                 break;
             }
 
-            let (next_tick, next_tick_initialized) = Self::next_initialized_tick_within_one_word(
-                e,
-                slot.tick,
-                tick_spacing,
-                zero_for_one,
-            );
+            let (next_tick, next_tick_initialized) =
+                Self::find_initialized_tick_in_word(e, slot.tick, tick_spacing, zero_for_one);
             let next_tick_price = sqrt_ratio_at_tick(e, next_tick)?;
 
             let sqrt_target = if zero_for_one {
