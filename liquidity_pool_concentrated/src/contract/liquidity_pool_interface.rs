@@ -390,7 +390,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             Err(err) => panic_with_error!(&e, err),
         };
 
-        let (burn_amount0, burn_amount1) = match Self::withdraw_position(
+        let (_burn_amount0, _burn_amount1) = match Self::withdraw_position(
             e.clone(),
             user.clone(),
             tick_lower,
@@ -407,8 +407,8 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             &user,
             tick_lower,
             tick_upper,
-            burn_amount0,
-            burn_amount1,
+            u128::MAX,
+            u128::MAX,
             false,
         ) {
             Ok(v) => v,

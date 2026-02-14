@@ -68,8 +68,14 @@ impl RewardsGaugeInterfaceTrait for ConcentratedLiquidityPool {
 
         let total_weighted = get_total_weighted_liquidity(&e);
         let user_weighted = get_user_weighted_liquidity(&e, &user);
+        let manager = Self::rewards_manager(&e).manager();
 
-        rewards_gauge::operations::claim(&e, &user, user_weighted, total_weighted)
+        rewards_gauge::operations::claim(
+            &e,
+            &user,
+            manager.get_working_balance(&user, user_weighted),
+            manager.get_working_supply(total_weighted),
+        )
     }
 
     fn gauges_get_reward_info(e: Env, user: Address) -> Map<Address, Map<Symbol, i128>> {
@@ -77,7 +83,13 @@ impl RewardsGaugeInterfaceTrait for ConcentratedLiquidityPool {
 
         let total_weighted = get_total_weighted_liquidity(&e);
         let user_weighted = get_user_weighted_liquidity(&e, &user);
+        let manager = Self::rewards_manager(&e).manager();
 
-        rewards_gauge::operations::get_rewards_info(&e, &user, user_weighted, total_weighted)
+        rewards_gauge::operations::get_rewards_info(
+            &e,
+            &user,
+            manager.get_working_balance(&user, user_weighted),
+            manager.get_working_supply(total_weighted),
+        )
     }
 }

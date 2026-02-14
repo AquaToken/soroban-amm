@@ -12,7 +12,7 @@ use utils::{
 pub const MIN_TICK: i32 = -887_272;
 pub const MAX_TICK: i32 = 887_272;
 pub const FEE_DENOMINATOR: u128 = 10_000;
-pub const MAX_USER_POSITIONS: u32 = 50;
+pub const MAX_USER_POSITIONS: u32 = 20;
 
 #[derive(Clone)]
 #[contracttype]

@@ -18,6 +18,12 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             return Err(Error::InvalidSqrtPrice);
         }
 
+        // Prevent price change when pool has active liquidity — would corrupt
+        // tick accounting, fee growth, and active liquidity tracking.
+        if get_total_raw_liquidity(&e) > 0 {
+            return Err(Error::PoolAlreadyInitialized);
+        }
+
         let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)?;
 
         set_slot0(
@@ -69,6 +75,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
         if amount == 0 {
             return Err(Error::AmountShouldBeGreaterThanZero);
+        }
+        if amount > i128::MAX as u128 {
+            return Err(Error::LiquidityAmountTooLarge);
         }
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
@@ -143,6 +152,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         owner.require_auth();
         if amount == 0 {
             return Err(Error::AmountShouldBeGreaterThanZero);
+        }
+        if amount > i128::MAX as u128 {
+            return Err(Error::LiquidityAmountTooLarge);
         }
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
