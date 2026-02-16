@@ -9,6 +9,7 @@ mod plane_interface;
 mod pool_interface;
 mod storage;
 mod test;
+mod test_permissions;
 mod testutils;
 mod types;
 

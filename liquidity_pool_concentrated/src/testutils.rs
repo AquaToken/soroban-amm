@@ -103,6 +103,12 @@ pub(crate) struct Setup<'a> {
     pub(crate) pool: ConcentratedLiquidityPoolClient<'a>,
     pub(crate) plane: Address,
     pub(crate) admin: Address,
+    pub(crate) emergency_admin: Address,
+    pub(crate) rewards_admin: Address,
+    pub(crate) operations_admin: Address,
+    pub(crate) pause_admin: Address,
+    pub(crate) emergency_pause_admin: Address,
+    pub(crate) system_fee_admin: Address,
     pub(crate) router: Address,
     pub(crate) user: Address,
     pub(crate) token0: SorobanTokenClient<'a>,
@@ -125,6 +131,12 @@ impl Setup<'_> {
         env.cost_estimate().budget().reset_unlimited();
 
         let admin = Address::generate(&env);
+        let emergency_admin = Address::generate(&env);
+        let rewards_admin = Address::generate(&env);
+        let operations_admin = Address::generate(&env);
+        let pause_admin = Address::generate(&env);
+        let emergency_pause_admin = Address::generate(&env);
+        let system_fee_admin = Address::generate(&env);
         let router = Address::generate(&env);
         let user = Address::generate(&env);
 
@@ -132,24 +144,42 @@ impl Setup<'_> {
         let token1 = create_token_contract(&env, &admin);
         let reward_token = create_token_contract(&env, &admin);
         let reward_boost_token = create_token_contract(&env, &admin);
-        let reward_boost_feed = create_reward_boost_feed_contract(&env, &admin, &admin, &admin);
+        let reward_boost_feed =
+            create_reward_boost_feed_contract(&env, &admin, &operations_admin, &emergency_admin);
         let plane = create_plane_contract(&env);
 
-        let pool = create_pool_contract(
+        let client = ConcentratedLiquidityPoolClient::new(
             &env,
+            &env.register(ConcentratedLiquidityPool {}, ()),
+        );
+        client.init_pools_plane(&plane.address);
+        client.initialize(
             &admin,
+            &(
+                emergency_admin.clone(),
+                rewards_admin.clone(),
+                operations_admin.clone(),
+                pause_admin.clone(),
+                Vec::from_array(&env, [emergency_pause_admin.clone()]),
+                system_fee_admin.clone(),
+            ),
             &router,
-            &plane.address,
             &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
-            30,
-            1,
+            &30,
+            &1,
         );
 
         Self {
             env,
-            pool,
+            pool: client,
             plane: plane.address,
             admin,
+            emergency_admin,
+            rewards_admin,
+            operations_admin,
+            pause_admin,
+            emergency_pause_admin,
+            system_fee_admin,
             router,
             user,
             token0,
