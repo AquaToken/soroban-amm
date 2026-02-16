@@ -1,4 +1,4 @@
-use crate::types::{PositionData, PositionRange, ProtocolFees, Slot0, TickInfo};
+use crate::types::{PositionData, PositionRange, ProtocolFees, Slot0, TickData, TickInfo, UserState};
 use paste::paste;
 use rewards::concentrated_weight::DistanceWeightConfig;
 use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Vec};
@@ -50,12 +50,10 @@ pub enum DataKey {
 
     // ── Persistent storage: per-user ──
     Position(Address, i32, i32), // PositionData — keyed by (owner, tick_lower, tick_upper)
-    UserPositions(Address),      // Vec<PositionRange> — list of user's active ranges
+    User(Address),               // UserState — positions + raw/weighted liquidity (single entry)
 
     // ── Rewards: distance-weighted liquidity ──
     DistanceWeightConfig,         // DistanceWeightConfig — how position distance affects rewards
-    UserRawLiquidity(Address),    // u128 — user's total liquidity across all positions
-    UserWeightedLiquidity(Address), // u128 — user's liquidity after distance multiplier
     TotalRawLiquidity,            // u128 — sum of all users' raw liquidity
     TotalWeightedLiquidity,       // u128 — sum of all users' weighted liquidity
 
@@ -183,23 +181,24 @@ pub fn remove_position(e: &Env, owner: &Address, tick_lower: i32, tick_upper: i3
 }
 
 // ── Tick accessors (persistent storage) ──
-// Returns default (zero/uninitialized) TickInfo if tick hasn't been written.
-// Each initialized tick costs one ledger entry during swap traversal.
+// Stored as TickData (tuple-encoded) for minimal XDR size.
+// Converted to/from TickInfo at the accessor boundary.
 pub fn get_tick(e: &Env, tick: i32) -> TickInfo {
     e.storage()
         .persistent()
-        .get(&DataKey::Tick(tick))
+        .get::<_, TickData>(&DataKey::Tick(tick))
+        .map(TickInfo::from)
         .unwrap_or(TickInfo {
             fee_growth_outside_0_x128: soroban_sdk::U256::from_u32(e, 0),
             fee_growth_outside_1_x128: soroban_sdk::U256::from_u32(e, 0),
-            initialized: false,
             liquidity_gross: 0,
             liquidity_net: 0,
         })
 }
 
 pub fn set_tick(e: &Env, tick: i32, value: &TickInfo) {
-    e.storage().persistent().set(&DataKey::Tick(tick), value);
+    let data: TickData = value.clone().into();
+    e.storage().persistent().set(&DataKey::Tick(tick), &data);
 }
 
 // ── Tick bitmap accessors (persistent storage) ──
@@ -218,46 +217,30 @@ pub fn set_tick_bitmap_word(e: &Env, word_pos: i32, word: &soroban_sdk::U256) {
         .set(&DataKey::TickBitmap(word_pos), word);
 }
 
-// ── User position list (persistent storage) ──
-// Tracks which tick ranges a user has positions in. Max MAX_USER_POSITIONS entries.
-pub fn get_user_positions(e: &Env, user: &Address) -> Vec<PositionRange> {
+// ── Per-user state (single persistent storage entry) ──
+// Merged positions + raw/weighted liquidity to save 2 footprint entries per user operation.
+pub fn get_user_state(e: &Env, user: &Address) -> UserState {
     e.storage()
         .persistent()
-        .get(&DataKey::UserPositions(user.clone()))
-        .unwrap_or(Vec::new(e))
+        .get(&DataKey::User(user.clone()))
+        .unwrap_or(UserState {
+            positions: Vec::new(e),
+            raw_liquidity: 0,
+            weighted_liquidity: 0,
+        })
 }
 
-pub fn set_user_positions(e: &Env, user: &Address, ranges: &Vec<PositionRange>) {
+pub fn set_user_state(e: &Env, user: &Address, state: &UserState) {
     e.storage()
         .persistent()
-        .set(&DataKey::UserPositions(user.clone()), ranges);
+        .set(&DataKey::User(user.clone()), state);
 }
 
-// ── Rewards liquidity tracking (persistent storage) ──
-// Raw = unweighted sum of all position amounts.
-// Weighted = raw * distance_multiplier (positions closer to price get higher weight).
+// Convenience read-only accessors — delegate to get_user_state.
 pub fn get_user_raw_liquidity(e: &Env, user: &Address) -> u128 {
-    e.storage()
-        .persistent()
-        .get(&DataKey::UserRawLiquidity(user.clone()))
-        .unwrap_or(0)
-}
-
-pub fn set_user_raw_liquidity(e: &Env, user: &Address, value: u128) {
-    e.storage()
-        .persistent()
-        .set(&DataKey::UserRawLiquidity(user.clone()), &value);
+    get_user_state(e, user).raw_liquidity
 }
 
 pub fn get_user_weighted_liquidity(e: &Env, user: &Address) -> u128 {
-    e.storage()
-        .persistent()
-        .get(&DataKey::UserWeightedLiquidity(user.clone()))
-        .unwrap_or(0)
-}
-
-pub fn set_user_weighted_liquidity(e: &Env, user: &Address, value: u128) {
-    e.storage()
-        .persistent()
-        .set(&DataKey::UserWeightedLiquidity(user.clone()), &value);
+    get_user_state(e, user).weighted_liquidity
 }

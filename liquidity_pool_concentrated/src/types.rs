@@ -23,22 +23,46 @@ pub struct PositionData {
     pub tokens_owed_1: u128,
 }
 
-// Per-tick state. Stored in persistent storage keyed by tick index.
-// liquidity_gross = total liquidity referencing this tick (for tracking if tick is still needed).
-// liquidity_net = signed delta applied to active liquidity when price crosses this tick.
-//   Positive at lower boundaries (liquidity enters), negative at upper (liquidity exits).
+// Per-tick state used throughout the contract and as the public API type.
 // fee_growth_outside = fee growth accumulated on the "other side" of this tick.
 //   Used to compute fee growth inside any [lower, upper] range via:
 //   inside = global - below(lower) - above(upper).
-// initialized = true when liquidity_gross > 0 (tick has at least one position boundary).
+// liquidity_gross = total liquidity referencing this tick.
+//   Tick is considered initialized when liquidity_gross > 0.
+// liquidity_net = signed delta applied to active liquidity when price crosses this tick.
+//   Positive at lower boundaries (liquidity enters), negative at upper (liquidity exits).
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct TickInfo {
     pub fee_growth_outside_0_x128: U256,
     pub fee_growth_outside_1_x128: U256,
-    pub initialized: bool,
     pub liquidity_gross: u128,
     pub liquidity_net: i128,
+}
+
+// Tuple-encoded storage representation for TickInfo.
+// Eliminates XDR field-name key overhead (~50% of serialized size with named structs).
+// Order: (fee_growth_outside_0, fee_growth_outside_1, liquidity_gross, liquidity_net).
+// Only used inside storage accessors; immediately converted to/from TickInfo.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct TickData(pub U256, pub U256, pub u128, pub i128);
+
+impl From<TickData> for TickInfo {
+    fn from(d: TickData) -> Self {
+        TickInfo {
+            fee_growth_outside_0_x128: d.0,
+            fee_growth_outside_1_x128: d.1,
+            liquidity_gross: d.2,
+            liquidity_net: d.3,
+        }
+    }
+}
+
+impl From<TickInfo> for TickData {
+    fn from(t: TickInfo) -> Self {
+        TickData(t.fee_growth_outside_0_x128, t.fee_growth_outside_1_x128, t.liquidity_gross, t.liquidity_net)
+    }
 }
 
 // Returned by swap_by_tokens. Signed amounts: positive = user paid, negative = user received.
@@ -62,12 +86,24 @@ pub struct ProtocolFees {
     pub token1: u128,
 }
 
-// Tick range identifier for a position. Used in UserPositions list.
+// Tick range identifier for a position. Used in UserState.positions list.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct PositionRange {
     pub tick_lower: i32,
     pub tick_upper: i32,
+}
+
+// Merged per-user state. Single persistent storage entry per user.
+// positions = list of active tick ranges (max MAX_USER_POSITIONS).
+// raw_liquidity = sum of all position liquidity amounts (unweighted).
+// weighted_liquidity = raw * distance_multiplier (for rewards distribution).
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct UserState {
+    pub positions: Vec<PositionRange>,
+    pub raw_liquidity: u128,
+    pub weighted_liquidity: u128,
 }
 
 // Full pool configuration + price state. Returned by get_full_pool_state.
@@ -92,8 +128,8 @@ pub struct PoolStateWithBalances {
     pub state: PoolState,
 }
 
-// Summary of a user's positions and liquidity for rewards. Returned by get_user_position_snapshot.
-// raw_liquidity = sum of all position amounts; weighted_liquidity = after distance multiplier.
+// Read-only view of user state. Returned by get_user_position_snapshot.
+// Mirrors UserState fields for external queries.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct UserPositionSnapshot {

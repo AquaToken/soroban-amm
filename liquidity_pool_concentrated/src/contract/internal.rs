@@ -208,7 +208,7 @@ impl ConcentratedLiquidityPool {
         is_upper: bool,
     ) -> Result<(), Error> {
         let mut tick = get_tick(e, tick_idx);
-        let prev_initialized = tick.initialized;
+        let was_initialized = tick.liquidity_gross > 0;
 
         let delta = Self::abs_i128(liquidity_delta);
         if liquidity_delta >= 0 {
@@ -226,16 +226,16 @@ impl ConcentratedLiquidityPool {
             tick.liquidity_net = tick.liquidity_net.saturating_add(liquidity_delta);
         }
 
-        tick.initialized = tick.liquidity_gross > 0;
+        let is_initialized = tick.liquidity_gross > 0;
 
-        if !prev_initialized && tick.initialized {
+        if !was_initialized && is_initialized {
             let slot = get_slot0(e);
             if tick_idx <= slot.tick {
                 tick.fee_growth_outside_0_x128 = get_fee_growth_global_0_x128(e);
                 tick.fee_growth_outside_1_x128 = get_fee_growth_global_1_x128(e);
             }
             Self::set_tick_bitmap_bit(e, tick_idx, get_tick_spacing(e), true);
-        } else if prev_initialized && !tick.initialized {
+        } else if was_initialized && !is_initialized {
             Self::set_tick_bitmap_bit(e, tick_idx, get_tick_spacing(e), false);
         }
 
@@ -249,22 +249,22 @@ impl ConcentratedLiquidityPool {
         tick_lower: i32,
         tick_upper: i32,
     ) -> Result<(), Error> {
-        let mut ranges = get_user_positions(e, user);
-        for range in ranges.iter() {
+        let mut state = get_user_state(e, user);
+        for range in state.positions.iter() {
             if range.tick_lower == tick_lower && range.tick_upper == tick_upper {
                 return Ok(());
             }
         }
 
-        if ranges.len() >= MAX_USER_POSITIONS {
+        if state.positions.len() >= MAX_USER_POSITIONS {
             return Err(Error::TooManyPositions);
         }
 
-        ranges.push_back(PositionRange {
+        state.positions.push_back(PositionRange {
             tick_lower,
             tick_upper,
         });
-        set_user_positions(e, user, &ranges);
+        set_user_state(e, user, &state);
         Ok(())
     }
 
@@ -274,25 +274,26 @@ impl ConcentratedLiquidityPool {
         tick_lower: i32,
         tick_upper: i32,
     ) {
-        let ranges = get_user_positions(e, user);
+        let mut state = get_user_state(e, user);
         let mut updated = Vec::new(e);
-        for range in ranges.iter() {
+        for range in state.positions.iter() {
             if range.tick_lower == tick_lower && range.tick_upper == tick_upper {
                 continue;
             }
             updated.push_back(range);
         }
-        set_user_positions(e, user, &updated);
+        state.positions = updated;
+        set_user_state(e, user, &state);
     }
 
     pub(super) fn recompute_user_weighted_liquidity(e: &Env, user: &Address) -> u128 {
         let cfg = get_distance_weight_config(e);
         let tick_current = get_slot0(e).tick;
 
-        let ranges = get_user_positions(e, user);
+        let mut state = get_user_state(e, user);
         let mut weighted = 0u128;
 
-        for range in ranges.iter() {
+        for range in state.positions.iter() {
             if let Some(position) = get_position(e, user, range.tick_lower, range.tick_upper) {
                 if position.liquidity == 0 {
                     continue;
@@ -304,7 +305,7 @@ impl ConcentratedLiquidityPool {
             }
         }
 
-        let prev_weighted = get_user_weighted_liquidity(e, user);
+        let prev_weighted = state.weighted_liquidity;
         let mut total_weighted = get_total_weighted_liquidity(e);
 
         if weighted >= prev_weighted {
@@ -313,25 +314,27 @@ impl ConcentratedLiquidityPool {
             total_weighted = total_weighted.saturating_sub(prev_weighted - weighted);
         }
 
-        set_user_weighted_liquidity(e, user, weighted);
+        state.weighted_liquidity = weighted;
+        set_user_state(e, user, &state);
         set_total_weighted_liquidity(e, &total_weighted);
 
         weighted
     }
 
     pub(super) fn update_user_raw_liquidity(e: &Env, user: &Address, delta: i128) {
-        let prev_user_raw = get_user_raw_liquidity(e, user);
+        let mut state = get_user_state(e, user);
         let prev_total_raw = get_total_raw_liquidity(e);
 
         if delta >= 0 {
             let inc = delta as u128;
-            set_user_raw_liquidity(e, user, prev_user_raw.saturating_add(inc));
+            state.raw_liquidity = state.raw_liquidity.saturating_add(inc);
             set_total_raw_liquidity(e, &prev_total_raw.saturating_add(inc));
         } else {
             let dec = (-delta) as u128;
-            set_user_raw_liquidity(e, user, prev_user_raw.saturating_sub(dec));
+            state.raw_liquidity = state.raw_liquidity.saturating_sub(dec);
             set_total_raw_liquidity(e, &prev_total_raw.saturating_sub(dec));
         }
+        set_user_state(e, user, &state);
     }
 
     pub(super) fn rewards_manager(e: &Env) -> Rewards {

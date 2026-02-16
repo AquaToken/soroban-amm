@@ -326,7 +326,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         get_protocol_fees(&e)
     }
 
-    // Tick state: liquidity_gross, liquidity_net, fee_growth_outside, initialized flag.
+    // Tick state (storage uses tuple encoding, converted to TickInfo at accessor boundary).
     fn ticks(e: Env, tick: i32) -> TickInfo {
         get_tick(&e, tick)
     }
@@ -370,10 +370,11 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
 
     // User's position ranges, raw liquidity, and weighted liquidity (for rewards).
     fn get_user_position_snapshot(e: Env, user: Address) -> UserPositionSnapshot {
+        let state = get_user_state(&e, &user);
         UserPositionSnapshot {
-            ranges: get_user_positions(&e, &user),
-            raw_liquidity: get_user_raw_liquidity(&e, &user),
-            weighted_liquidity: get_user_weighted_liquidity(&e, &user),
+            ranges: state.positions,
+            raw_liquidity: state.raw_liquidity,
+            weighted_liquidity: state.weighted_liquidity,
         }
     }
 
@@ -388,9 +389,8 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         get_total_raw_liquidity(&e)
     }
 
-    // Batch-fetch bitmap words for frontend tick scanning. Max 100 words per call.
+    // Batch-fetch bitmap words for frontend tick scanning.
     fn get_tick_bitmap_batch(e: Env, start_word: i32, count: u32) -> Vec<U256> {
-        let count = count.min(100);
         let mut result = Vec::new(&e);
         for i in 0..count {
             result.push_back(get_tick_bitmap_word(&e, start_word + i as i32));
@@ -398,11 +398,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         result
     }
 
-    // Batch-fetch tick data for multiple tick indexes. Max 100 ticks per call.
+    // Batch-fetch tick data for multiple tick indexes.
     fn get_ticks_batch(e: Env, ticks: Vec<i32>) -> Vec<TickInfo> {
-        let max_ticks = ticks.len().min(100);
         let mut result = Vec::new(&e);
-        for i in 0..max_ticks {
+        for i in 0..ticks.len() {
             result.push_back(get_tick(&e, ticks.get(i).unwrap()));
         }
         result

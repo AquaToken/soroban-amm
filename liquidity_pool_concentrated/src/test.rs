@@ -140,12 +140,10 @@ fn test_public_deposit_position_updates_position_tick_and_bitmap() {
     assert_eq!(position.tokens_owed_1, 0);
 
     let lower = setup.pool.ticks(&-10);
-    assert!(lower.initialized);
     assert_eq!(lower.liquidity_gross, 1_0000000);
     assert_eq!(lower.liquidity_net, 1_0000000);
 
     let upper = setup.pool.ticks(&10);
-    assert!(upper.initialized);
     assert_eq!(upper.liquidity_gross, 1_0000000);
     assert_eq!(upper.liquidity_net, -1_0000000);
 
