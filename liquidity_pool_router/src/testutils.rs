@@ -188,6 +188,7 @@ impl Default for Setup<'_> {
             &reward_token.address,
             &1_0000000,
             &1_0000000,
+            &1_0000000,
             &payment_for_creation_address,
         );
         router.set_reward_boost_config(

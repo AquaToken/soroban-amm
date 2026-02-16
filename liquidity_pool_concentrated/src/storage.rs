@@ -9,44 +9,57 @@ use utils::{
     generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
+// Uniswap V3 tick bounds: tick_at_sqrt_ratio(MIN_SQRT_RATIO) and tick_at_sqrt_ratio(MAX_SQRT_RATIO).
+// Price range: [1.0001^-887272, 1.0001^887272] ≈ [2.35e-39, 4.25e+38].
 pub const MIN_TICK: i32 = -887_272;
 pub const MAX_TICK: i32 = 887_272;
+
+// Fee precision: fee=30 means 30/10_000 = 0.3%.
 pub const FEE_DENOMINATOR: u128 = 10_000;
+
+// Max positions per user account (prevents storage bloat from griefing).
 pub const MAX_USER_POSITIONS: u32 = 20;
 
+// Storage layout. Instance storage for pool-wide config (accessed every tx),
+// persistent storage for per-user and per-tick data (accessed selectively).
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    Router,
-    Plane,
-    Token0,
-    Token1,
-    Fee,
-    TickSpacing,
-    Slot0,
-    Liquidity,
-    FeeGrowthGlobal0X128,
-    FeeGrowthGlobal1X128,
-    ProtocolFees,
-    ProtocolFeeFraction,
-    IsKilledDeposit,
-    IsKilledSwap,
-    TokenFutureWasm,
-    GaugeFutureWasm,
-    TickBitmap(i32),
+    // ── Instance storage: pool config & global state ──
+    Router,             // Address — router contract that manages this pool
+    Plane,              // Address — pool plane for batch metadata queries
+    Token0,             // Address — first token (sorted)
+    Token1,             // Address — second token (sorted)
+    Fee,                // u32 — fee in basis points (e.g. 30 = 0.3%)
+    TickSpacing,        // i32 — min distance between initialized ticks
+    Slot0,              // Slot0 — current sqrt_price and tick
+    Liquidity,          // u128 — active liquidity (positions overlapping current tick)
+    FeeGrowthGlobal0X128, // U256 — cumulative fee growth for token0, Q128
+    FeeGrowthGlobal1X128, // U256 — cumulative fee growth for token1, Q128
+    ProtocolFees,       // ProtocolFees — uncollected protocol fee amounts
+    ProtocolFeeFraction, // u32 — protocol's share of fees, per FEE_DENOMINATOR
+    IsKilledDeposit,    // bool — deposit kill switch
+    IsKilledSwap,       // bool — swap kill switch
+    TokenFutureWasm,    // BytesN<32> — staged LP token WASM hash for upgrade
+    GaugeFutureWasm,    // BytesN<32> — staged gauge WASM hash for upgrade
 
-    Position(Address, i32, i32),
-    Tick(i32),
-    UserPositions(Address),
+    // ── Persistent storage: per-tick ──
+    TickBitmap(i32),    // U256 — 256-bit bitmap word; each bit = one tick_spacing slot.
+                        //   word_pos = tick / (tick_spacing * 256). Bit = (tick/spacing) % 256.
+    Tick(i32),          // TickInfo — per-tick liquidity deltas and fee growth snapshots
 
-    // Distance-weighted liquidity for rewards.
-    DistanceWeightConfig,
-    UserRawLiquidity(Address),
-    UserWeightedLiquidity(Address),
-    TotalRawLiquidity,
-    TotalWeightedLiquidity,
+    // ── Persistent storage: per-user ──
+    Position(Address, i32, i32), // PositionData — keyed by (owner, tick_lower, tick_upper)
+    UserPositions(Address),      // Vec<PositionRange> — list of user's active ranges
 
-    ClaimKilled,
+    // ── Rewards: distance-weighted liquidity ──
+    DistanceWeightConfig,         // DistanceWeightConfig — how position distance affects rewards
+    UserRawLiquidity(Address),    // u128 — user's total liquidity across all positions
+    UserWeightedLiquidity(Address), // u128 — user's liquidity after distance multiplier
+    TotalRawLiquidity,            // u128 — sum of all users' raw liquidity
+    TotalWeightedLiquidity,       // u128 — sum of all users' weighted liquidity
+
+    ClaimKilled,        // bool — reward claim kill switch
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
@@ -136,6 +149,9 @@ generate_instance_storage_getter_and_setter_with_default!(
     false
 );
 
+// ── Position accessors (persistent storage) ──
+// Keyed by (owner, tick_lower, tick_upper). A user can have up to MAX_USER_POSITIONS
+// distinct ranges. Returns None if position doesn't exist.
 pub fn get_position(
     e: &Env,
     owner: &Address,
@@ -166,6 +182,9 @@ pub fn remove_position(e: &Env, owner: &Address, tick_lower: i32, tick_upper: i3
         .remove(&DataKey::Position(owner.clone(), tick_lower, tick_upper));
 }
 
+// ── Tick accessors (persistent storage) ──
+// Returns default (zero/uninitialized) TickInfo if tick hasn't been written.
+// Each initialized tick costs one ledger entry during swap traversal.
 pub fn get_tick(e: &Env, tick: i32) -> TickInfo {
     e.storage()
         .persistent()
@@ -183,6 +202,9 @@ pub fn set_tick(e: &Env, tick: i32, value: &TickInfo) {
     e.storage().persistent().set(&DataKey::Tick(tick), value);
 }
 
+// ── Tick bitmap accessors (persistent storage) ──
+// 256-bit words for efficient tick scanning. Each bit marks an initialized tick.
+// word_pos = compressed_tick / 256, where compressed_tick = tick / tick_spacing.
 pub fn get_tick_bitmap_word(e: &Env, word_pos: i32) -> soroban_sdk::U256 {
     e.storage()
         .persistent()
@@ -196,6 +218,8 @@ pub fn set_tick_bitmap_word(e: &Env, word_pos: i32, word: &soroban_sdk::U256) {
         .set(&DataKey::TickBitmap(word_pos), word);
 }
 
+// ── User position list (persistent storage) ──
+// Tracks which tick ranges a user has positions in. Max MAX_USER_POSITIONS entries.
 pub fn get_user_positions(e: &Env, user: &Address) -> Vec<PositionRange> {
     e.storage()
         .persistent()
@@ -209,6 +233,9 @@ pub fn set_user_positions(e: &Env, user: &Address, ranges: &Vec<PositionRange>) 
         .set(&DataKey::UserPositions(user.clone()), ranges);
 }
 
+// ── Rewards liquidity tracking (persistent storage) ──
+// Raw = unweighted sum of all position amounts.
+// Weighted = raw * distance_multiplier (positions closer to price get higher weight).
 pub fn get_user_raw_liquidity(e: &Env, user: &Address) -> u128 {
     e.storage()
         .persistent()

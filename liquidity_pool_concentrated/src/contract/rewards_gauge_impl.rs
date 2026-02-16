@@ -1,7 +1,11 @@
 use super::*;
 
+// External rewards gauges — third-party reward token distribution.
+// Each gauge is a separate contract that distributes its own reward token
+// proportionally to users' weighted liquidity in this pool.
 #[contractimpl]
 impl RewardsGaugeInterfaceTrait for ConcentratedLiquidityPool {
+    // Register a new rewards gauge contract. Operations admin, owner, or router.
     fn gauge_add(e: Env, admin: Address, gauge_address: Address) {
         admin.require_auth();
         if admin != get_router(&e) {
@@ -10,12 +14,14 @@ impl RewardsGaugeInterfaceTrait for ConcentratedLiquidityPool {
         rewards_gauge::operations::add(&e, gauge_address);
     }
 
+    // Remove a gauge. Admin only.
     fn gauge_remove(e: Env, admin: Address, reward_token: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         rewards_gauge::operations::remove(&e, reward_token);
     }
 
+    // Schedule reward distribution on a gauge. Router + distributor auth required.
     fn gauge_schedule_reward(
         e: Env,
         router: Address,
@@ -46,6 +52,7 @@ impl RewardsGaugeInterfaceTrait for ConcentratedLiquidityPool {
         );
     }
 
+    // Kill switch for gauge reward claims.
     fn kill_gauges_claim(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
@@ -58,10 +65,12 @@ impl RewardsGaugeInterfaceTrait for ConcentratedLiquidityPool {
         rewards_gauge::operations::unkill_claim(&e);
     }
 
+    // Returns map of gauge_address → reward_token_address.
     fn get_gauges(e: Env) -> Map<Address, Address> {
         rewards_gauge::operations::list(&e)
     }
 
+    // Claim rewards from all registered gauges. Returns map of reward_token → amount.
     fn gauges_claim(e: Env, user: Address) -> Map<Address, u128> {
         user.require_auth();
         Self::recompute_user_weighted_liquidity(&e, &user);
@@ -78,6 +87,7 @@ impl RewardsGaugeInterfaceTrait for ConcentratedLiquidityPool {
         )
     }
 
+    // Query pending gauge rewards for a user without claiming.
     fn gauges_get_reward_info(e: Env, user: Address) -> Map<Address, Map<Symbol, i128>> {
         Self::recompute_user_weighted_liquidity(&e, &user);
 

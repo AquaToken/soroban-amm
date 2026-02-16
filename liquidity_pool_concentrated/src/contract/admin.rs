@@ -1,7 +1,11 @@
 use super::*;
 
+// Admin operations — access-controlled pool management.
 #[contractimpl]
 impl AdminInterfaceTrait for ConcentratedLiquidityPool {
+    // Configure rewards distance weighting. Positions closer to current price
+    // get higher rewards multiplier. max_distance_ticks = range where multiplier
+    // starts decaying; min_multiplier_bps = floor multiplier for far positions (0 = no rewards).
     fn set_distance_weighting(
         e: Env,
         admin: Address,
@@ -23,6 +27,7 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         get_distance_weight_config(&e)
     }
 
+    // Kill switch for reward claims. Requires pause or emergency pause admin.
     fn set_claim_killed(e: Env, admin: Address, value: bool) {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
@@ -33,6 +38,8 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         get_claim_killed(&e)
     }
 
+    // Assign privileged roles: rewards_admin, operations_admin, pause_admin,
+    // emergency_pause_admins (multiple), system_fee_admin. Admin only.
     fn set_privileged_addrs(
         e: Env,
         admin: Address,
@@ -58,6 +65,7 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         );
     }
 
+    // Returns map of role_name → [addresses] for all privileged roles.
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>> {
         let access_control = AccessControl::new(&e);
         let mut result: Map<Symbol, Vec<Address>> = Map::new(&e);
@@ -84,6 +92,8 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         result
     }
 
+    // Kill switches: independently pause deposits, swaps, or fee claims.
+    // kill_* requires pause or emergency pause admin; unkill_* requires pause admin only.
     fn kill_deposit(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
@@ -138,6 +148,8 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         get_claim_killed(&e)
     }
 
+    // Set protocol's share of swap fees, in parts per FEE_DENOMINATOR (1_000_000).
+    // E.g. 5_000 = 0.5%. Operations admin or owner only.
     fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
@@ -148,11 +160,14 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         PoolEvents::new(&e).set_protocol_fee_fraction(new_fraction);
     }
 
+    // Returns [token0_fees, token1_fees] accumulated for the protocol.
     fn get_protocol_fees(e: Env) -> Vec<u128> {
         let fees = get_protocol_fees(&e);
         Vec::from_array(&e, [fees.token0, fees.token1])
     }
 
+    // Transfer accumulated protocol fees to destination. System fee admin or owner only.
+    // Returns [amount0, amount1] transferred. Resets counters to zero.
     fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128> {
         admin.require_auth();
         require_system_fee_admin_or_owner(&e, &admin);

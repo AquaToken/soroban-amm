@@ -1,7 +1,12 @@
 use super::*;
 
+// Native AQUA rewards — distributed proportionally to weighted liquidity.
+// Weighted liquidity = raw_liquidity * distance_multiplier * boost_multiplier.
+// Distance multiplier rewards positions closer to current price.
+// Boost multiplier rewards users who lock AQUA in the locker.
 #[contractimpl]
 impl RewardsTrait for ConcentratedLiquidityPool {
+    // Set the reward token address (typically AQUA). One-time setup, panics if already set.
     fn initialize_rewards_config(e: Env, reward_token: Address) {
         let rewards = Self::rewards_manager(&e);
         if rewards.storage().has_reward_token() {
@@ -10,6 +15,7 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         rewards.storage().put_reward_token(reward_token);
     }
 
+    // Set boost config: token to lock for boosted rewards + price feed for valuation.
     fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address) {
         let rewards = Self::rewards_manager(&e);
         if rewards.storage().has_reward_boost_token() {
@@ -19,6 +25,7 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         rewards.storage().put_reward_boost_feed(reward_boost_feed);
     }
 
+    // Update boost config after initialization. Admin only.
     fn set_reward_boost_config(
         e: Env,
         admin: Address,
@@ -33,6 +40,8 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         storage.put_reward_boost_feed(reward_boost_feed);
     }
 
+    // Configure reward emission rate: tps = tokens per second, expired_at = end timestamp.
+    // Rewards admin, owner, or router.
     fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128) {
         admin.require_auth();
         if admin != get_router(&e) {
@@ -42,6 +51,7 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         manager.set_reward_config(get_total_weighted_liquidity(&e), expired_at, tps);
     }
 
+    // Reward tokens held by pool that exceed what's owed to LPs. Can be reclaimed.
     fn get_unused_reward(e: Env) -> u128 {
         let rewards = Self::rewards_manager(&e);
         let mut manager = rewards.manager();
@@ -63,6 +73,7 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         reward_balance.saturating_sub(reward_balance_to_keep)
     }
 
+    // Transfer unused reward tokens back to router. Rewards admin or owner.
     fn return_unused_reward(e: Env, admin: Address) -> u128 {
         admin.require_auth();
         require_rewards_admin_or_owner(&e, &admin);
@@ -81,6 +92,7 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         unused_reward
     }
 
+    // Full rewards state for a user: pending reward, tps, expiry, working balance/supply.
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
         let rewards = Self::rewards_manager(&e);
         let storage = rewards.storage();
@@ -108,6 +120,7 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         ]
     }
 
+    // Pending reward amount for a user (recomputes weighted liquidity first).
     fn get_user_reward(e: Env, user: Address) -> u128 {
         Self::recompute_user_weighted_liquidity(&e, &user);
         Self::rewards_manager(&e).manager().get_amount_to_claim(
@@ -117,6 +130,8 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         )
     }
 
+    // Preview what a user's working_balance and working_supply would be
+    // with a hypothetical new_user_shares value. For UI estimation.
     fn estimate_working_balance(e: Env, user: Address, new_user_shares: u128) -> (u128, u128) {
         let total_weighted = get_total_weighted_liquidity(&e);
         let user_weighted = get_user_weighted_liquidity(&e, &user);
@@ -136,18 +151,21 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         (new_working_balance, new_working_supply)
     }
 
+    // Total rewards emitted since pool creation.
     fn get_total_accumulated_reward(e: Env) -> u128 {
         Self::rewards_manager(&e)
             .manager()
             .get_total_accumulated_reward(get_total_weighted_liquidity(&e))
     }
 
+    // Total rewards that will be emitted by current config expiry.
     fn get_total_configured_reward(e: Env) -> u128 {
         Self::rewards_manager(&e)
             .manager()
             .get_total_configured_reward(get_total_weighted_liquidity(&e))
     }
 
+    // Admin correction for accumulated rewards counter. Rewards admin or owner.
     fn adjust_total_accumulated_reward(e: Env, admin: Address, diff: i128) {
         admin.require_auth();
         require_rewards_admin_or_owner(&e, &admin);
@@ -156,12 +174,16 @@ impl RewardsTrait for ConcentratedLiquidityPool {
             .adjust_total_accumulated_reward(get_total_weighted_liquidity(&e), diff);
     }
 
+    // Total rewards already claimed by all users.
     fn get_total_claimed_reward(e: Env) -> u128 {
         Self::rewards_manager(&e)
             .manager()
             .get_total_claimed_reward(get_total_weighted_liquidity(&e))
     }
 
+    // Claim pending AQUA rewards. Recomputes weighted liquidity, checkpoints gauges,
+    // transfers reward tokens to user. Validates that claiming doesn't drain pool reserves
+    // (relevant when reward_token == one of the pool tokens).
     fn claim(e: Env, user: Address) -> u128 {
         if get_claim_killed(&e) {
             panic_with_error!(&e, Error::ClaimKilled)
@@ -221,12 +243,14 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         reward
     }
 
+    // Whether user has opted into rewards (true = active, false = excluded).
     fn get_rewards_state(e: Env, user: Address) -> bool {
         Self::rewards_manager(&e)
             .manager()
             .get_user_rewards_state(&user)
     }
 
+    // Opt in/out of rewards. Checkpoints gauges and rewards before changing state.
     fn set_rewards_state(e: Env, user: Address, state: bool) {
         user.require_auth();
 
@@ -254,6 +278,7 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         RewardEvents::new(&e).set_rewards_state(user, state);
     }
 
+    // Admin override for user's rewards opt-in state. Operations admin or owner.
     fn admin_set_rewards_state(e: Env, admin: Address, user: Address, state: bool) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);

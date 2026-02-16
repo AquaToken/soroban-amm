@@ -1,9 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::{deploy_rewards_gauge, get_token_admin_client, Setup};
+use crate::testutils::{
+    create_pool_contract, create_token_contract, deploy_rewards_gauge, get_token_admin_client,
+    Setup,
+};
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Map, Symbol, Vec, U256};
+use soroban_sdk::{Address, Env, Map, Symbol, Vec, U256};
 use utils::test_utils::jump;
 
 #[test]
@@ -357,5 +360,251 @@ fn test_get_and_return_unused_reward() {
     assert_eq!(
         setup.reward_token.balance(&setup.router) as u128,
         extra_reward
+    );
+}
+
+// Griefing scenario: attacker fills every tick with dust positions to increase
+// storage reads during swaps. Whale provide full-range liquidity, then
+// an attacker initializes every possible tick in a range around the current
+// price with minimal liquidity.
+///
+// With tick_spacing=20 (0.1% fee tier), this test demonstrates:
+// - Dust positions add overhead but spacing caps the damage
+// - Reports exact ledger footprint for capacity planning
+///
+// Mainnet limits: 200 read_only + 200 read_write entries per tx.
+#[test]
+fn test_dust_griefing_tick_spacing_20() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+    // Disable SDK resource limit enforcement — we check footprint manually
+    env.cost_estimate().disable_resource_limits();
+
+    let admin = Address::generate(&env);
+    let router = Address::generate(&env);
+
+    let token0 = create_token_contract(&env, &admin);
+    let token1 = create_token_contract(&env, &admin);
+
+    // Pool plane
+    mod pool_plane {
+        soroban_sdk::contractimport!(
+            file = "../contracts/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    let plane = pool_plane::Client::new(&env, &env.register(pool_plane::WASM, ()));
+
+    // Create pool with fee=10 bps, tick_spacing=20 (our 0.1% tier)
+    let tick_spacing: i32 = 20;
+    let pool = create_pool_contract(
+        &env,
+        &admin,
+        &router,
+        &plane.address,
+        &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
+        10,
+        tick_spacing,
+    );
+
+    // ---- Whale deposits (full range) ----
+    let whale = Address::generate(&env);
+    let whale_amount: i128 = 1_000_000_0000000;
+
+    get_token_admin_client(&env, &token0.address).mint(&whale, &whale_amount);
+    get_token_admin_client(&env, &token1.address).mint(&whale, &whale_amount);
+
+    // Full-range deposit: uses MIN_TICK/MAX_TICK aligned to spacing
+    pool.deposit(
+        &whale,
+        &Vec::from_array(&env, [500_000_0000000u128, 500_000_0000000u128]),
+        &0,
+    );
+
+    let slot_before = pool.slot0();
+    let liquidity_before = pool.liquidity();
+    std::println!(
+        "Pool state: tick={}, liquidity={}",
+        slot_before.tick,
+        liquidity_before
+    );
+
+    // ---- Attacker: fill ticks with dust ----
+    let dust_range: i32 = 300; // number of spacing steps on each side
+    let dust_liquidity: u128 = 1; // minimum possible
+
+    // Attacker uses multiple accounts to bypass MAX_USER_POSITIONS (20)
+    let mut total_dust_positions = 0u32;
+    let positions_per_attacker: i32 = 20; // MAX_USER_POSITIONS
+    let total_dust_ticks = (dust_range * 2) as u32; // x2 ticks
+    let num_attackers =
+        (total_dust_ticks as i32 + positions_per_attacker - 1) / positions_per_attacker;
+
+    std::println!(
+        "Dust attack: {} ticks, {} attacker accounts",
+        total_dust_ticks,
+        num_attackers
+    );
+
+    for attacker_idx in 0..num_attackers {
+        let attacker = Address::generate(&env);
+        get_token_admin_client(&env, &token0.address).mint(&attacker, &1_0000000);
+        get_token_admin_client(&env, &token1.address).mint(&attacker, &1_0000000);
+
+        let start_offset = -dust_range + (attacker_idx * positions_per_attacker);
+        let end_offset = start_offset + positions_per_attacker;
+
+        for i in start_offset..end_offset {
+            if i.abs() > dust_range {
+                continue;
+            }
+            let tick_lower = i * tick_spacing;
+            let tick_upper = tick_lower + tick_spacing;
+
+            pool.deposit_position(
+                &attacker,
+                &attacker,
+                &tick_lower,
+                &tick_upper,
+                &dust_liquidity,
+            );
+            total_dust_positions += 1;
+        }
+    }
+
+    std::println!(
+        "Dust positions created: {} (initializing up to {} ticks)",
+        total_dust_positions,
+        total_dust_positions * 2
+    );
+
+    // ---- Small swap: ~1% price move through dust field ----
+    let swapper = Address::generate(&env);
+    let small_swap: u128 = 10_000_0000000; // ~1% of whale liquidity
+
+    get_token_admin_client(&env, &token0.address).mint(&swapper, &(small_swap as i128));
+    let out = pool.swap(&swapper, &0, &1, &small_swap, &0);
+
+    let cost = env.cost_estimate().resources();
+
+    let slot_after = pool.slot0();
+    let tick_delta = (slot_after.tick - slot_before.tick).abs();
+    let ticks_crossed = tick_delta / tick_spacing;
+
+    std::println!("--- Small swap (~1% move) ---");
+    std::println!("Amount in:  {}", small_swap);
+    std::println!("Amount out: {}", out);
+    std::println!(
+        "Price moved: tick {} → {} (delta={}, ~{} spacing crossings)",
+        slot_before.tick, slot_after.tick, tick_delta, ticks_crossed
+    );
+    std::println!(
+        "Footprint: read_write={}, read_only={}",
+        cost.write_entries,
+        cost.disk_read_entries + cost.memory_read_entries
+    );
+
+    // ---- Reverse swap to restore price ----
+    get_token_admin_client(&env, &token1.address).mint(&swapper, &(small_swap as i128));
+    let out_back = pool.swap(&swapper, &1, &0, &small_swap, &0);
+    assert!(out_back > 0, "reverse swap must produce output");
+    let slot_mid = pool.slot0();
+
+    // ---- Larger swap: ~5% price move — stress test ----
+    let large_swap: u128 = 50_000_0000000;
+    get_token_admin_client(&env, &token0.address).mint(&swapper, &(large_swap as i128));
+    let out_large = pool.swap(&swapper, &0, &1, &large_swap, &0);
+
+    let cost_large = env.cost_estimate().resources();
+
+    let slot_after_large = pool.slot0();
+    let tick_delta_large = (slot_after_large.tick - slot_mid.tick).abs();
+    let ticks_crossed_large = tick_delta_large / tick_spacing;
+
+    std::println!("--- Large swap (~5% move) ---");
+    std::println!("Amount in:  {}", large_swap);
+    std::println!("Amount out: {}", out_large);
+    std::println!(
+        "Price moved: tick {} → {} (delta={}, ~{} spacing crossings)",
+        slot_mid.tick,
+        slot_after_large.tick,
+        tick_delta_large,
+        ticks_crossed_large
+    );
+    std::println!(
+        "Footprint: read_write={}, read_only={}",
+        cost_large.write_entries,
+        cost_large.disk_read_entries + cost_large.memory_read_entries
+    );
+
+    // ---- Extra large swap: ~10% price move ----
+    let xlarge_swap: u128 = 100_000_0000000;
+    get_token_admin_client(&env, &token0.address).mint(&swapper, &(xlarge_swap as i128));
+    let out_xlarge = pool.swap(&swapper, &0, &1, &xlarge_swap, &0);
+
+    let cost_xlarge = env.cost_estimate().resources();
+
+    let slot_after_xlarge = pool.slot0();
+    let tick_delta_xlarge = (slot_after_xlarge.tick - slot_after_large.tick).abs();
+    let ticks_crossed_xlarge = tick_delta_xlarge / tick_spacing;
+
+    std::println!("--- Extra large swap (~10% move) ---");
+    std::println!("Amount in:  {}", xlarge_swap);
+    std::println!("Amount out: {}", out_xlarge);
+    std::println!(
+        "Price moved: tick {} → {} (delta={}, ~{} spacing crossings)",
+        slot_after_large.tick,
+        slot_after_xlarge.tick,
+        tick_delta_xlarge,
+        ticks_crossed_xlarge
+    );
+    std::println!(
+        "Footprint: read_write={}, read_only={}",
+        cost_xlarge.write_entries,
+        cost_xlarge.disk_read_entries + cost_xlarge.memory_read_entries
+    );
+
+    // Mainnet limits: 200 read_only + 200 read_write entries per tx
+    const RW_LIMIT: u32 = 200;
+    const RO_LIMIT: u32 = 200;
+
+    let ro_small = cost.disk_read_entries + cost.memory_read_entries;
+    let ro_large = cost_large.disk_read_entries + cost_large.memory_read_entries;
+    let ro_xlarge = cost_xlarge.disk_read_entries + cost_xlarge.memory_read_entries;
+
+    // Summary
+    std::println!("\n=== GRIEFING IMPACT SUMMARY (tick_spacing={}) ===", tick_spacing);
+    std::println!("Dust positions: {}", total_dust_positions);
+    std::println!("Whale liquidity: {}", liquidity_before);
+    std::println!("Mainnet limits: rw={}, ro={}", RW_LIMIT, RO_LIMIT);
+    std::println!(
+        " ~1% move: {} crossings, rw={}/{} ro={}/{}",
+        ticks_crossed, cost.write_entries, RW_LIMIT, ro_small, RO_LIMIT
+    );
+    std::println!(
+        " ~5% move: {} crossings, rw={}/{} ro={}/{}",
+        ticks_crossed_large, cost_large.write_entries, RW_LIMIT, ro_large, RO_LIMIT
+    );
+    std::println!(
+        "~10% move: {} crossings, rw={}/{} ro={}/{}",
+        ticks_crossed_xlarge, cost_xlarge.write_entries, RW_LIMIT, ro_xlarge, RO_LIMIT
+    );
+
+    // Assert small and medium swaps fit within mainnet limits
+    assert!(
+        cost.write_entries <= RW_LIMIT && ro_small <= RO_LIMIT,
+        "~1% swap exceeds mainnet limits: rw={}/{} ro={}/{}",
+        cost.write_entries, RW_LIMIT, ro_small, RO_LIMIT
+    );
+    assert!(
+        cost_large.write_entries <= RW_LIMIT && ro_large <= RO_LIMIT,
+        "~5% swap exceeds mainnet limits: rw={}/{} ro={}/{}",
+        cost_large.write_entries, RW_LIMIT, ro_large, RO_LIMIT
+    );
+    // ~10% move under worst-case griefing may exceed limits — that's the attack ceiling
+    std::println!(
+        "\n~10% move fits mainnet? rw={} ro={}",
+        if cost_xlarge.write_entries <= RW_LIMIT { "YES" } else { "NO" },
+        if ro_xlarge <= RO_LIMIT { "YES" } else { "NO" },
     );
 }

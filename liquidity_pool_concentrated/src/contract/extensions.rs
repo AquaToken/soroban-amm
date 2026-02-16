@@ -1,15 +1,23 @@
 use super::*;
 
+// Concentrated pool extensions — methods specific to tick-based liquidity.
+// These are NOT available through the router; called directly on the pool contract.
 #[contractimpl]
 impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
+    // Validates tick range: lower < upper, both within [MIN_TICK, MAX_TICK],
+    // both aligned to tick_spacing.
     fn check_ticks(e: Env, tick_lower: i32, tick_upper: i32) -> Result<(), Error> {
         Self::check_ticks_internal(&e, tick_lower, tick_upper)
     }
 
+    // Returns current ledger timestamp (seconds since epoch).
     fn block_timestamp(e: Env) -> u64 {
         e.ledger().timestamp()
     }
 
+    // Sets the pool's initial price as sqrt(price) in Q64.96 format.
+    // Can only be called when pool has zero liquidity (before first deposit
+    // or after all positions are withdrawn). Operations admin or owner only.
     fn initialize_price(e: Env, admin: Address, sqrt_price_x96: U256) -> Result<(), Error> {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
@@ -37,6 +45,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Ok(())
     }
 
+    // Advanced swap: specify tokens by address, signed amount (positive=exact_input,
+    // negative=exact_output), and optional sqrt price limit. Returns signed amounts
+    // (positive=paid by user, negative=received by user).
     fn swap_by_tokens(
         e: Env,
         sender: Address,
@@ -61,6 +72,11 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         )
     }
 
+    // Add liquidity to a specific tick range [tick_lower, tick_upper).
+    // `amount` is liquidity units (not token amounts). Transfers required tokens from
+    // sender, creates/updates position for recipient. Returns (amount0, amount1) spent.
+    // If range contains current price, both tokens needed; otherwise only one.
+    // Accrues pending fees on existing position before adding.
     fn deposit_position(
         e: Env,
         sender: Address,
@@ -142,6 +158,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Ok((amount0, amount1))
     }
 
+    // Remove liquidity from a position. Withdrawn tokens + accrued fees are credited
+    // to position's tokens_owed fields — call claim_position_fees to actually transfer.
+    // Returns (amount0, amount1) that were credited. If position is fully withdrawn
+    // and has no owed tokens, it is deleted.
     fn withdraw_position(
         e: Env,
         owner: Address,
@@ -228,6 +248,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Ok((amount0, amount1))
     }
 
+    // Collect accrued swap fees from a position. Transfers up to amount0/1_requested
+    // of owed tokens to recipient. Fees accumulate from swaps that occur while the
+    // position's range contains the active price. Returns (amount0, amount1) collected.
     fn claim_position_fees(
         e: Env,
         owner: Address,
@@ -249,6 +272,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         )
     }
 
+    // Current price state: sqrt_price_x96 (Q64.96) and tick index.
     fn slot0(e: Env) -> Slot0 {
         get_slot0(&e)
     }
@@ -265,38 +289,50 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         get_token1(&e)
     }
 
+    // Fee tier in basis points (e.g. 10 = 0.1%).
     fn fee(e: Env) -> u32 {
         get_fee(&e)
     }
 
+    // Minimum distance between initialized ticks. Derived from fee tier.
     fn tick_spacing(e: Env) -> i32 {
         get_tick_spacing(&e)
     }
 
+    // Bitmap word for tick scanning. Each bit represents an initialized tick.
+    // word_pos = tick / (tick_spacing * 256).
     fn tick_bitmap(e: Env, word_pos: i32) -> U256 {
         get_tick_bitmap_word(&e, word_pos)
     }
 
+    // Active liquidity — sum of all positions whose range contains current tick.
+    // This is the liquidity used for swap math at the current price.
     fn liquidity(e: Env) -> u128 {
         get_liquidity(&e)
     }
 
+    // Global cumulative fee growth per unit of liquidity for token0, in Q128 format.
     fn fee_growth_global_0_x128(e: Env) -> U256 {
         get_fee_growth_global_0_x128(&e)
     }
 
+    // Global cumulative fee growth per unit of liquidity for token1, in Q128 format.
     fn fee_growth_global_1_x128(e: Env) -> U256 {
         get_fee_growth_global_1_x128(&e)
     }
 
+    // Uncollected protocol fees (admin's cut of swap fees).
     fn protocol_fees(e: Env) -> ProtocolFees {
         get_protocol_fees(&e)
     }
 
+    // Tick state: liquidity_gross, liquidity_net, fee_growth_outside, initialized flag.
     fn ticks(e: Env, tick: i32) -> TickInfo {
         get_tick(&e, tick)
     }
 
+    // Returns position data for a specific owner + tick range.
+    // Panics with PositionNotFound if position doesn't exist.
     fn get_position(e: Env, recipient: Address, tick_lower: i32, tick_upper: i32) -> PositionData {
         match get_position(&e, &recipient, tick_lower, tick_upper) {
             Some(pos) => pos,
@@ -304,6 +340,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
     }
 
+    // Full pool state in a single call: fee, liquidity, price, tick, spacing, tokens.
     fn get_full_pool_state(e: Env) -> Option<PoolState> {
         let slot = get_slot0(&e);
         Some(PoolState {
@@ -317,6 +354,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         })
     }
 
+    // Pool state + actual token balances held by the contract.
     fn get_pool_state_with_balances(e: Env) -> Option<PoolStateWithBalances> {
         let state = Self::get_full_pool_state(e.clone())?;
         let contract = e.current_contract_address();
@@ -330,6 +368,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         })
     }
 
+    // User's position ranges, raw liquidity, and weighted liquidity (for rewards).
     fn get_user_position_snapshot(e: Env, user: Address) -> UserPositionSnapshot {
         UserPositionSnapshot {
             ranges: get_user_positions(&e, &user),
@@ -338,14 +377,18 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
     }
 
+    // Total weighted liquidity across all users (used for rewards distribution).
+    // Weighted = raw * distance_multiplier, where narrower ranges near price get higher weight.
     fn get_total_weighted_liquidity(e: Env) -> u128 {
         get_total_weighted_liquidity(&e)
     }
 
+    // Total raw (unweighted) liquidity across all users.
     fn get_total_raw_liquidity(e: Env) -> u128 {
         get_total_raw_liquidity(&e)
     }
 
+    // Batch-fetch bitmap words for frontend tick scanning. Max 100 words per call.
     fn get_tick_bitmap_batch(e: Env, start_word: i32, count: u32) -> Vec<U256> {
         let count = count.min(100);
         let mut result = Vec::new(&e);
@@ -355,6 +398,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         result
     }
 
+    // Batch-fetch tick data for multiple tick indexes. Max 100 ticks per call.
     fn get_ticks_batch(e: Env, ticks: Vec<i32>) -> Vec<TickInfo> {
         let max_ticks = ticks.len().min(100);
         let mut result = Vec::new(&e);

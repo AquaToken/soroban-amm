@@ -1,5 +1,6 @@
 use crate::constants::{
-    CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_MAX_FEE, STABLESWAP_MAX_TOKENS,
+    CONCENTRATED_FEE_AVAILABLE, CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A,
+    STABLESWAP_MAX_FEE, STABLESWAP_MAX_TOKENS,
 };
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
@@ -21,17 +22,19 @@ use crate::rewards_gauge::{
 };
 use crate::router_interface::AdminInterface;
 use crate::storage::{
-    get_concentrated_pool_hash, get_gauge_rewards_enabled_for, get_init_pool_payment_address,
+    get_concentrated_pool_hash, get_gauge_rewards_enabled_for,
+    get_init_concentrated_pool_payment_amount, get_init_pool_payment_address,
     get_init_pool_payment_token, get_init_stable_pool_payment_amount,
     get_init_standard_pool_payment_amount, get_liquidity_calculator, get_pool, get_pool_plane,
     get_pools_plain, get_protocol_fee_fraction, get_reward_tokens, get_reward_tokens_detailed,
     get_rewards_config, get_tokens_set, get_tokens_set_count, has_pool, remove_pool,
     set_concentrated_pool_hash, set_constant_product_pool_hash, set_gauge_rewards_enabled_for,
-    set_init_pool_payment_address, set_init_pool_payment_token,
-    set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
-    set_liquidity_calculator, set_pool_plane, set_protocol_fee_fraction, set_reward_tokens,
-    set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash,
-    DataKey, GlobalRewardsConfig, LiquidityPoolRewardInfo,
+    set_init_concentrated_pool_payment_amount, set_init_pool_payment_address,
+    set_init_pool_payment_token, set_init_stable_pool_payment_amount,
+    set_init_standard_pool_payment_amount, set_liquidity_calculator, set_pool_plane,
+    set_protocol_fee_fraction, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
+    set_stableswap_pool_hash, set_token_hash, DataKey, GlobalRewardsConfig,
+    LiquidityPoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -649,6 +652,7 @@ impl AdminInterface for LiquidityPoolRouter {
         token: Address,
         standard_pool_amount: u128,
         stable_pool_amount: u128,
+        concentrated_pool_amount: u128,
         to: Address,
     ) {
         admin.require_auth();
@@ -657,6 +661,7 @@ impl AdminInterface for LiquidityPoolRouter {
         set_init_pool_payment_token(&e, &token);
         set_init_stable_pool_payment_amount(&e, &stable_pool_amount);
         set_init_standard_pool_payment_amount(&e, &standard_pool_amount);
+        set_init_concentrated_pool_payment_amount(&e, &concentrated_pool_amount);
         set_init_pool_payment_address(&e, &to);
     }
 
@@ -675,6 +680,10 @@ impl AdminInterface for LiquidityPoolRouter {
 
     fn get_standard_pool_payment_amount(e: Env) -> u128 {
         get_init_standard_pool_payment_amount(&e)
+    }
+
+    fn get_conc_pool_payment_amount(e: Env) -> u128 {
+        get_init_concentrated_pool_payment_amount(&e)
     }
 
     // Sets the reward token.
@@ -1323,8 +1332,8 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     //
     // * `user` - The address of the user initializing the pool.
     // * `tokens` - Exactly two token addresses of the pool.
-    // * `fee` - Fee tier in denominator 10000 (e.g. 5 = 0.05%, 30 = 0.3%, 100 = 1%).
-    // * `tick_spacing` - Tick spacing for the pool.
+    // * `fee` - Fee tier: must be one of 10 (0.1%), 30 (0.3%), 100 (1.0%).
+    //   Tick spacing is derived automatically from the fee tier.
     //
     // # Returns
     //
@@ -1336,7 +1345,6 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         user: Address,
         tokens: Vec<Address>,
         fee: u32,
-        tick_spacing: i32,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
         validate_tokens_contracts(&e, &tokens);
@@ -1345,12 +1353,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         if tokens.len() != 2 {
             panic_with_error!(&e, LiquidityPoolRouterError::UnsupportedTokensNum);
         }
-        if fee == 0 || fee > 1_000 {
+        if !CONCENTRATED_FEE_AVAILABLE.contains(&fee) {
             panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
         }
-        if tick_spacing <= 0 {
-            panic_with_error!(&e, LiquidityPoolRouterError::InvalidPoolType);
-        }
+
+        let tick_spacing = crate::constants::concentrated_tick_spacing(fee);
 
         let _hash = get_concentrated_pool_hash(&e);
         let salt = get_tokens_salt(&e, &tokens);
@@ -1361,7 +1368,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             Some(pool_address) => (pool_index, pool_address),
             None => {
                 let init_pool_token = get_init_pool_payment_token(&e);
-                let init_pool_amount = get_init_standard_pool_payment_amount(&e);
+                let init_pool_amount = get_init_concentrated_pool_payment_amount(&e);
                 let init_pool_address = get_init_pool_payment_address(&e);
                 if init_pool_amount > 0 {
                     SorobanTokenClient::new(&e, &init_pool_token).transfer(

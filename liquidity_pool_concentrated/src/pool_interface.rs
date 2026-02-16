@@ -236,11 +236,11 @@ pub trait ConcentratedPoolExtensionsTrait {
     fn get_total_weighted_liquidity(e: Env) -> u128;
     fn get_total_raw_liquidity(e: Env) -> u128;
 
-    /// Batch-read consecutive bitmap words starting at `start_word`.
-    /// Returns up to `count` words (max 100).
+    // Batch-read consecutive bitmap words starting at `start_word`.
+    // Returns up to `count` words (max 100).
     fn get_tick_bitmap_batch(e: Env, start_word: i32, count: u32) -> Vec<U256>;
 
-    /// Batch-read tick info for the specified ticks.
-    /// Returns a Vec of TickInfo in the same order (max 100 ticks).
+    // Batch-read tick info for the specified ticks.
+    // Returns a Vec of TickInfo in the same order (max 100 ticks).
     fn get_ticks_batch(e: Env, ticks: Vec<i32>) -> Vec<TickInfo>;
 }

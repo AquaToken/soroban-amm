@@ -1,27 +1,27 @@
 use soroban_sdk::{Env, U256};
 
-/// 512-bit unsigned integer for intermediate products in mul-div operations.
-/// Stored as two U256 halves: value = hi * 2^256 + lo.
+// 512-bit unsigned integer for intermediate products in mul-div operations.
+// Stored as two U256 halves: value = hi * 2^256 + lo.
 struct U512 {
     hi: U256,
     lo: U256,
 }
 
-/// Extract the lower 128 bits of a U256: a mod 2^128.
+// Extract the lower 128 bits of a U256: a mod 2^128.
 fn lo128(_e: &Env, a: &U256) -> U256 {
     // a - (a >> 128) << 128
     let hi_part = a.shr(128).shl(128);
     a.sub(&hi_part)
 }
 
-/// Full 512-bit product of two U256 values using schoolbook multiplication.
+// Full 512-bit product of two U256 values using schoolbook multiplication.
 ///
-/// Split each operand into two 128-bit halves:
-///   a = a_hi * 2^128 + a_lo,   b = b_hi * 2^128 + b_lo
+// Split each operand into two 128-bit halves:
+//   a = a_hi * 2^128 + a_lo,   b = b_hi * 2^128 + b_lo
 ///
-/// Product = a_hi*b_hi * 2^256 + (a_hi*b_lo + a_lo*b_hi) * 2^128 + a_lo*b_lo
+// Product = a_hi*b_hi * 2^256 + (a_hi*b_lo + a_lo*b_hi) * 2^128 + a_lo*b_lo
 ///
-/// Each partial product fits in U256 since inputs are at most 128-bit.
+// Each partial product fits in U256 since inputs are at most 128-bit.
 fn u256_full_mul(e: &Env, a: &U256, b: &U256) -> U512 {
     let a_lo = lo128(e, a);
     let a_hi = a.shr(128);
@@ -59,12 +59,12 @@ fn u256_full_mul(e: &Env, a: &U256, b: &U256) -> U512 {
     U512 { hi, lo }
 }
 
-/// Compute `floor(a * b / d)` or `ceil(a * b / d)` with 512-bit intermediate precision.
+// Compute `floor(a * b / d)` or `ceil(a * b / d)` with 512-bit intermediate precision.
 ///
-/// Uses schoolbook multiplication for the 512-bit product, then long division
-/// processing the dividend in 64-bit chunks (8 iterations).
+// Uses schoolbook multiplication for the 512-bit product, then long division
+// processing the dividend in 64-bit chunks (8 iterations).
 ///
-/// Panics if `d == 0`.
+// Panics if `d == 0`.
 pub fn mul_div_u256(e: &Env, a: &U256, b: &U256, d: &U256, round_up: bool) -> U256 {
     let zero = U256::from_u32(e, 0);
     let one = U256::from_u32(e, 1);
@@ -123,8 +123,8 @@ pub fn mul_div_u256(e: &Env, a: &U256, b: &U256, d: &U256, round_up: bool) -> U2
     quotient
 }
 
-/// Extract a 64-bit big-endian value from a 32-byte Bytes at the given chunk index.
-/// chunk_idx 0 = bytes [0..8] (most significant), chunk_idx 3 = bytes [24..32].
+// Extract a 64-bit big-endian value from a 32-byte Bytes at the given chunk index.
+// chunk_idx 0 = bytes [0..8] (most significant), chunk_idx 3 = bytes [24..32].
 fn extract_u64_from_bytes(bytes: &soroban_sdk::Bytes, chunk_idx: u32) -> u64 {
     let offset = chunk_idx * 8;
     let mut val: u64 = 0;

@@ -225,6 +225,7 @@ fn test_stableswap_pools_amount_over_max() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &payment_for_creation_address,
     );
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
@@ -261,6 +262,7 @@ fn test_stableswap_pools_amount_ok() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &payment_for_creation_address,
     );
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
@@ -298,6 +300,7 @@ fn test_stableswap_pool_no_balance() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &payment_for_creation_address,
     );
 
@@ -327,6 +330,7 @@ fn test_stableswap_pool() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &payment_for_creation_address,
     );
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
@@ -701,6 +705,7 @@ fn test_simple_ongoing_reward() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -997,6 +1002,7 @@ fn test_rewards_distribution() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1313,6 +1319,7 @@ fn test_rewards_distribution_as_operator() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1418,6 +1425,7 @@ fn test_rewards_distribution_override() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1580,6 +1588,7 @@ fn test_liqidity_not_filled() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1625,6 +1634,7 @@ fn test_fill_liqidity_reentrancy() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1670,6 +1680,7 @@ fn test_config_pool_rewards_reentrancy() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1715,6 +1726,7 @@ fn test_config_pool_rewards_after_new_global_config() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1777,6 +1789,7 @@ fn test_config_pool_after_liquidity_fill() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1840,6 +1853,7 @@ fn test_fill_liquidity_no_config() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1877,6 +1891,7 @@ fn test_config_rewards_not_admin() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1912,6 +1927,7 @@ fn test_config_rewards_duplicated_tokens() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1953,6 +1969,7 @@ fn test_config_rewards_tokens_not_sorted() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -1991,6 +2008,7 @@ fn test_config_rewards_no_pools_for_tokens() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &router.address,
     );
 
@@ -2055,6 +2073,7 @@ fn test_event_correct() {
         &reward_token.address,
         &0,
         &1000_0000000,
+        &0,
         &payment_for_creation_address,
     );
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
@@ -2298,6 +2317,7 @@ fn test_chained_swap() {
         &testutils::create_token_contract(&e, &admin).address,
         &0,
         &0,
+        &0,
         &router.address,
     );
 
@@ -2442,6 +2462,7 @@ fn test_chained_swap_strict_receive() {
     router.mock_all_auths().configure_init_pool_payment(
         &admin,
         &testutils::create_token_contract(&e, &admin).address,
+        &0,
         &0,
         &0,
         &router.address,
@@ -2644,6 +2665,7 @@ fn test_create_pool_payment() {
         &reward_token.address,
         &100,
         &1000,
+        &0,
         &payments_destination,
     );
 
@@ -3036,6 +3058,7 @@ fn test_boosted_rewards_abuse() {
     setup.router.configure_init_pool_payment(
         &setup.admin,
         &token_reward.address,
+        &1_0000000,
         &1_0000000,
         &1_0000000,
         &setup.admin,
@@ -3444,7 +3467,7 @@ fn test_setup_rewards_gauge_concentrated_pool() {
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     let (pool_hash, pool_address) = setup
         .router
-        .init_concentrated_pool(&user1, &tokens, &30, &1);
+        .init_concentrated_pool(&user1, &tokens, &30);
     let gauges_before: Map<Address, Address> =
         e.invoke_contract(&pool_address, &Symbol::new(&e, "get_gauges"), Vec::new(&e));
     assert_eq!(gauges_before, Map::new(&e));
@@ -3958,7 +3981,7 @@ fn test_rewards_distribution_reward_token_lock() {
     let reward_token = setup.reward_token;
 
     let user = Address::generate(&e);
-    router.configure_init_pool_payment(&admin, &reward_token.address, &0, &1000, &router.address);
+    router.configure_init_pool_payment(&admin, &reward_token.address, &0, &1000, &0, &router.address);
 
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 

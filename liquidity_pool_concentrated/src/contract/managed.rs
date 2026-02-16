@@ -2,6 +2,8 @@ use super::*;
 
 #[contractimpl]
 impl ManagedLiquidityPool for ConcentratedLiquidityPool {
+    // Full initialization in one call: pool params + rewards config + plane.
+    // Called by router during pool creation to avoid multiple cross-contract calls.
     fn initialize_all(
         e: Env,
         admin: Address,

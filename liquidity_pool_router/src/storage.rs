@@ -58,6 +58,7 @@ pub(crate) enum DataKey {
     InitPoolPaymentToken,
     InitStandardPoolPaymentAmount,
     InitStablePoolPaymentAmount,
+    InitConcentratedPoolPaymentAmt,
     InitPoolsPaymentsAddress,
     ConstantPoolHash,
     StableSwapPoolHash,
@@ -111,6 +112,11 @@ generate_instance_storage_getter_and_setter!(
 generate_instance_storage_getter_and_setter!(
     init_standard_pool_payment_amount,
     DataKey::InitStandardPoolPaymentAmount,
+    u128
+);
+generate_instance_storage_getter_and_setter!(
+    init_concentrated_pool_payment_amount,
+    DataKey::InitConcentratedPoolPaymentAmt,
     u128
 );
 generate_instance_storage_getter_and_setter!(

@@ -705,6 +705,7 @@ fn test_configure_init_pool_payment() {
                     &setup.reward_token.address,
                     &1,
                     &1,
+                    &0,
                     &router.address
                 )
                 .is_ok(),
