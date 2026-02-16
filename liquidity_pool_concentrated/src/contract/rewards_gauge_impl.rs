@@ -4,7 +4,7 @@ use super::*;
 // Each gauge is a separate contract that distributes its own reward token
 // proportionally to users' weighted liquidity in this pool.
 #[contractimpl]
-impl RewardsGaugeInterfaceTrait for ConcentratedLiquidityPool {
+impl RewardsGaugeInterface for ConcentratedLiquidityPool {
     // Register a new rewards gauge contract. Operations admin, owner, or router.
     fn gauge_add(e: Env, admin: Address, gauge_address: Address) {
         admin.require_auth();

@@ -156,25 +156,6 @@ pub trait UpgradeableContract {
     fn get_emergency_mode(e: Env) -> bool;
 }
 
-pub trait RewardsGaugeInterfaceTrait {
-    fn gauge_add(e: Env, admin: Address, gauge_address: Address);
-    fn gauge_remove(e: Env, admin: Address, reward_token: Address);
-    fn gauge_schedule_reward(
-        e: Env,
-        router: Address,
-        distributor: Address,
-        gauge: Address,
-        start_at: Option<u64>,
-        duration: u64,
-        tps: u128,
-    );
-    fn kill_gauges_claim(e: Env, admin: Address);
-    fn unkill_gauges_claim(e: Env, admin: Address);
-    fn get_gauges(e: Env) -> Map<Address, Address>;
-    fn gauges_claim(e: Env, user: Address) -> Map<Address, u128>;
-    fn gauges_get_reward_info(e: Env, user: Address) -> Map<Address, Map<Symbol, i128>>;
-}
-
 pub trait ConcentratedPoolExtensionsTrait {
     fn check_ticks(e: Env, tick_lower: i32, tick_upper: i32) -> Result<(), Error>;
     fn block_timestamp(e: Env) -> u64;

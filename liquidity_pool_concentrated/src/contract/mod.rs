@@ -9,7 +9,7 @@ use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool_interface::{
     AdminInterfaceTrait, ConcentratedPoolExtensionsTrait, LiquidityPoolInterfaceTrait,
-    ManagedLiquidityPool, RewardsGaugeInterfaceTrait, RewardsTrait, UpgradeableContract,
+    ManagedLiquidityPool, RewardsTrait, UpgradeableContract,
 };
 use crate::storage::{
     get_claim_killed, get_distance_weight_config, get_fee, get_fee_growth_global_0_x128,
@@ -45,6 +45,7 @@ use access_control::utils::{
 use liquidity_pool_events::Events as PoolEvents;
 use liquidity_pool_events::LiquidityPoolEvents;
 use liqidity_pool_rewards_gauge as rewards_gauge;
+use liqidity_pool_rewards_gauge::interface::RewardsGaugeInterface;
 use rewards::concentrated_weight::{
     apply_multiplier, position_multiplier_bps, DistanceWeightConfig,
 };
