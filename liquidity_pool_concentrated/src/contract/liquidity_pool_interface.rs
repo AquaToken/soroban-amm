@@ -12,7 +12,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
 
     // One-time pool setup. Called by router during pool creation.
     // Sets tokens, fee, tick spacing, access roles, default protocol fee (50%),
-    // and initial price at tick 0 (1:1). Use initialize_price to change afterwards.
+    // and initial price at tick 0 (1:1). Price is auto-set on first deposit from token ratio.
     fn initialize(
         e: Env,
         admin: Address,
@@ -131,8 +131,8 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
     }
 
     // Router-compatible deposit: opens a full-range position [MIN_TICK, MAX_TICK].
-    // Computes maximum liquidity from desired_amounts at current price,
-    // transfers required tokens, returns (actual_amounts, minted_liquidity).
+    // Delegates to deposit_position which computes maximum liquidity from desired_amounts
+    // at current price, transfers required tokens, returns (actual_amounts, minted_liquidity).
     fn deposit(
         e: Env,
         user: Address,
@@ -148,40 +148,23 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             Err(err) => panic_with_error!(&e, err),
         };
 
-        let desired_amount0 = desired_amounts.get_unchecked(0);
-        let desired_amount1 = desired_amounts.get_unchecked(1);
-
-        let liquidity = match Self::max_liquidity_for_amounts(
-            &e,
-            tick_lower,
-            tick_upper,
-            desired_amount0,
-            desired_amount1,
-        ) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
-
-        if liquidity == 0 {
-            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
-        }
-        if liquidity < min_shares {
-            panic_with_error!(&e, Error::InvalidAmount);
-        }
-
-        let (amount0, amount1) = match Self::deposit_position(
+        let (actual_amounts, liquidity) = match Self::deposit_position(
             e.clone(),
             user.clone(),
             user.clone(),
             tick_lower,
             tick_upper,
-            liquidity,
+            desired_amounts,
         ) {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
 
-        (Vec::from_array(&e, [amount0, amount1]), liquidity)
+        if liquidity < min_shares {
+            panic_with_error!(&e, Error::InvalidAmount);
+        }
+
+        (actual_amounts, liquidity)
     }
 
     // Estimates liquidity for a full-range deposit without executing it.

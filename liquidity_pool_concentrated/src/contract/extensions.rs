@@ -15,36 +15,6 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         e.ledger().timestamp()
     }
 
-    // Sets the pool's initial price as sqrt(price) in Q64.96 format.
-    // Can only be called when pool has zero liquidity (before first deposit
-    // or after all positions are withdrawn). Operations admin or owner only.
-    fn initialize_price(e: Env, admin: Address, sqrt_price_x96: U256) -> Result<(), Error> {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-
-        if sqrt_price_x96 == U256::from_u32(&e, 0) {
-            return Err(Error::InvalidSqrtPrice);
-        }
-
-        // Prevent price change when pool has active liquidity — would corrupt
-        // tick accounting, fee growth, and active liquidity tracking.
-        if get_total_raw_liquidity(&e) > 0 {
-            return Err(Error::PoolAlreadyInitialized);
-        }
-
-        let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)?;
-
-        set_slot0(
-            &e,
-            &Slot0 {
-                sqrt_price_x96,
-                tick,
-            },
-        );
-        update_plane(&e);
-        Ok(())
-    }
-
     // Advanced swap: specify tokens by address, signed amount (positive=exact_input,
     // negative=exact_output), and optional sqrt price limit. Returns signed amounts
     // (positive=paid by user, negative=received by user).
@@ -73,52 +43,85 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     }
 
     // Add liquidity to a specific tick range [tick_lower, tick_upper).
-    // `amount` is liquidity units (not token amounts). Transfers required tokens from
-    // sender, creates/updates position for recipient. Returns (amount0, amount1) spent.
-    // If range contains current price, both tokens needed; otherwise only one.
-    // Accrues pending fees on existing position before adding.
+    // `desired_amounts` is [amount0, amount1] — the maximum tokens the sender is willing
+    // to spend. The contract computes the maximum liquidity mintable from these amounts
+    // at the current price and transfers only the actual tokens needed.
+    // Returns (actual_amounts: Vec<u128>, liquidity: u128).
+    // On an empty pool (zero total liquidity), the price is auto-initialized from the
+    // token ratio — no separate initialize_price call needed.
     fn deposit_position(
         e: Env,
         sender: Address,
         recipient: Address,
         tick_lower: i32,
         tick_upper: i32,
-        amount: u128,
-    ) -> Result<(u128, u128), Error> {
+        desired_amounts: Vec<u128>,
+    ) -> Result<(Vec<u128>, u128), Error> {
         sender.require_auth();
         if get_is_killed_deposit(&e) {
             return Err(Error::DepositKilled);
         }
-        if amount == 0 {
-            return Err(Error::AmountShouldBeGreaterThanZero);
+        if desired_amounts.len() != 2 {
+            return Err(Error::InvalidAmount);
         }
-        if amount > i128::MAX as u128 {
-            return Err(Error::LiquidityAmountTooLarge);
+        let desired_amount0 = desired_amounts.get_unchecked(0);
+        let desired_amount1 = desired_amounts.get_unchecked(1);
+        if desired_amount0 == 0 && desired_amount1 == 0 {
+            return Err(Error::AmountShouldBeGreaterThanZero);
         }
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
 
+        // Auto-initialize price on empty pool from token ratio
+        if get_total_raw_liquidity(&e) == 0 && desired_amount0 > 0 && desired_amount1 > 0 {
+            let sqrt_price_x96 = sqrt_price_from_amounts(&e, desired_amount0, desired_amount1)?;
+            let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)?;
+            set_slot0(
+                &e,
+                &Slot0 {
+                    sqrt_price_x96,
+                    tick,
+                },
+            );
+        }
+
         Self::recompute_user_weighted_liquidity(&e, &recipient);
         Self::rewards_checkpoint_user(&e, &recipient);
 
+        // Compute max liquidity from desired token amounts at current price
+        let liquidity = Self::max_liquidity_for_amounts(
+            &e,
+            tick_lower,
+            tick_upper,
+            desired_amount0,
+            desired_amount1,
+        )?;
+        if liquidity == 0 {
+            return Err(Error::AmountShouldBeGreaterThanZero);
+        }
+        if liquidity > i128::MAX as u128 {
+            return Err(Error::LiquidityAmountTooLarge);
+        }
+
+        // Compute actual token amounts for this liquidity (round up for pool safety)
         let slot = get_slot0(&e);
         let sqrt_lower = sqrt_ratio_at_tick(&e, tick_lower)?;
         let sqrt_upper = sqrt_ratio_at_tick(&e, tick_upper)?;
 
         let (amount0, amount1) = if slot.sqrt_price_x96 <= sqrt_lower {
             (
-                amount0_delta(&e, &sqrt_lower, &sqrt_upper, amount, true)?,
+                amount0_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true)?,
                 0,
             )
         } else if slot.sqrt_price_x96 < sqrt_upper {
             (
-                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, amount, true)?,
-                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, amount, true)?,
+                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, liquidity, true)?,
+                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, liquidity, true)?,
             )
         } else {
             (
                 0,
-                amount1_delta(&e, &sqrt_lower, &sqrt_upper, amount, true)?,
+                amount1_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true)?,
             )
         };
 
@@ -135,27 +138,27 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
 
         let mut position = Self::get_or_create_position(&e, &recipient, tick_lower, tick_upper);
         Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick)?;
-        position.liquidity = position.liquidity.saturating_add(amount);
+        position.liquidity = position.liquidity.saturating_add(liquidity);
         set_position(&e, &recipient, tick_lower, tick_upper, &position);
         Self::ensure_user_range_exists(&e, &recipient, tick_lower, tick_upper)?;
 
-        Self::update_tick_liquidity(&e, tick_lower, amount as i128, false)?;
-        Self::update_tick_liquidity(&e, tick_upper, amount as i128, true)?;
+        Self::update_tick_liquidity(&e, tick_lower, liquidity as i128, false)?;
+        Self::update_tick_liquidity(&e, tick_upper, liquidity as i128, true)?;
 
         if slot.tick >= tick_lower && slot.tick < tick_upper {
-            set_liquidity(&e, &get_liquidity(&e).saturating_add(amount));
+            set_liquidity(&e, &get_liquidity(&e).saturating_add(liquidity));
         }
 
-        Self::update_user_raw_liquidity(&e, &recipient, amount as i128);
+        Self::update_user_raw_liquidity(&e, &recipient, liquidity as i128);
         Self::recompute_user_weighted_liquidity(&e, &recipient);
         Self::rewards_refresh_working_balance(&e, &recipient);
         update_plane(&e);
 
         let tokens = Vec::from_array(&e, [token0, token1]);
         let amounts = Vec::from_array(&e, [amount0, amount1]);
-        PoolEvents::new(&e).deposit_liquidity(tokens, amounts, amount);
+        PoolEvents::new(&e).deposit_liquidity(tokens, amounts, liquidity);
 
-        Ok((amount0, amount1))
+        Ok((Vec::from_array(&e, [amount0, amount1]), liquidity))
     }
 
     // Remove liquidity from a position. Withdrawn tokens + accrued fees are credited

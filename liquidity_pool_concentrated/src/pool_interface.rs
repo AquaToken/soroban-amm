@@ -157,7 +157,6 @@ pub trait UpgradeableContract {
 pub trait ConcentratedPoolExtensionsTrait {
     fn check_ticks(e: Env, tick_lower: i32, tick_upper: i32) -> Result<(), Error>;
     fn block_timestamp(e: Env) -> u64;
-    fn initialize_price(e: Env, admin: Address, sqrt_price_x96: U256) -> Result<(), Error>;
 
     fn swap_by_tokens(
         e: Env,
@@ -175,8 +174,8 @@ pub trait ConcentratedPoolExtensionsTrait {
         recipient: Address,
         tick_lower: i32,
         tick_upper: i32,
-        amount: u128,
-    ) -> Result<(u128, u128), Error>;
+        desired_amounts: Vec<u128>,
+    ) -> Result<(Vec<u128>, u128), Error>;
 
     fn withdraw_position(
         e: Env,
