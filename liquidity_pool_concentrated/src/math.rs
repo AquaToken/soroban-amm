@@ -3,6 +3,7 @@ use crate::storage::{MAX_TICK, MIN_TICK};
 use crate::u512::mul_div_u256 as u512_mul_div;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Bytes, Env, U256};
+use utils::u256_math::ExtraMath;
 
 const Q96_SHIFT: u32 = 96;
 const Q128_SHIFT: u32 = 128;
@@ -547,6 +548,32 @@ pub fn get_next_sqrt_price_from_output(
         // Buying token0 (output) → use amount0 formula (remove)
         get_next_sqrt_price_from_amount0(e, sqrt_price_x96, liquidity, amount_out, false)
     }
+}
+
+// Compute sqrt_price_x96 from a token amount ratio.
+//
+// sqrt_price_x96 = sqrt(amount1 / amount0) * 2^96
+//                = sqrt(amount1 * 2^192 / amount0)
+//
+// Uses U512 intermediate for the amount1 * 2^192 product (~321 bits).
+// Validates result against min/max sqrt ratio bounds.
+pub fn sqrt_price_from_amounts(e: &Env, amount0: u128, amount1: u128) -> Result<U256, Error> {
+    if amount0 == 0 || amount1 == 0 {
+        return Err(Error::InvalidAmount);
+    }
+    let q96 = u256_q96(e);
+    let q192 = q96.mul(&q96); // 2^192, fits U256 (193 bits)
+    let amount0_u256 = u256_from_u128(e, amount0);
+    let amount1_u256 = u256_from_u128(e, amount1);
+    // amount1 * 2^192 / amount0, using U512 intermediate (up to 321-bit numerator)
+    let ratio_q192 = u512_mul_div(e, &amount1_u256, &q192, &amount0_u256, false);
+    let sqrt_price = ratio_q192.sqrt(); // ~97 bits, exactly sqrt_price_x96 range
+
+    // Validate bounds
+    if sqrt_price < min_sqrt_ratio(e) || sqrt_price >= max_sqrt_ratio(e) {
+        return Err(Error::PriceOutOfBounds);
+    }
+    Ok(sqrt_price)
 }
 
 #[cfg(test)]
