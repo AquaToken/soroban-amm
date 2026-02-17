@@ -1600,11 +1600,11 @@ fn test_deposit_position_killed() {
 // storage reads during swaps. Whale provide full-range liquidity, then
 // an attacker initializes every possible tick in a range around the current
 // price with minimal liquidity.
-///
+//
 // With tick_spacing=20 (0.1% fee tier), this test demonstrates:
 // - Dust positions add overhead but spacing caps the damage
 // - Reports exact ledger footprint for capacity planning
-///
+//
 // Mainnet limits: 200 read_only + 200 read_write entries per tx.
 #[test]
 fn test_dust_griefing_tick_spacing_20() {

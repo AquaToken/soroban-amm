@@ -320,10 +320,10 @@ pub fn mul_div_fee_growth(
 }
 
 // Compute maximum liquidity mintable from a given amount of token0.
-///
+//
 // Inverse of amount0_delta:
 //   L = amount0 * sqrtA * sqrtB / (Q96 * (sqrtB - sqrtA))
-///
+//
 // Computed as: L = amount0 * mulDiv(sqrtA, sqrtB, Q96) / (sqrtB - sqrtA)
 // Uses U512 intermediates to avoid overflow.
 pub fn liquidity_for_amount0(
@@ -358,10 +358,10 @@ pub fn liquidity_for_amount0(
 }
 
 // Compute maximum liquidity mintable from a given amount of token1.
-///
+//
 // Inverse of amount1_delta:
 //   L = amount1 * Q96 / (sqrtB - sqrtA)
-///
+//
 // Uses U512 intermediate for amount1 * Q96 product (~224 bits).
 pub fn liquidity_for_amount1(
     e: &Env,
@@ -392,13 +392,13 @@ pub fn liquidity_for_amount1(
 }
 
 // Compute next sqrt price given token0 input/output amount.
-///
+//
 // When adding token0 (price decreases):
 //   sqrt_next = L * sqrt_current * Q96 / (L * Q96 + amount * sqrt_current)
-///
+//
 // When removing token0 (price increases):
 //   sqrt_next = L * sqrt_current * Q96 / (L * Q96 - amount * sqrt_current)
-///
+//
 // Uses U512 for the `amount * sqrt_current` product which can exceed 256 bits.
 pub fn get_next_sqrt_price_from_amount0(
     e: &Env,
@@ -479,13 +479,13 @@ pub fn get_next_sqrt_price_from_amount0(
 }
 
 // Compute next sqrt price given token1 input/output amount.
-///
+//
 // When adding token1 (price increases):
 //   sqrt_next = sqrt_current + amount * Q96 / L
-///
+//
 // When removing token1 (price decreases):
 //   sqrt_next = sqrt_current - amount * Q96 / L
-///
+//
 // Uses U512 for `amount * Q96` which can exceed 256 bits.
 pub fn get_next_sqrt_price_from_amount1(
     e: &Env,

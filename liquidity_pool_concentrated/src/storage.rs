@@ -284,7 +284,7 @@ impl ChunkCache {
         }
     }
 
-    /// Read-through: returns cached chunk or loads from storage (caching the result).
+    // Read-through: returns cached chunk or loads from storage (caching the result).
     pub fn get_chunk(&mut self, e: &Env, chunk_pos: i32) -> Option<Vec<TickData>> {
         if let Some(cached) = self.cache.get(chunk_pos) {
             return Some(cached);
@@ -296,7 +296,7 @@ impl ChunkCache {
         chunk
     }
 
-    /// Read-through with lazy allocation: returns cached/stored chunk, or creates an empty one.
+    // Read-through with lazy allocation: returns cached/stored chunk, or creates an empty one.
     pub fn get_or_create_chunk(&mut self, e: &Env, chunk_pos: i32) -> Vec<TickData> {
         if let Some(cached) = self.cache.get(chunk_pos) {
             return cached;
@@ -306,13 +306,13 @@ impl ChunkCache {
         chunk
     }
 
-    /// Write-back: updates chunk in cache and marks it dirty. Does NOT write to storage.
+    // Write-back: updates chunk in cache and marks it dirty. Does NOT write to storage.
     pub fn set_chunk(&mut self, chunk_pos: i32, chunk: &Vec<TickData>) {
         self.cache.set(chunk_pos, chunk.clone());
         self.dirty.set(chunk_pos, true);
     }
 
-    /// Read a single tick from cached chunk.
+    // Read a single tick from cached chunk.
     pub fn get_tick(&mut self, e: &Env, tick: i32, spacing: i32) -> TickInfo {
         let compressed = compress_tick_storage(tick, spacing);
         let (chunk_pos, slot) = chunk_address(compressed);
@@ -327,7 +327,7 @@ impl ChunkCache {
         }
     }
 
-    /// Persist all dirty chunks to storage.
+    // Persist all dirty chunks to storage.
     pub fn flush(&self, e: &Env) {
         for (chunk_pos, _) in self.dirty.iter() {
             if let Some(chunk) = self.cache.get(chunk_pos) {

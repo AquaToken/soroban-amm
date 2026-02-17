@@ -15,12 +15,12 @@ fn lo128(_e: &Env, a: &U256) -> U256 {
 }
 
 // Full 512-bit product of two U256 values using schoolbook multiplication.
-///
+//
 // Split each operand into two 128-bit halves:
 //   a = a_hi * 2^128 + a_lo,   b = b_hi * 2^128 + b_lo
-///
+//
 // Product = a_hi*b_hi * 2^256 + (a_hi*b_lo + a_lo*b_hi) * 2^128 + a_lo*b_lo
-///
+//
 // Each partial product fits in U256 since inputs are at most 128-bit.
 fn u256_full_mul(e: &Env, a: &U256, b: &U256) -> U512 {
     let a_lo = lo128(e, a);
@@ -60,10 +60,10 @@ fn u256_full_mul(e: &Env, a: &U256, b: &U256) -> U512 {
 }
 
 // Compute `floor(a * b / d)` or `ceil(a * b / d)` with 512-bit intermediate precision.
-///
+//
 // Uses schoolbook multiplication for the 512-bit product, then long division
 // processing the dividend in 64-bit chunks (8 iterations).
-///
+//
 // Panics if `d == 0`.
 pub fn mul_div_u256(e: &Env, a: &U256, b: &U256, d: &U256, round_up: bool) -> U256 {
     let zero = U256::from_u32(e, 0);
