@@ -431,31 +431,3 @@ fn test_claim_protocol_fees_permissions() {
         .try_claim_protocol_fees(&setup.operations_admin, &dest)
         .is_err());
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Initialize price permissions
-// ═══════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn test_initialize_price_permissions() {
-    let setup = Setup::default();
-    let user = Address::generate(&setup.env);
-    let price = soroban_sdk::U256::from_u128(&setup.env, 1u128 << 96);
-
-    // Operations admin or admin can set price
-    assert!(setup
-        .pool
-        .try_initialize_price(&setup.operations_admin, &price)
-        .is_ok());
-    assert!(setup
-        .pool
-        .try_initialize_price(&setup.admin, &price)
-        .is_ok());
-
-    // Others cannot
-    assert!(setup.pool.try_initialize_price(&user, &price).is_err());
-    assert!(setup
-        .pool
-        .try_initialize_price(&setup.rewards_admin, &price)
-        .is_err());
-}

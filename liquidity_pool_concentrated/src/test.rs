@@ -22,6 +22,26 @@ fn test_swap_empty_pool() {
 }
 
 #[test]
+fn test_auto_price_on_empty_pool() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(1_000_0000000, 2_000_0000000);
+
+    // Pool initialized at tick 0 (1:1), but first deposit with 1:2 ratio should auto-set price
+    let amounts = Vec::from_array(&setup.env, [1_000_0000000u128, 2_000_0000000u128]);
+    let (_actual, liq) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &setup.user, &-100, &100, &amounts);
+    assert!(liq > 0);
+
+    // Verify price was set based on ratio (not default 1:1)
+    let slot = setup.pool.slot0();
+    let tick = slot.tick;
+    // tick for price 2.0 ≈ 6931, should be positive for price > 1
+    assert!(tick > 0, "tick should be positive for price > 1");
+}
+
+#[test]
 fn test_router_happy_flow() {
     let setup = Setup::default();
     setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
@@ -130,22 +150,24 @@ fn test_public_deposit_position_updates_position_tick_and_bitmap() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
 
-    setup
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liquidity) = setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &1_0000000);
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts);
+    assert!(liquidity > 0);
 
     let position = setup.pool.get_position(&setup.user, &-10, &10);
-    assert_eq!(position.liquidity, 1_0000000);
+    assert_eq!(position.liquidity, liquidity);
     assert_eq!(position.tokens_owed_0, 0);
     assert_eq!(position.tokens_owed_1, 0);
 
     let lower = setup.pool.ticks(&-10);
-    assert_eq!(lower.liquidity_gross, 1_0000000);
-    assert_eq!(lower.liquidity_net, 1_0000000);
+    assert_eq!(lower.liquidity_gross, liquidity);
+    assert_eq!(lower.liquidity_net, liquidity as i128);
 
     let upper = setup.pool.ticks(&10);
-    assert_eq!(upper.liquidity_gross, 1_0000000);
-    assert_eq!(upper.liquidity_net, -1_0000000);
+    assert_eq!(upper.liquidity_gross, liquidity);
+    assert_eq!(upper.liquidity_net, -(liquidity as i128));
 
     let zero = U256::from_u32(&setup.env, 0);
     assert_ne!(setup.pool.chunk_bitmap(&-1), zero);
@@ -370,9 +392,10 @@ fn test_get_and_return_unused_reward() {
 fn test_deposit_position_tick_lower_gte_upper() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
+    let amounts = Vec::from_array(&setup.env, [10_0000000u128, 10_0000000u128]);
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &10, &10, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &10, &10, &amounts);
 }
 
 #[test]
@@ -380,9 +403,10 @@ fn test_deposit_position_tick_lower_gte_upper() {
 fn test_deposit_position_tick_lower_too_low() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
+    let amounts = Vec::from_array(&setup.env, [10_0000000u128, 10_0000000u128]);
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-887_273, &0, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &-887_273, &0, &amounts);
 }
 
 #[test]
@@ -390,9 +414,10 @@ fn test_deposit_position_tick_lower_too_low() {
 fn test_deposit_position_tick_upper_too_high() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
+    let amounts = Vec::from_array(&setup.env, [10_0000000u128, 10_0000000u128]);
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &0, &887_273, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &0, &887_273, &amounts);
 }
 
 #[test]
@@ -400,9 +425,10 @@ fn test_deposit_position_tick_upper_too_high() {
 fn test_deposit_position_zero_amount() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
+    let amounts = Vec::from_array(&setup.env, [0u128, 0u128]);
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &0);
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts);
 }
 
 #[test]
@@ -419,12 +445,13 @@ fn test_withdraw_position_not_found() {
 fn test_withdraw_position_insufficient_liquidity() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
+    let amounts = Vec::from_array(&setup.env, [10_0000000u128, 10_0000000u128]);
+    let (_, liquidity) = setup
+        .pool
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts);
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000);
-    setup
-        .pool
-        .withdraw_position(&setup.user, &-10, &10, &2_000_000);
+        .withdraw_position(&setup.user, &-10, &10, &(liquidity + 1));
 }
 
 #[test]
@@ -432,9 +459,10 @@ fn test_withdraw_position_insufficient_liquidity() {
 fn test_withdraw_position_zero_amount() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
+    let amounts = Vec::from_array(&setup.env, [10_0000000u128, 10_0000000u128]);
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts);
     setup.pool.withdraw_position(&setup.user, &-10, &10, &0);
 }
 
@@ -445,45 +473,18 @@ fn test_max_user_positions_exceeded() {
     setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
 
     // MAX_USER_POSITIONS = 20; create 20 positions then try a 21st
+    let amounts = Vec::from_array(&setup.env, [1_0000000u128, 1_0000000u128]);
     for i in 0..20u32 {
         let lower = -((i as i32 + 1) * 2);
         let upper = (i as i32 + 1) * 2;
         setup
             .pool
-            .deposit_position(&setup.user, &setup.user, &lower, &upper, &1_000);
+            .deposit_position(&setup.user, &setup.user, &lower, &upper, &amounts);
     }
     // 21st position should fail
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-100, &100, &1_000);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Error handling: initialize_price
-// ═══════════════════════════════════════════════════════════════════════════
-
-#[test]
-#[should_panic(expected = "Error(Contract, #2104)")]
-fn test_initialize_price_zero_sqrt() {
-    let setup = Setup::default();
-    setup
-        .pool
-        .initialize_price(&setup.admin, &U256::from_u32(&setup.env, 0));
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #201)")]
-fn test_initialize_price_with_active_liquidity() {
-    let setup = Setup::default();
-    setup.mint_user_tokens(100_0000000, 100_0000000);
-    setup.pool.deposit(
-        &setup.user,
-        &Vec::from_array(&setup.env, [10_0000000u128, 10_0000000u128]),
-        &0,
-    );
-    // Pool has liquidity — cannot change price
-    let new_price = U256::from_u128(&setup.env, 1u128 << 96);
-    setup.pool.initialize_price(&setup.admin, &new_price);
+        .deposit_position(&setup.user, &setup.user, &-100, &100, &amounts);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -534,9 +535,10 @@ fn test_deposit_position_below_price_token0_only() {
     // Deposit below current tick (0): only token0 needed
     // Current price at tick 0, deposit at range [10, 20] which is ABOVE tick 0
     // → only token0
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &10, &20, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &10, &20, &amounts);
 
     assert!(setup.token0.balance(&setup.user) < initial_0);
     assert_eq!(setup.token1.balance(&setup.user), initial_1);
@@ -551,9 +553,10 @@ fn test_deposit_position_above_price_token1_only() {
     let initial_1 = setup.token1.balance(&setup.user);
 
     // Deposit range entirely below current tick (0): only token1
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-20, &-10, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &-20, &-10, &amounts);
 
     assert_eq!(setup.token0.balance(&setup.user), initial_0);
     assert!(setup.token1.balance(&setup.user) < initial_1);
@@ -568,23 +571,26 @@ fn test_add_liquidity_to_existing_position() {
     let setup = Setup::default();
     setup.mint_user_tokens(200_0000000, 200_0000000);
 
-    setup
+    let amounts1 = Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]);
+    let (_, liq1) = setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts1);
     let pos = setup.pool.get_position(&setup.user, &-10, &10);
-    assert_eq!(pos.liquidity, 1_000_000);
+    assert_eq!(pos.liquidity, liq1);
 
     // Add more to the same range
-    setup
+    let amounts2 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq2) = setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &2_000_000);
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts2);
     let pos = setup.pool.get_position(&setup.user, &-10, &10);
-    assert_eq!(pos.liquidity, 3_000_000);
+    assert_eq!(pos.liquidity, liq1 + liq2);
 
     // Ticks should reflect total
+    let total_liq = liq1 + liq2;
     let lower = setup.pool.ticks(&-10);
-    assert_eq!(lower.liquidity_gross, 3_000_000);
-    assert_eq!(lower.liquidity_net, 3_000_000);
+    assert_eq!(lower.liquidity_gross, total_liq);
+    assert_eq!(lower.liquidity_net, total_liq as i128);
 }
 
 #[test]
@@ -592,21 +598,24 @@ fn test_partial_withdrawal_keeps_position() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
 
+    let amounts = Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]);
+    let (_, liquidity) = setup
+        .pool
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts);
+    let withdraw_amount = liquidity * 40 / 100; // ~40%
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000);
-    setup
-        .pool
-        .withdraw_position(&setup.user, &-10, &10, &400_000);
+        .withdraw_position(&setup.user, &-10, &10, &withdraw_amount);
 
+    let remaining = liquidity - withdraw_amount;
     let pos = setup.pool.get_position(&setup.user, &-10, &10);
-    assert_eq!(pos.liquidity, 600_000);
+    assert_eq!(pos.liquidity, remaining);
     // tokens_owed should have the withdrawn amounts
     assert!(pos.tokens_owed_0 > 0 || pos.tokens_owed_1 > 0);
 
     // Ticks still initialized
     let lower = setup.pool.ticks(&-10);
-    assert_eq!(lower.liquidity_gross, 600_000);
+    assert_eq!(lower.liquidity_gross, remaining);
 }
 
 #[test]
@@ -614,14 +623,15 @@ fn test_full_withdrawal_deletes_position_and_clears_ticks() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
 
-    setup
+    let amounts = Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]);
+    let (_, liquidity) = setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts);
 
     // Withdraw full amount
     setup
         .pool
-        .withdraw_position(&setup.user, &-10, &10, &1_000_000);
+        .withdraw_position(&setup.user, &-10, &10, &liquidity);
 
     // Claim owed tokens
     setup
@@ -654,9 +664,11 @@ fn test_position_accrues_fees_from_swaps() {
     setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
 
     // LP deposits position around current price
-    setup
-        .pool
-        .deposit_position(&setup.user, &setup.user, &-100, &100, &100_0000000);
+    let amounts = Vec::from_array(&setup.env, [500_0000000u128, 500_0000000u128]);
+    let (_, liquidity) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &setup.user, &-100, &100, &amounts);
 
     // Swapper trades through the position range
     let swapper = Address::generate(&setup.env);
@@ -670,7 +682,7 @@ fn test_position_accrues_fees_from_swaps() {
 
     setup
         .pool
-        .withdraw_position(&setup.user, &-100, &100, &100_0000000);
+        .withdraw_position(&setup.user, &-100, &100, &liquidity);
     setup.pool.claim_position_fees(
         &setup.user,
         &setup.user,
@@ -699,9 +711,11 @@ fn test_claim_position_fees_without_withdrawal() {
     let setup = Setup::default();
     setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
 
-    setup
-        .pool
-        .deposit_position(&setup.user, &setup.user, &-100, &100, &100_0000000);
+    let amounts = Vec::from_array(&setup.env, [500_0000000u128, 500_0000000u128]);
+    let (_, liquidity) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &setup.user, &-100, &100, &amounts);
 
     // Swap to generate fees
     let swapper = Address::generate(&setup.env);
@@ -723,7 +737,7 @@ fn test_claim_position_fees_without_withdrawal() {
 
     // Position still has liquidity
     let pos = setup.pool.get_position(&setup.user, &-100, &100);
-    assert_eq!(pos.liquidity, 100_0000000);
+    assert_eq!(pos.liquidity, liquidity);
 
     // User received fee tokens
     assert_eq!(
@@ -855,10 +869,11 @@ fn test_swap_crossing_multiple_ticks() {
     get_token_admin_client(&env, &token0.address).mint(&user, &1_000_0000000);
     get_token_admin_client(&env, &token1.address).mint(&user, &1_000_0000000);
 
-    // Stacked positions at different ranges
-    pool.deposit_position(&user, &user, &-50, &-10, &10_0000000);
-    pool.deposit_position(&user, &user, &-10, &10, &10_0000000);
-    pool.deposit_position(&user, &user, &10, &50, &10_0000000);
+    // Stacked positions at different ranges (small amounts to allow tick crossings)
+    let amounts = Vec::from_array(&env, [1_0000000u128, 1_0000000u128]);
+    pool.deposit_position(&user, &user, &-50, &-10, &amounts);
+    pool.deposit_position(&user, &user, &-10, &10, &amounts);
+    pool.deposit_position(&user, &user, &10, &50, &amounts);
 
     let slot_before = pool.slot0();
 
@@ -924,29 +939,6 @@ fn test_set_protocol_fee_fraction_too_high() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Admin: initialize price
-// ═══════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn test_initialize_price_changes_tick() {
-    let setup = Setup::default();
-
-    let slot_before = setup.pool.slot0();
-    assert_eq!(slot_before.tick, 0); // default initialization at tick 0
-
-    // Set price to tick ~100 (sqrt_ratio_at_tick(100))
-    // Price = 1.0001^100 ≈ 1.01005
-    // We can use a known sqrt_price for tick 100
-    // For simplicity, use any valid non-zero price
-    let new_price = U256::from_u128(&setup.env, (1u128 << 96) + (1u128 << 90));
-    setup.pool.initialize_price(&setup.admin, &new_price);
-
-    let slot_after = setup.pool.slot0();
-    assert_ne!(slot_after.tick, 0);
-    assert_eq!(slot_after.sqrt_price_x96, new_price);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Admin: kill/unkill swap and deposit
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -985,9 +977,10 @@ fn test_kill_unkill_deposit() {
     assert!(setup.pool.get_is_killed_deposit());
 
     // deposit_position should also be blocked
+    let amounts = Vec::from_array(&setup.env, [10_0000000u128, 10_0000000u128]);
     assert!(setup
         .pool
-        .try_deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000)
+        .try_deposit_position(&setup.user, &setup.user, &-10, &10, &amounts)
         .is_err());
 
     // Unkill deposit
@@ -995,7 +988,7 @@ fn test_kill_unkill_deposit() {
     assert!(!setup.pool.get_is_killed_deposit());
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1009,17 +1002,16 @@ fn test_estimate_working_balance() {
     get_token_admin_client(&setup.env, &setup.token0.address).mint(&user2, &1_000_0000000);
     get_token_admin_client(&setup.env, &setup.token1.address).mint(&user2, &1_000_0000000);
 
-    // In-range estimate (tick 0 is current price) → should have high working_balance
-    let (wb_in, ws_in) = setup
+    // Before any deposit: in-range estimate should be higher than out-of-range
+    let test_liq = 1_000_000u128;
+    let (wb_in, _) = setup
         .pool
-        .estimate_working_balance(&user2, &-100, &100, &1_000_000);
+        .estimate_working_balance(&user2, &-100, &100, &test_liq);
     assert!(wb_in > 0, "in-range estimate must be positive");
 
-    // Out-of-range estimate → should have lower working_balance due to distance decay
-    let (wb_out, ws_out) = setup
+    let (wb_out, _) = setup
         .pool
-        .estimate_working_balance(&user2, &500, &600, &1_000_000);
-
+        .estimate_working_balance(&user2, &500, &600, &test_liq);
     assert!(
         wb_in > wb_out,
         "in-range wb ({}) must be > out-of-range wb ({})",
@@ -1027,30 +1019,39 @@ fn test_estimate_working_balance() {
         wb_out
     );
 
-    // Actual deposit, then compare estimate vs reality
-    setup
+    // Deposit for user2
+    let dep_amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, dep_liq) = setup
         .pool
-        .deposit_position(&user2, &user2, &-100, &100, &1_000_000);
+        .deposit_position(&user2, &user2, &-100, &100, &dep_amounts);
 
     let info = setup.pool.get_rewards_info(&user2);
-    let actual_wb = info.get(Symbol::new(&setup.env, "working_balance")).unwrap() as u128;
+    let actual_wb = info
+        .get(Symbol::new(&setup.env, "working_balance"))
+        .unwrap() as u128;
     let actual_ws = info.get(Symbol::new(&setup.env, "working_supply")).unwrap() as u128;
+    assert!(
+        actual_wb > 0,
+        "working balance must be positive after deposit"
+    );
 
+    // Estimate with the deposited liquidity should match actual
+    let (wb_est, ws_est) = setup
+        .pool
+        .estimate_working_balance(&user2, &-100, &100, &dep_liq);
     assert_eq!(
-        wb_in, actual_wb,
+        wb_est, actual_wb,
         "estimated wb ({}) must match actual wb ({})",
-        wb_in, actual_wb
+        wb_est, actual_wb
     );
     assert_eq!(
-        ws_in, actual_ws,
+        ws_est, actual_ws,
         "estimated ws ({}) must match actual ws ({})",
-        ws_in, actual_ws
+        ws_est, actual_ws
     );
 
     // Withdrawal preview: new_liquidity=0 for existing position → wb should decrease
-    let (wb_zero, _) = setup
-        .pool
-        .estimate_working_balance(&user2, &-100, &100, &0);
+    let (wb_zero, _) = setup.pool.estimate_working_balance(&user2, &-100, &100, &0);
     assert!(
         wb_zero < actual_wb,
         "zero liquidity wb ({}) must be < actual wb ({})",
@@ -1073,16 +1074,18 @@ fn test_two_users_overlapping_positions() {
     get_token_admin_client(&setup.env, &setup.token1.address).mint(&user2, &500_0000000);
 
     // Both users deposit overlapping positions
-    setup
+    let amounts1 = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
+    let (_, liq1) = setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-50, &50, &50_0000000);
-    setup
+        .deposit_position(&setup.user, &setup.user, &-50, &50, &amounts1);
+    let amounts2 = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
+    let (_, liq2) = setup
         .pool
-        .deposit_position(&user2, &user2, &-20, &20, &50_0000000);
+        .deposit_position(&user2, &user2, &-20, &20, &amounts2);
 
     // Active liquidity should be sum of overlapping positions
     let active_liq = setup.pool.liquidity();
-    assert_eq!(active_liq, 100_0000000);
+    assert_eq!(active_liq, liq1 + liq2);
 
     // Swap generates fees for both
     let swapper = Address::generate(&setup.env);
@@ -1110,20 +1113,23 @@ fn test_multiple_positions_same_user() {
     setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
 
     // User creates multiple positions at different ranges
-    setup
+    let amounts1 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq1) = setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-100, &-50, &10_0000000);
-    setup
+        .deposit_position(&setup.user, &setup.user, &-100, &-50, &amounts1);
+    let amounts2 = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
+    let (_, liq2) = setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &20_0000000);
-    setup
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts2);
+    let amounts3 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq3) = setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &50, &100, &10_0000000);
+        .deposit_position(&setup.user, &setup.user, &50, &100, &amounts3);
 
     // User should have 3 ranges tracked
     let snapshot = setup.pool.get_user_position_snapshot(&setup.user);
     assert_eq!(snapshot.ranges.len(), 3);
-    assert_eq!(snapshot.raw_liquidity, 40_0000000);
+    assert_eq!(snapshot.raw_liquidity, liq1 + liq2 + liq3);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1559,7 +1565,8 @@ fn test_tick_not_spaced_correctly() {
     get_token_admin_client(&env, &token1.address).mint(&user, &100_0000000);
 
     // Ticks -5 and 5 are not aligned to spacing of 10
-    pool.deposit_position(&user, &user, &-5, &5, &1_000_000);
+    let amounts = Vec::from_array(&env, [10_0000000u128, 10_0000000u128]);
+    pool.deposit_position(&user, &user, &-5, &5, &amounts);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1571,11 +1578,13 @@ fn test_liquidity_amount_too_large() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
 
-    // amount > i128::MAX should fail with #2120
-    let huge_amount = (i128::MAX as u128) + 1;
-    let result = setup
-        .pool
-        .try_deposit_position(&setup.user, &setup.user, &-10, &10, &huge_amount);
+    // Passing huge desired amounts that would produce liquidity > i128::MAX
+    // should fail (either overflow or LiquidityAmountTooLarge)
+    let huge_amounts = Vec::from_array(&setup.env, [u128::MAX, u128::MAX]);
+    let result =
+        setup
+            .pool
+            .try_deposit_position(&setup.user, &setup.user, &-10, &10, &huge_amounts);
     assert!(result.is_err());
 }
 
@@ -1632,9 +1641,10 @@ fn test_deposit_position_killed() {
     setup.mint_user_tokens(100_0000000, 100_0000000);
     setup.pool.kill_deposit(&setup.admin);
     // deposit_position should also fail when deposit is killed
+    let amounts = Vec::from_array(&setup.env, [10_0000000u128, 10_0000000u128]);
     setup
         .pool
-        .deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000);
+        .deposit_position(&setup.user, &setup.user, &-10, &10, &amounts);
 }
 
 // Griefing scenario: attacker fills every tick with dust positions to increase
@@ -1705,7 +1715,6 @@ fn test_dust_griefing_tick_spacing_20() {
 
     // ---- Attacker: fill ticks with dust ----
     let dust_range: i32 = 300; // number of spacing steps on each side
-    let dust_liquidity: u128 = 1; // minimum possible
 
     // Attacker uses multiple accounts to bypass MAX_USER_POSITIONS (20)
     let mut total_dust_positions = 0u32;
@@ -1720,6 +1729,7 @@ fn test_dust_griefing_tick_spacing_20() {
         num_attackers
     );
 
+    let dust_amounts = Vec::from_array(&env, [1000u128, 1000u128]);
     for attacker_idx in 0..num_attackers {
         let attacker = Address::generate(&env);
         get_token_admin_client(&env, &token0.address).mint(&attacker, &1_0000000);
@@ -1740,7 +1750,7 @@ fn test_dust_griefing_tick_spacing_20() {
                 &attacker,
                 &tick_lower,
                 &tick_upper,
-                &dust_liquidity,
+                &dust_amounts,
             );
             total_dust_positions += 1;
         }
