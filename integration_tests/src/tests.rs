@@ -271,8 +271,7 @@ fn test_concentrated_pool_positions() {
     let token0_admin = get_token_admin_client(&setup.env, &token0.address);
     let token1_admin = get_token_admin_client(&setup.env, &token1.address);
 
-    let (conc_pool, _) =
-        setup.deploy_concentrated_pool(&token0.address, &token1.address, 30);
+    let (conc_pool, _) = setup.deploy_concentrated_pool(&token0.address, &token1.address, 30);
 
     // Deposit a narrow-range position
     let user = Address::generate(&setup.env);
@@ -293,18 +292,16 @@ fn test_concentrated_pool_positions() {
     conc_pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
     // Collect position fees
-    let (fee0, fee1) = conc_pool.claim_position_fees(
-        &user, &user, &-120, &120, &u128::MAX, &u128::MAX,
-    );
+    let (fee0, fee1) =
+        conc_pool.claim_position_fees(&user, &user, &-120, &120, &u128::MAX, &u128::MAX);
     assert!(fee0 > 0 || fee1 > 0, "should collect fees");
 
     // Withdraw position
     conc_pool.withdraw_position(&user, &-120, &120, &50_0000000);
 
     // Collect remaining owed tokens
-    let (owed0, owed1) = conc_pool.claim_position_fees(
-        &user, &user, &-120, &120, &u128::MAX, &u128::MAX,
-    );
+    let (owed0, owed1) =
+        conc_pool.claim_position_fees(&user, &user, &-120, &120, &u128::MAX, &u128::MAX);
     assert!(owed0 > 0 || owed1 > 0, "should collect withdrawn tokens");
 }
 
