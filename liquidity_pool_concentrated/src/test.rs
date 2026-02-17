@@ -1739,6 +1739,12 @@ fn test_dust_griefing_tick_spacing_20() {
         cost.write_entries,
         cost.disk_read_entries + cost.memory_read_entries
     );
+    std::println!(
+        "Bytes: disk_read={}, write={}, mem={}",
+        cost.disk_read_bytes,
+        cost.write_bytes,
+        cost.mem_bytes
+    );
 
     // ---- Reverse swap to restore price ----
     get_token_admin_client(&env, &token1.address).mint(&swapper, &(small_swap as i128));
@@ -1772,6 +1778,12 @@ fn test_dust_griefing_tick_spacing_20() {
         cost_large.write_entries,
         cost_large.disk_read_entries + cost_large.memory_read_entries
     );
+    std::println!(
+        "Bytes: disk_read={}, write={}, mem={}",
+        cost_large.disk_read_bytes,
+        cost_large.write_bytes,
+        cost_large.mem_bytes
+    );
 
     // ---- Extra large swap: ~10% price move ----
     let xlarge_swap: u128 = 100_000_0000000;
@@ -1799,10 +1811,18 @@ fn test_dust_griefing_tick_spacing_20() {
         cost_xlarge.write_entries,
         cost_xlarge.disk_read_entries + cost_xlarge.memory_read_entries
     );
+    std::println!(
+        "Bytes: disk_read={}, write={}, mem={}",
+        cost_xlarge.disk_read_bytes,
+        cost_xlarge.write_bytes,
+        cost_xlarge.mem_bytes
+    );
 
-    // Mainnet limits: 200 read_only + 200 read_write entries per tx
+    // Mainnet limits
     const RW_LIMIT: u32 = 200;
     const RO_LIMIT: u32 = 200;
+    const DISK_READ_BYTES_LIMIT: u32 = 200_000;
+    const WRITE_BYTES_LIMIT: u32 = 132_096;
 
     let ro_small = cost.disk_read_entries + cost.memory_read_entries;
     let ro_large = cost_large.disk_read_entries + cost_large.memory_read_entries;
@@ -1815,57 +1835,99 @@ fn test_dust_griefing_tick_spacing_20() {
     );
     std::println!("Dust positions: {}", total_dust_positions);
     std::println!("Whale liquidity: {}", liquidity_before);
-    std::println!("Mainnet limits: rw={}, ro={}", RW_LIMIT, RO_LIMIT);
     std::println!(
-        " ~1% move: {} crossings, rw={}/{} ro={}/{}",
+        "Mainnet limits: rw={}, ro={}, disk_read={}B, write={}B",
+        RW_LIMIT,
+        RO_LIMIT,
+        DISK_READ_BYTES_LIMIT,
+        WRITE_BYTES_LIMIT
+    );
+    std::println!(
+        " ~1% move: {} crossings, rw={}/{} ro={}/{}, disk_read={}/{} write={}/{}",
         ticks_crossed,
         cost.write_entries,
         RW_LIMIT,
         ro_small,
-        RO_LIMIT
+        RO_LIMIT,
+        cost.disk_read_bytes,
+        DISK_READ_BYTES_LIMIT,
+        cost.write_bytes,
+        WRITE_BYTES_LIMIT
     );
     std::println!(
-        " ~5% move: {} crossings, rw={}/{} ro={}/{}",
+        " ~5% move: {} crossings, rw={}/{} ro={}/{}, disk_read={}/{} write={}/{}",
         ticks_crossed_large,
         cost_large.write_entries,
         RW_LIMIT,
         ro_large,
-        RO_LIMIT
+        RO_LIMIT,
+        cost_large.disk_read_bytes,
+        DISK_READ_BYTES_LIMIT,
+        cost_large.write_bytes,
+        WRITE_BYTES_LIMIT
     );
     std::println!(
-        "~10% move: {} crossings, rw={}/{} ro={}/{}",
+        "~10% move: {} crossings, rw={}/{} ro={}/{}, disk_read={}/{} write={}/{}",
         ticks_crossed_xlarge,
         cost_xlarge.write_entries,
         RW_LIMIT,
         ro_xlarge,
-        RO_LIMIT
+        RO_LIMIT,
+        cost_xlarge.disk_read_bytes,
+        DISK_READ_BYTES_LIMIT,
+        cost_xlarge.write_bytes,
+        WRITE_BYTES_LIMIT
     );
 
     // Assert small and medium swaps fit within mainnet limits
     assert!(
-        cost.write_entries <= RW_LIMIT && ro_small <= RO_LIMIT,
-        "~1% swap exceeds mainnet limits: rw={}/{} ro={}/{}",
+        cost.write_entries <= RW_LIMIT
+            && ro_small <= RO_LIMIT
+            && cost.disk_read_bytes <= DISK_READ_BYTES_LIMIT
+            && cost.write_bytes <= WRITE_BYTES_LIMIT,
+        "~1% swap exceeds mainnet limits: rw={}/{} ro={}/{} disk_read={}/{} write={}/{}",
         cost.write_entries,
         RW_LIMIT,
         ro_small,
-        RO_LIMIT
+        RO_LIMIT,
+        cost.disk_read_bytes,
+        DISK_READ_BYTES_LIMIT,
+        cost.write_bytes,
+        WRITE_BYTES_LIMIT
     );
     assert!(
-        cost_large.write_entries <= RW_LIMIT && ro_large <= RO_LIMIT,
-        "~5% swap exceeds mainnet limits: rw={}/{} ro={}/{}",
+        cost_large.write_entries <= RW_LIMIT
+            && ro_large <= RO_LIMIT
+            && cost_large.disk_read_bytes <= DISK_READ_BYTES_LIMIT
+            && cost_large.write_bytes <= WRITE_BYTES_LIMIT,
+        "~5% swap exceeds mainnet limits: rw={}/{} ro={}/{} disk_read={}/{} write={}/{}",
         cost_large.write_entries,
         RW_LIMIT,
         ro_large,
-        RO_LIMIT
+        RO_LIMIT,
+        cost_large.disk_read_bytes,
+        DISK_READ_BYTES_LIMIT,
+        cost_large.write_bytes,
+        WRITE_BYTES_LIMIT
     );
     // ~10% move under worst-case griefing may exceed limits — that's the attack ceiling
     std::println!(
-        "\n~10% move fits mainnet? rw={} ro={}",
+        "\n~10% move fits mainnet? rw={} ro={} disk_read={} write={}",
         if cost_xlarge.write_entries <= RW_LIMIT {
             "YES"
         } else {
             "NO"
         },
         if ro_xlarge <= RO_LIMIT { "YES" } else { "NO" },
+        if cost_xlarge.disk_read_bytes <= DISK_READ_BYTES_LIMIT {
+            "YES"
+        } else {
+            "NO"
+        },
+        if cost_xlarge.write_bytes <= WRITE_BYTES_LIMIT {
+            "YES"
+        } else {
+            "NO"
+        },
     );
 }
