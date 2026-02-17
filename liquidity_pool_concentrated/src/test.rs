@@ -1785,6 +1785,12 @@ fn test_dust_griefing_tick_spacing_20() {
         cost_large.mem_bytes
     );
 
+    // ---- Reverse swap to restore price before ~10% test ----
+    get_token_admin_client(&env, &token1.address).mint(&swapper, &(large_swap as i128));
+    let out_back_large = pool.swap(&swapper, &1, &0, &large_swap, &0);
+    assert!(out_back_large > 0, "reverse swap must produce output");
+    let slot_mid2 = pool.slot0();
+
     // ---- Extra large swap: ~10% price move ----
     let xlarge_swap: u128 = 100_000_0000000;
     get_token_admin_client(&env, &token0.address).mint(&swapper, &(xlarge_swap as i128));
@@ -1793,7 +1799,7 @@ fn test_dust_griefing_tick_spacing_20() {
     let cost_xlarge = env.cost_estimate().resources();
 
     let slot_after_xlarge = pool.slot0();
-    let tick_delta_xlarge = (slot_after_xlarge.tick - slot_after_large.tick).abs();
+    let tick_delta_xlarge = (slot_after_xlarge.tick - slot_mid2.tick).abs();
     let ticks_crossed_xlarge = tick_delta_xlarge / tick_spacing;
 
     std::println!("--- Extra large swap (~10% move) ---");
@@ -1801,7 +1807,7 @@ fn test_dust_griefing_tick_spacing_20() {
     std::println!("Amount out: {}", out_xlarge);
     std::println!(
         "Price moved: tick {} → {} (delta={}, ~{} spacing crossings)",
-        slot_after_large.tick,
+        slot_mid2.tick,
         slot_after_xlarge.tick,
         tick_delta_xlarge,
         ticks_crossed_xlarge
