@@ -12,7 +12,6 @@ pub enum ConcentratedPoolError {
     DepositKilled = 205,
     SwapKilled = 206,
     ClaimKilled = 207,
-    PoolNotInitialized = 211,
     PositionNotFound = 212,
     InsufficientLiquidity = 213,
     LiquidityOverflow = 214,
