@@ -12,22 +12,23 @@ use crate::pool_interface::{
     ManagedLiquidityPool, RewardsTrait, UpgradeableContract,
 };
 use crate::storage::{
-    get_claim_killed, get_distance_weight_config, get_fee, get_fee_growth_global_0_x128,
-    get_fee_growth_global_1_x128, get_gauge_future_wasm, get_is_killed_deposit, get_is_killed_swap,
-    get_liquidity, get_plane, get_position, get_protocol_fee_fraction, get_protocol_fees,
-    get_router, get_slot0, get_tick, get_tick_bitmap_word, get_tick_spacing, get_token0,
-    get_token1, get_token_future_wasm, get_total_raw_liquidity, get_total_weighted_liquidity,
-    get_user_raw_liquidity, get_user_state, get_user_weighted_liquidity, remove_position,
-    set_claim_killed, set_distance_weight_config, set_fee, set_fee_growth_global_0_x128,
+    chunk_address, get_chunk_bitmap_word, get_claim_killed, get_distance_weight_config, get_fee,
+    get_fee_growth_global_0_x128, get_fee_growth_global_1_x128, get_gauge_future_wasm,
+    get_is_killed_deposit, get_is_killed_swap, get_liquidity, get_or_create_tick_chunk, get_plane,
+    get_position, get_protocol_fee_fraction, get_protocol_fees, get_router, get_slot0, get_tick,
+    get_tick_chunk, get_tick_spacing, get_token0, get_token1, get_token_future_wasm,
+    get_total_raw_liquidity, get_total_weighted_liquidity, get_user_raw_liquidity, get_user_state,
+    get_user_weighted_liquidity, remove_position, set_chunk_bitmap_word, set_claim_killed,
+    set_distance_weight_config, set_fee, set_fee_growth_global_0_x128,
     set_fee_growth_global_1_x128, set_gauge_future_wasm, set_is_killed_deposit, set_is_killed_swap,
     set_liquidity, set_plane, set_position, set_protocol_fee_fraction, set_protocol_fees,
-    set_router, set_slot0, set_tick, set_tick_bitmap_word, set_tick_spacing, set_token0,
-    set_token1, set_token_future_wasm, set_total_raw_liquidity, set_total_weighted_liquidity,
-    set_user_state, FEE_DENOMINATOR, MAX_TICK, MAX_USER_POSITIONS, MIN_TICK,
+    set_router, set_slot0, set_tick_chunk, set_tick_spacing, set_token0, set_token1,
+    set_token_future_wasm, set_total_raw_liquidity, set_total_weighted_liquidity, set_user_state,
+    ChunkCache, FEE_DENOMINATOR, MAX_TICK, MAX_USER_POSITIONS, MIN_TICK, TICKS_PER_CHUNK,
 };
 use crate::types::{
     PoolState, PoolStateWithBalances, PositionData, PositionRange, ProtocolFees, Slot0, SwapResult,
-    TickInfo, UserPositionSnapshot,
+    TickData, TickInfo, UserPositionSnapshot,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};

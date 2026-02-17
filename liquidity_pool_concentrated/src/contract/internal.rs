@@ -145,60 +145,143 @@ impl ConcentratedLiquidityPool {
         compressed
     }
 
-    pub(super) fn position(compressed_tick: i32) -> (i32, u32) {
-        let word_pos = compressed_tick >> 8;
-        let bit_pos = (compressed_tick & 255) as u32;
+    // Chunk bitmap addressing: 1 bit per chunk.
+    pub(super) fn chunk_bitmap_position(chunk_pos: i32) -> (i32, u32) {
+        let word_pos = chunk_pos >> 8;
+        let bit_pos = (chunk_pos & 255) as u32;
         (word_pos, bit_pos)
     }
 
-    pub(super) fn set_tick_bitmap_bit(e: &Env, tick_idx: i32, spacing: i32, initialized: bool) {
-        let compressed = Self::compress_tick(tick_idx, spacing);
-        let (word_pos, bit_pos) = Self::position(compressed);
-
-        let mut word = Self::u256_to_array(&get_tick_bitmap_word(e, word_pos));
-        Self::set_bit(&mut word, bit_pos, initialized);
-        set_tick_bitmap_word(e, word_pos, &Self::u256_from_array(e, &word));
+    pub(super) fn update_chunk_bitmap_bit(e: &Env, chunk_pos: i32, has_initialized: bool) {
+        let (word_pos, bit_pos) = Self::chunk_bitmap_position(chunk_pos);
+        let mut word = Self::u256_to_array(&get_chunk_bitmap_word(e, word_pos));
+        Self::set_bit(&mut word, bit_pos, has_initialized);
+        set_chunk_bitmap_word(e, word_pos, &Self::u256_from_array(e, &word));
     }
 
+    // Check if any tick in a chunk is initialized (liquidity_gross > 0).
+    fn chunk_has_initialized(chunk: &Vec<TickData>) -> bool {
+        for i in 0..TICKS_PER_CHUNK as u32 {
+            if chunk.get(i).unwrap().2 > 0 {
+                return true;
+            }
+        }
+        false
+    }
+
+    // Scan a loaded chunk for the highest (last) initialized tick. Returns slot index.
+    fn scan_chunk_highest_init(chunk: &Vec<TickData>) -> Option<u32> {
+        for s in (0..TICKS_PER_CHUNK as u32).rev() {
+            if chunk.get(s).unwrap().2 > 0 {
+                return Some(s);
+            }
+        }
+        None
+    }
+
+    // Scan a loaded chunk for the lowest (first) initialized tick. Returns slot index.
+    fn scan_chunk_lowest_init(chunk: &Vec<TickData>) -> Option<u32> {
+        for s in 0..TICKS_PER_CHUNK as u32 {
+            if chunk.get(s).unwrap().2 > 0 {
+                return Some(s);
+            }
+        }
+        None
+    }
+
+    fn clamp_tick(tick: i32) -> i32 {
+        tick.max(MIN_TICK).min(MAX_TICK)
+    }
+
+    fn compressed_to_tick(compressed: i32, spacing: i32) -> i32 {
+        Self::clamp_tick(compressed.saturating_mul(spacing))
+    }
+
+    // Two-level search: scan within current chunk, then across chunks via chunk bitmap.
+    // Returns (next_tick, initialized) — same contract as the old find_initialized_tick_in_word.
     pub(super) fn find_initialized_tick_in_word(
         e: &Env,
         tick: i32,
         spacing: i32,
         lte: bool,
+        cc: &mut ChunkCache,
     ) -> (i32, bool) {
         let compressed = Self::compress_tick(tick, spacing);
 
-        let (next_compressed, initialized) = if lte {
-            let (word_pos, bit_pos) = Self::position(compressed);
-            let word = Self::u256_to_array(&get_tick_bitmap_word(e, word_pos));
+        if lte {
+            // --- Scanning downward ---
+            let (chunk_pos, slot) = chunk_address(compressed);
 
-            if let Some(msb) = Self::find_prev_set_bit(&word, bit_pos) {
-                ((word_pos << 8) + msb as i32, true)
-            } else {
-                (word_pos << 8, false)
+            // 1. Check current chunk: scan slots [0..=slot] downward
+            if let Some(chunk) = cc.get_chunk(e, chunk_pos) {
+                for s in (0..=slot).rev() {
+                    if chunk.get(s).unwrap().2 > 0 {
+                        let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
+                        return (Self::compressed_to_tick(found_compressed, spacing), true);
+                    }
+                }
             }
+
+            // 2. Use chunk bitmap to find previous chunk with initialized ticks
+            let (bm_word_pos, bm_bit_pos) = Self::chunk_bitmap_position(chunk_pos);
+            let word = Self::u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
+
+            // Search for set bit below current chunk in this bitmap word
+            if bm_bit_pos > 0 {
+                if let Some(found_bit) = Self::find_prev_set_bit(&word, bm_bit_pos - 1) {
+                    let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
+                    let chunk = cc.get_or_create_chunk(e, found_chunk_pos);
+                    if let Some(s) = Self::scan_chunk_highest_init(&chunk) {
+                        let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                        return (Self::compressed_to_tick(found_compressed, spacing), true);
+                    }
+                }
+            }
+
+            // Not found in this bitmap word — return boundary
+            let boundary_compressed = (bm_word_pos << 8) * TICKS_PER_CHUNK;
+            (
+                Self::compressed_to_tick(boundary_compressed, spacing),
+                false,
+            )
         } else {
+            // --- Scanning upward ---
             let compressed_plus_one = compressed.saturating_add(1);
-            let (word_pos, bit_pos) = Self::position(compressed_plus_one);
-            let word = Self::u256_to_array(&get_tick_bitmap_word(e, word_pos));
+            let (chunk_pos, slot) = chunk_address(compressed_plus_one);
 
-            if let Some(lsb) = Self::find_next_set_bit(&word, bit_pos) {
-                ((word_pos << 8) + lsb as i32, true)
-            } else {
-                ((word_pos << 8) + 255, false)
+            // 1. Check current chunk: scan slots [slot..TICKS_PER_CHUNK) upward
+            if let Some(chunk) = cc.get_chunk(e, chunk_pos) {
+                for s in slot..TICKS_PER_CHUNK as u32 {
+                    if chunk.get(s).unwrap().2 > 0 {
+                        let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
+                        return (Self::compressed_to_tick(found_compressed, spacing), true);
+                    }
+                }
             }
-        };
 
-        let next_tick = next_compressed.saturating_mul(spacing);
-        let next_tick = if next_tick < MIN_TICK {
-            MIN_TICK
-        } else if next_tick > MAX_TICK {
-            MAX_TICK
-        } else {
-            next_tick
-        };
+            // 2. Use chunk bitmap to find next chunk with initialized ticks
+            let (bm_word_pos, bm_bit_pos) = Self::chunk_bitmap_position(chunk_pos);
+            let word = Self::u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
 
-        (next_tick, initialized)
+            if bm_bit_pos < 255 {
+                if let Some(found_bit) = Self::find_next_set_bit(&word, bm_bit_pos + 1) {
+                    let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
+                    let chunk = cc.get_or_create_chunk(e, found_chunk_pos);
+                    if let Some(s) = Self::scan_chunk_lowest_init(&chunk) {
+                        let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                        return (Self::compressed_to_tick(found_compressed, spacing), true);
+                    }
+                }
+            }
+
+            // Not found — return boundary at end of current bitmap word
+            let boundary_compressed =
+                ((bm_word_pos << 8) + 255) * TICKS_PER_CHUNK + (TICKS_PER_CHUNK - 1);
+            (
+                Self::compressed_to_tick(boundary_compressed, spacing),
+                false,
+            )
+        }
     }
 
     pub(super) fn update_tick_liquidity(
@@ -207,7 +290,14 @@ impl ConcentratedLiquidityPool {
         liquidity_delta: i128,
         is_upper: bool,
     ) -> Result<(), Error> {
-        let mut tick = get_tick(e, tick_idx);
+        let spacing = get_tick_spacing(e);
+        let compressed = Self::compress_tick(tick_idx, spacing);
+        let (chunk_pos, slot_idx) = chunk_address(compressed);
+
+        let mut chunk = get_or_create_tick_chunk(e, chunk_pos);
+        let td = chunk.get(slot_idx).unwrap();
+        let mut tick = TickInfo::from(td);
+
         let was_initialized = tick.liquidity_gross > 0;
 
         let delta = Self::abs_i128(liquidity_delta);
@@ -229,17 +319,36 @@ impl ConcentratedLiquidityPool {
         let is_initialized = tick.liquidity_gross > 0;
 
         if !was_initialized && is_initialized {
-            let slot = get_slot0(e);
-            if tick_idx <= slot.tick {
+            let slot0 = get_slot0(e);
+            if tick_idx <= slot0.tick {
                 tick.fee_growth_outside_0_x128 = get_fee_growth_global_0_x128(e);
                 tick.fee_growth_outside_1_x128 = get_fee_growth_global_1_x128(e);
             }
-            Self::set_tick_bitmap_bit(e, tick_idx, get_tick_spacing(e), true);
-        } else if was_initialized && !is_initialized {
-            Self::set_tick_bitmap_bit(e, tick_idx, get_tick_spacing(e), false);
         }
 
-        set_tick(e, tick_idx, &tick);
+        // Write tick back into chunk
+        chunk.set(
+            slot_idx,
+            TickData(
+                tick.fee_growth_outside_0_x128,
+                tick.fee_growth_outside_1_x128,
+                tick.liquidity_gross,
+                tick.liquidity_net,
+            ),
+        );
+        set_tick_chunk(e, chunk_pos, &chunk);
+
+        // Update chunk bitmap on initialization state change
+        if !was_initialized && is_initialized {
+            Self::update_chunk_bitmap_bit(e, chunk_pos, true);
+        } else if was_initialized && !is_initialized {
+            // Scan chunk to see if any tick remains initialized
+            let any_init = Self::chunk_has_initialized(&chunk);
+            if !any_init {
+                Self::update_chunk_bitmap_bit(e, chunk_pos, false);
+            }
+        }
+
         Ok(())
     }
 
@@ -380,8 +489,9 @@ impl ConcentratedLiquidityPool {
         let fee_growth_global_0 = get_fee_growth_global_0_x128(e);
         let fee_growth_global_1 = get_fee_growth_global_1_x128(e);
 
-        let lower = get_tick(e, tick_lower);
-        let upper = get_tick(e, tick_upper);
+        let spacing = get_tick_spacing(e);
+        let lower = get_tick(e, tick_lower, spacing);
+        let upper = get_tick(e, tick_upper, spacing);
 
         let fee_growth_below_0 = if tick_current >= tick_lower {
             lower.fee_growth_outside_0_x128
@@ -517,8 +627,15 @@ impl ConcentratedLiquidityPool {
         Ok((amount0, amount1))
     }
 
-    pub(super) fn cross_tick(e: &Env, tick_idx: i32) -> i128 {
-        let mut tick = get_tick(e, tick_idx);
+    pub(super) fn cross_tick(e: &Env, tick_idx: i32, cc: &mut ChunkCache) -> i128 {
+        let spacing = get_tick_spacing(e);
+        let compressed = Self::compress_tick(tick_idx, spacing);
+        let (chunk_pos, slot_idx) = chunk_address(compressed);
+
+        let mut chunk = cc.get_or_create_chunk(e, chunk_pos);
+        let td = chunk.get(slot_idx).unwrap();
+        let mut tick = TickInfo::from(td);
+
         let fee_growth_global_0 = get_fee_growth_global_0_x128(e);
         let fee_growth_global_1 = get_fee_growth_global_1_x128(e);
 
@@ -528,7 +645,18 @@ impl ConcentratedLiquidityPool {
             wrapping_sub_u256(e, &fee_growth_global_1, &tick.fee_growth_outside_1_x128);
 
         let liquidity_net = tick.liquidity_net;
-        set_tick(e, tick_idx, &tick);
+
+        chunk.set(
+            slot_idx,
+            TickData(
+                tick.fee_growth_outside_0_x128,
+                tick.fee_growth_outside_1_x128,
+                tick.liquidity_gross,
+                tick.liquidity_net,
+            ),
+        );
+        cc.set_chunk(chunk_pos, &chunk);
+
         liquidity_net
     }
 
@@ -840,14 +968,20 @@ impl ConcentratedLiquidityPool {
         let mut amount_remaining = Self::abs_i128(amount_specified);
         let mut amount_calculated: u128 = 0;
         let tick_spacing = get_tick_spacing(e);
+        let mut cc = ChunkCache::new(e);
 
         while amount_remaining > 0 && slot.sqrt_price_x96 != price_limit {
             if liquidity == 0 {
                 break;
             }
 
-            let (next_tick, next_tick_initialized) =
-                Self::find_initialized_tick_in_word(e, slot.tick, tick_spacing, zero_for_one);
+            let (next_tick, next_tick_initialized) = Self::find_initialized_tick_in_word(
+                e,
+                slot.tick,
+                tick_spacing,
+                zero_for_one,
+                &mut cc,
+            );
             let next_tick_price = sqrt_ratio_at_tick(e, next_tick)?;
 
             let sqrt_target = if zero_for_one {
@@ -908,7 +1042,7 @@ impl ConcentratedLiquidityPool {
 
             if slot.sqrt_price_x96 == sqrt_target {
                 if next_tick_initialized {
-                    let mut liquidity_net = get_tick(e, next_tick).liquidity_net;
+                    let mut liquidity_net = cc.get_tick(e, next_tick, tick_spacing).liquidity_net;
                     if zero_for_one {
                         liquidity_net = -liquidity_net;
                     }
@@ -990,14 +1124,20 @@ impl ConcentratedLiquidityPool {
         let mut amount_calculated: u128 = 0;
         let mut total_fee_amount: u128 = 0;
         let tick_spacing = get_tick_spacing(e);
+        let mut cc = ChunkCache::new(e);
 
         while amount_remaining > 0 && slot.sqrt_price_x96 != price_limit {
             if liquidity == 0 {
                 break;
             }
 
-            let (next_tick, next_tick_initialized) =
-                Self::find_initialized_tick_in_word(e, slot.tick, tick_spacing, zero_for_one);
+            let (next_tick, next_tick_initialized) = Self::find_initialized_tick_in_word(
+                e,
+                slot.tick,
+                tick_spacing,
+                zero_for_one,
+                &mut cc,
+            );
             let next_tick_price = sqrt_ratio_at_tick(e, next_tick)?;
 
             let sqrt_target = if zero_for_one {
@@ -1070,7 +1210,7 @@ impl ConcentratedLiquidityPool {
 
             if slot.sqrt_price_x96 == sqrt_target {
                 if next_tick_initialized {
-                    let mut liquidity_net = Self::cross_tick(e, next_tick);
+                    let mut liquidity_net = Self::cross_tick(e, next_tick, &mut cc);
                     if zero_for_one {
                         liquidity_net = -liquidity_net;
                     }
@@ -1095,6 +1235,8 @@ impl ConcentratedLiquidityPool {
                 slot.tick = tick_at_sqrt_ratio(e, &slot.sqrt_price_x96)?;
             }
         }
+
+        cc.flush(e);
 
         if !exact_input && amount_remaining > 0 {
             return Err(Error::InsufficientLiquidity);

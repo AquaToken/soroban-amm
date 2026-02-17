@@ -148,8 +148,8 @@ fn test_public_deposit_position_updates_position_tick_and_bitmap() {
     assert_eq!(upper.liquidity_net, -1_0000000);
 
     let zero = U256::from_u32(&setup.env, 0);
-    assert_ne!(setup.pool.tick_bitmap(&-1), zero);
-    assert_ne!(setup.pool.tick_bitmap(&0), zero);
+    assert_ne!(setup.pool.chunk_bitmap(&-1), zero);
+    assert_ne!(setup.pool.chunk_bitmap(&0), zero);
 }
 
 #[test]
@@ -640,8 +640,8 @@ fn test_full_withdrawal_deletes_position_and_clears_ticks() {
 
     // Bitmap should be cleared
     let zero = U256::from_u32(&setup.env, 0);
-    assert_eq!(setup.pool.tick_bitmap(&-1), zero);
-    assert_eq!(setup.pool.tick_bitmap(&0), zero);
+    assert_eq!(setup.pool.chunk_bitmap(&-1), zero);
+    assert_eq!(setup.pool.chunk_bitmap(&0), zero);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

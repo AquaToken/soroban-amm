@@ -6,8 +6,9 @@ pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
 use crate::math::{amount0_delta, amount1_delta, sqrt_ratio_at_tick};
 use crate::storage::{
-    get_fee, get_liquidity, get_plane, get_protocol_fees, get_slot0, get_tick,
-    get_tick_bitmap_word, get_tick_spacing, get_token0, get_token1, MAX_TICK, MIN_TICK,
+    chunk_address, get_chunk_bitmap_word, get_fee, get_liquidity, get_plane, get_protocol_fees,
+    get_slot0, get_tick_spacing, get_token0, get_token1, ChunkCache, MAX_TICK, MIN_TICK,
+    TICKS_PER_CHUNK,
 };
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{Env, Symbol, Vec, U256};
@@ -53,10 +54,19 @@ fn u256_to_array(v: &U256) -> [u8; 32] {
     out
 }
 
-fn position(compressed_tick: i32) -> (i32, u32) {
-    let word_pos = compressed_tick >> 8;
-    let bit_pos = (compressed_tick & 255) as u32;
+// Chunk bitmap addressing: 1 bit per chunk_pos.
+fn chunk_bitmap_position(chunk_pos: i32) -> (i32, u32) {
+    let word_pos = chunk_pos >> 8;
+    let bit_pos = (chunk_pos & 255) as u32;
     (word_pos, bit_pos)
+}
+
+fn clamp_tick(tick: i32) -> i32 {
+    tick.max(MIN_TICK).min(MAX_TICK)
+}
+
+fn compressed_to_tick(compressed: i32, spacing: i32) -> i32 {
+    clamp_tick(compressed.saturating_mul(spacing))
 }
 
 fn find_prev_set_bit(word: &[u8; 32], from_bit: u32) -> Option<u32> {
@@ -105,91 +115,110 @@ fn find_next_set_bit(word: &[u8; 32], from_bit: u32) -> Option<u32> {
     None
 }
 
-/// Find the next initialized tick using cross-word bitmap scanning.
-/// For zero_for_one (lte): scans from `compressed` downward toward `limit_compressed`.
-/// For one_for_zero (!lte): scans from `compressed + 1` upward toward `limit_compressed`.
-/// Returns (initialized_tick, found) or None if no initialized tick within range.
+// Two-level chunk-based tick search.
+// For lte (zero_for_one): scans from `compressed` downward toward `limit_compressed`.
+// For !lte (one_for_zero): scans from `compressed + 1` upward toward `limit_compressed`.
+// Returns (tick, liquidity_net) of the first initialized tick found, or None.
+// Since the chunk is already loaded during the search, liquidity_net is returned directly
+// to avoid a redundant storage read.
 fn find_initialized_tick(
     e: &Env,
     compressed: i32,
     limit_compressed: i32,
     spacing: i32,
     lte: bool,
-) -> Option<i32> {
+    cc: &mut ChunkCache,
+) -> Option<(i32, i128)> {
     if lte {
-        // Scan downward: from `compressed` toward `limit_compressed`
-        let (mut word_pos, bit_pos) = position(compressed);
-        let (limit_word_pos, _) = position(limit_compressed);
+        // --- Scanning downward ---
+        let (chunk_pos, slot) = chunk_address(compressed);
 
-        // First (partial) word
-        let word = u256_to_array(&get_tick_bitmap_word(e, word_pos));
-        if let Some(msb) = find_prev_set_bit(&word, bit_pos) {
-            let found_compressed = (word_pos << 8) + msb as i32;
-            if found_compressed >= limit_compressed {
-                let tick = found_compressed.saturating_mul(spacing);
-                return Some(tick.max(MIN_TICK));
+        // 1. Check current chunk: scan slots [0..=slot] downward
+        if let Some(chunk) = cc.get_chunk(e, chunk_pos) {
+            for s in (0..=slot).rev() {
+                let td = chunk.get(s).unwrap();
+                if td.2 > 0 {
+                    let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
+                    if found_compressed >= limit_compressed {
+                        return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                    }
+                }
             }
         }
 
-        // Subsequent full words
-        word_pos -= 1;
-        while word_pos >= limit_word_pos {
-            let word = u256_to_array(&get_tick_bitmap_word(e, word_pos));
-            if let Some(msb) = find_prev_set_bit(&word, 255) {
-                let found_compressed = (word_pos << 8) + msb as i32;
-                if found_compressed >= limit_compressed {
-                    let tick = found_compressed.saturating_mul(spacing);
-                    return Some(tick.max(MIN_TICK));
+        // 2. Use chunk bitmap to find previous chunk with initialized ticks
+        let (bm_word_pos, bm_bit_pos) = chunk_bitmap_position(chunk_pos);
+        let word = u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
+
+        if bm_bit_pos > 0 {
+            if let Some(found_bit) = find_prev_set_bit(&word, bm_bit_pos - 1) {
+                let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in (0..TICKS_PER_CHUNK as u32).rev() {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed >= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
+                        }
+                    }
                 }
-                return None;
             }
-            word_pos -= 1;
         }
 
         None
     } else {
-        // Scan upward: from `compressed + 1` toward `limit_compressed`
+        // --- Scanning upward ---
         let start_compressed = compressed.saturating_add(1);
-        let (mut word_pos, bit_pos) = position(start_compressed);
-        let (limit_word_pos, _) = position(limit_compressed);
+        let (chunk_pos, slot) = chunk_address(start_compressed);
 
-        // First (partial) word
-        let word = u256_to_array(&get_tick_bitmap_word(e, word_pos));
-        if let Some(lsb) = find_next_set_bit(&word, bit_pos) {
-            let found_compressed = (word_pos << 8) + lsb as i32;
-            if found_compressed <= limit_compressed {
-                let tick = found_compressed.saturating_mul(spacing);
-                return Some(tick.min(MAX_TICK));
+        // 1. Check current chunk: scan slots [slot..TICKS_PER_CHUNK) upward
+        if let Some(chunk) = cc.get_chunk(e, chunk_pos) {
+            for s in slot..TICKS_PER_CHUNK as u32 {
+                let td = chunk.get(s).unwrap();
+                if td.2 > 0 {
+                    let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
+                    if found_compressed <= limit_compressed {
+                        return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                    }
+                }
             }
         }
 
-        // Subsequent full words
-        word_pos += 1;
-        while word_pos <= limit_word_pos {
-            let word = u256_to_array(&get_tick_bitmap_word(e, word_pos));
-            if let Some(lsb) = find_next_set_bit(&word, 0) {
-                let found_compressed = (word_pos << 8) + lsb as i32;
-                if found_compressed <= limit_compressed {
-                    let tick = found_compressed.saturating_mul(spacing);
-                    return Some(tick.min(MAX_TICK));
+        // 2. Use chunk bitmap to find next chunk with initialized ticks
+        let (bm_word_pos, bm_bit_pos) = chunk_bitmap_position(chunk_pos);
+        let word = u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
+
+        if bm_bit_pos < 255 {
+            if let Some(found_bit) = find_next_set_bit(&word, bm_bit_pos + 1) {
+                let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in 0..TICKS_PER_CHUNK as u32 {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed <= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
+                        }
+                    }
                 }
-                return None;
             }
-            word_pos += 1;
         }
 
         None
     }
 }
 
-/// Cumulative boundary count at step `i`: triangular number (i+1)*(i+2)/2.
-/// Step 0: 1, Step 1: 3, Step 2: 6, ..., Step 19: 210.
+// Cumulative boundary count at step `i`: triangular number (i+1)*(i+2)/2.
+// Step 0: 1, Step 1: 3, Step 2: 6, ..., Step 19: 210.
 fn step_target(step: u32) -> i32 {
     (((step + 1) * (step + 2)) / 2) as i32
 }
 
-/// Compute amounts between two sqrt prices at given liquidity.
-/// Returns (amount_in, amount_out).
+// Compute amounts between two sqrt prices at given liquidity.
+// Returns (amount_in, amount_out).
 fn compute_amounts(
     e: &Env,
     sqrt_a: &U256,
@@ -235,6 +264,7 @@ fn collect_exact_direction_steps(
     let mut sqrt_cursor = slot.sqrt_price_x96;
     let mut liquidity = get_liquidity(e);
     let mut exhausted = false;
+    let mut cc = ChunkCache::new(e);
 
     // Track the compressed tick of the cursor for bitmap scanning.
     // For zero_for_one, cursor starts at compressed_current and moves down.
@@ -295,16 +325,17 @@ fn collect_exact_direction_steps(
         loop {
             let limit_compressed = target_compressed;
 
-            let maybe_init_tick = find_initialized_tick(
+            let maybe_init = find_initialized_tick(
                 e,
                 cursor_compressed,
                 limit_compressed,
                 spacing,
                 zero_for_one,
+                &mut cc,
             );
 
-            let init_tick_in_range = match maybe_init_tick {
-                Some(tick) => {
+            let init_in_range = match maybe_init {
+                Some((tick, _)) => {
                     if zero_for_one {
                         tick >= target_tick
                     } else {
@@ -314,8 +345,8 @@ fn collect_exact_direction_steps(
                 None => false,
             };
 
-            if init_tick_in_range {
-                let init_tick = maybe_init_tick.unwrap();
+            if init_in_range {
+                let (init_tick, liquidity_net) = maybe_init.unwrap();
                 let sqrt_init = match sqrt_ratio_at_tick(e, init_tick) {
                     Ok(v) => v,
                     Err(_) => break,
@@ -327,9 +358,8 @@ fn collect_exact_direction_steps(
                 step_in = step_in.saturating_add(amt_in);
                 step_out = step_out.saturating_add(amt_out);
 
-                // Cross the tick: apply liquidity delta
-                let tick_info = get_tick(e, init_tick);
-                liquidity = apply_liquidity_net(liquidity, tick_info.liquidity_net, zero_for_one);
+                // Cross the tick: apply liquidity delta returned by find_initialized_tick
+                liquidity = apply_liquidity_net(liquidity, liquidity_net, zero_for_one);
                 sqrt_cursor = sqrt_init;
                 cursor_compressed = compress_tick(init_tick, spacing);
 

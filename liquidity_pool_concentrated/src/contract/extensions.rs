@@ -299,10 +299,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         get_tick_spacing(&e)
     }
 
-    // Bitmap word for tick scanning. Each bit represents an initialized tick.
-    // word_pos = tick / (tick_spacing * 256).
-    fn tick_bitmap(e: Env, word_pos: i32) -> U256 {
-        get_tick_bitmap_word(&e, word_pos)
+    // Chunk bitmap word. Each bit represents a chunk that has at least one initialized tick.
+    // word_pos = chunk_pos >> 8.
+    fn chunk_bitmap(e: Env, word_pos: i32) -> U256 {
+        get_chunk_bitmap_word(&e, word_pos)
     }
 
     // Active liquidity — sum of all positions whose range contains current tick.
@@ -326,9 +326,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         get_protocol_fees(&e)
     }
 
-    // Tick state (storage uses tuple encoding, converted to TickInfo at accessor boundary).
+    // Tick state (stored in chunks, converted to TickInfo at accessor boundary).
     fn ticks(e: Env, tick: i32) -> TickInfo {
-        get_tick(&e, tick)
+        get_tick(&e, tick, get_tick_spacing(&e))
     }
 
     // Returns position data for a specific owner + tick range.
@@ -389,20 +389,21 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         get_total_raw_liquidity(&e)
     }
 
-    // Batch-fetch bitmap words for frontend tick scanning.
-    fn get_tick_bitmap_batch(e: Env, start_word: i32, count: u32) -> Vec<U256> {
+    // Batch-fetch chunk bitmap words for frontend scanning.
+    fn get_chunk_bitmap_batch(e: Env, start_word: i32, count: u32) -> Vec<U256> {
         let mut result = Vec::new(&e);
         for i in 0..count {
-            result.push_back(get_tick_bitmap_word(&e, start_word + i as i32));
+            result.push_back(get_chunk_bitmap_word(&e, start_word + i as i32));
         }
         result
     }
 
     // Batch-fetch tick data for multiple tick indexes.
     fn get_ticks_batch(e: Env, ticks: Vec<i32>) -> Vec<TickInfo> {
+        let spacing = get_tick_spacing(&e);
         let mut result = Vec::new(&e);
         for i in 0..ticks.len() {
-            result.push_back(get_tick(&e, ticks.get(i).unwrap()));
+            result.push_back(get_tick(&e, ticks.get(i).unwrap(), spacing));
         }
         result
     }

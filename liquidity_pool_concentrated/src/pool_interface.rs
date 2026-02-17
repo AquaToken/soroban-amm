@@ -204,7 +204,7 @@ pub trait ConcentratedPoolExtensionsTrait {
     fn token1(e: Env) -> Address;
     fn fee(e: Env) -> u32;
     fn tick_spacing(e: Env) -> i32;
-    fn tick_bitmap(e: Env, word_pos: i32) -> U256;
+    fn chunk_bitmap(e: Env, word_pos: i32) -> U256;
     fn liquidity(e: Env) -> u128;
     fn fee_growth_global_0_x128(e: Env) -> U256;
     fn fee_growth_global_1_x128(e: Env) -> U256;
@@ -217,8 +217,8 @@ pub trait ConcentratedPoolExtensionsTrait {
     fn get_total_weighted_liquidity(e: Env) -> u128;
     fn get_total_raw_liquidity(e: Env) -> u128;
 
-    // Batch-read consecutive bitmap words starting at `start_word`.
-    fn get_tick_bitmap_batch(e: Env, start_word: i32, count: u32) -> Vec<U256>;
+    // Batch-read consecutive chunk bitmap words starting at `start_word`.
+    fn get_chunk_bitmap_batch(e: Env, start_word: i32, count: u32) -> Vec<U256>;
 
     // Batch-read tick info for the specified ticks.
     fn get_ticks_batch(e: Env, ticks: Vec<i32>) -> Vec<TickInfo>;

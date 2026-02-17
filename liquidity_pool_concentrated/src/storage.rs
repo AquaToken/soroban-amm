@@ -22,6 +22,11 @@ pub const FEE_DENOMINATOR: u128 = 10_000;
 // Max positions per user account (prevents storage bloat from griefing).
 pub const MAX_USER_POSITIONS: u32 = 20;
 
+// Number of ticks per chunk. Each chunk is stored as one Vec<TickData> entry.
+// Chunk addressing: chunk_pos = compressed_tick.div_euclid(TICKS_PER_CHUNK),
+//                   slot      = compressed_tick.rem_euclid(TICKS_PER_CHUNK).
+pub const TICKS_PER_CHUNK: i32 = 16;
+
 // Storage layout. Instance storage for pool-wide config (accessed every tx),
 // persistent storage for per-user and per-tick data (accessed selectively).
 #[derive(Clone)]
@@ -45,10 +50,11 @@ pub enum DataKey {
     TokenFutureWasm,      // BytesN<32> — staged LP token WASM hash for upgrade
     GaugeFutureWasm,      // BytesN<32> — staged gauge WASM hash for upgrade
 
-    // ── Persistent storage: per-tick ──
-    TickBitmap(i32), // U256 — 256-bit bitmap word; each bit = one tick_spacing slot.
-    //   word_pos = tick / (tick_spacing * 256). Bit = (tick/spacing) % 256.
-    Tick(i32), // TickInfo — per-tick liquidity deltas and fee growth snapshots
+    // ── Persistent storage: per-tick (chunked) ──
+    ChunkBitmap(i32), // U256 — 1 bit per chunk; set if chunk has any initialized tick.
+    //   word_pos = chunk_pos >> 8. Bit = chunk_pos & 255.
+    TickChunk(i32), // Vec<TickData> — exactly TICKS_PER_CHUNK entries, pre-allocated.
+    //   chunk_pos = compressed_tick.div_euclid(TICKS_PER_CHUNK).
 
     // ── Persistent storage: per-user ──
     Position(Address, i32, i32), // PositionData — keyed by (owner, tick_lower, tick_upper)
@@ -182,41 +188,153 @@ pub fn remove_position(e: &Env, owner: &Address, tick_lower: i32, tick_upper: i3
         .remove(&DataKey::Position(owner.clone(), tick_lower, tick_upper));
 }
 
-// ── Tick accessors (persistent storage) ──
-// Stored as TickData (tuple-encoded) for minimal XDR size.
-// Converted to/from TickInfo at the accessor boundary.
-pub fn get_tick(e: &Env, tick: i32) -> TickInfo {
+// ── Chunk addressing ──
+
+// Compress a tick value by dividing by spacing (floor division).
+fn compress_tick_storage(tick: i32, spacing: i32) -> i32 {
+    let mut compressed = tick / spacing;
+    if tick < 0 && tick % spacing != 0 {
+        compressed -= 1;
+    }
+    compressed
+}
+
+// Compute (chunk_pos, slot) from a compressed tick.
+// Uses Euclidean division so negative compressed ticks map correctly.
+pub fn chunk_address(compressed_tick: i32) -> (i32, u32) {
+    let chunk_pos = compressed_tick.div_euclid(TICKS_PER_CHUNK);
+    let slot = compressed_tick.rem_euclid(TICKS_PER_CHUNK) as u32;
+    (chunk_pos, slot)
+}
+
+// ── Tick chunk accessors (persistent storage) ──
+// Each chunk holds exactly TICKS_PER_CHUNK TickData entries, pre-allocated at creation.
+
+pub fn get_tick_chunk(e: &Env, chunk_pos: i32) -> Option<Vec<TickData>> {
+    e.storage().persistent().get(&DataKey::TickChunk(chunk_pos))
+}
+
+pub fn set_tick_chunk(e: &Env, chunk_pos: i32, chunk: &Vec<TickData>) {
     e.storage()
         .persistent()
-        .get::<_, TickData>(&DataKey::Tick(tick))
-        .map(TickInfo::from)
-        .unwrap_or(TickInfo {
+        .set(&DataKey::TickChunk(chunk_pos), chunk);
+}
+
+// Allocate a zeroed chunk: Vec of TICKS_PER_CHUNK TickData entries.
+pub fn new_empty_chunk(e: &Env) -> Vec<TickData> {
+    let zero = soroban_sdk::U256::from_u32(e, 0);
+    let mut chunk = Vec::new(e);
+    for _ in 0..TICKS_PER_CHUNK {
+        chunk.push_back(TickData(zero.clone(), zero.clone(), 0, 0));
+    }
+    chunk
+}
+
+// Get or create chunk for a given chunk_pos.
+pub fn get_or_create_tick_chunk(e: &Env, chunk_pos: i32) -> Vec<TickData> {
+    get_tick_chunk(e, chunk_pos).unwrap_or_else(|| new_empty_chunk(e))
+}
+
+// Convenience: read a single tick's TickInfo from chunk storage.
+pub fn get_tick(e: &Env, tick: i32, spacing: i32) -> TickInfo {
+    let compressed = compress_tick_storage(tick, spacing);
+    let (chunk_pos, slot) = chunk_address(compressed);
+    match get_tick_chunk(e, chunk_pos) {
+        Some(chunk) => TickInfo::from(chunk.get(slot).unwrap()),
+        None => TickInfo {
             fee_growth_outside_0_x128: soroban_sdk::U256::from_u32(e, 0),
             fee_growth_outside_1_x128: soroban_sdk::U256::from_u32(e, 0),
             liquidity_gross: 0,
             liquidity_net: 0,
-        })
+        },
+    }
 }
 
-pub fn set_tick(e: &Env, tick: i32, value: &TickInfo) {
-    let data: TickData = value.clone().into();
-    e.storage().persistent().set(&DataKey::Tick(tick), &data);
-}
-
-// ── Tick bitmap accessors (persistent storage) ──
-// 256-bit words for efficient tick scanning. Each bit marks an initialized tick.
-// word_pos = compressed_tick / 256, where compressed_tick = tick / tick_spacing.
-pub fn get_tick_bitmap_word(e: &Env, word_pos: i32) -> soroban_sdk::U256 {
+// ── Chunk bitmap accessors (persistent storage) ──
+// 256-bit words for efficient chunk scanning. Each bit marks a chunk with initialized ticks.
+// word_pos = chunk_pos >> 8. bit_pos = chunk_pos & 255.
+pub fn get_chunk_bitmap_word(e: &Env, word_pos: i32) -> soroban_sdk::U256 {
     e.storage()
         .persistent()
-        .get(&DataKey::TickBitmap(word_pos))
+        .get(&DataKey::ChunkBitmap(word_pos))
         .unwrap_or_else(|| soroban_sdk::U256::from_u32(e, 0))
 }
 
-pub fn set_tick_bitmap_word(e: &Env, word_pos: i32, word: &soroban_sdk::U256) {
+pub fn set_chunk_bitmap_word(e: &Env, word_pos: i32, word: &soroban_sdk::U256) {
     e.storage()
         .persistent()
-        .set(&DataKey::TickBitmap(word_pos), word);
+        .set(&DataKey::ChunkBitmap(word_pos), word);
+}
+
+// ── Chunk cache (write-back with explicit flush) ──
+// Avoids repeated XDR deserialization of Vec<TickData> within one operation.
+// Read-through: first get loads from storage and caches.
+// Write-back: set_chunk updates only the cache; flush() persists all dirty chunks to storage.
+// Caller must call flush() before the cache is dropped to persist writes.
+pub struct ChunkCache {
+    cache: soroban_sdk::Map<i32, Vec<TickData>>,
+    dirty: soroban_sdk::Map<i32, bool>,
+}
+
+impl ChunkCache {
+    pub fn new(e: &Env) -> Self {
+        Self {
+            cache: soroban_sdk::Map::new(e),
+            dirty: soroban_sdk::Map::new(e),
+        }
+    }
+
+    /// Read-through: returns cached chunk or loads from storage (caching the result).
+    pub fn get_chunk(&mut self, e: &Env, chunk_pos: i32) -> Option<Vec<TickData>> {
+        if let Some(cached) = self.cache.get(chunk_pos) {
+            return Some(cached);
+        }
+        let chunk = get_tick_chunk(e, chunk_pos);
+        if let Some(ref c) = chunk {
+            self.cache.set(chunk_pos, c.clone());
+        }
+        chunk
+    }
+
+    /// Read-through with lazy allocation: returns cached/stored chunk, or creates an empty one.
+    pub fn get_or_create_chunk(&mut self, e: &Env, chunk_pos: i32) -> Vec<TickData> {
+        if let Some(cached) = self.cache.get(chunk_pos) {
+            return cached;
+        }
+        let chunk = get_tick_chunk(e, chunk_pos).unwrap_or_else(|| new_empty_chunk(e));
+        self.cache.set(chunk_pos, chunk.clone());
+        chunk
+    }
+
+    /// Write-back: updates chunk in cache and marks it dirty. Does NOT write to storage.
+    pub fn set_chunk(&mut self, chunk_pos: i32, chunk: &Vec<TickData>) {
+        self.cache.set(chunk_pos, chunk.clone());
+        self.dirty.set(chunk_pos, true);
+    }
+
+    /// Read a single tick from cached chunk.
+    pub fn get_tick(&mut self, e: &Env, tick: i32, spacing: i32) -> TickInfo {
+        let compressed = compress_tick_storage(tick, spacing);
+        let (chunk_pos, slot) = chunk_address(compressed);
+        match self.get_chunk(e, chunk_pos) {
+            Some(chunk) => TickInfo::from(chunk.get(slot).unwrap()),
+            None => TickInfo {
+                fee_growth_outside_0_x128: soroban_sdk::U256::from_u32(e, 0),
+                fee_growth_outside_1_x128: soroban_sdk::U256::from_u32(e, 0),
+                liquidity_gross: 0,
+                liquidity_net: 0,
+            },
+        }
+    }
+
+    /// Persist all dirty chunks to storage.
+    pub fn flush(&self, e: &Env) {
+        for (chunk_pos, _) in self.dirty.iter() {
+            if let Some(chunk) = self.cache.get(chunk_pos) {
+                set_tick_chunk(e, chunk_pos, &chunk);
+            }
+        }
+    }
 }
 
 // ── Per-user state (single persistent storage entry) ──
