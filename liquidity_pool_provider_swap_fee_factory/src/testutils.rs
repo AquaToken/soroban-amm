@@ -77,6 +77,7 @@ impl Setup<'_> {
             &token_a.address,
             &10_0000000,
             &1_0000000,
+            &1_0000000,
             &router.address,
         );
         router.set_reward_boost_config(&admin, &token_a.address, &boost_feed.address);
