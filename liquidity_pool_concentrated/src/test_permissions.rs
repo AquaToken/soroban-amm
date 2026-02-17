@@ -433,36 +433,6 @@ fn test_claim_protocol_fees_permissions() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Distance weighting permissions
-// ═══════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn test_set_distance_weighting_permissions() {
-    let setup = Setup::default();
-    let user = Address::generate(&setup.env);
-
-    // Operations admin or admin can set
-    assert!(setup
-        .pool
-        .try_set_distance_weighting(&setup.operations_admin, &10_000, &1_000)
-        .is_ok());
-    assert!(setup
-        .pool
-        .try_set_distance_weighting(&setup.admin, &10_000, &1_000)
-        .is_ok());
-
-    // Others cannot
-    assert!(setup
-        .pool
-        .try_set_distance_weighting(&user, &10_000, &1_000)
-        .is_err());
-    assert!(setup
-        .pool
-        .try_set_distance_weighting(&setup.pause_admin, &10_000, &1_000)
-        .is_err());
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Initialize price permissions
 // ═══════════════════════════════════════════════════════════════════════════
 

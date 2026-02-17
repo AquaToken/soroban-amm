@@ -89,7 +89,13 @@ pub trait RewardsTrait {
     fn return_unused_reward(e: Env, admin: Address) -> u128;
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
     fn get_user_reward(e: Env, user: Address) -> u128;
-    fn estimate_working_balance(e: Env, user: Address, new_user_shares: u128) -> (u128, u128);
+    fn estimate_working_balance(
+        e: Env,
+        user: Address,
+        tick_lower: i32,
+        tick_upper: i32,
+        new_liquidity: u128,
+    ) -> (u128, u128);
     fn get_total_accumulated_reward(e: Env) -> u128;
     fn get_total_configured_reward(e: Env) -> u128;
     fn adjust_total_accumulated_reward(e: Env, admin: Address, diff: i128);
@@ -101,14 +107,6 @@ pub trait RewardsTrait {
 }
 
 pub trait AdminInterfaceTrait {
-    fn set_distance_weighting(
-        e: Env,
-        admin: Address,
-        max_distance_ticks: u32,
-        min_multiplier_bps: u32,
-    );
-    fn get_distance_weighting(e: Env) -> rewards::concentrated_weight::DistanceWeightConfig;
-
     fn set_claim_killed(e: Env, admin: Address, value: bool);
     fn get_claim_killed(e: Env) -> bool;
 

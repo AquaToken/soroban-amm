@@ -1,4 +1,4 @@
-use crate::concentrated_weight::{apply_multiplier, position_multiplier_bps, DistanceWeightConfig};
+use crate::concentrated_weight::{apply_multiplier, position_multiplier_bps};
 use crate::constants::REWARD_PRECISION;
 use crate::errors::RewardsError;
 use crate::locked_boost::manager::BoostManagerPlugin;
@@ -133,10 +133,9 @@ impl Manager {
         tick_current: i32,
         tick_lower: i32,
         tick_upper: i32,
-        distance_weight_config: DistanceWeightConfig,
+        fee: u32,
     ) -> u128 {
-        let multiplier =
-            position_multiplier_bps(tick_current, tick_lower, tick_upper, distance_weight_config);
+        let multiplier = position_multiplier_bps(tick_current, tick_lower, tick_upper, fee);
         self.calculate_effective_balance_with_multiplier(
             user,
             share_balance,

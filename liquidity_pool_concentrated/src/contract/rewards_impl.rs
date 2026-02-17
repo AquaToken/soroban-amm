@@ -130,23 +130,34 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         )
     }
 
-    // Preview what a user's working_balance and working_supply would be
-    // with a hypothetical new_user_shares value. For UI estimation.
-    fn estimate_working_balance(e: Env, user: Address, new_user_shares: u128) -> (u128, u128) {
+    // Preview working_balance and working_supply after a hypothetical position change.
+    // new_liquidity = absolute liquidity value for position (tick_lower, tick_upper).
+    // If tick range matches an existing position — simulates modification.
+    // If new range — simulates deposit. new_liquidity=0 simulates full withdrawal.
+    fn estimate_working_balance(
+        e: Env,
+        user: Address,
+        tick_lower: i32,
+        tick_upper: i32,
+        new_liquidity: u128,
+    ) -> (u128, u128) {
+        let new_user_weighted =
+            Self::compute_user_weighted_liquidity(&e, &user, tick_lower, tick_upper, new_liquidity);
+
         let total_weighted = get_total_weighted_liquidity(&e);
         let user_weighted = get_user_weighted_liquidity(&e, &user);
 
-        let new_total_weighted = if new_user_shares >= user_weighted {
-            total_weighted + (new_user_shares - user_weighted)
+        let new_total_weighted = if new_user_weighted >= user_weighted {
+            total_weighted.saturating_add(new_user_weighted - user_weighted)
         } else {
-            total_weighted - (user_weighted - new_user_shares)
+            total_weighted.saturating_sub(user_weighted - new_user_weighted)
         };
 
         let manager = Self::rewards_manager(&e).manager();
         let prev_working_balance = manager.get_working_balance(&user, user_weighted);
         let prev_working_supply = manager.get_working_supply(total_weighted);
         let new_working_balance =
-            manager.calculate_effective_balance(&user, new_user_shares, new_total_weighted);
+            manager.calculate_effective_balance(&user, new_user_weighted, new_total_weighted);
         let new_working_supply = prev_working_supply + new_working_balance - prev_working_balance;
         (new_working_balance, new_working_supply)
     }

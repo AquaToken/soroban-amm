@@ -70,13 +70,6 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         set_is_killed_deposit(&e, &false);
         set_is_killed_swap(&e, &false);
         set_claim_killed(&e, &false);
-        set_distance_weight_config(
-            &e,
-            &DistanceWeightConfig {
-                max_distance_ticks: 5_000,
-                min_multiplier_bps: 0,
-            },
-        );
 
         let sqrt_price_x96 = sqrt_ratio_at_tick(&e, 0).unwrap();
         set_slot0(

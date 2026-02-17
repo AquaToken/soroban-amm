@@ -999,23 +999,64 @@ fn test_kill_unkill_deposit() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Admin: distance weighting
+// estimate_working_balance
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn test_set_and_get_distance_weighting() {
+fn test_estimate_working_balance() {
     let setup = Setup::default();
+    let user2 = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&user2, &1_000_0000000);
+    get_token_admin_client(&setup.env, &setup.token1.address).mint(&user2, &1_000_0000000);
 
-    let config = setup.pool.get_distance_weighting();
-    assert_eq!(config.max_distance_ticks, 5_000); // default
-    assert_eq!(config.min_multiplier_bps, 0);
+    // In-range estimate (tick 0 is current price) → should have high working_balance
+    let (wb_in, ws_in) = setup
+        .pool
+        .estimate_working_balance(&user2, &-100, &100, &1_000_000);
+    assert!(wb_in > 0, "in-range estimate must be positive");
 
+    // Out-of-range estimate → should have lower working_balance due to distance decay
+    let (wb_out, ws_out) = setup
+        .pool
+        .estimate_working_balance(&user2, &500, &600, &1_000_000);
+
+    assert!(
+        wb_in > wb_out,
+        "in-range wb ({}) must be > out-of-range wb ({})",
+        wb_in,
+        wb_out
+    );
+
+    // Actual deposit, then compare estimate vs reality
     setup
         .pool
-        .set_distance_weighting(&setup.admin, &10_000, &5_000);
-    let config = setup.pool.get_distance_weighting();
-    assert_eq!(config.max_distance_ticks, 10_000);
-    assert_eq!(config.min_multiplier_bps, 5_000);
+        .deposit_position(&user2, &user2, &-100, &100, &1_000_000);
+
+    let info = setup.pool.get_rewards_info(&user2);
+    let actual_wb = info.get(Symbol::new(&setup.env, "working_balance")).unwrap() as u128;
+    let actual_ws = info.get(Symbol::new(&setup.env, "working_supply")).unwrap() as u128;
+
+    assert_eq!(
+        wb_in, actual_wb,
+        "estimated wb ({}) must match actual wb ({})",
+        wb_in, actual_wb
+    );
+    assert_eq!(
+        ws_in, actual_ws,
+        "estimated ws ({}) must match actual ws ({})",
+        ws_in, actual_ws
+    );
+
+    // Withdrawal preview: new_liquidity=0 for existing position → wb should decrease
+    let (wb_zero, _) = setup
+        .pool
+        .estimate_working_balance(&user2, &-100, &100, &0);
+    assert!(
+        wb_zero < actual_wb,
+        "zero liquidity wb ({}) must be < actual wb ({})",
+        wb_zero,
+        actual_wb
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

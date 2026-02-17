@@ -2,7 +2,6 @@ use crate::types::{
     PositionData, PositionRange, ProtocolFees, Slot0, TickData, TickInfo, UserState,
 };
 use paste::paste;
-use rewards::concentrated_weight::DistanceWeightConfig;
 use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Vec};
 use utils::storage_errors::StorageError;
 use utils::{
@@ -61,8 +60,7 @@ pub enum DataKey {
     User(Address),               // UserState — positions + raw/weighted liquidity (single entry)
 
     // ── Rewards: distance-weighted liquidity ──
-    DistanceWeightConfig, // DistanceWeightConfig — how position distance affects rewards
-    TotalRawLiquidity,    // u128 — sum of all users' raw liquidity
+    TotalRawLiquidity, // u128 — sum of all users' raw liquidity
     TotalWeightedLiquidity, // u128 — sum of all users' weighted liquidity
 
     ClaimKilled, // bool — reward claim kill switch
@@ -126,15 +124,6 @@ generate_instance_storage_getter_and_setter!(
     gauge_future_wasm,
     DataKey::GaugeFutureWasm,
     BytesN<32>
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    distance_weight_config,
-    DataKey::DistanceWeightConfig,
-    DistanceWeightConfig,
-    DistanceWeightConfig {
-        max_distance_ticks: 5_000,
-        min_multiplier_bps: 0,
-    }
 );
 generate_instance_storage_getter_and_setter_with_default!(
     total_raw_liquidity,

@@ -3,30 +3,6 @@ use super::*;
 // Admin operations — access-controlled pool management.
 #[contractimpl]
 impl AdminInterfaceTrait for ConcentratedLiquidityPool {
-    // Configure rewards distance weighting. Positions closer to current price
-    // get higher rewards multiplier. max_distance_ticks = range where multiplier
-    // starts decaying; min_multiplier_bps = floor multiplier for far positions (0 = no rewards).
-    fn set_distance_weighting(
-        e: Env,
-        admin: Address,
-        max_distance_ticks: u32,
-        min_multiplier_bps: u32,
-    ) {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-        set_distance_weight_config(
-            &e,
-            &DistanceWeightConfig {
-                max_distance_ticks,
-                min_multiplier_bps,
-            },
-        );
-    }
-
-    fn get_distance_weighting(e: Env) -> DistanceWeightConfig {
-        get_distance_weight_config(&e)
-    }
-
     // Kill switch for reward claims. Requires pause or emergency pause admin.
     fn set_claim_killed(e: Env, admin: Address, value: bool) {
         admin.require_auth();

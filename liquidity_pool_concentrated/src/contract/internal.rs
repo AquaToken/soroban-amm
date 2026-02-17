@@ -395,25 +395,58 @@ impl ConcentratedLiquidityPool {
         set_user_state(e, user, &state);
     }
 
-    pub(super) fn recompute_user_weighted_liquidity(e: &Env, user: &Address) -> u128 {
-        let cfg = get_distance_weight_config(e);
+    // Pure computation of weighted liquidity for a user's positions.
+    // If target range matches an existing position, uses target_liquidity instead of stored value.
+    // If target range is new and target_liquidity > 0, includes it as a new position.
+    // No storage writes — used by both recompute (mutating) and estimate (read-only).
+    pub(super) fn compute_user_weighted_liquidity(
+        e: &Env,
+        user: &Address,
+        target_tick_lower: i32,
+        target_tick_upper: i32,
+        target_liquidity: u128,
+    ) -> u128 {
         let tick_current = get_slot0(e).tick;
-
-        let mut state = get_user_state(e, user);
+        let fee = get_fee(e);
+        let state = get_user_state(e, user);
         let mut weighted = 0u128;
+        let mut target_applied = false;
 
         for range in state.positions.iter() {
-            if let Some(position) = get_position(e, user, range.tick_lower, range.tick_upper) {
-                if position.liquidity == 0 {
-                    continue;
-                }
-                let multiplier =
-                    position_multiplier_bps(tick_current, range.tick_lower, range.tick_upper, cfg);
-                weighted =
-                    weighted.saturating_add(apply_multiplier(position.liquidity, multiplier));
+            let liq = if range.tick_lower == target_tick_lower
+                && range.tick_upper == target_tick_upper
+            {
+                target_applied = true;
+                target_liquidity
+            } else if let Some(position) =
+                get_position(e, user, range.tick_lower, range.tick_upper)
+            {
+                position.liquidity
+            } else {
+                0
+            };
+            if liq == 0 {
+                continue;
             }
+            let multiplier =
+                position_multiplier_bps(tick_current, range.tick_lower, range.tick_upper, fee);
+            weighted = weighted.saturating_add(apply_multiplier(liq, multiplier));
         }
 
+        // New position not yet in user's list
+        if !target_applied && target_liquidity > 0 {
+            let multiplier =
+                position_multiplier_bps(tick_current, target_tick_lower, target_tick_upper, fee);
+            weighted = weighted.saturating_add(apply_multiplier(target_liquidity, multiplier));
+        }
+
+        weighted
+    }
+
+    pub(super) fn recompute_user_weighted_liquidity(e: &Env, user: &Address) -> u128 {
+        let weighted = Self::compute_user_weighted_liquidity(e, user, 0, 0, 0);
+
+        let mut state = get_user_state(e, user);
         let prev_weighted = state.weighted_liquidity;
         let mut total_weighted = get_total_weighted_liquidity(e);
 
@@ -1315,11 +1348,6 @@ impl ConcentratedLiquidityPool {
             out_amount,
             total_fee_amount,
         );
-
-        Self::recompute_user_weighted_liquidity(e, sender);
-        if sender != recipient {
-            Self::recompute_user_weighted_liquidity(e, recipient);
-        }
 
         Ok(SwapResult {
             amount0,
