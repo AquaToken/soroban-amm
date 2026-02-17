@@ -279,12 +279,17 @@ fn test_concentrated_pool_positions() {
     token1_admin.mint(&user, &100_000_0000000);
 
     // tick_spacing for 30bps fee is 60, so use multiples of 60
-    let (amt0, amt1) = conc_pool.deposit_position(&user, &user, &-120, &120, &50_0000000);
+    let dep_amounts = Vec::from_array(&setup.env, [50_000_0000000u128, 50_000_0000000u128]);
+    let (actual_amounts, liquidity) =
+        conc_pool.deposit_position(&user, &user, &-120, &120, &dep_amounts);
+    let amt0 = actual_amounts.get_unchecked(0);
+    let amt1 = actual_amounts.get_unchecked(1);
     assert!(amt0 > 0 || amt1 > 0, "should transfer at least one token");
+    assert!(liquidity > 0);
 
     // Read position back
     let pos = conc_pool.get_position(&user, &-120, &120);
-    assert_eq!(pos.liquidity, 50_0000000);
+    assert_eq!(pos.liquidity, liquidity);
 
     // Generate fees via swap
     let swapper = Address::generate(&setup.env);
@@ -297,7 +302,7 @@ fn test_concentrated_pool_positions() {
     assert!(fee0 > 0 || fee1 > 0, "should collect fees");
 
     // Withdraw position
-    conc_pool.withdraw_position(&user, &-120, &120, &50_0000000);
+    conc_pool.withdraw_position(&user, &-120, &120, &liquidity);
 
     // Collect remaining owed tokens
     let (owed0, owed1) =

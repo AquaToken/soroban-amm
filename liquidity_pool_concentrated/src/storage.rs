@@ -60,7 +60,7 @@ pub enum DataKey {
     User(Address),               // UserState — positions + raw/weighted liquidity (single entry)
 
     // ── Rewards: distance-weighted liquidity ──
-    TotalRawLiquidity, // u128 — sum of all users' raw liquidity
+    TotalRawLiquidity,      // u128 — sum of all users' raw liquidity
     TotalWeightedLiquidity, // u128 — sum of all users' weighted liquidity
 
     ClaimKilled, // bool — reward claim kill switch

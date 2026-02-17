@@ -418,8 +418,7 @@ impl ConcentratedLiquidityPool {
             {
                 target_applied = true;
                 target_liquidity
-            } else if let Some(position) =
-                get_position(e, user, range.tick_lower, range.tick_upper)
+            } else if let Some(position) = get_position(e, user, range.tick_lower, range.tick_upper)
             {
                 position.liquidity
             } else {
