@@ -2255,6 +2255,14 @@ impl RewardsTrait for LiquidityPool {
             ],
         );
 
+        // gauge checkpoint before pool checkpoint
+        rewards_gauge::operations::checkpoint_user(
+            &e,
+            &user,
+            manager.get_working_balance(&user, user_shares),
+            manager.get_working_supply(total_shares),
+        );
+
         // display actual values
         let user_data = manager.checkpoint_user(&user, total_shares, user_shares);
         let pool_data = storage.get_pool_reward_data();
@@ -2297,9 +2305,16 @@ impl RewardsTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        rewards
-            .manager()
-            .get_amount_to_claim(&user, total_shares, user_shares)
+        let mut manager = rewards.manager();
+
+        rewards_gauge::operations::checkpoint_user(
+            &e,
+            &user,
+            manager.get_working_balance(&user, user_shares),
+            manager.get_working_supply(total_shares),
+        );
+
+        manager.get_amount_to_claim(&user, total_shares, user_shares)
     }
 
     // Returns the estimated working balance for a hypothetical resulting user share balance.
@@ -2471,7 +2486,16 @@ impl RewardsTrait for LiquidityPool {
             }
         }
 
-        RewardEvents::new(&e).claim(user, reward_token, reward);
+        RewardEvents::new(&e).claim(user.clone(), reward_token, reward);
+
+        // second gauge checkpoint with updated working balance
+        let manager_after = rewards.manager();
+        rewards_gauge::operations::checkpoint_user(
+            &e,
+            &user,
+            manager_after.get_working_balance(&user, user_shares),
+            manager_after.get_working_supply(total_shares),
+        );
 
         reward
     }

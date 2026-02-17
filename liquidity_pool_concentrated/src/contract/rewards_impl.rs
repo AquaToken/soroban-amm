@@ -92,42 +92,99 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         unused_reward
     }
 
-    // Full rewards state for a user: pending reward, tps, expiry, working balance/supply.
+    // Full rewards state for a user — aligned with standard/stableswap pools.
     fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
         let rewards = Self::rewards_manager(&e);
-        let storage = rewards.storage();
         let mut manager = rewards.manager();
+        let storage = rewards.storage();
+        let config = storage.get_pool_reward_config();
 
         let total_weighted = get_total_weighted_liquidity(&e);
         let user_weighted = get_user_weighted_liquidity(&e, &user);
 
-        let user_data = manager.checkpoint_user(&user, total_weighted, user_weighted);
-        let config = storage.get_pool_reward_config();
-
-        map![
+        // pre-fill result dict with stored values
+        // or values won't be affected by checkpoint in any way
+        let mut result = Map::from_array(
             &e,
-            (Symbol::new(&e, "user_reward"), user_data.to_claim as i128),
-            (Symbol::new(&e, "tps"), config.tps as i128),
-            (Symbol::new(&e, "expired_at"), config.expired_at as i128),
-            (
-                Symbol::new(&e, "working_balance"),
-                manager.get_working_balance(&user, user_weighted) as i128
-            ),
-            (
-                Symbol::new(&e, "working_supply"),
-                manager.get_working_supply(total_weighted) as i128
-            ),
-        ]
+            [
+                (symbol_short!("tps"), config.tps as i128),
+                (symbol_short!("exp_at"), config.expired_at as i128),
+                (
+                    symbol_short!("state"),
+                    manager.get_user_rewards_state(&user) as i128,
+                ),
+                (symbol_short!("supply"), total_weighted as i128),
+                (
+                    Symbol::new(&e, "working_balance"),
+                    manager.get_working_balance(&user, user_weighted) as i128,
+                ),
+                (
+                    Symbol::new(&e, "working_supply"),
+                    manager.get_working_supply(total_weighted) as i128,
+                ),
+                (
+                    Symbol::new(&e, "boost_balance"),
+                    manager.get_user_boost_balance(&user) as i128,
+                ),
+                (
+                    Symbol::new(&e, "boost_supply"),
+                    manager.get_total_locked() as i128,
+                ),
+            ],
+        );
+
+        // gauge checkpoint before pool checkpoint
+        rewards_gauge::operations::checkpoint_user(
+            &e,
+            &user,
+            manager.get_working_balance(&user, user_weighted),
+            manager.get_working_supply(total_weighted),
+        );
+
+        // display actual values
+        let user_data = manager.checkpoint_user(&user, total_weighted, user_weighted);
+        let pool_data = storage.get_pool_reward_data();
+
+        result.set(symbol_short!("acc"), pool_data.accumulated as i128);
+        result.set(symbol_short!("last_time"), pool_data.last_time as i128);
+        result.set(
+            symbol_short!("pool_acc"),
+            user_data.pool_accumulated as i128,
+        );
+        result.set(symbol_short!("block"), pool_data.block as i128);
+        result.set(symbol_short!("usr_block"), user_data.last_block as i128);
+        result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
+
+        // provide updated working balance information. if working_balance_new is bigger
+        // than working_balance, it means that user has locked some tokens
+        // and needs to checkpoint itself for more rewards
+        result.set(
+            Symbol::new(&e, "new_working_balance"),
+            manager.get_working_balance(&user, user_weighted) as i128,
+        );
+        result.set(
+            Symbol::new(&e, "new_working_supply"),
+            manager.get_working_supply(total_weighted) as i128,
+        );
+        result
     }
 
     // Pending reward amount for a user (recomputes weighted liquidity first).
     fn get_user_reward(e: Env, user: Address) -> u128 {
         Self::recompute_user_weighted_liquidity(&e, &user);
-        Self::rewards_manager(&e).manager().get_amount_to_claim(
+
+        let total_weighted = get_total_weighted_liquidity(&e);
+        let user_weighted = get_user_weighted_liquidity(&e, &user);
+        let mut manager = Self::rewards_manager(&e).manager();
+
+        rewards_gauge::operations::checkpoint_user(
+            &e,
             &user,
-            get_total_weighted_liquidity(&e),
-            get_user_weighted_liquidity(&e, &user),
-        )
+            manager.get_working_balance(&user, user_weighted),
+            manager.get_working_supply(total_weighted),
+        );
+
+        manager.get_amount_to_claim(&user, total_weighted, user_weighted)
     }
 
     // Preview working_balance and working_supply after a hypothetical position change.
