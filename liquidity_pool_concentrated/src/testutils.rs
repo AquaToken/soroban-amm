@@ -140,8 +140,13 @@ impl Setup<'_> {
         let router = Address::generate(&env);
         let user = Address::generate(&env);
 
-        let token0 = create_token_contract(&env, &admin);
-        let token1 = create_token_contract(&env, &admin);
+        let token_a = create_token_contract(&env, &admin);
+        let token_b = create_token_contract(&env, &admin);
+        let (token0, token1) = if token_a.address < token_b.address {
+            (token_a, token_b)
+        } else {
+            (token_b, token_a)
+        };
         let reward_token = create_token_contract(&env, &admin);
         let reward_boost_token = create_token_contract(&env, &admin);
         let reward_boost_feed =

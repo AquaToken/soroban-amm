@@ -189,11 +189,7 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
                 &(amount0 as i128),
             );
             fees.token0 = 0;
-            PoolEvents::new(&e).claim_protocol_fee(
-                token0,
-                destination.clone(),
-                amount0,
-            );
+            PoolEvents::new(&e).claim_protocol_fee(token0, destination.clone(), amount0);
         }
         if amount1 > 0 {
             SorobanTokenClient::new(&e, &token1).transfer(

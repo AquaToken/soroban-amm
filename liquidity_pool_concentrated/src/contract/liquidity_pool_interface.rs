@@ -37,8 +37,8 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
 
         let token0 = tokens.get_unchecked(0);
         let token1 = tokens.get_unchecked(1);
-        if token0 == token1 {
-            panic_with_error!(&e, Error::InvalidTickRange);
+        if token0 >= token1 {
+            panic_with_error!(&e, Error::TokensNotSorted);
         }
 
         let access_control = AccessControl::new(&e);

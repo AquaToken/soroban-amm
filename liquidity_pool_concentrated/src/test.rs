@@ -435,9 +435,7 @@ fn test_withdraw_position_zero_amount() {
     setup
         .pool
         .deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000);
-    setup
-        .pool
-        .withdraw_position(&setup.user, &-10, &10, &0);
+    setup.pool.withdraw_position(&setup.user, &-10, &10, &0);
 }
 
 #[test]
@@ -626,14 +624,9 @@ fn test_full_withdrawal_deletes_position_and_clears_ticks() {
         .withdraw_position(&setup.user, &-10, &10, &1_000_000);
 
     // Claim owed tokens
-    setup.pool.claim_position_fees(
-        &setup.user,
-        &setup.user,
-        &-10,
-        &10,
-        &u128::MAX,
-        &u128::MAX,
-    );
+    setup
+        .pool
+        .claim_position_fees(&setup.user, &setup.user, &-10, &10, &u128::MAX, &u128::MAX);
 
     // Position should be deleted — get_position panics
     let result = setup.pool.try_get_position(&setup.user, &-10, &10);
@@ -812,13 +805,19 @@ fn test_swap_both_directions() {
     let out_0to1 = setup.pool.swap(&setup.user, &0, &1, &5_0000000, &0);
     assert!(out_0to1 > 0);
     let slot_mid = setup.pool.slot0();
-    assert!(slot_mid.tick < slot_before.tick, "price should decrease for 0→1");
+    assert!(
+        slot_mid.tick < slot_before.tick,
+        "price should decrease for 0→1"
+    );
 
     // Swap 1→0 (one_for_zero)
     let out_1to0 = setup.pool.swap(&setup.user, &1, &0, &5_0000000, &0);
     assert!(out_1to0 > 0);
     let slot_after = setup.pool.slot0();
-    assert!(slot_after.tick > slot_mid.tick, "price should increase for 1→0");
+    assert!(
+        slot_after.tick > slot_mid.tick,
+        "price should increase for 1→0"
+    );
 }
 
 #[test]
@@ -921,9 +920,7 @@ fn test_set_protocol_fee_fraction() {
 fn test_set_protocol_fee_fraction_too_high() {
     let setup = Setup::default();
     // FEE_DENOMINATOR = 10_000, so 10_001 is invalid
-    setup
-        .pool
-        .set_protocol_fee_fraction(&setup.admin, &10_001);
+    setup.pool.set_protocol_fee_fraction(&setup.admin, &10_001);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -966,7 +963,10 @@ fn test_kill_unkill_swap() {
     // Kill swap
     setup.pool.kill_swap(&setup.admin);
     assert!(setup.pool.get_is_killed_swap());
-    assert!(setup.pool.try_swap(&setup.user, &0, &1, &1_0000000, &0).is_err());
+    assert!(setup
+        .pool
+        .try_swap(&setup.user, &0, &1, &1_0000000, &0)
+        .is_err());
 
     // Unkill swap
     setup.pool.unkill_swap(&setup.admin);
@@ -985,7 +985,10 @@ fn test_kill_unkill_deposit() {
     assert!(setup.pool.get_is_killed_deposit());
 
     // deposit_position should also be blocked
-    assert!(setup.pool.try_deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000).is_err());
+    assert!(setup
+        .pool
+        .try_deposit_position(&setup.user, &setup.user, &-10, &10, &1_000_000)
+        .is_err());
 
     // Unkill deposit
     setup.pool.unkill_deposit(&setup.admin);
@@ -1007,7 +1010,9 @@ fn test_set_and_get_distance_weighting() {
     assert_eq!(config.max_distance_ticks, 5_000); // default
     assert_eq!(config.min_multiplier_bps, 0);
 
-    setup.pool.set_distance_weighting(&setup.admin, &10_000, &5_000);
+    setup
+        .pool
+        .set_distance_weighting(&setup.admin, &10_000, &5_000);
     let config = setup.pool.get_distance_weighting();
     assert_eq!(config.max_distance_ticks, 10_000);
     assert_eq!(config.min_multiplier_bps, 5_000);
@@ -1044,14 +1049,10 @@ fn test_two_users_overlapping_positions() {
     setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
     // Both users can claim fees
-    let (u1_fee0, u1_fee1) = setup.pool.claim_position_fees(
-        &setup.user,
-        &setup.user,
-        &-50,
-        &50,
-        &u128::MAX,
-        &u128::MAX,
-    );
+    let (u1_fee0, u1_fee1) =
+        setup
+            .pool
+            .claim_position_fees(&setup.user, &setup.user, &-50, &50, &u128::MAX, &u128::MAX);
     let (u2_fee0, u2_fee1) =
         setup
             .pool
@@ -1325,9 +1326,7 @@ fn test_swap_output_below_minimum() {
         &0,
     );
     // out_min is impossibly high
-    setup
-        .pool
-        .swap(&setup.user, &0, &1, &1_0000000, &u128::MAX);
+    setup.pool.swap(&setup.user, &0, &1, &1_0000000, &u128::MAX);
 }
 
 #[test]
@@ -1370,11 +1369,9 @@ fn test_withdraw_wrong_min_amounts_length() {
         &0,
     );
     // withdraw min_amounts must have exactly 2 elements
-    setup.pool.withdraw(
-        &setup.user,
-        &100,
-        &Vec::from_array(&setup.env, [0u128]),
-    );
+    setup
+        .pool
+        .withdraw(&setup.user, &100, &Vec::from_array(&setup.env, [0u128]));
 }
 
 #[test]
@@ -1405,6 +1402,79 @@ fn test_deposit_min_shares_not_met() {
         &setup.user,
         &Vec::from_array(&setup.env, [1_0000000u128, 1_0000000u128]),
         &u128::MAX,
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Error handling: token ordering in initialize
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2121)")]
+fn test_initialize_tokens_not_sorted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&env);
+    let router = Address::generate(&env);
+
+    let token_a = create_token_contract(&env, &admin);
+    let token_b = create_token_contract(&env, &admin);
+    // Ensure reverse order (unsorted)
+    let (higher, lower) = if token_a.address > token_b.address {
+        (token_a, token_b)
+    } else {
+        (token_b, token_a)
+    };
+
+    mod pool_plane {
+        soroban_sdk::contractimport!(
+            file = "../contracts/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    let plane = pool_plane::Client::new(&env, &env.register(pool_plane::WASM, ()));
+
+    // Pass tokens in wrong order: higher address first
+    create_pool_contract(
+        &env,
+        &admin,
+        &router,
+        &plane.address,
+        &Vec::from_array(&env, [higher.address.clone(), lower.address.clone()]),
+        30,
+        1,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2121)")]
+fn test_initialize_duplicate_tokens() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&env);
+    let router = Address::generate(&env);
+
+    let token0 = create_token_contract(&env, &admin);
+
+    mod pool_plane {
+        soroban_sdk::contractimport!(
+            file = "../contracts/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    let plane = pool_plane::Client::new(&env, &env.register(pool_plane::WASM, ()));
+
+    // Same token twice
+    create_pool_contract(
+        &env,
+        &admin,
+        &router,
+        &plane.address,
+        &Vec::from_array(&env, [token0.address.clone(), token0.address.clone()]),
+        30,
+        1,
     );
 }
 
@@ -1659,7 +1729,10 @@ fn test_dust_griefing_tick_spacing_20() {
     std::println!("Amount out: {}", out);
     std::println!(
         "Price moved: tick {} → {} (delta={}, ~{} spacing crossings)",
-        slot_before.tick, slot_after.tick, tick_delta, ticks_crossed
+        slot_before.tick,
+        slot_after.tick,
+        tick_delta,
+        ticks_crossed
     );
     std::println!(
         "Footprint: read_write={}, read_only={}",
@@ -1736,38 +1809,63 @@ fn test_dust_griefing_tick_spacing_20() {
     let ro_xlarge = cost_xlarge.disk_read_entries + cost_xlarge.memory_read_entries;
 
     // Summary
-    std::println!("\n=== GRIEFING IMPACT SUMMARY (tick_spacing={}) ===", tick_spacing);
+    std::println!(
+        "\n=== GRIEFING IMPACT SUMMARY (tick_spacing={}) ===",
+        tick_spacing
+    );
     std::println!("Dust positions: {}", total_dust_positions);
     std::println!("Whale liquidity: {}", liquidity_before);
     std::println!("Mainnet limits: rw={}, ro={}", RW_LIMIT, RO_LIMIT);
     std::println!(
         " ~1% move: {} crossings, rw={}/{} ro={}/{}",
-        ticks_crossed, cost.write_entries, RW_LIMIT, ro_small, RO_LIMIT
+        ticks_crossed,
+        cost.write_entries,
+        RW_LIMIT,
+        ro_small,
+        RO_LIMIT
     );
     std::println!(
         " ~5% move: {} crossings, rw={}/{} ro={}/{}",
-        ticks_crossed_large, cost_large.write_entries, RW_LIMIT, ro_large, RO_LIMIT
+        ticks_crossed_large,
+        cost_large.write_entries,
+        RW_LIMIT,
+        ro_large,
+        RO_LIMIT
     );
     std::println!(
         "~10% move: {} crossings, rw={}/{} ro={}/{}",
-        ticks_crossed_xlarge, cost_xlarge.write_entries, RW_LIMIT, ro_xlarge, RO_LIMIT
+        ticks_crossed_xlarge,
+        cost_xlarge.write_entries,
+        RW_LIMIT,
+        ro_xlarge,
+        RO_LIMIT
     );
 
     // Assert small and medium swaps fit within mainnet limits
     assert!(
         cost.write_entries <= RW_LIMIT && ro_small <= RO_LIMIT,
         "~1% swap exceeds mainnet limits: rw={}/{} ro={}/{}",
-        cost.write_entries, RW_LIMIT, ro_small, RO_LIMIT
+        cost.write_entries,
+        RW_LIMIT,
+        ro_small,
+        RO_LIMIT
     );
     assert!(
         cost_large.write_entries <= RW_LIMIT && ro_large <= RO_LIMIT,
         "~5% swap exceeds mainnet limits: rw={}/{} ro={}/{}",
-        cost_large.write_entries, RW_LIMIT, ro_large, RO_LIMIT
+        cost_large.write_entries,
+        RW_LIMIT,
+        ro_large,
+        RO_LIMIT
     );
     // ~10% move under worst-case griefing may exceed limits — that's the attack ceiling
     std::println!(
         "\n~10% move fits mainnet? rw={} ro={}",
-        if cost_xlarge.write_entries <= RW_LIMIT { "YES" } else { "NO" },
+        if cost_xlarge.write_entries <= RW_LIMIT {
+            "YES"
+        } else {
+            "NO"
+        },
         if ro_xlarge <= RO_LIMIT { "YES" } else { "NO" },
     );
 }

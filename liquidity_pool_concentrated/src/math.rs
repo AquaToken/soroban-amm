@@ -1,4 +1,4 @@
-use crate::errors::Error;
+use crate::errors::ConcentratedPoolError as Error;
 use crate::storage::{MAX_TICK, MIN_TICK};
 use crate::u512::mul_div_u256 as u512_mul_div;
 use soroban_fixed_point_math::SorobanFixedPoint;
@@ -439,7 +439,13 @@ pub fn get_next_sqrt_price_from_amount0(
             let product = amt.mul(sqrt_price_x96);
             let denominator = numerator1.add(&product);
             // sqrt_next = numerator1 * sqrt / denominator (round up)
-            Ok(u512_mul_div(e, &numerator1, sqrt_price_x96, &denominator, true))
+            Ok(u512_mul_div(
+                e,
+                &numerator1,
+                sqrt_price_x96,
+                &denominator,
+                true,
+            ))
         } else {
             // Overflow fallback: sqrt_next = numerator1 / (numerator1 / sqrt + amount)
             let term = numerator1.div(sqrt_price_x96);
@@ -458,7 +464,13 @@ pub fn get_next_sqrt_price_from_amount0(
             if denominator == zero {
                 return Err(Error::PriceOutOfBounds);
             }
-            Ok(u512_mul_div(e, &numerator1, sqrt_price_x96, &denominator, true))
+            Ok(u512_mul_div(
+                e,
+                &numerator1,
+                sqrt_price_x96,
+                &denominator,
+                true,
+            ))
         } else {
             // Overflow means product > numerator1 for realistic values
             return Err(Error::PriceOutOfBounds);
@@ -540,8 +552,8 @@ pub fn get_next_sqrt_price_from_output(
 #[cfg(test)]
 mod test {
     use super::{
-        max_sqrt_ratio, min_sqrt_ratio, sqrt_ratio_at_tick, tick_at_sqrt_ratio, u256_max,
-        u256_one, wrapping_add_u256, wrapping_sub_u256,
+        max_sqrt_ratio, min_sqrt_ratio, sqrt_ratio_at_tick, tick_at_sqrt_ratio, u256_max, u256_one,
+        wrapping_add_u256, wrapping_sub_u256,
     };
     use soroban_sdk::{Env, U256};
 
@@ -601,7 +613,8 @@ mod test {
         // Simpler: diff2 is just b - a = 150, and wrapping_sub(diff1, 0) should invert
         // Actually verify the concrete values:
         assert_eq!(diff2, U256::from_u128(&e, 150));
-        let expected_diff1 = wrapping_sub_u256(&e, &U256::from_u32(&e, 0), &U256::from_u128(&e, 150));
+        let expected_diff1 =
+            wrapping_sub_u256(&e, &U256::from_u32(&e, 0), &U256::from_u128(&e, 150));
         assert_eq!(diff1, expected_diff1);
     }
 
@@ -624,10 +637,7 @@ mod test {
         // MAX - MAX = 0
         assert_eq!(wrapping_sub_u256(&e, &max, &max), zero);
         // 0 - MAX = 1
-        assert_eq!(
-            wrapping_sub_u256(&e, &zero, &max),
-            U256::from_u32(&e, 1)
-        );
+        assert_eq!(wrapping_sub_u256(&e, &zero, &max), U256::from_u32(&e, 1));
     }
 
     #[test]
@@ -653,10 +663,7 @@ mod test {
         let max = u256_max(&e);
         let one = u256_one(&e);
         // MAX + 1 mod 2^256 = 0
-        assert_eq!(
-            wrapping_add_u256(&e, &max, &one),
-            U256::from_u32(&e, 0)
-        );
+        assert_eq!(wrapping_add_u256(&e, &max, &one), U256::from_u32(&e, 0));
     }
 
     #[test]

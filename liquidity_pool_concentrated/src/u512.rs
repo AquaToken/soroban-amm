@@ -106,7 +106,9 @@ pub fn mul_div_u256(e: &Env, a: &U256, b: &U256, d: &U256, round_up: bool) -> U2
         };
 
         // remainder = remainder * 2^64 + chunk
-        remainder = remainder.shl(64).add(&U256::from_u128(e, chunk_val as u128));
+        remainder = remainder
+            .shl(64)
+            .add(&U256::from_u128(e, chunk_val as u128));
 
         // q_chunk = remainder / d
         let q_chunk = remainder.div(d);

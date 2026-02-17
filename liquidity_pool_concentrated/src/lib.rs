@@ -3,7 +3,6 @@
 mod contract;
 mod errors;
 mod math;
-mod u512;
 mod plane;
 mod plane_interface;
 mod pool_interface;
@@ -12,9 +11,10 @@ mod test;
 mod test_permissions;
 mod testutils;
 mod types;
+mod u512;
 
 pub use contract::{ConcentratedLiquidityPool, ConcentratedLiquidityPoolClient};
-pub use errors::Error;
+pub use errors::ConcentratedPoolError as Error;
 pub use types::{
     PoolState, PoolStateWithBalances, PositionData, PositionRange, ProtocolFees, Slot0, SwapResult,
     TickInfo, UserPositionSnapshot,

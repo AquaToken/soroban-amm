@@ -101,10 +101,9 @@ fn test_emergency_admin_transfer_ownership_too_early() {
         &new_addr,
     );
     jump(&setup.env, ADMIN_ACTIONS_DELAY - 1);
-    setup.pool.apply_transfer_ownership(
-        &setup.admin,
-        &Symbol::new(&setup.env, "EmergencyAdmin"),
-    );
+    setup
+        .pool
+        .apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
 }
 
 #[test]
@@ -122,15 +121,11 @@ fn test_emergency_admin_transfer_ownership() {
         .try_set_emergency_mode(&setup.emergency_admin, &false)
         .is_ok());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    setup.pool.apply_transfer_ownership(
-        &setup.admin,
-        &Symbol::new(&setup.env, "EmergencyAdmin"),
-    );
-    // New emergency admin works, old one doesn't
-    assert!(setup
+    setup
         .pool
-        .try_set_emergency_mode(&new_addr, &false)
-        .is_ok());
+        .apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
+    // New emergency admin works, old one doesn't
+    assert!(setup.pool.try_set_emergency_mode(&new_addr, &false).is_ok());
     assert!(setup
         .pool
         .try_set_emergency_mode(&setup.emergency_admin, &false)
@@ -204,9 +199,7 @@ fn test_emergency_upgrade() {
     let token_wasm = install_dummy_wasm(&setup.env);
     let gauge_wasm = install_dummy_wasm(&setup.env);
 
-    setup
-        .pool
-        .set_emergency_mode(&setup.emergency_admin, &true);
+    setup.pool.set_emergency_mode(&setup.emergency_admin, &true);
     setup
         .pool
         .commit_upgrade(&setup.admin, &wasm, &token_wasm, &gauge_wasm);
@@ -240,10 +233,7 @@ fn test_set_emergency_mode_admin_fails() {
 fn test_set_emergency_mode_third_party_fails() {
     let setup = Setup::default();
     let user = Address::generate(&setup.env);
-    assert!(setup
-        .pool
-        .try_set_emergency_mode(&user, &true)
-        .is_err());
+    assert!(setup.pool.try_set_emergency_mode(&user, &true).is_err());
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -267,10 +257,7 @@ fn test_kill_deposit_permissions() {
 
     // Others cannot
     assert!(setup.pool.try_kill_deposit(&user).is_err());
-    assert!(setup
-        .pool
-        .try_kill_deposit(&setup.rewards_admin)
-        .is_err());
+    assert!(setup.pool.try_kill_deposit(&setup.rewards_admin).is_err());
     assert!(setup
         .pool
         .try_kill_deposit(&setup.operations_admin)
@@ -332,10 +319,7 @@ fn test_kill_claim_permissions() {
     let setup = Setup::default();
     let user = Address::generate(&setup.env);
 
-    assert!(setup
-        .pool
-        .try_set_claim_killed(&setup.admin, &true)
-        .is_ok());
+    assert!(setup.pool.try_set_claim_killed(&setup.admin, &true).is_ok());
     setup.pool.set_claim_killed(&setup.admin, &false);
     assert!(setup
         .pool
@@ -347,10 +331,7 @@ fn test_kill_claim_permissions() {
         .try_set_claim_killed(&setup.emergency_pause_admin, &true)
         .is_ok());
 
-    assert!(setup
-        .pool
-        .try_set_claim_killed(&user, &true)
-        .is_err());
+    assert!(setup.pool.try_set_claim_killed(&user, &true).is_err());
     assert!(setup
         .pool
         .try_set_claim_killed(&setup.rewards_admin, &true)
@@ -444,10 +425,7 @@ fn test_claim_protocol_fees_permissions() {
         .is_ok());
 
     // Others cannot
-    assert!(setup
-        .pool
-        .try_claim_protocol_fees(&user, &dest)
-        .is_err());
+    assert!(setup.pool.try_claim_protocol_fees(&user, &dest).is_err());
     assert!(setup
         .pool
         .try_claim_protocol_fees(&setup.operations_admin, &dest)
@@ -505,10 +483,7 @@ fn test_initialize_price_permissions() {
         .is_ok());
 
     // Others cannot
-    assert!(setup
-        .pool
-        .try_initialize_price(&user, &price)
-        .is_err());
+    assert!(setup.pool.try_initialize_price(&user, &price).is_err());
     assert!(setup
         .pool
         .try_initialize_price(&setup.rewards_admin, &price)

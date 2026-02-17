@@ -3465,9 +3465,7 @@ fn test_setup_rewards_gauge_concentrated_pool() {
     setup.reward_token.mint(&user1, &10_0000000);
     let [token1, token2, _, _] = setup.tokens;
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
-    let (pool_hash, pool_address) = setup
-        .router
-        .init_concentrated_pool(&user1, &tokens, &30);
+    let (pool_hash, pool_address) = setup.router.init_concentrated_pool(&user1, &tokens, &30);
     let gauges_before: Map<Address, Address> =
         e.invoke_contract(&pool_address, &Symbol::new(&e, "get_gauges"), Vec::new(&e));
     assert_eq!(gauges_before, Map::new(&e));
@@ -3981,7 +3979,14 @@ fn test_rewards_distribution_reward_token_lock() {
     let reward_token = setup.reward_token;
 
     let user = Address::generate(&e);
-    router.configure_init_pool_payment(&admin, &reward_token.address, &0, &1000, &0, &router.address);
+    router.configure_init_pool_payment(
+        &admin,
+        &reward_token.address,
+        &0,
+        &1000,
+        &0,
+        &router.address,
+    );
 
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 

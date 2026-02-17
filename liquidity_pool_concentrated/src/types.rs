@@ -61,7 +61,12 @@ impl From<TickData> for TickInfo {
 
 impl From<TickInfo> for TickData {
     fn from(t: TickInfo) -> Self {
-        TickData(t.fee_growth_outside_0_x128, t.fee_growth_outside_1_x128, t.liquidity_gross, t.liquidity_net)
+        TickData(
+            t.fee_growth_outside_0_x128,
+            t.fee_growth_outside_1_x128,
+            t.liquidity_gross,
+            t.liquidity_net,
+        )
     }
 }
 

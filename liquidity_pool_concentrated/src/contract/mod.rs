@@ -1,9 +1,9 @@
-use crate::errors::Error;
+use crate::errors::ConcentratedPoolError as Error;
 use crate::math::{
     amount0_delta, amount1_delta, fee_growth_delta_x128, get_next_sqrt_price_from_input,
-    get_next_sqrt_price_from_output, liquidity_for_amount0, liquidity_for_amount1,
-    max_sqrt_ratio, min_sqrt_ratio, mul_div_fee_growth, mul_div_u128, sqrt_ratio_at_tick,
-    tick_at_sqrt_ratio, wrapping_add_u256, wrapping_sub_u256,
+    get_next_sqrt_price_from_output, liquidity_for_amount0, liquidity_for_amount1, max_sqrt_ratio,
+    min_sqrt_ratio, mul_div_fee_growth, mul_div_u128, sqrt_ratio_at_tick, tick_at_sqrt_ratio,
+    wrapping_add_u256, wrapping_sub_u256,
 };
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
@@ -23,8 +23,7 @@ use crate::storage::{
     set_liquidity, set_plane, set_position, set_protocol_fee_fraction, set_protocol_fees,
     set_router, set_slot0, set_tick, set_tick_bitmap_word, set_tick_spacing, set_token0,
     set_token1, set_token_future_wasm, set_total_raw_liquidity, set_total_weighted_liquidity,
-    set_user_state, FEE_DENOMINATOR,
-    MAX_TICK, MAX_USER_POSITIONS, MIN_TICK,
+    set_user_state, FEE_DENOMINATOR, MAX_TICK, MAX_USER_POSITIONS, MIN_TICK,
 };
 use crate::types::{
     PoolState, PoolStateWithBalances, PositionData, PositionRange, ProtocolFees, Slot0, SwapResult,
@@ -42,10 +41,10 @@ use access_control::utils::{
     require_pause_or_emergency_pause_admin_or_owner, require_rewards_admin_or_owner,
     require_system_fee_admin_or_owner,
 };
-use liquidity_pool_events::Events as PoolEvents;
-use liquidity_pool_events::LiquidityPoolEvents;
 use liqidity_pool_rewards_gauge as rewards_gauge;
 use liqidity_pool_rewards_gauge::interface::RewardsGaugeInterface;
+use liquidity_pool_events::Events as PoolEvents;
+use liquidity_pool_events::LiquidityPoolEvents;
 use rewards::concentrated_weight::{
     apply_multiplier, position_multiplier_bps, DistanceWeightConfig,
 };

@@ -814,10 +814,8 @@ impl ConcentratedLiquidityPool {
         } else if slot.sqrt_price_x96 >= sqrt_upper {
             liquidity_for_amount1(e, &sqrt_lower, &sqrt_upper, desired_amount1)
         } else {
-            let l0 =
-                liquidity_for_amount0(e, &slot.sqrt_price_x96, &sqrt_upper, desired_amount0)?;
-            let l1 =
-                liquidity_for_amount1(e, &sqrt_lower, &slot.sqrt_price_x96, desired_amount1)?;
+            let l0 = liquidity_for_amount0(e, &slot.sqrt_price_x96, &sqrt_upper, desired_amount0)?;
+            let l1 = liquidity_for_amount1(e, &sqrt_lower, &slot.sqrt_price_x96, desired_amount1)?;
             Ok(l0.min(l1))
         }
     }

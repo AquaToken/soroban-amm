@@ -3,7 +3,7 @@ use soroban_sdk::contracterror;
 #[contracterror]
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[repr(u32)]
-pub enum Error {
+pub enum ConcentratedPoolError {
     Unauthorized = 102,
 
     PoolAlreadyInitialized = 201,
@@ -19,7 +19,6 @@ pub enum Error {
     LiquidityUnderflow = 215,
 
     InvalidTickRange = 2101,
-    InvalidLiquidity = 2102,
     InvalidAmount = 2103,
     InvalidSqrtPrice = 2104,
     InvalidFee = 2105,
@@ -32,10 +31,9 @@ pub enum Error {
     TickUpperTooHigh = 2112,
     InvalidPriceLimit = 2113,
     AmountShouldBeGreaterThanZero = 2114,
-    NegativeAmount = 2115,
     InsufficientToken0 = 2116,
     InsufficientToken1 = 2117,
-    InvalidFeeProtocol = 2118,
     TooManyPositions = 2119,
     LiquidityAmountTooLarge = 2120,
+    TokensNotSorted = 2121,
 }

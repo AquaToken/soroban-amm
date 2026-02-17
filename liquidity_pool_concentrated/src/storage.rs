@@ -1,4 +1,6 @@
-use crate::types::{PositionData, PositionRange, ProtocolFees, Slot0, TickData, TickInfo, UserState};
+use crate::types::{
+    PositionData, PositionRange, ProtocolFees, Slot0, TickData, TickInfo, UserState,
+};
 use paste::paste;
 use rewards::concentrated_weight::DistanceWeightConfig;
 use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Vec};
@@ -26,38 +28,38 @@ pub const MAX_USER_POSITIONS: u32 = 20;
 #[contracttype]
 pub enum DataKey {
     // ── Instance storage: pool config & global state ──
-    Router,             // Address — router contract that manages this pool
-    Plane,              // Address — pool plane for batch metadata queries
-    Token0,             // Address — first token (sorted)
-    Token1,             // Address — second token (sorted)
-    Fee,                // u32 — fee in basis points (e.g. 30 = 0.3%)
-    TickSpacing,        // i32 — min distance between initialized ticks
-    Slot0,              // Slot0 — current sqrt_price and tick
-    Liquidity,          // u128 — active liquidity (positions overlapping current tick)
+    Router,               // Address — router contract that manages this pool
+    Plane,                // Address — pool plane for batch metadata queries
+    Token0,               // Address — first token (sorted)
+    Token1,               // Address — second token (sorted)
+    Fee,                  // u32 — fee in basis points (e.g. 30 = 0.3%)
+    TickSpacing,          // i32 — min distance between initialized ticks
+    Slot0,                // Slot0 — current sqrt_price and tick
+    Liquidity,            // u128 — active liquidity (positions overlapping current tick)
     FeeGrowthGlobal0X128, // U256 — cumulative fee growth for token0, Q128
     FeeGrowthGlobal1X128, // U256 — cumulative fee growth for token1, Q128
-    ProtocolFees,       // ProtocolFees — uncollected protocol fee amounts
-    ProtocolFeeFraction, // u32 — protocol's share of fees, per FEE_DENOMINATOR
-    IsKilledDeposit,    // bool — deposit kill switch
-    IsKilledSwap,       // bool — swap kill switch
-    TokenFutureWasm,    // BytesN<32> — staged LP token WASM hash for upgrade
-    GaugeFutureWasm,    // BytesN<32> — staged gauge WASM hash for upgrade
+    ProtocolFees,         // ProtocolFees — uncollected protocol fee amounts
+    ProtocolFeeFraction,  // u32 — protocol's share of fees, per FEE_DENOMINATOR
+    IsKilledDeposit,      // bool — deposit kill switch
+    IsKilledSwap,         // bool — swap kill switch
+    TokenFutureWasm,      // BytesN<32> — staged LP token WASM hash for upgrade
+    GaugeFutureWasm,      // BytesN<32> — staged gauge WASM hash for upgrade
 
     // ── Persistent storage: per-tick ──
-    TickBitmap(i32),    // U256 — 256-bit bitmap word; each bit = one tick_spacing slot.
-                        //   word_pos = tick / (tick_spacing * 256). Bit = (tick/spacing) % 256.
-    Tick(i32),          // TickInfo — per-tick liquidity deltas and fee growth snapshots
+    TickBitmap(i32), // U256 — 256-bit bitmap word; each bit = one tick_spacing slot.
+    //   word_pos = tick / (tick_spacing * 256). Bit = (tick/spacing) % 256.
+    Tick(i32), // TickInfo — per-tick liquidity deltas and fee growth snapshots
 
     // ── Persistent storage: per-user ──
     Position(Address, i32, i32), // PositionData — keyed by (owner, tick_lower, tick_upper)
     User(Address),               // UserState — positions + raw/weighted liquidity (single entry)
 
     // ── Rewards: distance-weighted liquidity ──
-    DistanceWeightConfig,         // DistanceWeightConfig — how position distance affects rewards
-    TotalRawLiquidity,            // u128 — sum of all users' raw liquidity
-    TotalWeightedLiquidity,       // u128 — sum of all users' weighted liquidity
+    DistanceWeightConfig, // DistanceWeightConfig — how position distance affects rewards
+    TotalRawLiquidity,    // u128 — sum of all users' raw liquidity
+    TotalWeightedLiquidity, // u128 — sum of all users' weighted liquidity
 
-    ClaimKilled,        // bool — reward claim kill switch
+    ClaimKilled, // bool — reward claim kill switch
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);

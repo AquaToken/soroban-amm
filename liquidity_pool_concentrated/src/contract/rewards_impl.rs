@@ -215,15 +215,13 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         let protocol_fees = get_protocol_fees(&e);
 
         if reward_token == token0 {
-            let balance =
-                SorobanTokenClient::new(&e, &token0).balance(&contract) as u128;
+            let balance = SorobanTokenClient::new(&e, &token0).balance(&contract) as u128;
             let reserve = Self::get_reserves(e.clone()).get_unchecked(0);
             if reserve + protocol_fees.token0 > balance {
                 panic_with_error!(&e, Error::InsufficientToken0);
             }
         } else if reward_token == token1 {
-            let balance =
-                SorobanTokenClient::new(&e, &token1).balance(&contract) as u128;
+            let balance = SorobanTokenClient::new(&e, &token1).balance(&contract) as u128;
             let reserve = Self::get_reserves(e.clone()).get_unchecked(1);
             if reserve + protocol_fees.token1 > balance {
                 panic_with_error!(&e, Error::InsufficientToken1);

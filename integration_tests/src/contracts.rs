@@ -41,6 +41,12 @@ pub(crate) mod config_storage {
     soroban_sdk::contractimport!(file = "../contracts/soroban_config_storage_contract.wasm");
 }
 
+pub(crate) mod concentrated_pool {
+    soroban_sdk::contractimport!(
+        file = "../contracts/soroban_liquidity_pool_concentrated_contract.wasm"
+    );
+}
+
 pub(crate) mod rewards_gauge {
     soroban_sdk::contractimport!(file = "../contracts/soroban_rewards_gauge_contract.wasm");
 }
