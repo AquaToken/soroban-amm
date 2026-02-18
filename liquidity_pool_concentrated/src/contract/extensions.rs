@@ -4,17 +4,6 @@ use super::*;
 // These are NOT available through the router; called directly on the pool contract.
 #[contractimpl]
 impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
-    // Validates tick range: lower < upper, both within [MIN_TICK, MAX_TICK],
-    // both aligned to tick_spacing.
-    fn check_ticks(e: Env, tick_lower: i32, tick_upper: i32) -> Result<(), Error> {
-        Self::check_ticks_internal(&e, tick_lower, tick_upper)
-    }
-
-    // Returns current ledger timestamp (seconds since epoch).
-    fn block_timestamp(e: Env) -> u64 {
-        e.ledger().timestamp()
-    }
-
     // Advanced swap: specify tokens by address, signed amount (positive=exact_input,
     // negative=exact_output), and optional sqrt price limit. Returns signed amounts
     // (positive=paid by user, negative=received by user).
@@ -276,23 +265,6 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     // Current price state: sqrt_price_x96 (Q64.96) and tick index.
     fn slot0(e: Env) -> Slot0 {
         get_slot0(&e)
-    }
-
-    fn router(e: Env) -> Address {
-        get_router(&e)
-    }
-
-    fn token0(e: Env) -> Address {
-        get_token0(&e)
-    }
-
-    fn token1(e: Env) -> Address {
-        get_token1(&e)
-    }
-
-    // Fee tier in basis points (e.g. 10 = 0.1%).
-    fn fee(e: Env) -> u32 {
-        get_fee(&e)
     }
 
     // Minimum distance between initialized ticks. Derived from fee tier.

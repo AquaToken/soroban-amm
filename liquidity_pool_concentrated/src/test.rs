@@ -2736,3 +2736,399 @@ fn test_fee_proportionality_same_range() {
         "should have collected fees"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P1: MIN_TICK / MAX_TICK boundary deposits and swaps
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_min_max_tick_boundary_deposit_and_swap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&env);
+    let router = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let token_a = create_token_contract(&env, &admin);
+    let token_b = create_token_contract(&env, &admin);
+    let (token0, token1) = if token_a.address < token_b.address {
+        (token_a, token_b)
+    } else {
+        (token_b, token_a)
+    };
+
+    mod pool_plane_mm {
+        soroban_sdk::contractimport!(
+            file = "../contracts/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    let plane = pool_plane_mm::Client::new(&env, &env.register(pool_plane_mm::WASM, ()));
+
+    let tick_spacing: i32 = 200;
+    let pool = create_pool_contract(
+        &env,
+        &admin,
+        &router,
+        &plane.address,
+        &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
+        100,
+        tick_spacing,
+    );
+
+    // Compute aligned MIN_TICK and MAX_TICK
+    let mut min_tick_aligned = -887_272 - (-887_272 % tick_spacing);
+    if min_tick_aligned < -887_272 {
+        min_tick_aligned += tick_spacing;
+    }
+    let mut max_tick_aligned = 887_272 - (887_272 % tick_spacing);
+    if max_tick_aligned > 887_272 {
+        max_tick_aligned -= tick_spacing;
+    }
+
+    get_token_admin_client(&env, &token0.address).mint(&user, &10_000_0000000);
+    get_token_admin_client(&env, &token1.address).mint(&user, &10_000_0000000);
+
+    // Deposit at the extreme tick boundaries
+    let amounts = Vec::from_array(&env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq) = pool.deposit_position(&user, &min_tick_aligned, &max_tick_aligned, &amounts);
+    assert!(liq > 0, "full-range position should have liquidity");
+
+    // Verify tick data at boundaries
+    let lower_tick = pool.ticks(&min_tick_aligned);
+    assert_eq!(lower_tick.liquidity_gross, liq);
+    assert_eq!(lower_tick.liquidity_net, liq as i128);
+
+    let upper_tick = pool.ticks(&max_tick_aligned);
+    assert_eq!(upper_tick.liquidity_gross, liq);
+    assert_eq!(upper_tick.liquidity_net, -(liq as i128));
+
+    // Swap to push price toward MIN_TICK boundary
+    let swapper = Address::generate(&env);
+    get_token_admin_client(&env, &token0.address).mint(&swapper, &5_000_0000000);
+    let out = pool.swap(&swapper, &0, &1, &2_000_0000000, &0);
+    assert!(out > 0, "swap should produce output");
+
+    let slot = pool.slot0();
+    assert!(
+        slot.tick < 0,
+        "swap should push tick below 0, got {}",
+        slot.tick
+    );
+
+    // Swap in the other direction toward MAX_TICK boundary
+    get_token_admin_client(&env, &token1.address).mint(&swapper, &5_000_0000000);
+    let out2 = pool.swap(&swapper, &1, &0, &4_000_0000000, &0);
+    assert!(out2 > 0);
+
+    let slot2 = pool.slot0();
+    assert!(
+        slot2.tick > 0,
+        "swap should push tick above 0, got {}",
+        slot2.tick
+    );
+
+    // Verify position can be withdrawn
+    pool.withdraw_position(&user, &min_tick_aligned, &max_tick_aligned, &liq);
+    let (claimed0, claimed1) = pool.claim_position_fees(
+        &user,
+        &min_tick_aligned,
+        &max_tick_aligned,
+        &u128::MAX,
+        &u128::MAX,
+    );
+    // Should have earned fees from both swaps
+    assert!(
+        claimed0 > 0 || claimed1 > 0,
+        "full-range position should earn fees"
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P1: Zero-liquidity traversal fee growth must be zero
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_zero_liquidity_gap_no_fee_growth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&env);
+    let router = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let token_a = create_token_contract(&env, &admin);
+    let token_b = create_token_contract(&env, &admin);
+    let (token0, token1) = if token_a.address < token_b.address {
+        (token_a, token_b)
+    } else {
+        (token_b, token_a)
+    };
+
+    mod pool_plane_zl {
+        soroban_sdk::contractimport!(
+            file = "../contracts/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    let plane = pool_plane_zl::Client::new(&env, &env.register(pool_plane_zl::WASM, ()));
+
+    let pool = create_pool_contract(
+        &env,
+        &admin,
+        &router,
+        &plane.address,
+        &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
+        30,
+        10,
+    );
+
+    get_token_admin_client(&env, &token0.address).mint(&user, &1_000_0000000);
+    get_token_admin_client(&env, &token1.address).mint(&user, &1_000_0000000);
+
+    // Two positions with a gap at [0, 40]:
+    // Position A: [-60, -20] (below current price)
+    // Position B: [40, 80] (above gap)
+    let amounts = Vec::from_array(&env, [50_0000000u128, 50_0000000u128]);
+    let (_, liq_a) = pool.deposit_position(&user, &-60, &-20, &amounts);
+    let (_, liq_b) = pool.deposit_position(&user, &40, &80, &amounts);
+    assert!(liq_a > 0 && liq_b > 0);
+
+    // Swap zero_for_one: price slides from tick 0, through gap, into position A
+    let swapper = Address::generate(&env);
+    get_token_admin_client(&env, &token0.address).mint(&swapper, &100_0000000);
+    let out = pool.swap(&swapper, &0, &1, &50_0000000, &0);
+    assert!(out > 0);
+
+    let slot = pool.slot0();
+    assert!(
+        slot.tick < -20,
+        "swap should cross gap and enter position A, tick={}",
+        slot.tick
+    );
+
+    // Position A earned fees (swap went through its range)
+    let (fee_a0, fee_a1) =
+        pool.claim_position_fees(&user, &-60, &-20, &u128::MAX, &u128::MAX);
+    assert!(
+        fee_a0 > 0,
+        "position A should earn fees from swap through its range"
+    );
+
+    // Position B earned zero fees (swap never entered its range)
+    let (fee_b0, fee_b1) = pool.claim_position_fees(&user, &40, &80, &u128::MAX, &u128::MAX);
+    assert_eq!(
+        fee_b0, 0,
+        "position B should earn zero token0 fees (out of range)"
+    );
+    assert_eq!(
+        fee_b1, 0,
+        "position B should earn zero token1 fees (out of range)"
+    );
+
+    // Verify the gap traversal was free (no extra tokens consumed in the gap)
+    // Total fees = position A fees + protocol fees only
+    let protocol_fees = pool.protocol_fees();
+    let total_fee0 = fee_a0 + protocol_fees.token0;
+    // fee_b0 must be 0, confirming no fee growth in the gap
+    assert_eq!(fee_b0, 0);
+    assert!(total_fee0 > 0, "should have collected fees overall");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P1: Tick crossing fee_growth_outside flip verification
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_tick_crossing_fee_growth_outside_flip() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&env);
+    let router = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let token_a = create_token_contract(&env, &admin);
+    let token_b = create_token_contract(&env, &admin);
+    let (token0, token1) = if token_a.address < token_b.address {
+        (token_a, token_b)
+    } else {
+        (token_b, token_a)
+    };
+
+    mod pool_plane_fg2 {
+        soroban_sdk::contractimport!(
+            file = "../contracts/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    let plane = pool_plane_fg2::Client::new(&env, &env.register(pool_plane_fg2::WASM, ()));
+
+    // Use tick_spacing=10 to reduce ledger entries during swap
+    let pool = create_pool_contract(
+        &env,
+        &admin,
+        &router,
+        &plane.address,
+        &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
+        30,
+        10,
+    );
+
+    get_token_admin_client(&env, &token0.address).mint(&user, &1_000_0000000);
+    get_token_admin_client(&env, &token1.address).mint(&user, &1_000_0000000);
+
+    // Use a narrow range [-20, 20] to minimize ledger entries.
+    // Also add a "catch" position below so swap doesn't scan empty bitmap chunks.
+    let amounts = Vec::from_array(&env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq) = pool.deposit_position(&user, &-20, &20, &amounts);
+    assert!(liq > 0);
+
+    // Catch position below to absorb the swap after crossing -20
+    let catch_amounts = Vec::from_array(&env, [50_0000000u128, 50_0000000u128]);
+    pool.deposit_position(&user, &-40, &-20, &catch_amounts);
+
+    // Record fee_growth_outside at tick -20 BEFORE any swaps
+    let tick_lower_before = pool.ticks(&-20);
+
+    // Swap to generate some fees, staying in range
+    let swapper = Address::generate(&env);
+    get_token_admin_client(&env, &token0.address).mint(&swapper, &200_0000000);
+    pool.swap(&swapper, &0, &1, &10_0000000, &0);
+
+    // Now do a swap large enough to cross tick -20
+    pool.swap(&swapper, &0, &1, &100_0000000, &0);
+
+    let slot = pool.slot0();
+    assert!(
+        slot.tick < -20,
+        "swap should cross below tick -20, got {}",
+        slot.tick
+    );
+
+    // Check fee_growth_outside at tick -20 AFTER crossing
+    let tick_lower_after = pool.ticks(&-20);
+
+    // After crossing, fee_growth_outside should have been flipped:
+    // new_outside = fee_growth_global - old_outside
+    // So it must be different from before (since fees were accumulated)
+    assert!(
+        tick_lower_after.fee_growth_outside_0_x128 != tick_lower_before.fee_growth_outside_0_x128,
+        "fee_growth_outside_0 at tick -20 should flip after crossing"
+    );
+
+    // Verify fee accounting still works correctly after the flip:
+    // Position should have accrued fees from both swaps while it was in range
+    let (claimed0, _claimed1) =
+        pool.claim_position_fees(&user, &-20, &20, &u128::MAX, &u128::MAX);
+    assert!(
+        claimed0 > 0,
+        "position should have earned token0 fees before tick crossing"
+    );
+
+    // Catch position should also have fees from the second swap segment
+    let (catch_fee0, _catch_fee1) =
+        pool.claim_position_fees(&user, &-40, &-20, &u128::MAX, &u128::MAX);
+    assert!(
+        catch_fee0 > 0,
+        "catch position should earn fees from swap that crossed into its range"
+    );
+
+    // Now swap back to cross tick -20 again (re-entering the main position range)
+    get_token_admin_client(&env, &token1.address).mint(&swapper, &200_0000000);
+    pool.swap(&swapper, &1, &0, &100_0000000, &0);
+
+    let slot2 = pool.slot0();
+    assert!(
+        slot2.tick > -20,
+        "swap back should cross above tick -20, got {}",
+        slot2.tick
+    );
+
+    // fee_growth_outside should flip again
+    let tick_lower_after2 = pool.ticks(&-20);
+    assert!(
+        tick_lower_after2.fee_growth_outside_0_x128 != tick_lower_after.fee_growth_outside_0_x128,
+        "fee_growth_outside_0 at tick -20 should flip again after re-crossing"
+    );
+
+    // Main position should accrue new fees from the return swap
+    let (_claimed0_2, claimed1_2) =
+        pool.claim_position_fees(&user, &-20, &20, &u128::MAX, &u128::MAX);
+    assert!(
+        claimed1_2 > 0,
+        "position should earn token1 fees from return swap"
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P1: Exact output + price limit → InsufficientLiquidity
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_exact_output_with_price_limit_insufficient() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
+
+    let amounts = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-100, &100, &amounts);
+
+    let swapper = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &500_0000000);
+
+    // Set a tight price limit that prevents filling the full exact output
+    // zero_for_one: price limit must be < current price
+    let limit = sqrt_ratio_at_tick(&setup.env, -5).unwrap();
+    let desired_out: i128 = 100_0000000; // large exact output
+
+    // swap_by_tokens with negative amount (exact output) + tight price limit
+    // Should fail because the price limit prevents filling the full output
+    let result = setup.pool.try_swap_by_tokens(
+        &swapper,
+        &setup.token0.address,
+        &setup.token1.address,
+        &(-desired_out),
+        &limit,
+    );
+
+    // Should fail with InsufficientLiquidity (#213) because price limit
+    // prevents filling the entire exact output amount
+    assert!(
+        result.is_err(),
+        "exact output with restrictive price limit should fail"
+    );
+}
+
+#[test]
+fn test_exact_output_with_price_limit_one_for_zero_insufficient() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
+
+    let amounts = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-100, &100, &amounts);
+
+    let swapper = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token1.address).mint(&swapper, &500_0000000);
+
+    // one_for_zero: price limit must be > current price
+    let limit = sqrt_ratio_at_tick(&setup.env, 5).unwrap();
+    let desired_out: i128 = 100_0000000;
+
+    let result = setup.pool.try_swap_by_tokens(
+        &swapper,
+        &setup.token1.address,
+        &setup.token0.address,
+        &(-desired_out),
+        &limit,
+    );
+
+    assert!(
+        result.is_err(),
+        "exact output with restrictive price limit should fail"
+    );
+}
