@@ -2699,8 +2699,7 @@ fn test_zero_liquidity_gap_no_fee_growth() {
     );
 
     // Position A earned fees (swap went through its range)
-    let (fee_a0, fee_a1) =
-        pool.claim_position_fees(&user, &-60, &-20, &u128::MAX, &u128::MAX);
+    let (fee_a0, fee_a1) = pool.claim_position_fees(&user, &-60, &-20, &u128::MAX, &u128::MAX);
     assert!(
         fee_a0 > 0,
         "position A should earn fees from swap through its range"
@@ -2810,8 +2809,7 @@ fn test_tick_crossing_fee_growth_outside_flip() {
 
     // Verify fee accounting still works correctly after the flip:
     // Position should have accrued fees from both swaps while it was in range
-    let (claimed0, _claimed1) =
-        pool.claim_position_fees(&user, &-20, &20, &u128::MAX, &u128::MAX);
+    let (claimed0, _claimed1) = pool.claim_position_fees(&user, &-20, &20, &u128::MAX, &u128::MAX);
     assert!(
         claimed0 > 0,
         "position should have earned token0 fees before tick crossing"
@@ -2870,7 +2868,9 @@ fn test_exact_output_with_low_in_max_fails() {
     get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &500_0000000);
 
     let desired_out: u128 = 100_0000000; // large exact output
-    let estimated_in = setup.pool.estimate_swap_strict_receive(&0, &1, &desired_out);
+    let estimated_in = setup
+        .pool
+        .estimate_swap_strict_receive(&0, &1, &desired_out);
     assert!(estimated_in > 0);
     let in_max = estimated_in - 1;
 
@@ -2899,7 +2899,9 @@ fn test_exact_output_with_low_in_max_one_for_zero_fails() {
     get_token_admin_client(&setup.env, &setup.token1.address).mint(&swapper, &500_0000000);
 
     let desired_out: u128 = 100_0000000;
-    let estimated_in = setup.pool.estimate_swap_strict_receive(&1, &0, &desired_out);
+    let estimated_in = setup
+        .pool
+        .estimate_swap_strict_receive(&1, &0, &desired_out);
     assert!(estimated_in > 0);
     let in_max = estimated_in - 1;
 
@@ -2935,16 +2937,17 @@ fn test_position_reinit_after_full_withdraw() {
     setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
     // Fully withdraw
-    setup
-        .pool
-        .withdraw_position(&setup.user, &-30, &30, &liq1);
+    setup.pool.withdraw_position(&setup.user, &-30, &30, &liq1);
 
     // Claim all owed tokens
     let (owed0, owed1) =
         setup
             .pool
             .claim_position_fees(&setup.user, &-30, &30, &u128::MAX, &u128::MAX);
-    assert!(owed0 > 0 || owed1 > 0, "should have owed tokens from withdraw");
+    assert!(
+        owed0 > 0 || owed1 > 0,
+        "should have owed tokens from withdraw"
+    );
 
     // Position should be deleted (zero liquidity + zero owed)
     let tick_lower = setup.pool.ticks(&-30);
@@ -2960,8 +2963,14 @@ fn test_position_reinit_after_full_withdraw() {
     // Position should be fresh (no leftover fee state)
     let pos = setup.pool.get_position(&setup.user, &-30, &30);
     assert_eq!(pos.liquidity, liq2);
-    assert_eq!(pos.tokens_owed_0, 0, "recreated position should have zero owed_0");
-    assert_eq!(pos.tokens_owed_1, 0, "recreated position should have zero owed_1");
+    assert_eq!(
+        pos.tokens_owed_0, 0,
+        "recreated position should have zero owed_0"
+    );
+    assert_eq!(
+        pos.tokens_owed_1, 0,
+        "recreated position should have zero owed_1"
+    );
 
     // Tick should be re-initialized
     let tick_lower2 = setup.pool.ticks(&-30);
@@ -3071,9 +3080,7 @@ fn test_protocol_fee_one_hundred_percent() {
     setup.mint_user_tokens(500_0000000, 500_0000000);
 
     // Set protocol fee to 100%
-    setup
-        .pool
-        .set_protocol_fee_fraction(&setup.admin, &10_000);
+    setup.pool.set_protocol_fee_fraction(&setup.admin, &10_000);
     assert_eq!(setup.pool.get_protocol_fee_fraction(), 10_000);
 
     let amounts = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
@@ -3188,7 +3195,10 @@ fn test_bitmap_word_boundary_crossing() {
     // Swap zero_for_one back: should find liquidity in [-50, -10] across word boundary
     get_token_admin_client(&env, &token0.address).mint(&swapper, &100_0000000);
     let out2 = pool.swap(&swapper, &0, &1, &80_0000000, &0);
-    assert!(out2 > 0, "reverse swap should find liquidity across word boundary");
+    assert!(
+        out2 > 0,
+        "reverse swap should find liquidity across word boundary"
+    );
 
     let slot2 = pool.slot0();
     assert!(
@@ -3253,16 +3263,17 @@ fn test_two_users_same_tick_range_fee_tracking() {
     );
 
     // User1 withdraws fully, user2's position should be unaffected
-    setup
-        .pool
-        .withdraw_position(&setup.user, &-30, &30, &liq1);
+    setup.pool.withdraw_position(&setup.user, &-30, &30, &liq1);
     setup
         .pool
         .claim_position_fees(&setup.user, &-30, &30, &u128::MAX, &u128::MAX);
 
     // User2 still has position
     let pos2 = setup.pool.get_position(&user2, &-30, &30);
-    assert_eq!(pos2.liquidity, liq2, "user2's position should be unaffected");
+    assert_eq!(
+        pos2.liquidity, liq2,
+        "user2's position should be unaffected"
+    );
 
     // Tick should still have user2's liquidity
     let tick_after = setup.pool.ticks(&-30);

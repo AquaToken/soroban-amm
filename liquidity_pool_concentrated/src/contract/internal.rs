@@ -289,7 +289,7 @@ impl ConcentratedLiquidityPool {
 
         let was_initialized = tick.liquidity_gross > 0;
 
-        let delta = Self::abs_i128(liquidity_delta);
+        let delta = liquidity_delta.unsigned_abs();
         if liquidity_delta >= 0 {
             tick.liquidity_gross = tick.liquidity_gross.saturating_add(delta);
         } else {
@@ -981,7 +981,7 @@ impl ConcentratedLiquidityPool {
         let price_limit = Self::validate_price_limit(e, &slot, zero_for_one, sqrt_price_limit_x96)?;
         let mut liquidity = get_liquidity(e);
 
-        let mut amount_remaining = Self::abs_i128(amount_specified);
+        let mut amount_remaining = amount_specified.unsigned_abs();
         let mut amount_calculated: u128 = 0;
         let tick_spacing = get_tick_spacing(e);
         let mut cc = ChunkCache::new(e);
@@ -1068,31 +1068,19 @@ impl ConcentratedLiquidityPool {
             return Err(Error::InsufficientLiquidity);
         }
 
-        let original_spec = Self::abs_i128(amount_specified);
+        let original_spec = amount_specified.unsigned_abs();
         let amount_spec_used = original_spec.saturating_sub(amount_remaining);
 
         if zero_for_one {
             if exact_input {
-                Ok((
-                    amount_spec_used as i128,
-                    -(amount_calculated as i128),
-                ))
+                Ok((amount_spec_used as i128, -(amount_calculated as i128)))
             } else {
-                Ok((
-                    amount_calculated as i128,
-                    -(amount_spec_used as i128),
-                ))
+                Ok((amount_calculated as i128, -(amount_spec_used as i128)))
             }
         } else if exact_input {
-            Ok((
-                -(amount_calculated as i128),
-                amount_spec_used as i128,
-            ))
+            Ok((-(amount_calculated as i128), amount_spec_used as i128))
         } else {
-            Ok((
-                -(amount_spec_used as i128),
-                amount_calculated as i128,
-            ))
+            Ok((-(amount_spec_used as i128), amount_calculated as i128))
         }
     }
 
@@ -1133,7 +1121,7 @@ impl ConcentratedLiquidityPool {
         let old_protocol_fees = get_protocol_fees(e);
         let mut protocol_fees = old_protocol_fees.clone();
 
-        let mut amount_remaining = Self::abs_i128(amount_specified);
+        let mut amount_remaining = amount_specified.unsigned_abs();
         let mut amount_calculated: u128 = 0;
         let mut total_fee_amount: u128 = 0;
         let tick_spacing = get_tick_spacing(e);
@@ -1246,31 +1234,19 @@ impl ConcentratedLiquidityPool {
 
         update_plane(e);
 
-        let original_spec = Self::abs_i128(amount_specified);
+        let original_spec = amount_specified.unsigned_abs();
         let amount_spec_used = original_spec.saturating_sub(amount_remaining);
 
         let (amount0, amount1) = if zero_for_one {
             if exact_input {
-                (
-                    amount_spec_used as i128,
-                    -(amount_calculated as i128),
-                )
+                (amount_spec_used as i128, -(amount_calculated as i128))
             } else {
-                (
-                    amount_calculated as i128,
-                    -(amount_spec_used as i128),
-                )
+                (amount_calculated as i128, -(amount_spec_used as i128))
             }
         } else if exact_input {
-            (
-                -(amount_calculated as i128),
-                amount_spec_used as i128,
-            )
+            (-(amount_calculated as i128), amount_spec_used as i128)
         } else {
-            (
-                -(amount_spec_used as i128),
-                amount_calculated as i128,
-            )
+            (-(amount_spec_used as i128), amount_calculated as i128)
         };
 
         let token0 = get_token0(e);
@@ -1312,15 +1288,15 @@ impl ConcentratedLiquidityPool {
             (
                 token0.clone(),
                 token1.clone(),
-                amount0.unsigned_abs() as u128,
-                (-amount1).unsigned_abs() as u128,
+                amount0.unsigned_abs(),
+                (-amount1).unsigned_abs(),
             )
         } else {
             (
                 token1.clone(),
                 token0.clone(),
-                amount1.unsigned_abs() as u128,
-                (-amount0).unsigned_abs() as u128,
+                amount1.unsigned_abs(),
+                (-amount0).unsigned_abs(),
             )
         };
         PoolEvents::new(e).trade(
