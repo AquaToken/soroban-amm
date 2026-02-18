@@ -53,8 +53,10 @@ pub fn max_distance_for_fee(fee: u32) -> u32 {
     fee * FEE_TO_DISTANCE_MULTIPLIER
 }
 
-// Tick distance from current price to the nearest edge of [tick_lower, tick_upper].
+// Tick distance from current price to the nearest edge of [tick_lower, tick_upper).
 // Returns 0 if current price is inside the range.
+// Uses half-open interval matching active-liquidity semantics: tick_current == tick_upper
+// is OUT of range (position does not supply active swap liquidity at this tick).
 pub fn tick_distance_from_range(tick_current: i32, tick_lower: i32, tick_upper: i32) -> u32 {
     if tick_lower >= tick_upper {
         return 0;
@@ -62,8 +64,10 @@ pub fn tick_distance_from_range(tick_current: i32, tick_lower: i32, tick_upper: 
 
     if tick_current < tick_lower {
         (tick_lower as i64 - tick_current as i64) as u32
-    } else if tick_current > tick_upper {
-        (tick_current as i64 - tick_upper as i64) as u32
+    } else if tick_current >= tick_upper {
+        // tick_current == tick_upper → boundary, distance 0 from edge but NOT in-range.
+        // Use max(1, ..) to ensure at least minimal out-of-range penalty.
+        ((tick_current as i64 - tick_upper as i64) as u32).max(1)
     } else {
         0
     }
@@ -142,5 +146,24 @@ mod tests {
         assert_eq!(apply_multiplier(1_000, 2_500), 250);
         // Capped at 100%
         assert_eq!(apply_multiplier(1_000, 20_000), 1_000);
+    }
+
+    #[test]
+    fn test_upper_boundary_is_out_of_range() {
+        // tick_current == tick_upper: half-open interval [lower, upper) → out-of-range
+        assert_eq!(tick_distance_from_range(110, 90, 110), 1);
+        // tick_current == tick_upper - 1: still in-range
+        assert_eq!(tick_distance_from_range(109, 90, 110), 0);
+        // tick_current == tick_lower: in-range (lower bound is inclusive)
+        assert_eq!(tick_distance_from_range(90, 90, 110), 0);
+        // tick_current == tick_lower - 1: out-of-range below
+        assert_eq!(tick_distance_from_range(89, 90, 110), 1);
+    }
+
+    #[test]
+    fn test_upper_boundary_not_full_weight() {
+        // Position at tick_current == tick_upper should NOT get full rewards
+        let mult = position_multiplier_bps(110, 90, 110, 30);
+        assert!(mult < BPS_DENOMINATOR, "boundary position should not get full weight");
     }
 }
