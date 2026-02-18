@@ -164,6 +164,9 @@ mod tests {
     fn test_upper_boundary_not_full_weight() {
         // Position at tick_current == tick_upper should NOT get full rewards
         let mult = position_multiplier_bps(110, 90, 110, 30);
-        assert!(mult < BPS_DENOMINATOR, "boundary position should not get full weight");
+        assert!(
+            mult < BPS_DENOMINATOR,
+            "boundary position should not get full weight"
+        );
     }
 }

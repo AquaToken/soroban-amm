@@ -1,11 +1,11 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::math::{sqrt_ratio_at_tick, tick_at_sqrt_ratio};
 use crate::testutils::{
     create_pool_contract, create_token_contract, deploy_rewards_gauge, get_token_admin_client,
     Setup,
 };
-use crate::math::{sqrt_ratio_at_tick, tick_at_sqrt_ratio};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, Map, Symbol, Vec, U256};
 use utils::test_utils::jump;
@@ -852,14 +852,10 @@ fn test_claim_position_fees_partial_then_full() {
     );
 
     let req0 = before.tokens_owed_0 / 2;
-    let (claimed0_partial, claimed1_partial) = setup.pool.claim_position_fees(
-        &setup.user,
-        &setup.user,
-        &-100,
-        &100,
-        &req0,
-        &0,
-    );
+    let (claimed0_partial, claimed1_partial) =
+        setup
+            .pool
+            .claim_position_fees(&setup.user, &setup.user, &-100, &100, &req0, &0);
     assert_eq!(claimed0_partial, req0);
     assert_eq!(claimed1_partial, 0);
 
@@ -1133,16 +1129,14 @@ fn test_swap_by_tokens_stops_at_price_limit_zero_for_one() {
     let limit = sqrt_ratio_at_tick(&setup.env, -100).unwrap();
     let amount_specified = 1_000_0000000i128;
 
-    let result = setup
-        .pool
-        .swap_by_tokens(
-            &swapper,
-            &swapper,
-            &setup.token0.address,
-            &setup.token1.address,
-            &amount_specified,
-            &limit,
-        );
+    let result = setup.pool.swap_by_tokens(
+        &swapper,
+        &swapper,
+        &setup.token0.address,
+        &setup.token1.address,
+        &amount_specified,
+        &limit,
+    );
 
     // Should partially fill due to price limit.
     assert!(result.amount0 > 0);
@@ -1167,16 +1161,14 @@ fn test_swap_by_tokens_stops_at_price_limit_one_for_zero() {
     let limit = sqrt_ratio_at_tick(&setup.env, 100).unwrap();
     let amount_specified = 1_000_0000000i128;
 
-    let result = setup
-        .pool
-        .swap_by_tokens(
-            &swapper,
-            &swapper,
-            &setup.token1.address,
-            &setup.token0.address,
-            &amount_specified,
-            &limit,
-        );
+    let result = setup.pool.swap_by_tokens(
+        &swapper,
+        &swapper,
+        &setup.token1.address,
+        &setup.token0.address,
+        &amount_specified,
+        &limit,
+    );
 
     // Should partially fill due to price limit.
     assert!(result.amount1 > 0);
@@ -1200,22 +1192,18 @@ fn test_swap_by_tokens_non_boundary_price_limit_has_consistent_tick() {
 
     let upper = sqrt_ratio_at_tick(&setup.env, -100).unwrap();
     let lower = sqrt_ratio_at_tick(&setup.env, -101).unwrap();
-    let half = upper
-        .sub(&lower)
-        .div(&U256::from_u32(&setup.env, 2));
+    let half = upper.sub(&lower).div(&U256::from_u32(&setup.env, 2));
     let limit = lower.add(&half);
     let amount_specified = 1_000_0000000i128;
 
-    let result = setup
-        .pool
-        .swap_by_tokens(
-            &swapper,
-            &swapper,
-            &setup.token0.address,
-            &setup.token1.address,
-            &amount_specified,
-            &limit,
-        );
+    let result = setup.pool.swap_by_tokens(
+        &swapper,
+        &swapper,
+        &setup.token0.address,
+        &setup.token1.address,
+        &amount_specified,
+        &limit,
+    );
 
     assert!(result.amount0 > 0);
     assert!(result.amount1 < 0);
@@ -2318,9 +2306,7 @@ fn test_drain_reserves() {
         &setup.reward_boost_token.address,
         &setup.reward_boost_feed.address,
     );
-    setup
-        .pool
-        .initialize_rewards_config(&setup.token0.address);
+    setup.pool.initialize_rewards_config(&setup.token0.address);
 
     // Deposit liquidity
     let deposit_amounts = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
