@@ -734,7 +734,7 @@ impl ConcentratedLiquidityPool {
     ) -> Result<SwapStep, Error> {
         if liquidity == 0 {
             return Ok(SwapStep {
-                sqrt_next: sqrt_current.clone(),
+                sqrt_next: sqrt_target.clone(),
                 amount_in: 0,
                 amount_out: 0,
                 fee_amount: 0,
@@ -999,6 +999,15 @@ impl ConcentratedLiquidityPool {
         }
 
         let exact_input = amount_specified > 0;
+
+        // Early exit: no positions in the pool — nothing to scan.
+        if get_total_raw_liquidity(e) == 0 {
+            if !exact_input {
+                return Err(Error::InsufficientLiquidity);
+            }
+            return Ok((0, 0));
+        }
+
         let fee = get_fee(e);
 
         let mut slot = get_slot0(e);
@@ -1011,10 +1020,6 @@ impl ConcentratedLiquidityPool {
         let mut cc = ChunkCache::new(e);
 
         while amount_remaining > 0 && slot.sqrt_price_x96 != price_limit {
-            if liquidity == 0 {
-                break;
-            }
-
             let (next_tick, next_tick_initialized) = Self::find_initialized_tick_in_word(
                 e,
                 slot.tick,
@@ -1046,25 +1051,6 @@ impl ConcentratedLiquidityPool {
                 zero_for_one,
                 exact_input,
             )?;
-
-            if step.amount_in == 0 && step.amount_out == 0 && step.fee_amount == 0 {
-                // Empty word boundary can produce a zero-step at the current price.
-                // Move the tick cursor forward to continue scanning initialized ticks.
-                if slot.sqrt_price_x96 == sqrt_target {
-                    slot.tick = if zero_for_one {
-                        next_tick.saturating_sub(1).max(MIN_TICK)
-                    } else {
-                        next_tick.min(MAX_TICK)
-                    };
-                    if (zero_for_one && slot.tick == MIN_TICK)
-                        || (!zero_for_one && slot.tick == MAX_TICK)
-                    {
-                        break;
-                    }
-                    continue;
-                }
-                break;
-            }
 
             if exact_input {
                 amount_remaining = amount_remaining
@@ -1152,6 +1138,22 @@ impl ConcentratedLiquidityPool {
         }
 
         let exact_input = amount_specified > 0;
+
+        // Early exit: no positions in the pool — nothing to scan.
+        if get_total_raw_liquidity(e) == 0 {
+            if !exact_input {
+                return Err(Error::InsufficientLiquidity);
+            }
+            let slot = get_slot0(e);
+            return Ok(SwapResult {
+                amount0: 0,
+                amount1: 0,
+                liquidity: 0,
+                sqrt_price_x96: slot.sqrt_price_x96,
+                tick: slot.tick,
+            });
+        }
+
         let fee = get_fee(e);
 
         let mut slot = get_slot0(e);
@@ -1168,10 +1170,6 @@ impl ConcentratedLiquidityPool {
         let mut cc = ChunkCache::new(e);
 
         while amount_remaining > 0 && slot.sqrt_price_x96 != price_limit {
-            if liquidity == 0 {
-                break;
-            }
-
             let (next_tick, next_tick_initialized) = Self::find_initialized_tick_in_word(
                 e,
                 slot.tick,
@@ -1203,25 +1201,6 @@ impl ConcentratedLiquidityPool {
                 zero_for_one,
                 exact_input,
             )?;
-
-            if step.amount_in == 0 && step.amount_out == 0 && step.fee_amount == 0 {
-                // Empty word boundary can produce a zero-step at the current price.
-                // Move the tick cursor forward to continue scanning initialized ticks.
-                if slot.sqrt_price_x96 == sqrt_target {
-                    slot.tick = if zero_for_one {
-                        next_tick.saturating_sub(1).max(MIN_TICK)
-                    } else {
-                        next_tick.min(MAX_TICK)
-                    };
-                    if (zero_for_one && slot.tick == MIN_TICK)
-                        || (!zero_for_one && slot.tick == MAX_TICK)
-                    {
-                        break;
-                    }
-                    continue;
-                }
-                break;
-            }
 
             if exact_input {
                 amount_remaining = amount_remaining

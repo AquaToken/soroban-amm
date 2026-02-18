@@ -892,6 +892,76 @@ fn test_swap_crossing_multiple_ticks() {
     );
 }
 
+// Verify swap traverses a liquidity gap (L10 fix).
+// Two positions with a gap between them: [-60, -20] and [20, 60].
+// Price starts at tick 0 (in the gap). A swap zero_for_one must slide through
+// the gap for free, find liquidity at [-60, -20], and execute.
+#[test]
+fn test_swap_across_liquidity_gap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&env);
+    let router = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let token0 = create_token_contract(&env, &admin);
+    let token1 = create_token_contract(&env, &admin);
+
+    mod pool_plane_gap {
+        soroban_sdk::contractimport!(
+            file = "../contracts/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    let plane = pool_plane_gap::Client::new(&env, &env.register(pool_plane_gap::WASM, ()));
+
+    let pool = create_pool_contract(
+        &env,
+        &admin,
+        &router,
+        &plane.address,
+        &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
+        30,
+        10,
+    );
+
+    // Fund the LP and create two positions with a gap at tick 0.
+    get_token_admin_client(&env, &token0.address).mint(&user, &1_000_0000000);
+    get_token_admin_client(&env, &token1.address).mint(&user, &1_000_0000000);
+
+    // Position below current price (only token1 deposited)
+    let amounts_below = Vec::from_array(&env, [10_0000000u128, 10_0000000u128]);
+    let (_, liq_below) = pool.deposit_position(&user, &user, &-60, &-20, &amounts_below);
+    assert!(liq_below > 0, "below-range position should have liquidity");
+
+    // Position above current price (only token0 deposited)
+    let amounts_above = Vec::from_array(&env, [10_0000000u128, 10_0000000u128]);
+    let (_, liq_above) = pool.deposit_position(&user, &user, &20, &60, &amounts_above);
+    assert!(liq_above > 0, "above-range position should have liquidity");
+
+    // Active liquidity at tick 0 should be 0 (gap between positions)
+    assert_eq!(pool.liquidity(), 0, "no active liquidity in the gap");
+
+    // Swap zero_for_one: price moves down, should cross gap and reach [-60, -20]
+    let swapper = Address::generate(&env);
+    get_token_admin_client(&env, &token0.address).mint(&swapper, &5_0000000);
+    let out = pool.swap(&swapper, &0, &1, &5_0000000, &0);
+    assert!(out > 0, "swap should produce output by crossing the gap");
+
+    // Price should have moved below -20 (into the lower position)
+    let slot = pool.slot0();
+    assert!(
+        slot.tick < -20,
+        "tick should be below -20 after crossing gap, got {}",
+        slot.tick
+    );
+
+    // estimate_swap should match: feed the same input, get the same output
+    let estimate = pool.estimate_swap(&0, &1, &out);
+    assert!(estimate > 0, "estimate should also cross the gap");
+}
+
 #[test]
 fn test_estimate_swap_matches_actual() {
     let setup = Setup::default();
