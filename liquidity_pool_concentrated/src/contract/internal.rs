@@ -324,6 +324,11 @@ impl ConcentratedLiquidityPool {
                 tick.fee_growth_outside_0_x128 = get_fee_growth_global_0_x128(e);
                 tick.fee_growth_outside_1_x128 = get_fee_growth_global_1_x128(e);
             }
+        } else if was_initialized && !is_initialized {
+            // Clear stale fee accumulators on de-initialization to prevent
+            // history-dependent fee attribution when the tick is later reused.
+            tick.fee_growth_outside_0_x128 = soroban_sdk::U256::from_u32(e, 0);
+            tick.fee_growth_outside_1_x128 = soroban_sdk::U256::from_u32(e, 0);
         }
 
         // Write tick back into chunk
