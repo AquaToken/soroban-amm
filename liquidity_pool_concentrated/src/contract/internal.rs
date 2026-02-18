@@ -36,11 +36,7 @@ impl ConcentratedLiquidityPool {
     }
 
     pub(super) fn abs_i128(v: i128) -> u128 {
-        if v < 0 {
-            (-v) as u128
-        } else {
-            v as u128
-        }
+        v.unsigned_abs()
     }
 
     pub(super) fn u128_to_i128(v: u128) -> Result<i128, Error> {
@@ -659,8 +655,8 @@ impl ConcentratedLiquidityPool {
             SorobanTokenClient::new(e, &token1).transfer(&contract, recipient, &(amount1 as i128));
         }
 
-        set_reserve0(e, &(get_reserve0(e).saturating_sub(amount0)));
-        set_reserve1(e, &(get_reserve1(e).saturating_sub(amount1)));
+        set_reserve0(e, &(get_reserve0(e) - amount0));
+        set_reserve1(e, &(get_reserve1(e) - amount1));
 
         update_plane(e);
 
@@ -1041,6 +1037,7 @@ impl ConcentratedLiquidityPool {
                 next_tick_price.clone()
             };
 
+            let sqrt_price_start = slot.sqrt_price_x96.clone();
             let step = Self::compute_swap_step(
                 e,
                 &slot.sqrt_price_x96,
@@ -1091,7 +1088,7 @@ impl ConcentratedLiquidityPool {
                 } else {
                     next_tick.min(MAX_TICK)
                 };
-            } else {
+            } else if slot.sqrt_price_x96 != sqrt_price_start {
                 slot.tick = tick_at_sqrt_ratio(e, &slot.sqrt_price_x96)?;
             }
         }
@@ -1194,6 +1191,7 @@ impl ConcentratedLiquidityPool {
                 next_tick_price.clone()
             };
 
+            let sqrt_price_start = slot.sqrt_price_x96.clone();
             let step = Self::compute_swap_step(
                 e,
                 &slot.sqrt_price_x96,
@@ -1257,7 +1255,7 @@ impl ConcentratedLiquidityPool {
                 } else {
                     next_tick.min(MAX_TICK)
                 };
-            } else {
+            } else if slot.sqrt_price_x96 != sqrt_price_start {
                 slot.tick = tick_at_sqrt_ratio(e, &slot.sqrt_price_x96)?;
             }
         }
@@ -1330,12 +1328,12 @@ impl ConcentratedLiquidityPool {
         if amount0 > 0 {
             res0 += amount0 as u128 - pf_delta_0;
         } else if amount0 < 0 {
-            res0 = res0.saturating_sub((-amount0) as u128);
+            res0 -= (-amount0) as u128;
         }
         if amount1 > 0 {
             res1 += amount1 as u128 - pf_delta_1;
         } else if amount1 < 0 {
-            res1 = res1.saturating_sub((-amount1) as u128);
+            res1 -= (-amount1) as u128;
         }
         set_reserve0(e, &res0);
         set_reserve1(e, &res1);

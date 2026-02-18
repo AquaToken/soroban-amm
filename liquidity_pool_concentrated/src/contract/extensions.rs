@@ -58,6 +58,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         desired_amounts: Vec<u128>,
     ) -> Result<(Vec<u128>, u128), Error> {
         sender.require_auth();
+        if sender != recipient {
+            recipient.require_auth();
+        }
         if get_is_killed_deposit(&e) {
             return Err(Error::DepositKilled);
         }
