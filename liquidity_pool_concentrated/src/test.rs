@@ -3132,3 +3132,372 @@ fn test_exact_output_with_price_limit_one_for_zero_insufficient() {
         "exact output with restrictive price limit should fail"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P2: Position re-initialization (create → full withdraw → recreate)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_position_reinit_after_full_withdraw() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
+
+    // Create position
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq1) = setup
+        .pool
+        .deposit_position(&setup.user, &-30, &30, &amounts);
+    assert!(liq1 > 0);
+
+    // Generate fees via swap
+    let swapper = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &20_0000000);
+    setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
+
+    // Fully withdraw
+    setup
+        .pool
+        .withdraw_position(&setup.user, &-30, &30, &liq1);
+
+    // Claim all owed tokens
+    let (owed0, owed1) =
+        setup
+            .pool
+            .claim_position_fees(&setup.user, &-30, &30, &u128::MAX, &u128::MAX);
+    assert!(owed0 > 0 || owed1 > 0, "should have owed tokens from withdraw");
+
+    // Position should be deleted (zero liquidity + zero owed)
+    let tick_lower = setup.pool.ticks(&-30);
+    assert_eq!(tick_lower.liquidity_gross, 0, "tick should be cleared");
+
+    // Recreate at the same tick range
+    let amounts2 = Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]);
+    let (_, liq2) = setup
+        .pool
+        .deposit_position(&setup.user, &-30, &30, &amounts2);
+    assert!(liq2 > 0, "should be able to recreate position");
+
+    // Position should be fresh (no leftover fee state)
+    let pos = setup.pool.get_position(&setup.user, &-30, &30);
+    assert_eq!(pos.liquidity, liq2);
+    assert_eq!(pos.tokens_owed_0, 0, "recreated position should have zero owed_0");
+    assert_eq!(pos.tokens_owed_1, 0, "recreated position should have zero owed_1");
+
+    // Tick should be re-initialized
+    let tick_lower2 = setup.pool.ticks(&-30);
+    assert_eq!(tick_lower2.liquidity_gross, liq2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P2: Fee accrual during deposit (swap then deposit on same range)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_fee_accrual_during_second_deposit() {
+    let setup = Setup::default();
+    let user2 = Address::generate(&setup.env);
+
+    setup.mint_user_tokens(500_0000000, 500_0000000);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&user2, &500_0000000);
+    get_token_admin_client(&setup.env, &setup.token1.address).mint(&user2, &500_0000000);
+
+    // User1 deposits first
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq1) = setup
+        .pool
+        .deposit_position(&setup.user, &-50, &50, &amounts);
+
+    // Swap to generate fees for user1's position
+    let swapper = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &20_0000000);
+    setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
+
+    // User1 deposits AGAIN at the same range — accrue_position_fees should
+    // snapshot the fees earned so far into tokens_owed before adding liquidity
+    let amounts2 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq_add) = setup
+        .pool
+        .deposit_position(&setup.user, &-50, &50, &amounts2);
+    assert!(liq_add > 0);
+
+    // Verify position has accrued fees from the swap (stored in tokens_owed)
+    let pos = setup.pool.get_position(&setup.user, &-50, &50);
+    assert_eq!(pos.liquidity, liq1 + liq_add);
+    assert!(
+        pos.tokens_owed_0 > 0,
+        "fees from swap should be accrued into tokens_owed_0 during deposit: {}",
+        pos.tokens_owed_0
+    );
+
+    // User can claim those fees
+    let (claimed0, claimed1) =
+        setup
+            .pool
+            .claim_position_fees(&setup.user, &-50, &50, &u128::MAX, &u128::MAX);
+    assert!(claimed0 > 0, "should be able to claim accrued fees");
+
+    let pos_after = setup.pool.get_position(&setup.user, &-50, &50);
+    assert_eq!(pos_after.tokens_owed_0, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P2: Protocol fee = 0% and 100% edge cases
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_protocol_fee_zero_percent() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(500_0000000, 500_0000000);
+
+    // Set protocol fee to 0%
+    setup.pool.set_protocol_fee_fraction(&setup.admin, &0);
+    assert_eq!(setup.pool.get_protocol_fee_fraction(), 0);
+
+    let amounts = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
+    let (_, liq) = setup
+        .pool
+        .deposit_position(&setup.user, &-50, &50, &amounts);
+
+    // Swap to generate fees
+    let swapper = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &30_0000000);
+    setup.pool.swap(&swapper, &0, &1, &20_0000000, &0);
+
+    // Protocol should have zero fees
+    let protocol_fees = setup.pool.protocol_fees();
+    assert_eq!(
+        protocol_fees.token0, 0,
+        "protocol fee 0%: protocol should collect nothing"
+    );
+
+    // LP should get ALL the fees (30 bps of input)
+    let (lp_fee0, _lp_fee1) =
+        setup
+            .pool
+            .claim_position_fees(&setup.user, &-50, &50, &u128::MAX, &u128::MAX);
+    let expected_total_fee = 20_0000000u128 * 30 / 10000;
+    let tolerance = expected_total_fee / 100 + 1;
+    assert!(
+        lp_fee0.abs_diff(expected_total_fee) <= tolerance,
+        "LP should get all fees (~{}), got {}",
+        expected_total_fee,
+        lp_fee0
+    );
+}
+
+#[test]
+fn test_protocol_fee_one_hundred_percent() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(500_0000000, 500_0000000);
+
+    // Set protocol fee to 100%
+    setup
+        .pool
+        .set_protocol_fee_fraction(&setup.admin, &10_000);
+    assert_eq!(setup.pool.get_protocol_fee_fraction(), 10_000);
+
+    let amounts = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-50, &50, &amounts);
+
+    // Swap to generate fees
+    let swapper = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &30_0000000);
+    setup.pool.swap(&swapper, &0, &1, &20_0000000, &0);
+
+    // Protocol should get ALL fees
+    let protocol_fees = setup.pool.protocol_fees();
+    let expected_total_fee = 20_0000000u128 * 30 / 10000;
+    let tolerance = expected_total_fee / 100 + 1;
+    assert!(
+        protocol_fees.token0.abs_diff(expected_total_fee) <= tolerance,
+        "protocol fee 100%: protocol should collect all fees (~{}), got {}",
+        expected_total_fee,
+        protocol_fees.token0
+    );
+
+    // LP should get zero fees
+    let (lp_fee0, lp_fee1) =
+        setup
+            .pool
+            .claim_position_fees(&setup.user, &-50, &50, &u128::MAX, &u128::MAX);
+    assert_eq!(lp_fee0, 0, "LP should get zero fees at 100% protocol fee");
+    assert_eq!(lp_fee1, 0, "LP should get zero fees at 100% protocol fee");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P2: Bitmap word boundary crossing
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_bitmap_word_boundary_crossing() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&env);
+    let router = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let token_a = create_token_contract(&env, &admin);
+    let token_b = create_token_contract(&env, &admin);
+    let (token0, token1) = if token_a.address < token_b.address {
+        (token_a, token_b)
+    } else {
+        (token_b, token_a)
+    };
+
+    mod pool_plane_bw {
+        soroban_sdk::contractimport!(
+            file = "../contracts/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    let plane = pool_plane_bw::Client::new(&env, &env.register(pool_plane_bw::WASM, ()));
+
+    // tick_spacing=10: compressed_tick = tick/10, chunk_pos = compressed/16
+    // word_pos = chunk_pos >> 8
+    // Word boundary: chunk_pos -1 → word -1, chunk_pos 0 → word 0
+    // chunk_pos -1 corresponds to compressed_tick -16..-1, i.e. ticks -160..-10
+    // chunk_pos 0 corresponds to compressed_tick 0..15, i.e. ticks 0..150
+    // So the word boundary is between tick -10 and tick 0
+
+    let pool = create_pool_contract(
+        &env,
+        &admin,
+        &router,
+        &plane.address,
+        &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
+        30,
+        10,
+    );
+
+    get_token_admin_client(&env, &token0.address).mint(&user, &1_000_0000000);
+    get_token_admin_client(&env, &token1.address).mint(&user, &1_000_0000000);
+
+    // Position in word 0: [10, 50]
+    let amounts = Vec::from_array(&env, [50_0000000u128, 50_0000000u128]);
+    let (_, liq_pos) = pool.deposit_position(&user, &10, &50, &amounts);
+    assert!(liq_pos > 0);
+
+    // Position in word -1: [-50, -10]
+    let (_, liq_neg) = pool.deposit_position(&user, &-50, &-10, &amounts);
+    assert!(liq_neg > 0);
+
+    // Verify bitmap words are set in different words
+    let word_0 = pool.chunk_bitmap(&0);
+    let word_neg1 = pool.chunk_bitmap(&-1);
+    let zero = U256::from_u32(&env, 0);
+    assert!(word_0 != zero, "word 0 should have bits set");
+    assert!(word_neg1 != zero, "word -1 should have bits set");
+
+    // Swap one_for_zero starting from tick 0 (in the gap between positions)
+    // This should find liquidity in [10, 50] by scanning forward across word boundary
+    let swapper = Address::generate(&env);
+    get_token_admin_client(&env, &token1.address).mint(&swapper, &100_0000000);
+    let out = pool.swap(&swapper, &1, &0, &30_0000000, &0);
+    assert!(out > 0, "swap should find liquidity across word boundary");
+
+    let slot = pool.slot0();
+    assert!(
+        slot.tick >= 10,
+        "swap should reach position in [10,50], tick={}",
+        slot.tick
+    );
+
+    // Swap zero_for_one back: should find liquidity in [-50, -10] across word boundary
+    get_token_admin_client(&env, &token0.address).mint(&swapper, &100_0000000);
+    let out2 = pool.swap(&swapper, &0, &1, &80_0000000, &0);
+    assert!(out2 > 0, "reverse swap should find liquidity across word boundary");
+
+    let slot2 = pool.slot0();
+    assert!(
+        slot2.tick < -10,
+        "swap should reach position in [-50,-10], tick={}",
+        slot2.tick
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P2: Two users sharing exact same tick range
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_two_users_same_tick_range_fee_tracking() {
+    let setup = Setup::default();
+    let user2 = Address::generate(&setup.env);
+
+    setup.mint_user_tokens(500_0000000, 500_0000000);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&user2, &500_0000000);
+    get_token_admin_client(&setup.env, &setup.token1.address).mint(&user2, &500_0000000);
+
+    // Both users deposit at EXACTLY the same range
+    let amounts1 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq1) = setup
+        .pool
+        .deposit_position(&setup.user, &-30, &30, &amounts1);
+
+    let amounts2 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq2) = setup.pool.deposit_position(&user2, &-30, &30, &amounts2);
+
+    assert!(liq1 > 0 && liq2 > 0);
+    // Same amounts → same liquidity
+    assert_eq!(liq1, liq2, "equal deposits should produce equal liquidity");
+
+    // Verify tick state: liquidity_gross = sum of both
+    let tick = setup.pool.ticks(&-30);
+    assert_eq!(tick.liquidity_gross, liq1 + liq2);
+
+    // Swap to generate fees
+    let swapper = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &30_0000000);
+    setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
+
+    // Both should earn identical fees (same liquidity, same range)
+    let (u1_fee0, u1_fee1) =
+        setup
+            .pool
+            .claim_position_fees(&setup.user, &-30, &30, &u128::MAX, &u128::MAX);
+    let (u2_fee0, u2_fee1) =
+        setup
+            .pool
+            .claim_position_fees(&user2, &-30, &30, &u128::MAX, &u128::MAX);
+
+    assert_eq!(
+        u1_fee0, u2_fee0,
+        "equal liquidity at same range should earn equal token0 fees"
+    );
+    assert_eq!(
+        u1_fee1, u2_fee1,
+        "equal liquidity at same range should earn equal token1 fees"
+    );
+
+    // User1 withdraws fully, user2's position should be unaffected
+    setup
+        .pool
+        .withdraw_position(&setup.user, &-30, &30, &liq1);
+    setup
+        .pool
+        .claim_position_fees(&setup.user, &-30, &30, &u128::MAX, &u128::MAX);
+
+    // User2 still has position
+    let pos2 = setup.pool.get_position(&user2, &-30, &30);
+    assert_eq!(pos2.liquidity, liq2, "user2's position should be unaffected");
+
+    // Tick should still have user2's liquidity
+    let tick_after = setup.pool.ticks(&-30);
+    assert_eq!(
+        tick_after.liquidity_gross, liq2,
+        "tick should have only user2's liquidity after user1 withdrawal"
+    );
+
+    // Swap again — only user2 should earn fees
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &30_0000000);
+    setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
+
+    let (u2_fee0_2, _u2_fee1_2) =
+        setup
+            .pool
+            .claim_position_fees(&user2, &-30, &30, &u128::MAX, &u128::MAX);
+    assert!(u2_fee0_2 > 0, "user2 should earn fees from second swap");
+}
