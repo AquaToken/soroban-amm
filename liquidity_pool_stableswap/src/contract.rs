@@ -1537,8 +1537,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         rewards_gauge::operations::checkpoint_user(
             &e,
             &user,
-            rewards_manager.get_working_balance(&user, total_shares + mint_amount),
-            rewards_manager.get_working_supply(user_shares + mint_amount),
+            rewards_manager.get_working_balance(&user, user_shares + mint_amount),
+            rewards_manager.get_working_supply(total_shares + mint_amount),
         );
         rewards_manager.update_working_balance(
             &user,
