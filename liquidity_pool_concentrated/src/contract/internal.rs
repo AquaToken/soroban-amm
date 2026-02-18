@@ -612,7 +612,6 @@ impl ConcentratedLiquidityPool {
     pub(super) fn collect_internal(
         e: &Env,
         owner: &Address,
-        recipient: &Address,
         tick_lower: i32,
         tick_upper: i32,
         amount0_requested: u128,
@@ -649,10 +648,10 @@ impl ConcentratedLiquidityPool {
         let contract = e.current_contract_address();
 
         if amount0 > 0 {
-            SorobanTokenClient::new(e, &token0).transfer(&contract, recipient, &(amount0 as i128));
+            SorobanTokenClient::new(e, &token0).transfer(&contract, owner, &(amount0 as i128));
         }
         if amount1 > 0 {
-            SorobanTokenClient::new(e, &token1).transfer(&contract, recipient, &(amount1 as i128));
+            SorobanTokenClient::new(e, &token1).transfer(&contract, owner, &(amount1 as i128));
         }
 
         set_reserve0(e, &(get_reserve0(e) - amount0));
@@ -1128,7 +1127,6 @@ impl ConcentratedLiquidityPool {
     pub(super) fn swap_internal(
         e: &Env,
         sender: &Address,
-        recipient: &Address,
         zero_for_one: bool,
         amount_specified: i128,
         sqrt_price_limit_x96: U256,
@@ -1315,10 +1313,10 @@ impl ConcentratedLiquidityPool {
         }
 
         if amount0 < 0 {
-            SorobanTokenClient::new(e, &token0).transfer(&contract, recipient, &(-amount0));
+            SorobanTokenClient::new(e, &token0).transfer(&contract, sender, &(-amount0));
         }
         if amount1 < 0 {
-            SorobanTokenClient::new(e, &token1).transfer(&contract, recipient, &(-amount1));
+            SorobanTokenClient::new(e, &token1).transfer(&contract, sender, &(-amount1));
         }
 
         // Reserve tracking: reserves change by net token flow minus protocol fee delta.

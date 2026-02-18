@@ -161,7 +161,6 @@ pub trait ConcentratedPoolExtensionsTrait {
     fn swap_by_tokens(
         e: Env,
         sender: Address,
-        recipient: Address,
         token_in: Address,
         token_out: Address,
         amount_specified: i128,
@@ -171,7 +170,6 @@ pub trait ConcentratedPoolExtensionsTrait {
     fn deposit_position(
         e: Env,
         sender: Address,
-        recipient: Address,
         tick_lower: i32,
         tick_upper: i32,
         desired_amounts: Vec<u128>,
@@ -188,7 +186,6 @@ pub trait ConcentratedPoolExtensionsTrait {
     fn claim_position_fees(
         e: Env,
         owner: Address,
-        recipient: Address,
         tick_lower: i32,
         tick_upper: i32,
         amount0_requested: u128,

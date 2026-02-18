@@ -143,7 +143,6 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         let (actual_amounts, liquidity) = match Self::deposit_position(
             e.clone(),
             user.clone(),
-            user.clone(),
             tick_lower,
             tick_upper,
             desired_amounts,
@@ -215,7 +214,6 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
 
         let result = match Self::swap_by_tokens(
             e.clone(),
-            user.clone(),
             user.clone(),
             token_in,
             token_out,
@@ -312,7 +310,6 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         let result = match Self::swap_by_tokens(
             e.clone(),
             user.clone(),
-            user.clone(),
             token_in,
             token_out,
             -out_amount_i128,
@@ -401,7 +398,6 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
 
         let (amount0, amount1) = match Self::collect_internal(
             &e,
-            &user,
             &user,
             tick_lower,
             tick_upper,

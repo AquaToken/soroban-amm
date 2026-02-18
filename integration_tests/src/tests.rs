@@ -280,8 +280,7 @@ fn test_concentrated_pool_positions() {
 
     // tick_spacing for 30bps fee is 60, so use multiples of 60
     let dep_amounts = Vec::from_array(&setup.env, [50_000_0000000u128, 50_000_0000000u128]);
-    let (actual_amounts, liquidity) =
-        conc_pool.deposit_position(&user, &user, &-120, &120, &dep_amounts);
+    let (actual_amounts, liquidity) = conc_pool.deposit_position(&user, &-120, &120, &dep_amounts);
     let amt0 = actual_amounts.get_unchecked(0);
     let amt1 = actual_amounts.get_unchecked(1);
     assert!(amt0 > 0 || amt1 > 0, "should transfer at least one token");
@@ -297,16 +296,14 @@ fn test_concentrated_pool_positions() {
     conc_pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
     // Collect position fees
-    let (fee0, fee1) =
-        conc_pool.claim_position_fees(&user, &user, &-120, &120, &u128::MAX, &u128::MAX);
+    let (fee0, fee1) = conc_pool.claim_position_fees(&user, &-120, &120, &u128::MAX, &u128::MAX);
     assert!(fee0 > 0 || fee1 > 0, "should collect fees");
 
     // Withdraw position
     conc_pool.withdraw_position(&user, &-120, &120, &liquidity);
 
     // Collect remaining owed tokens
-    let (owed0, owed1) =
-        conc_pool.claim_position_fees(&user, &user, &-120, &120, &u128::MAX, &u128::MAX);
+    let (owed0, owed1) = conc_pool.claim_position_fees(&user, &-120, &120, &u128::MAX, &u128::MAX);
     assert!(owed0 > 0 || owed1 > 0, "should collect withdrawn tokens");
 }
 

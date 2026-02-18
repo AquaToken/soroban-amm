@@ -21,7 +21,6 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     fn swap_by_tokens(
         e: Env,
         sender: Address,
-        recipient: Address,
         token_in: Address,
         token_out: Address,
         amount_specified: i128,
@@ -35,7 +34,6 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Self::swap_internal(
             &e,
             &sender,
-            &recipient,
             zero_for_one,
             amount_specified,
             sqrt_price_limit_x96,
@@ -52,15 +50,11 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     fn deposit_position(
         e: Env,
         sender: Address,
-        recipient: Address,
         tick_lower: i32,
         tick_upper: i32,
         desired_amounts: Vec<u128>,
     ) -> Result<(Vec<u128>, u128), Error> {
         sender.require_auth();
-        if sender != recipient {
-            recipient.require_auth();
-        }
         if get_is_killed_deposit(&e) {
             return Err(Error::DepositKilled);
         }
@@ -88,8 +82,8 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             );
         }
 
-        Self::recompute_user_weighted_liquidity(&e, &recipient);
-        Self::rewards_checkpoint_user(&e, &recipient);
+        Self::recompute_user_weighted_liquidity(&e, &sender);
+        Self::rewards_checkpoint_user(&e, &sender);
 
         // Compute max liquidity from desired token amounts at current price
         let liquidity = Self::max_liquidity_for_amounts(
@@ -142,11 +136,11 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         set_reserve0(&e, &(get_reserve0(&e) + amount0));
         set_reserve1(&e, &(get_reserve1(&e) + amount1));
 
-        let mut position = Self::get_or_create_position(&e, &recipient, tick_lower, tick_upper);
+        let mut position = Self::get_or_create_position(&e, &sender, tick_lower, tick_upper);
         Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick)?;
         position.liquidity = position.liquidity.saturating_add(liquidity);
-        set_position(&e, &recipient, tick_lower, tick_upper, &position);
-        Self::ensure_user_range_exists(&e, &recipient, tick_lower, tick_upper)?;
+        set_position(&e, &sender, tick_lower, tick_upper, &position);
+        Self::ensure_user_range_exists(&e, &sender, tick_lower, tick_upper)?;
 
         Self::update_tick_liquidity(&e, tick_lower, liquidity as i128, false)?;
         Self::update_tick_liquidity(&e, tick_upper, liquidity as i128, true)?;
@@ -155,9 +149,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             set_liquidity(&e, &get_liquidity(&e).saturating_add(liquidity));
         }
 
-        Self::update_user_raw_liquidity(&e, &recipient, liquidity as i128);
-        Self::recompute_user_weighted_liquidity(&e, &recipient);
-        Self::rewards_refresh_working_balance(&e, &recipient);
+        Self::update_user_raw_liquidity(&e, &sender, liquidity as i128);
+        Self::recompute_user_weighted_liquidity(&e, &sender);
+        Self::rewards_refresh_working_balance(&e, &sender);
         update_plane(&e);
 
         let tokens = Vec::from_array(&e, [token0, token1]);
@@ -258,12 +252,11 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     }
 
     // Collect accrued swap fees from a position. Transfers up to amount0/1_requested
-    // of owed tokens to recipient. Fees accumulate from swaps that occur while the
+    // of owed tokens to owner. Fees accumulate from swaps that occur while the
     // position's range contains the active price. Returns (amount0, amount1) collected.
     fn claim_position_fees(
         e: Env,
         owner: Address,
-        recipient: Address,
         tick_lower: i32,
         tick_upper: i32,
         amount0_requested: u128,
@@ -272,7 +265,6 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Self::collect_internal(
             &e,
             &owner,
-            &recipient,
             tick_lower,
             tick_upper,
             amount0_requested,
