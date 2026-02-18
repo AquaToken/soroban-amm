@@ -1988,3 +1988,84 @@ fn test_dust_griefing_tick_spacing_20() {
         },
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Reserve tracking: reward claim must not drain LP reserves
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_drain_reserves() {
+    // Verify that stored reserves are not affected by reward claims
+    // when reward_token == one of the pool tokens.
+    let setup = Setup::default();
+    setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
+
+    // Use token0 as reward token — the critical scenario
+    setup.pool.initialize_boost_config(
+        &setup.reward_boost_token.address,
+        &setup.reward_boost_feed.address,
+    );
+    setup
+        .pool
+        .initialize_rewards_config(&setup.token0.address);
+
+    // Deposit liquidity
+    let deposit_amounts = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
+    let (_, shares) = setup.pool.deposit(&setup.user, &deposit_amounts, &0);
+    assert!(shares > 0);
+
+    let reserves_after_deposit = setup.pool.get_reserves();
+    assert!(reserves_after_deposit.get_unchecked(0) > 0);
+    assert!(reserves_after_deposit.get_unchecked(1) > 0);
+
+    // Configure and fund rewards (token0 = reward_token)
+    let reward_tps = 1_000u128;
+    let reward_duration = 60u64;
+    let total_reward = reward_tps * reward_duration as u128;
+    let reward_expired_at = setup.env.ledger().timestamp() + reward_duration;
+
+    get_token_admin_client(&setup.env, &setup.token0.address)
+        .mint(&setup.pool.address, &(total_reward as i128));
+    setup
+        .pool
+        .set_rewards_config(&setup.admin, &reward_expired_at, &reward_tps);
+
+    // Advance time and claim rewards
+    jump(&setup.env, 30);
+    let claimed = setup.pool.claim(&setup.user);
+    assert!(claimed > 0, "should have claimed some rewards");
+
+    // Reserves must be unchanged by the reward claim
+    let reserves_after_claim = setup.pool.get_reserves();
+    assert_eq!(
+        reserves_after_claim.get_unchecked(0),
+        reserves_after_deposit.get_unchecked(0),
+        "reserve0 must not change from reward claim"
+    );
+    assert_eq!(
+        reserves_after_claim.get_unchecked(1),
+        reserves_after_deposit.get_unchecked(1),
+        "reserve1 must not change from reward claim"
+    );
+
+    // Verify invariant: balance >= reserves + protocol_fees
+    let protocol_fees = setup.pool.protocol_fees();
+    let balance0 = setup.token0.balance(&setup.pool.address) as u128;
+    let balance1 = setup.token1.balance(&setup.pool.address) as u128;
+    assert!(
+        balance0 >= reserves_after_claim.get_unchecked(0) + protocol_fees.token0,
+        "balance0 must cover reserves + protocol fees"
+    );
+    assert!(
+        balance1 >= reserves_after_claim.get_unchecked(1) + protocol_fees.token1,
+        "balance1 must cover reserves + protocol fees"
+    );
+
+    // Withdraw should still work
+    let withdrawn = setup.pool.withdraw(
+        &setup.user,
+        &shares,
+        &Vec::from_array(&setup.env, [0u128, 0u128]),
+    );
+    assert!(withdrawn.get_unchecked(0) > 0 || withdrawn.get_unchecked(1) > 0);
+}

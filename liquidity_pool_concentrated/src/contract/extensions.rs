@@ -136,6 +136,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             SorobanTokenClient::new(&e, &token1).transfer(&sender, &contract, &(amount1 as i128));
         }
 
+        set_reserve0(&e, &(get_reserve0(&e) + amount0));
+        set_reserve1(&e, &(get_reserve1(&e) + amount1));
+
         let mut position = Self::get_or_create_position(&e, &recipient, tick_lower, tick_upper);
         Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick)?;
         position.liquidity = position.liquidity.saturating_add(liquidity);

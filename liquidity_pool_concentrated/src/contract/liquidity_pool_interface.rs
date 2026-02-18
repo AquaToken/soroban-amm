@@ -70,6 +70,8 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         set_is_killed_deposit(&e, &false);
         set_is_killed_swap(&e, &false);
         set_claim_killed(&e, &false);
+        set_reserve0(&e, &0);
+        set_reserve1(&e, &0);
 
         let sqrt_price_x96 = sqrt_ratio_at_tick(&e, 0).unwrap();
         set_slot0(
@@ -110,19 +112,9 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         get_user_raw_liquidity(&e, &user)
     }
 
-    // Token balances held by pool minus uncollected protocol fees.
+    // Tracked LP reserves (excludes protocol fees). Updated by deposit/withdraw/swap/collect.
     fn get_reserves(e: Env) -> Vec<u128> {
-        let contract = e.current_contract_address();
-        let fees = get_protocol_fees(&e);
-        let balance0 = SorobanTokenClient::new(&e, &get_token0(&e)).balance(&contract) as u128;
-        let balance1 = SorobanTokenClient::new(&e, &get_token1(&e)).balance(&contract) as u128;
-        Vec::from_array(
-            &e,
-            [
-                balance0.saturating_sub(fees.token0),
-                balance1.saturating_sub(fees.token1),
-            ],
-        )
+        Vec::from_array(&e, [get_reserve0(&e), get_reserve1(&e)])
     }
 
     // Returns [token0, token1] sorted addresses.

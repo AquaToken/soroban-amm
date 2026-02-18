@@ -659,6 +659,9 @@ impl ConcentratedLiquidityPool {
             SorobanTokenClient::new(e, &token1).transfer(&contract, recipient, &(amount1 as i128));
         }
 
+        set_reserve0(e, &(get_reserve0(e).saturating_sub(amount0)));
+        set_reserve1(e, &(get_reserve1(e).saturating_sub(amount1)));
+
         update_plane(e);
 
         Ok((amount0, amount1))
@@ -1155,7 +1158,8 @@ impl ConcentratedLiquidityPool {
         let price_limit = Self::validate_price_limit(e, &slot, zero_for_one, sqrt_price_limit_x96)?;
 
         let mut liquidity = get_liquidity(e);
-        let mut protocol_fees = get_protocol_fees(e);
+        let old_protocol_fees = get_protocol_fees(e);
+        let mut protocol_fees = old_protocol_fees.clone();
 
         let mut amount_remaining = Self::abs_i128(amount_specified);
         let mut amount_calculated: u128 = 0;
@@ -1282,6 +1286,11 @@ impl ConcentratedLiquidityPool {
         set_protocol_fees(e, &protocol_fees);
         set_liquidity(e, &liquidity);
         set_slot0(e, &slot);
+
+        // Update reserves: net token flow minus protocol fee delta
+        let pf_delta_0 = protocol_fees.token0 - old_protocol_fees.token0;
+        let pf_delta_1 = protocol_fees.token1 - old_protocol_fees.token1;
+
         update_plane(e);
 
         let original_spec = Self::abs_i128(amount_specified);
@@ -1328,6 +1337,23 @@ impl ConcentratedLiquidityPool {
         if amount1 < 0 {
             SorobanTokenClient::new(e, &token1).transfer(&contract, recipient, &(-amount1));
         }
+
+        // Reserve tracking: reserves change by net token flow minus protocol fee delta.
+        // amount0/amount1: positive = user pays in, negative = user receives out.
+        let mut res0 = get_reserve0(e);
+        let mut res1 = get_reserve1(e);
+        if amount0 > 0 {
+            res0 += amount0 as u128 - pf_delta_0;
+        } else if amount0 < 0 {
+            res0 = res0.saturating_sub((-amount0) as u128);
+        }
+        if amount1 > 0 {
+            res1 += amount1 as u128 - pf_delta_1;
+        } else if amount1 < 0 {
+            res1 = res1.saturating_sub((-amount1) as u128);
+        }
+        set_reserve0(e, &res0);
+        set_reserve1(e, &res1);
 
         let (token_in, token_out, in_amount, out_amount) = if zero_for_one {
             (

@@ -275,9 +275,8 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         let reward = manager.claim_reward(&user, total_weighted, user_weighted);
 
         // Post-claim reserve validation: ensure the reward transfer did not drain
-        // below the protocol fee floor. Unlike standard pools (which track reserves
-        // as explicit state), concentrated pool reserves are derived from balance,
-        // so we validate the post-transfer balance directly against protocol fees.
+        // below reserves + protocol fees. Stored reserves are independent of balance
+        // (updated only by deposit/withdraw/swap/collect), so this check is meaningful.
         let reward_token = rewards.storage().get_reward_token();
         let token0 = get_token0(&e);
         let token1 = get_token1(&e);
@@ -286,12 +285,14 @@ impl RewardsTrait for ConcentratedLiquidityPool {
 
         if reward_token == token0 {
             let balance = SorobanTokenClient::new(&e, &token0).balance(&contract) as u128;
-            if balance < protocol_fees.token0 {
+            let reserve = get_reserve0(&e);
+            if reserve + protocol_fees.token0 > balance {
                 panic_with_error!(&e, Error::InsufficientToken0);
             }
         } else if reward_token == token1 {
             let balance = SorobanTokenClient::new(&e, &token1).balance(&contract) as u128;
-            if balance < protocol_fees.token1 {
+            let reserve = get_reserve1(&e);
+            if reserve + protocol_fees.token1 > balance {
                 panic_with_error!(&e, Error::InsufficientToken1);
             }
         }

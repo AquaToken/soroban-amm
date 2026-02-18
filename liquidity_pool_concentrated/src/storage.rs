@@ -64,6 +64,10 @@ pub enum DataKey {
     TotalWeightedLiquidity, // u128 — sum of all users' weighted liquidity
 
     ClaimKilled, // bool — reward claim kill switch
+
+    // ── Explicit reserve tracking ──
+    Reserve0, // u128 — tracked LP reserve for token0 (excludes protocol fees)
+    Reserve1, // u128 — tracked LP reserve for token1 (excludes protocol fees)
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
@@ -143,6 +147,8 @@ generate_instance_storage_getter_and_setter_with_default!(
     bool,
     false
 );
+generate_instance_storage_getter_and_setter_with_default!(reserve0, DataKey::Reserve0, u128, 0);
+generate_instance_storage_getter_and_setter_with_default!(reserve1, DataKey::Reserve1, u128, 0);
 
 // ── Position accessors (persistent storage) ──
 // Keyed by (owner, tick_lower, tick_upper). A user can have up to MAX_USER_POSITIONS
