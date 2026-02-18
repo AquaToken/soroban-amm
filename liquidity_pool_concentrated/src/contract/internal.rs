@@ -39,13 +39,6 @@ impl ConcentratedLiquidityPool {
         v.unsigned_abs()
     }
 
-    pub(super) fn u128_to_i128(v: u128) -> Result<i128, Error> {
-        if v > i128::MAX as u128 {
-            return Err(Error::LiquidityOverflow);
-        }
-        Ok(v as i128)
-    }
-
     pub(super) fn u256_to_array(v: &U256) -> [u8; 32] {
         let bytes = v.to_be_bytes();
         let mut out = [0u8; 32];
@@ -1081,24 +1074,24 @@ impl ConcentratedLiquidityPool {
         if zero_for_one {
             if exact_input {
                 Ok((
-                    Self::u128_to_i128(amount_spec_used)?,
-                    -Self::u128_to_i128(amount_calculated)?,
+                    amount_spec_used as i128,
+                    -(amount_calculated as i128),
                 ))
             } else {
                 Ok((
-                    Self::u128_to_i128(amount_calculated)?,
-                    -Self::u128_to_i128(amount_spec_used)?,
+                    amount_calculated as i128,
+                    -(amount_spec_used as i128),
                 ))
             }
         } else if exact_input {
             Ok((
-                -Self::u128_to_i128(amount_calculated)?,
-                Self::u128_to_i128(amount_spec_used)?,
+                -(amount_calculated as i128),
+                amount_spec_used as i128,
             ))
         } else {
             Ok((
-                -Self::u128_to_i128(amount_spec_used)?,
-                Self::u128_to_i128(amount_calculated)?,
+                -(amount_spec_used as i128),
+                amount_calculated as i128,
             ))
         }
     }
@@ -1259,24 +1252,24 @@ impl ConcentratedLiquidityPool {
         let (amount0, amount1) = if zero_for_one {
             if exact_input {
                 (
-                    Self::u128_to_i128(amount_spec_used)?,
-                    -Self::u128_to_i128(amount_calculated)?,
+                    amount_spec_used as i128,
+                    -(amount_calculated as i128),
                 )
             } else {
                 (
-                    Self::u128_to_i128(amount_calculated)?,
-                    -Self::u128_to_i128(amount_spec_used)?,
+                    amount_calculated as i128,
+                    -(amount_spec_used as i128),
                 )
             }
         } else if exact_input {
             (
-                -Self::u128_to_i128(amount_calculated)?,
-                Self::u128_to_i128(amount_spec_used)?,
+                -(amount_calculated as i128),
+                amount_spec_used as i128,
             )
         } else {
             (
-                -Self::u128_to_i128(amount_spec_used)?,
-                Self::u128_to_i128(amount_calculated)?,
+                -(amount_spec_used as i128),
+                amount_calculated as i128,
             )
         };
 

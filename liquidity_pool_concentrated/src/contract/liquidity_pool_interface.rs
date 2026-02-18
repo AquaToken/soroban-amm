@@ -197,10 +197,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             Err(err) => panic_with_error!(&e, err),
         };
 
-        let amount_specified = match Self::u128_to_i128(in_amount) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let amount_specified = in_amount as i128;
         user.require_auth();
         if get_is_killed_swap(&e) {
             panic_with_error!(&e, Error::SwapKilled);
@@ -242,10 +239,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-        let amount_specified = match Self::u128_to_i128(in_amount) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let amount_specified = in_amount as i128;
 
         let (amount0, amount1) = match Self::simulate_swap_amounts(
             &e,
@@ -285,10 +279,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             Err(err) => panic_with_error!(&e, err),
         };
 
-        let out_amount_i128 = match Self::u128_to_i128(out_amount) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let out_amount_i128 = out_amount as i128;
         user.require_auth();
         if get_is_killed_swap(&e) {
             panic_with_error!(&e, Error::SwapKilled);
@@ -330,10 +321,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-        let out_amount_i128 = match Self::u128_to_i128(out_amount) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let out_amount_i128 = out_amount as i128;
 
         let (amount0, amount1) = match Self::simulate_swap_amounts(
             &e,
