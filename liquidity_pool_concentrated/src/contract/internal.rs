@@ -1066,7 +1066,10 @@ impl ConcentratedLiquidityPool {
 
             slot.sqrt_price_x96 = step.sqrt_next;
 
-            if slot.sqrt_price_x96 == sqrt_target {
+            // Match Uniswap V3 semantics:
+            // cross tick only when we reached the actual next tick price,
+            // not when we stopped at an arbitrary price limit between ticks.
+            if slot.sqrt_price_x96 == next_tick_price {
                 if next_tick_initialized {
                     let mut liquidity_net = cc.get_tick(e, next_tick, tick_spacing).liquidity_net;
                     if zero_for_one {
@@ -1228,7 +1231,10 @@ impl ConcentratedLiquidityPool {
 
             slot.sqrt_price_x96 = step.sqrt_next;
 
-            if slot.sqrt_price_x96 == sqrt_target {
+            // Match Uniswap V3 semantics:
+            // cross tick only when we reached the actual next tick price,
+            // not when we stopped at an arbitrary price limit between ticks.
+            if slot.sqrt_price_x96 == next_tick_price {
                 if next_tick_initialized {
                     let mut liquidity_net = Self::cross_tick(e, next_tick, &mut cc);
                     if zero_for_one {
