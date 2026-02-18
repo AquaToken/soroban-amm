@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::types::{
-    PoolState, PoolStateWithBalances, PositionData, ProtocolFees, Slot0, SwapResult, TickInfo,
+    PoolState, PoolStateWithBalances, PositionData, ProtocolFees, Slot0, TickInfo,
     UserPositionSnapshot,
 };
 use crate::Error;
@@ -155,15 +155,6 @@ pub trait UpgradeableContract {
 }
 
 pub trait ConcentratedPoolExtensionsTrait {
-    fn swap_by_tokens(
-        e: Env,
-        sender: Address,
-        token_in: Address,
-        token_out: Address,
-        amount_specified: i128,
-        sqrt_price_limit_x96: U256,
-    ) -> Result<SwapResult, Error>;
-
     fn deposit_position(
         e: Env,
         sender: Address,

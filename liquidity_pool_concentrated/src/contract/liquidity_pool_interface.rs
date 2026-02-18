@@ -201,22 +201,15 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-        let token_in = if zero_for_one {
-            get_token0(&e)
-        } else {
-            get_token1(&e)
-        };
-        let token_out = if zero_for_one {
-            get_token1(&e)
-        } else {
-            get_token0(&e)
-        };
+        user.require_auth();
+        if get_is_killed_swap(&e) {
+            panic_with_error!(&e, Error::SwapKilled);
+        }
 
-        let result = match Self::swap_by_tokens(
-            e.clone(),
-            user.clone(),
-            token_in,
-            token_out,
+        let result = match Self::swap_internal(
+            &e,
+            &user,
+            zero_for_one,
             amount_specified,
             U256::from_u32(&e, 0),
         ) {
@@ -296,22 +289,15 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-        let token_in = if zero_for_one {
-            get_token0(&e)
-        } else {
-            get_token1(&e)
-        };
-        let token_out = if zero_for_one {
-            get_token1(&e)
-        } else {
-            get_token0(&e)
-        };
+        user.require_auth();
+        if get_is_killed_swap(&e) {
+            panic_with_error!(&e, Error::SwapKilled);
+        }
 
-        let result = match Self::swap_by_tokens(
-            e.clone(),
-            user.clone(),
-            token_in,
-            token_out,
+        let result = match Self::swap_internal(
+            &e,
+            &user,
+            zero_for_one,
             -out_amount_i128,
             U256::from_u32(&e, 0),
         ) {

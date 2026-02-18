@@ -4,31 +4,6 @@ use super::*;
 // These are NOT available through the router; called directly on the pool contract.
 #[contractimpl]
 impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
-    // Advanced swap: specify tokens by address, signed amount (positive=exact_input,
-    // negative=exact_output), and optional sqrt price limit. Returns signed amounts
-    // (positive=paid by user, negative=received by user).
-    fn swap_by_tokens(
-        e: Env,
-        sender: Address,
-        token_in: Address,
-        token_out: Address,
-        amount_specified: i128,
-        sqrt_price_limit_x96: U256,
-    ) -> Result<SwapResult, Error> {
-        sender.require_auth();
-        if get_is_killed_swap(&e) {
-            return Err(Error::SwapKilled);
-        }
-        let zero_for_one = Self::direction_from_tokens(&e, &token_in, &token_out)?;
-        Self::swap_internal(
-            &e,
-            &sender,
-            zero_for_one,
-            amount_specified,
-            sqrt_price_limit_x96,
-        )
-    }
-
     // Add liquidity to a specific tick range [tick_lower, tick_upper).
     // `desired_amounts` is [amount0, amount1] — the maximum tokens the sender is willing
     // to spend. The contract computes the maximum liquidity mintable from these amounts

@@ -883,27 +883,6 @@ impl ConcentratedLiquidityPool {
         Ok(in_idx == 0 && out_idx == 1)
     }
 
-    pub(super) fn direction_from_tokens(
-        e: &Env,
-        token_in: &Address,
-        token_out: &Address,
-    ) -> Result<bool, Error> {
-        if token_in == token_out {
-            return Err(Error::InvalidAmount);
-        }
-
-        let token0 = get_token0(e);
-        let token1 = get_token1(e);
-        if *token_in == token0 && *token_out == token1 {
-            return Ok(true);
-        }
-        if *token_in == token1 && *token_out == token0 {
-            return Ok(false);
-        }
-
-        Err(Error::InvalidAmount)
-    }
-
     pub(super) fn full_range_ticks(e: &Env) -> Result<(i32, i32), Error> {
         let spacing = get_tick_spacing(e);
         if spacing <= 0 {

@@ -70,7 +70,7 @@ impl From<TickInfo> for TickData {
     }
 }
 
-// Returned by swap_by_tokens. Signed amounts: positive = user paid, negative = user received.
+// Returned by internal swap execution. Signed amounts: positive = user paid, negative = user received.
 // Includes final pool state after swap.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]

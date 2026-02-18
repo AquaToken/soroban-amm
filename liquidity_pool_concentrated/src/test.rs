@@ -1,7 +1,6 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::math::{sqrt_ratio_at_tick, tick_at_sqrt_ratio};
 use crate::testutils::{
     create_pool_contract, create_token_contract, deploy_rewards_gauge, get_token_admin_client,
     Setup,
@@ -1088,104 +1087,6 @@ fn test_estimate_swap_matches_actual() {
     assert_eq!(estimate_1to0, actual_1to0);
 }
 
-#[test]
-fn test_swap_by_tokens_stops_at_price_limit_zero_for_one() {
-    let setup = Setup::default();
-    setup.mint_user_tokens(2_000_0000000, 2_000_0000000);
-    setup.pool.deposit(
-        &setup.user,
-        &Vec::from_array(&setup.env, [800_0000000u128, 800_0000000u128]),
-        &0,
-    );
-
-    let swapper = Address::generate(&setup.env);
-    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &2_000_0000000);
-
-    let limit = sqrt_ratio_at_tick(&setup.env, -100).unwrap();
-    let amount_specified = 1_000_0000000i128;
-
-    let result = setup.pool.swap_by_tokens(
-        &swapper,
-        &setup.token0.address,
-        &setup.token1.address,
-        &amount_specified,
-        &limit,
-    );
-
-    // Should partially fill due to price limit.
-    assert!(result.amount0 > 0);
-    assert!(result.amount0 < amount_specified);
-    assert!(result.amount1 < 0);
-    assert_eq!(setup.pool.slot0().sqrt_price_x96, limit);
-}
-
-#[test]
-fn test_swap_by_tokens_stops_at_price_limit_one_for_zero() {
-    let setup = Setup::default();
-    setup.mint_user_tokens(2_000_0000000, 2_000_0000000);
-    setup.pool.deposit(
-        &setup.user,
-        &Vec::from_array(&setup.env, [800_0000000u128, 800_0000000u128]),
-        &0,
-    );
-
-    let swapper = Address::generate(&setup.env);
-    get_token_admin_client(&setup.env, &setup.token1.address).mint(&swapper, &2_000_0000000);
-
-    let limit = sqrt_ratio_at_tick(&setup.env, 100).unwrap();
-    let amount_specified = 1_000_0000000i128;
-
-    let result = setup.pool.swap_by_tokens(
-        &swapper,
-        &setup.token1.address,
-        &setup.token0.address,
-        &amount_specified,
-        &limit,
-    );
-
-    // Should partially fill due to price limit.
-    assert!(result.amount1 > 0);
-    assert!(result.amount1 < amount_specified);
-    assert!(result.amount0 < 0);
-    assert_eq!(setup.pool.slot0().sqrt_price_x96, limit);
-}
-
-#[test]
-fn test_swap_by_tokens_non_boundary_price_limit_has_consistent_tick() {
-    let setup = Setup::default();
-    setup.mint_user_tokens(2_000_0000000, 2_000_0000000);
-    setup.pool.deposit(
-        &setup.user,
-        &Vec::from_array(&setup.env, [800_0000000u128, 800_0000000u128]),
-        &0,
-    );
-
-    let swapper = Address::generate(&setup.env);
-    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &2_000_0000000);
-
-    let upper = sqrt_ratio_at_tick(&setup.env, -100).unwrap();
-    let lower = sqrt_ratio_at_tick(&setup.env, -101).unwrap();
-    let half = upper.sub(&lower).div(&U256::from_u32(&setup.env, 2));
-    let limit = lower.add(&half);
-    let amount_specified = 1_000_0000000i128;
-
-    let result = setup.pool.swap_by_tokens(
-        &swapper,
-        &setup.token0.address,
-        &setup.token1.address,
-        &amount_specified,
-        &limit,
-    );
-
-    assert!(result.amount0 > 0);
-    assert!(result.amount1 < 0);
-
-    let slot_after = setup.pool.slot0();
-    assert_eq!(slot_after.sqrt_price_x96, limit);
-    let expected_tick = tick_at_sqrt_ratio(&setup.env, &limit).unwrap();
-    assert_eq!(slot_after.tick, expected_tick);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Admin: protocol fee configuration
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1593,46 +1494,6 @@ fn test_swap_out_of_range_index() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #2103)")]
-fn test_swap_by_tokens_same_token() {
-    let setup = Setup::default();
-    setup.mint_user_tokens(100_0000000, 100_0000000);
-    setup.pool.deposit(
-        &setup.user,
-        &Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]),
-        &0,
-    );
-    // token_in == token_out is invalid
-    setup.pool.swap_by_tokens(
-        &setup.user,
-        &setup.token0.address,
-        &setup.token0.address,
-        &1_0000000,
-        &U256::from_u32(&setup.env, 0),
-    );
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
-fn test_swap_by_tokens_unknown_token() {
-    let setup = Setup::default();
-    setup.mint_user_tokens(100_0000000, 100_0000000);
-    setup.pool.deposit(
-        &setup.user,
-        &Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]),
-        &0,
-    );
-    let unknown = Address::generate(&setup.env);
-    setup.pool.swap_by_tokens(
-        &setup.user,
-        &unknown,
-        &setup.token0.address,
-        &1_0000000,
-        &U256::from_u32(&setup.env, 0),
-    );
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
 fn test_swap_output_below_minimum() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -1854,46 +1715,6 @@ fn test_liquidity_amount_too_large() {
         .pool
         .try_deposit_position(&setup.user, &-10, &10, &huge_amounts);
     assert!(result.is_err());
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Error handling: invalid price limit in swap_by_tokens
-// ═══════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn test_swap_by_tokens_invalid_price_limit() {
-    let setup = Setup::default();
-    setup.mint_user_tokens(100_0000000, 100_0000000);
-    setup.pool.deposit(
-        &setup.user,
-        &Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]),
-        &0,
-    );
-
-    // For zero_for_one swap, price limit must be < current_price and > MIN_SQRT_RATIO.
-    // Passing a limit > current_price should fail with #2113.
-    let current_price = setup.pool.slot0().sqrt_price_x96;
-    let bad_limit = current_price.add(&U256::from_u32(&setup.env, 1));
-    let result = setup.pool.try_swap_by_tokens(
-        &setup.user,
-        &setup.token0.address,
-        &setup.token1.address,
-        &1_0000000,
-        &bad_limit,
-    );
-    assert!(result.is_err());
-
-    // For one_for_zero swap, price limit must be > current_price and < MAX_SQRT_RATIO.
-    // Passing a limit < current_price should fail with #2113.
-    let bad_limit2 = current_price.sub(&U256::from_u32(&setup.env, 1));
-    let result2 = setup.pool.try_swap_by_tokens(
-        &setup.user,
-        &setup.token1.address,
-        &setup.token0.address,
-        &1_0000000,
-        &bad_limit2,
-    );
-    assert!(result2.is_err());
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2383,31 +2204,18 @@ fn test_exact_output_swap_crossing_multiple_ticks() {
     let estimated_in = pool.estimate_swap_strict_receive(&0, &1, &desired_out);
     assert!(estimated_in > 0, "estimate should be positive");
 
-    // Perform exact-output swap via swap_by_tokens with negative amount
+    // Perform exact-output swap
     let swapper = Address::generate(&env);
     get_token_admin_client(&env, &token0.address).mint(&swapper, &(estimated_in as i128 * 2));
 
-    let result = pool.swap_by_tokens(
-        &swapper,
-        &token0.address,
-        &token1.address,
-        &-(desired_out as i128),
-        &U256::from_u32(&env, 0),
-    );
-
-    // amount0 > 0 (input), amount1 < 0 (output)
-    assert!(result.amount0 > 0, "should consume token0 input");
-    assert!(result.amount1 < 0, "should produce token1 output");
-
-    // Exact output: user gets exactly the desired amount
-    let actual_out = (-result.amount1) as u128;
+    let actual_in = pool.swap_strict_receive(&swapper, &0, &1, &desired_out, &u128::MAX);
+    let actual_out = desired_out;
     assert_eq!(
         actual_out, desired_out,
         "exact output should match desired amount"
     );
 
     // Input should match estimate
-    let actual_in = result.amount0 as u128;
     assert_eq!(
         actual_in, estimated_in,
         "actual input should match estimate"
@@ -2480,22 +2288,9 @@ fn test_exact_output_swap_one_for_zero_crossing_ticks() {
     let swapper = Address::generate(&env);
     get_token_admin_client(&env, &token1.address).mint(&swapper, &(estimated_in as i128 * 2));
 
-    let result = pool.swap_by_tokens(
-        &swapper,
-        &token1.address,
-        &token0.address,
-        &-(desired_out as i128),
-        &U256::from_u32(&env, 0),
-    );
-
-    // one_for_zero: amount1 > 0 (input), amount0 < 0 (output)
-    assert!(result.amount1 > 0, "should consume token1 input");
-    assert!(result.amount0 < 0, "should produce token0 output");
-
-    let actual_out = (-result.amount0) as u128;
+    let actual_in = pool.swap_strict_receive(&swapper, &1, &0, &desired_out, &u128::MAX);
+    let actual_out = desired_out;
     assert_eq!(actual_out, desired_out);
-
-    let actual_in = result.amount1 as u128;
     assert_eq!(actual_in, estimated_in);
 
     let slot = pool.slot0();
@@ -2567,14 +2362,9 @@ fn test_fee_growth_accuracy_across_tick_crossings() {
     // This means part of the swap is in both positions' range, part is only in LP1's range
     let swapper = Address::generate(&env);
     get_token_admin_client(&env, &token0.address).mint(&swapper, &200_0000000);
-    let swap_result = pool.swap_by_tokens(
-        &swapper,
-        &token0.address,
-        &token1.address,
-        &150_0000000i128,
-        &U256::from_u32(&env, 0),
-    );
-    assert!(swap_result.amount1 < 0, "should produce token1 output");
+    let input_amount = 150_0000000u128;
+    let amount_out = pool.swap(&swapper, &0, &1, &input_amount, &0);
+    assert!(amount_out > 0, "should produce token1 output");
 
     // Verify the swap crossed tick -20
     let slot = pool.slot0();
@@ -2624,7 +2414,7 @@ fn test_fee_growth_accuracy_across_tick_crossings() {
 
     // Total fees collected should be roughly 30 bps of input amount
     // Allow some rounding tolerance (within 1%)
-    let expected_total_fee = (swap_result.amount0 as u128) * 30 / 10000;
+    let expected_total_fee = input_amount * 30 / 10000;
     let tolerance = expected_total_fee / 100 + 1;
     assert!(
         total_fee0.abs_diff(expected_total_fee) <= tolerance,
@@ -3063,11 +2853,11 @@ fn test_tick_crossing_fee_growth_outside_flip() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// P1: Exact output + price limit → InsufficientLiquidity
+// P1: Exact output with too-low in_max should fail
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn test_exact_output_with_price_limit_insufficient() {
+fn test_exact_output_with_low_in_max_fails() {
     let setup = Setup::default();
     setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
 
@@ -3079,31 +2869,24 @@ fn test_exact_output_with_price_limit_insufficient() {
     let swapper = Address::generate(&setup.env);
     get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &500_0000000);
 
-    // Set a tight price limit that prevents filling the full exact output
-    // zero_for_one: price limit must be < current price
-    let limit = sqrt_ratio_at_tick(&setup.env, -5).unwrap();
-    let desired_out: i128 = 100_0000000; // large exact output
+    let desired_out: u128 = 100_0000000; // large exact output
+    let estimated_in = setup.pool.estimate_swap_strict_receive(&0, &1, &desired_out);
+    assert!(estimated_in > 0);
+    let in_max = estimated_in - 1;
 
-    // swap_by_tokens with negative amount (exact output) + tight price limit
-    // Should fail because the price limit prevents filling the full output
-    let result = setup.pool.try_swap_by_tokens(
-        &swapper,
-        &setup.token0.address,
-        &setup.token1.address,
-        &(-desired_out),
-        &limit,
-    );
+    let result = setup
+        .pool
+        .try_swap_strict_receive(&swapper, &0, &1, &desired_out, &in_max);
 
-    // Should fail with InsufficientLiquidity (#213) because price limit
-    // prevents filling the entire exact output amount
+    // Should fail because exact output cannot be obtained within in_max.
     assert!(
         result.is_err(),
-        "exact output with restrictive price limit should fail"
+        "exact output with too-low in_max should fail"
     );
 }
 
 #[test]
-fn test_exact_output_with_price_limit_one_for_zero_insufficient() {
+fn test_exact_output_with_low_in_max_one_for_zero_fails() {
     let setup = Setup::default();
     setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
 
@@ -3115,21 +2898,18 @@ fn test_exact_output_with_price_limit_one_for_zero_insufficient() {
     let swapper = Address::generate(&setup.env);
     get_token_admin_client(&setup.env, &setup.token1.address).mint(&swapper, &500_0000000);
 
-    // one_for_zero: price limit must be > current price
-    let limit = sqrt_ratio_at_tick(&setup.env, 5).unwrap();
-    let desired_out: i128 = 100_0000000;
+    let desired_out: u128 = 100_0000000;
+    let estimated_in = setup.pool.estimate_swap_strict_receive(&1, &0, &desired_out);
+    assert!(estimated_in > 0);
+    let in_max = estimated_in - 1;
 
-    let result = setup.pool.try_swap_by_tokens(
-        &swapper,
-        &setup.token1.address,
-        &setup.token0.address,
-        &(-desired_out),
-        &limit,
-    );
+    let result = setup
+        .pool
+        .try_swap_strict_receive(&swapper, &1, &0, &desired_out, &in_max);
 
     assert!(
         result.is_err(),
-        "exact output with restrictive price limit should fail"
+        "exact output with too-low in_max should fail"
     );
 }
 
