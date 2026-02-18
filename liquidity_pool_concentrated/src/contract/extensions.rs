@@ -238,44 +238,39 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     }
 
     // Current price state: sqrt_price_x96 (Q64.96) and tick index.
-    fn slot0(e: Env) -> Slot0 {
+    fn get_slot0(e: Env) -> Slot0 {
         get_slot0(&e)
     }
 
     // Minimum distance between initialized ticks. Derived from fee tier.
-    fn tick_spacing(e: Env) -> i32 {
+    fn get_tick_spacing(e: Env) -> i32 {
         get_tick_spacing(&e)
     }
 
     // Chunk bitmap word. Each bit represents a chunk that has at least one initialized tick.
     // word_pos = chunk_pos >> 8.
-    fn chunk_bitmap(e: Env, word_pos: i32) -> U256 {
+    fn get_chunk_bitmap(e: Env, word_pos: i32) -> U256 {
         get_chunk_bitmap_word(&e, word_pos)
     }
 
     // Active liquidity — sum of all positions whose range contains current tick.
     // This is the liquidity used for swap math at the current price.
-    fn liquidity(e: Env) -> u128 {
+    fn get_active_liquidity(e: Env) -> u128 {
         get_liquidity(&e)
     }
 
     // Global cumulative fee growth per unit of liquidity for token0, in Q128 format.
-    fn fee_growth_global_0_x128(e: Env) -> U256 {
+    fn get_fee_growth_global_0_x128(e: Env) -> U256 {
         get_fee_growth_global_0_x128(&e)
     }
 
     // Global cumulative fee growth per unit of liquidity for token1, in Q128 format.
-    fn fee_growth_global_1_x128(e: Env) -> U256 {
+    fn get_fee_growth_global_1_x128(e: Env) -> U256 {
         get_fee_growth_global_1_x128(&e)
     }
 
-    // Uncollected protocol fees (admin's cut of swap fees).
-    fn protocol_fees(e: Env) -> ProtocolFees {
-        get_protocol_fees(&e)
-    }
-
     // Tick state (stored in chunks, converted to TickInfo at accessor boundary).
-    fn ticks(e: Env, tick: i32) -> TickInfo {
+    fn get_tick(e: Env, tick: i32) -> TickInfo {
         get_tick(&e, tick, get_tick_spacing(&e))
     }
 
@@ -286,34 +281,6 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             Some(pos) => pos,
             None => panic_with_error!(&e, Error::PositionNotFound),
         }
-    }
-
-    // Full pool state in a single call: fee, liquidity, price, tick, spacing, tokens.
-    fn get_full_pool_state(e: Env) -> Option<PoolState> {
-        let slot = get_slot0(&e);
-        Some(PoolState {
-            fee: get_fee(&e),
-            liquidity: get_liquidity(&e),
-            sqrt_price_x96: slot.sqrt_price_x96,
-            tick: slot.tick,
-            tick_spacing: get_tick_spacing(&e),
-            token0: get_token0(&e),
-            token1: get_token1(&e),
-        })
-    }
-
-    // Pool state + actual token balances held by the contract.
-    fn get_pool_state_with_balances(e: Env) -> Option<PoolStateWithBalances> {
-        let state = Self::get_full_pool_state(e.clone())?;
-        let contract = e.current_contract_address();
-        let reserve0 = SorobanTokenClient::new(&e, &state.token0).balance(&contract);
-        let reserve1 = SorobanTokenClient::new(&e, &state.token1).balance(&contract);
-
-        Some(PoolStateWithBalances {
-            reserve0,
-            reserve1,
-            state,
-        })
     }
 
     // User's position ranges, raw liquidity, and weighted liquidity (for rewards).

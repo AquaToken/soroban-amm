@@ -180,17 +180,14 @@ pub trait ConcentratedPoolExtensionsTrait {
         amount1_requested: u128,
     ) -> Result<(u128, u128), Error>;
 
-    fn slot0(e: Env) -> Slot0;
-    fn tick_spacing(e: Env) -> i32;
-    fn chunk_bitmap(e: Env, word_pos: i32) -> U256;
-    fn liquidity(e: Env) -> u128;
-    fn fee_growth_global_0_x128(e: Env) -> U256;
-    fn fee_growth_global_1_x128(e: Env) -> U256;
-    fn protocol_fees(e: Env) -> ProtocolFees;
-    fn ticks(e: Env, tick: i32) -> TickInfo;
+    fn get_slot0(e: Env) -> Slot0;
+    fn get_tick_spacing(e: Env) -> i32;
+    fn get_chunk_bitmap(e: Env, word_pos: i32) -> U256;
+    fn get_active_liquidity(e: Env) -> u128;
+    fn get_fee_growth_global_0_x128(e: Env) -> U256;
+    fn get_fee_growth_global_1_x128(e: Env) -> U256;
+    fn get_tick(e: Env, tick: i32) -> TickInfo;
     fn get_position(e: Env, recipient: Address, tick_lower: i32, tick_upper: i32) -> PositionData;
-    fn get_full_pool_state(e: Env) -> Option<PoolState>;
-    fn get_pool_state_with_balances(e: Env) -> Option<PoolStateWithBalances>;
     fn get_user_position_snapshot(e: Env, user: Address) -> UserPositionSnapshot;
     fn get_total_weighted_liquidity(e: Env) -> u128;
     fn get_total_raw_liquidity(e: Env) -> u128;

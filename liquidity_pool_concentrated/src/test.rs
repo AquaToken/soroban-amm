@@ -34,7 +34,7 @@ fn test_auto_price_on_empty_pool() {
     assert!(liq > 0);
 
     // Verify price was set based on ratio (not default 1:1)
-    let slot = setup.pool.slot0();
+    let slot = setup.pool.get_slot0();
     let tick = slot.tick;
     // tick for price 2.0 ≈ 6931, should be positive for price > 1
     assert!(tick > 0, "tick should be positive for price > 1");
@@ -160,17 +160,17 @@ fn test_public_deposit_position_updates_position_tick_and_bitmap() {
     assert_eq!(position.tokens_owed_0, 0);
     assert_eq!(position.tokens_owed_1, 0);
 
-    let lower = setup.pool.ticks(&-10);
+    let lower = setup.pool.get_tick(&-10);
     assert_eq!(lower.liquidity_gross, liquidity);
     assert_eq!(lower.liquidity_net, liquidity as i128);
 
-    let upper = setup.pool.ticks(&10);
+    let upper = setup.pool.get_tick(&10);
     assert_eq!(upper.liquidity_gross, liquidity);
     assert_eq!(upper.liquidity_net, -(liquidity as i128));
 
     let zero = U256::from_u32(&setup.env, 0);
-    assert_ne!(setup.pool.chunk_bitmap(&-1), zero);
-    assert_ne!(setup.pool.chunk_bitmap(&0), zero);
+    assert_ne!(setup.pool.get_chunk_bitmap(&-1), zero);
+    assert_ne!(setup.pool.get_chunk_bitmap(&0), zero);
 }
 
 #[test]
@@ -583,7 +583,7 @@ fn test_add_liquidity_to_existing_position() {
 
     // Ticks should reflect total
     let total_liq = liq1 + liq2;
-    let lower = setup.pool.ticks(&-10);
+    let lower = setup.pool.get_tick(&-10);
     assert_eq!(lower.liquidity_gross, total_liq);
     assert_eq!(lower.liquidity_net, total_liq as i128);
 }
@@ -609,7 +609,7 @@ fn test_partial_withdrawal_keeps_position() {
     assert!(pos.tokens_owed_0 > 0 || pos.tokens_owed_1 > 0);
 
     // Ticks still initialized
-    let lower = setup.pool.ticks(&-10);
+    let lower = setup.pool.get_tick(&-10);
     assert_eq!(lower.liquidity_gross, remaining);
 }
 
@@ -638,15 +638,15 @@ fn test_full_withdrawal_deletes_position_and_clears_ticks() {
     assert!(result.is_err());
 
     // Ticks should be uninitialized (liquidity_gross = 0)
-    let lower = setup.pool.ticks(&-10);
+    let lower = setup.pool.get_tick(&-10);
     assert_eq!(lower.liquidity_gross, 0);
-    let upper = setup.pool.ticks(&10);
+    let upper = setup.pool.get_tick(&10);
     assert_eq!(upper.liquidity_gross, 0);
 
     // Bitmap should be cleared
     let zero = U256::from_u32(&setup.env, 0);
-    assert_eq!(setup.pool.chunk_bitmap(&-1), zero);
-    assert_eq!(setup.pool.chunk_bitmap(&0), zero);
+    assert_eq!(setup.pool.get_chunk_bitmap(&-1), zero);
+    assert_eq!(setup.pool.get_chunk_bitmap(&0), zero);
 }
 
 #[test]
@@ -669,17 +669,17 @@ fn test_withdraw_clears_only_non_shared_upper_tick() {
         .withdraw_position(&setup.user, &-100, &100, &liq1);
 
     // Shared lower tick stays initialized by user2's position.
-    let lower = setup.pool.ticks(&-100);
+    let lower = setup.pool.get_tick(&-100);
     assert_eq!(lower.liquidity_gross, liq2);
     assert_eq!(lower.liquidity_net, liq2 as i128);
 
     // Upper tick from user1-only range is cleared.
-    let middle = setup.pool.ticks(&100);
+    let middle = setup.pool.get_tick(&100);
     assert_eq!(middle.liquidity_gross, 0);
     assert_eq!(middle.liquidity_net, 0);
 
     // User2 upper tick remains initialized.
-    let upper = setup.pool.ticks(&200);
+    let upper = setup.pool.get_tick(&200);
     assert_eq!(upper.liquidity_gross, liq2);
     assert_eq!(upper.liquidity_net, -(liq2 as i128));
 }
@@ -704,16 +704,16 @@ fn test_withdraw_clears_only_non_shared_lower_tick() {
         .withdraw_position(&setup.user, &-100, &100, &liq1);
 
     // User1 lower tick is cleared, user2 lower tick remains initialized.
-    let lower = setup.pool.ticks(&-100);
+    let lower = setup.pool.get_tick(&-100);
     assert_eq!(lower.liquidity_gross, 0);
     assert_eq!(lower.liquidity_net, 0);
 
-    let lower_user2 = setup.pool.ticks(&-200);
+    let lower_user2 = setup.pool.get_tick(&-200);
     assert_eq!(lower_user2.liquidity_gross, liq2);
     assert_eq!(lower_user2.liquidity_net, liq2 as i128);
 
     // Shared upper tick stays initialized by user2's position.
-    let upper = setup.pool.ticks(&100);
+    let upper = setup.pool.get_tick(&100);
     assert_eq!(upper.liquidity_gross, liq2);
     assert_eq!(upper.liquidity_net, -(liq2 as i128));
 }
@@ -878,9 +878,9 @@ fn test_protocol_fee_accumulates_and_collects() {
     setup.pool.swap(&swapper, &1, &0, &20_0000000, &0);
 
     // Protocol fees should have accumulated
-    let fees = setup.pool.protocol_fees();
+    let fees = setup.pool.get_protocol_fees();
     assert!(
-        fees.token0 > 0 || fees.token1 > 0,
+        fees.get(0).unwrap() > 0 || fees.get(1).unwrap() > 0,
         "protocol fees should accumulate"
     );
 
@@ -897,9 +897,9 @@ fn test_protocol_fee_accumulates_and_collects() {
     );
 
     // Fees should be reset to zero
-    let fees_after = setup.pool.protocol_fees();
-    assert_eq!(fees_after.token0, 0);
-    assert_eq!(fees_after.token1, 0);
+    let fees_after = setup.pool.get_protocol_fees();
+    assert_eq!(fees_after.get(0).unwrap(), 0);
+    assert_eq!(fees_after.get(1).unwrap(), 0);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -917,12 +917,12 @@ fn test_swap_both_directions() {
         &0,
     );
 
-    let slot_before = setup.pool.slot0();
+    let slot_before = setup.pool.get_slot0();
 
     // Swap 0→1 (zero_for_one)
     let out_0to1 = setup.pool.swap(&setup.user, &0, &1, &5_0000000, &0);
     assert!(out_0to1 > 0);
-    let slot_mid = setup.pool.slot0();
+    let slot_mid = setup.pool.get_slot0();
     assert!(
         slot_mid.tick < slot_before.tick,
         "price should decrease for 0→1"
@@ -931,7 +931,7 @@ fn test_swap_both_directions() {
     // Swap 1→0 (one_for_zero)
     let out_1to0 = setup.pool.swap(&setup.user, &1, &0, &5_0000000, &0);
     assert!(out_1to0 > 0);
-    let slot_after = setup.pool.slot0();
+    let slot_after = setup.pool.get_slot0();
     assert!(
         slot_after.tick > slot_mid.tick,
         "price should increase for 1→0"
@@ -979,7 +979,7 @@ fn test_swap_crossing_multiple_ticks() {
     pool.deposit_position(&user, &-10, &10, &amounts);
     pool.deposit_position(&user, &10, &50, &amounts);
 
-    let slot_before = pool.slot0();
+    let slot_before = pool.get_slot0();
 
     // Large swap that should cross tick boundaries
     let swapper = Address::generate(&env);
@@ -987,7 +987,7 @@ fn test_swap_crossing_multiple_ticks() {
     let out = pool.swap(&swapper, &0, &1, &50_0000000, &0);
     assert!(out > 0);
 
-    let slot_after = pool.slot0();
+    let slot_after = pool.get_slot0();
     let ticks_crossed = (slot_before.tick - slot_after.tick).abs() / 10;
     assert!(
         ticks_crossed > 1,
@@ -1045,7 +1045,11 @@ fn test_swap_across_liquidity_gap() {
     assert!(liq_above > 0, "above-range position should have liquidity");
 
     // Active liquidity at tick 0 should be 0 (gap between positions)
-    assert_eq!(pool.liquidity(), 0, "no active liquidity in the gap");
+    assert_eq!(
+        pool.get_active_liquidity(),
+        0,
+        "no active liquidity in the gap"
+    );
 
     // Swap zero_for_one: price moves down, should cross gap and reach [-60, -20]
     let swapper = Address::generate(&env);
@@ -1054,7 +1058,7 @@ fn test_swap_across_liquidity_gap() {
     assert!(out > 0, "swap should produce output by crossing the gap");
 
     // Price should have moved below -20 (into the lower position)
-    let slot = pool.slot0();
+    let slot = pool.get_slot0();
     assert!(
         slot.tick < -20,
         "tick should be below -20 after crossing gap, got {}",
@@ -1256,7 +1260,7 @@ fn test_two_users_overlapping_positions() {
     let (_, liq2) = setup.pool.deposit_position(&user2, &-20, &20, &amounts2);
 
     // Active liquidity should be sum of overlapping positions
-    let active_liq = setup.pool.liquidity();
+    let active_liq = setup.pool.get_active_liquidity();
     assert_eq!(active_liq, liq1 + liq2);
 
     // Swap generates fees for both
@@ -1309,43 +1313,6 @@ fn test_multiple_positions_same_user() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn test_get_full_pool_state() {
-    let setup = Setup::default();
-    setup.mint_user_tokens(100_0000000, 100_0000000);
-    setup.pool.deposit(
-        &setup.user,
-        &Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]),
-        &0,
-    );
-
-    let state = setup.pool.get_full_pool_state();
-    assert!(state.is_some());
-    let state = state.unwrap();
-    assert_eq!(state.fee, 30);
-    assert_eq!(state.tick_spacing, 1);
-    assert!(state.liquidity > 0);
-    assert_eq!(state.token0, setup.token0.address);
-    assert_eq!(state.token1, setup.token1.address);
-}
-
-#[test]
-fn test_get_pool_state_with_balances() {
-    let setup = Setup::default();
-    setup.mint_user_tokens(100_0000000, 100_0000000);
-    setup.pool.deposit(
-        &setup.user,
-        &Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]),
-        &0,
-    );
-
-    let state = setup.pool.get_pool_state_with_balances();
-    assert!(state.is_some());
-    let state = state.unwrap();
-    assert!(state.reserve0 > 0);
-    assert!(state.reserve1 > 0);
-}
-
-#[test]
 fn test_get_reserves_excludes_protocol_fees() {
     let setup = Setup::default();
     setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
@@ -1363,11 +1330,14 @@ fn test_get_reserves_excludes_protocol_fees() {
     setup.pool.swap(&swapper, &0, &1, &20_0000000, &0);
 
     let reserves_after = setup.pool.get_reserves();
-    let fees = setup.pool.protocol_fees();
+    let fees = setup.pool.get_protocol_fees();
 
     // Balance = reserves + protocol_fees
     let balance0 = setup.token0.balance(&setup.pool.address) as u128;
-    assert_eq!(balance0, reserves_after.get_unchecked(0) + fees.token0);
+    assert_eq!(
+        balance0,
+        reserves_after.get_unchecked(0) + fees.get(0).unwrap()
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1792,8 +1762,8 @@ fn test_dust_griefing_tick_spacing_20() {
         &0,
     );
 
-    let slot_before = pool.slot0();
-    let liquidity_before = pool.liquidity();
+    let slot_before = pool.get_slot0();
+    let liquidity_before = pool.get_active_liquidity();
     std::println!(
         "Pool state: tick={}, liquidity={}",
         slot_before.tick,
@@ -1852,7 +1822,7 @@ fn test_dust_griefing_tick_spacing_20() {
 
     let cost = env.cost_estimate().resources();
 
-    let slot_after = pool.slot0();
+    let slot_after = pool.get_slot0();
     let tick_delta = (slot_after.tick - slot_before.tick).abs();
     let ticks_crossed = tick_delta / tick_spacing;
 
@@ -1882,7 +1852,7 @@ fn test_dust_griefing_tick_spacing_20() {
     get_token_admin_client(&env, &token1.address).mint(&swapper, &(small_swap as i128));
     let out_back = pool.swap(&swapper, &1, &0, &small_swap, &0);
     assert!(out_back > 0, "reverse swap must produce output");
-    let slot_mid = pool.slot0();
+    let slot_mid = pool.get_slot0();
 
     // ---- Larger swap: ~5% price move — stress test ----
     let large_swap: u128 = 50_000_0000000;
@@ -1891,7 +1861,7 @@ fn test_dust_griefing_tick_spacing_20() {
 
     let cost_large = env.cost_estimate().resources();
 
-    let slot_after_large = pool.slot0();
+    let slot_after_large = pool.get_slot0();
     let tick_delta_large = (slot_after_large.tick - slot_mid.tick).abs();
     let ticks_crossed_large = tick_delta_large / tick_spacing;
 
@@ -1921,7 +1891,7 @@ fn test_dust_griefing_tick_spacing_20() {
     get_token_admin_client(&env, &token1.address).mint(&swapper, &(large_swap as i128));
     let out_back_large = pool.swap(&swapper, &1, &0, &large_swap, &0);
     assert!(out_back_large > 0, "reverse swap must produce output");
-    let slot_mid2 = pool.slot0();
+    let slot_mid2 = pool.get_slot0();
 
     // ---- Extra large swap: ~10% price move ----
     let xlarge_swap: u128 = 100_000_0000000;
@@ -1930,7 +1900,7 @@ fn test_dust_griefing_tick_spacing_20() {
 
     let cost_xlarge = env.cost_estimate().resources();
 
-    let slot_after_xlarge = pool.slot0();
+    let slot_after_xlarge = pool.get_slot0();
     let tick_delta_xlarge = (slot_after_xlarge.tick - slot_mid2.tick).abs();
     let ticks_crossed_xlarge = tick_delta_xlarge / tick_spacing;
 
@@ -2128,15 +2098,15 @@ fn test_drain_reserves() {
     );
 
     // Verify invariant: balance >= reserves + protocol_fees
-    let protocol_fees = setup.pool.protocol_fees();
+    let protocol_fees = setup.pool.get_protocol_fees();
     let balance0 = setup.token0.balance(&setup.pool.address) as u128;
     let balance1 = setup.token1.balance(&setup.pool.address) as u128;
     assert!(
-        balance0 >= reserves_after_claim.get_unchecked(0) + protocol_fees.token0,
+        balance0 >= reserves_after_claim.get_unchecked(0) + protocol_fees.get(0).unwrap(),
         "balance0 must cover reserves + protocol fees"
     );
     assert!(
-        balance1 >= reserves_after_claim.get_unchecked(1) + protocol_fees.token1,
+        balance1 >= reserves_after_claim.get_unchecked(1) + protocol_fees.get(1).unwrap(),
         "balance1 must cover reserves + protocol fees"
     );
 
@@ -2222,7 +2192,7 @@ fn test_exact_output_swap_crossing_multiple_ticks() {
     );
 
     // Verify tick crossed multiple boundaries (spacing=10)
-    let slot = pool.slot0();
+    let slot = pool.get_slot0();
     assert!(
         slot.tick < -10,
         "swap should have crossed at least 2 tick boundaries, final tick={}",
@@ -2293,7 +2263,7 @@ fn test_exact_output_swap_one_for_zero_crossing_ticks() {
     assert_eq!(actual_out, desired_out);
     assert_eq!(actual_in, estimated_in);
 
-    let slot = pool.slot0();
+    let slot = pool.get_slot0();
     assert!(
         slot.tick > 10,
         "swap should have crossed upward past tick 10, final tick={}",
@@ -2367,7 +2337,7 @@ fn test_fee_growth_accuracy_across_tick_crossings() {
     assert!(amount_out > 0, "should produce token1 output");
 
     // Verify the swap crossed tick -20
-    let slot = pool.slot0();
+    let slot = pool.get_slot0();
     assert!(
         slot.tick < -20,
         "swap should cross below tick -20, final tick={}",
@@ -2409,8 +2379,8 @@ fn test_fee_growth_accuracy_across_tick_crossings() {
 
     // Verify total fees are consistent with swap amount and fee rate
     // fee_rate = 30 bps, protocol_fee = 50% → LP fee = 15 bps
-    let protocol_fees = pool.protocol_fees();
-    let total_fee0 = wide_fee0 + narrow_fee0 + protocol_fees.token0;
+    let protocol_fees = pool.get_protocol_fees();
+    let total_fee0 = wide_fee0 + narrow_fee0 + protocol_fees.get(0).unwrap();
 
     // Total fees collected should be roughly 30 bps of input amount
     // Allow some rounding tolerance (within 1%)
@@ -2470,7 +2440,7 @@ fn test_fee_proportionality_same_range() {
     assert!(swap_out2 > 0);
 
     // Verify both swaps stayed within range
-    let slot = setup.pool.slot0();
+    let slot = setup.pool.get_slot0();
     assert!(
         slot.tick > -50 && slot.tick < 50,
         "swaps should stay in range, tick={}",
@@ -2518,9 +2488,9 @@ fn test_fee_proportionality_same_range() {
     }
 
     // Additional: verify total LP fees + protocol fees ≈ 30 bps of total swapped
-    let protocol_fees = setup.pool.protocol_fees();
-    let total_fee0 = u1_fee0 + u2_fee0 + protocol_fees.token0;
-    let total_fee1 = u1_fee1 + u2_fee1 + protocol_fees.token1;
+    let protocol_fees = setup.pool.get_protocol_fees();
+    let total_fee0 = u1_fee0 + u2_fee0 + protocol_fees.get(0).unwrap();
+    let total_fee1 = u1_fee1 + u2_fee1 + protocol_fees.get(1).unwrap();
     assert!(
         total_fee0 > 0 || total_fee1 > 0,
         "should have collected fees"
@@ -2586,11 +2556,11 @@ fn test_min_max_tick_boundary_deposit_and_swap() {
     assert!(liq > 0, "full-range position should have liquidity");
 
     // Verify tick data at boundaries
-    let lower_tick = pool.ticks(&min_tick_aligned);
+    let lower_tick = pool.get_tick(&min_tick_aligned);
     assert_eq!(lower_tick.liquidity_gross, liq);
     assert_eq!(lower_tick.liquidity_net, liq as i128);
 
-    let upper_tick = pool.ticks(&max_tick_aligned);
+    let upper_tick = pool.get_tick(&max_tick_aligned);
     assert_eq!(upper_tick.liquidity_gross, liq);
     assert_eq!(upper_tick.liquidity_net, -(liq as i128));
 
@@ -2600,7 +2570,7 @@ fn test_min_max_tick_boundary_deposit_and_swap() {
     let out = pool.swap(&swapper, &0, &1, &2_000_0000000, &0);
     assert!(out > 0, "swap should produce output");
 
-    let slot = pool.slot0();
+    let slot = pool.get_slot0();
     assert!(
         slot.tick < 0,
         "swap should push tick below 0, got {}",
@@ -2612,7 +2582,7 @@ fn test_min_max_tick_boundary_deposit_and_swap() {
     let out2 = pool.swap(&swapper, &1, &0, &4_000_0000000, &0);
     assert!(out2 > 0);
 
-    let slot2 = pool.slot0();
+    let slot2 = pool.get_slot0();
     assert!(
         slot2.tick > 0,
         "swap should push tick above 0, got {}",
@@ -2691,7 +2661,7 @@ fn test_zero_liquidity_gap_no_fee_growth() {
     let out = pool.swap(&swapper, &0, &1, &50_0000000, &0);
     assert!(out > 0);
 
-    let slot = pool.slot0();
+    let slot = pool.get_slot0();
     assert!(
         slot.tick < -20,
         "swap should cross gap and enter position A, tick={}",
@@ -2718,8 +2688,8 @@ fn test_zero_liquidity_gap_no_fee_growth() {
 
     // Verify the gap traversal was free (no extra tokens consumed in the gap)
     // Total fees = position A fees + protocol fees only
-    let protocol_fees = pool.protocol_fees();
-    let total_fee0 = fee_a0 + protocol_fees.token0;
+    let protocol_fees = pool.get_protocol_fees();
+    let total_fee0 = fee_a0 + protocol_fees.get(0).unwrap();
     // fee_b0 must be 0, confirming no fee growth in the gap
     assert_eq!(fee_b0, 0);
     assert!(total_fee0 > 0, "should have collected fees overall");
@@ -2779,7 +2749,7 @@ fn test_tick_crossing_fee_growth_outside_flip() {
     pool.deposit_position(&user, &-40, &-20, &catch_amounts);
 
     // Record fee_growth_outside at tick -20 BEFORE any swaps
-    let tick_lower_before = pool.ticks(&-20);
+    let tick_lower_before = pool.get_tick(&-20);
 
     // Swap to generate some fees, staying in range
     let swapper = Address::generate(&env);
@@ -2789,7 +2759,7 @@ fn test_tick_crossing_fee_growth_outside_flip() {
     // Now do a swap large enough to cross tick -20
     pool.swap(&swapper, &0, &1, &100_0000000, &0);
 
-    let slot = pool.slot0();
+    let slot = pool.get_slot0();
     assert!(
         slot.tick < -20,
         "swap should cross below tick -20, got {}",
@@ -2797,7 +2767,7 @@ fn test_tick_crossing_fee_growth_outside_flip() {
     );
 
     // Check fee_growth_outside at tick -20 AFTER crossing
-    let tick_lower_after = pool.ticks(&-20);
+    let tick_lower_after = pool.get_tick(&-20);
 
     // After crossing, fee_growth_outside should have been flipped:
     // new_outside = fee_growth_global - old_outside
@@ -2827,7 +2797,7 @@ fn test_tick_crossing_fee_growth_outside_flip() {
     get_token_admin_client(&env, &token1.address).mint(&swapper, &200_0000000);
     pool.swap(&swapper, &1, &0, &100_0000000, &0);
 
-    let slot2 = pool.slot0();
+    let slot2 = pool.get_slot0();
     assert!(
         slot2.tick > -20,
         "swap back should cross above tick -20, got {}",
@@ -2835,7 +2805,7 @@ fn test_tick_crossing_fee_growth_outside_flip() {
     );
 
     // fee_growth_outside should flip again
-    let tick_lower_after2 = pool.ticks(&-20);
+    let tick_lower_after2 = pool.get_tick(&-20);
     assert!(
         tick_lower_after2.fee_growth_outside_0_x128 != tick_lower_after.fee_growth_outside_0_x128,
         "fee_growth_outside_0 at tick -20 should flip again after re-crossing"
@@ -2950,7 +2920,7 @@ fn test_position_reinit_after_full_withdraw() {
     );
 
     // Position should be deleted (zero liquidity + zero owed)
-    let tick_lower = setup.pool.ticks(&-30);
+    let tick_lower = setup.pool.get_tick(&-30);
     assert_eq!(tick_lower.liquidity_gross, 0, "tick should be cleared");
 
     // Recreate at the same tick range
@@ -2973,7 +2943,7 @@ fn test_position_reinit_after_full_withdraw() {
     );
 
     // Tick should be re-initialized
-    let tick_lower2 = setup.pool.ticks(&-30);
+    let tick_lower2 = setup.pool.get_tick(&-30);
     assert_eq!(tick_lower2.liquidity_gross, liq2);
 }
 
@@ -3053,9 +3023,10 @@ fn test_protocol_fee_zero_percent() {
     setup.pool.swap(&swapper, &0, &1, &20_0000000, &0);
 
     // Protocol should have zero fees
-    let protocol_fees = setup.pool.protocol_fees();
+    let protocol_fees = setup.pool.get_protocol_fees();
     assert_eq!(
-        protocol_fees.token0, 0,
+        protocol_fees.get(0).unwrap(),
+        0,
         "protocol fee 0%: protocol should collect nothing"
     );
 
@@ -3094,14 +3065,14 @@ fn test_protocol_fee_one_hundred_percent() {
     setup.pool.swap(&swapper, &0, &1, &20_0000000, &0);
 
     // Protocol should get ALL fees
-    let protocol_fees = setup.pool.protocol_fees();
+    let protocol_fees = setup.pool.get_protocol_fees();
     let expected_total_fee = 20_0000000u128 * 30 / 10000;
     let tolerance = expected_total_fee / 100 + 1;
     assert!(
-        protocol_fees.token0.abs_diff(expected_total_fee) <= tolerance,
+        protocol_fees.get(0).unwrap().abs_diff(expected_total_fee) <= tolerance,
         "protocol fee 100%: protocol should collect all fees (~{}), got {}",
         expected_total_fee,
-        protocol_fees.token0
+        protocol_fees.get(0).unwrap()
     );
 
     // LP should get zero fees
@@ -3172,8 +3143,8 @@ fn test_bitmap_word_boundary_crossing() {
     assert!(liq_neg > 0);
 
     // Verify bitmap words are set in different words
-    let word_0 = pool.chunk_bitmap(&0);
-    let word_neg1 = pool.chunk_bitmap(&-1);
+    let word_0 = pool.get_chunk_bitmap(&0);
+    let word_neg1 = pool.get_chunk_bitmap(&-1);
     let zero = U256::from_u32(&env, 0);
     assert!(word_0 != zero, "word 0 should have bits set");
     assert!(word_neg1 != zero, "word -1 should have bits set");
@@ -3185,7 +3156,7 @@ fn test_bitmap_word_boundary_crossing() {
     let out = pool.swap(&swapper, &1, &0, &30_0000000, &0);
     assert!(out > 0, "swap should find liquidity across word boundary");
 
-    let slot = pool.slot0();
+    let slot = pool.get_slot0();
     assert!(
         slot.tick >= 10,
         "swap should reach position in [10,50], tick={}",
@@ -3200,7 +3171,7 @@ fn test_bitmap_word_boundary_crossing() {
         "reverse swap should find liquidity across word boundary"
     );
 
-    let slot2 = pool.slot0();
+    let slot2 = pool.get_slot0();
     assert!(
         slot2.tick < -10,
         "swap should reach position in [-50,-10], tick={}",
@@ -3235,7 +3206,7 @@ fn test_two_users_same_tick_range_fee_tracking() {
     assert_eq!(liq1, liq2, "equal deposits should produce equal liquidity");
 
     // Verify tick state: liquidity_gross = sum of both
-    let tick = setup.pool.ticks(&-30);
+    let tick = setup.pool.get_tick(&-30);
     assert_eq!(tick.liquidity_gross, liq1 + liq2);
 
     // Swap to generate fees
@@ -3276,7 +3247,7 @@ fn test_two_users_same_tick_range_fee_tracking() {
     );
 
     // Tick should still have user2's liquidity
-    let tick_after = setup.pool.ticks(&-30);
+    let tick_after = setup.pool.get_tick(&-30);
     assert_eq!(
         tick_after.liquidity_gross, liq2,
         "tick should have only user2's liquidity after user1 withdrawal"
