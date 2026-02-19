@@ -11,24 +11,26 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         tick_lower: i32,
         tick_upper: i32,
         desired_amounts: Vec<u128>,
-    ) -> Result<(Vec<u128>, u128), Error> {
+    ) -> (Vec<u128>, u128) {
         if desired_amounts.len() != 2 {
-            return Err(Error::InvalidAmount);
+            panic_with_error!(&e, Error::InvalidAmount);
         }
 
         let desired_amount0 = desired_amounts.get_unchecked(0);
         let desired_amount1 = desired_amounts.get_unchecked(1);
         if desired_amount0 == 0 && desired_amount1 == 0 {
-            return Err(Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
         }
 
-        Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
+        Self::check_ticks_internal(&e, tick_lower, tick_upper);
 
         // Match deposit_position behavior on empty pool: infer price from desired ratio.
         let mut slot = get_slot0(&e);
         if get_total_raw_liquidity(&e) == 0 && desired_amount0 > 0 && desired_amount1 > 0 {
-            let sqrt_price_x96 = sqrt_price_from_amounts(&e, desired_amount0, desired_amount1)?;
-            let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)?;
+            let sqrt_price_x96 = sqrt_price_from_amounts(&e, desired_amount0, desired_amount1)
+                .unwrap_or_else(|err| panic_with_error!(&e, err));
+            let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)
+                .unwrap_or_else(|err| panic_with_error!(&e, err));
             slot = Slot0 {
                 sqrt_price_x96,
                 tick,
@@ -42,18 +44,18 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             tick_upper,
             desired_amount0,
             desired_amount1,
-        )?;
+        );
         if liquidity == 0 {
-            return Err(Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
         }
         if liquidity > i128::MAX as u128 {
-            return Err(Error::LiquidityAmountTooLarge);
+            panic_with_error!(&e, Error::LiquidityAmountTooLarge);
         }
 
         let (amount0, amount1) =
-            Self::amounts_for_liquidity(&e, &slot, tick_lower, tick_upper, liquidity, true)?;
+            Self::amounts_for_liquidity(&e, &slot, tick_lower, tick_upper, liquidity, true);
 
-        Ok((Vec::from_array(&e, [amount0, amount1]), liquidity))
+        (Vec::from_array(&e, [amount0, amount1]), liquidity)
     }
 
     // Add liquidity to a specific tick range [tick_lower, tick_upper).
@@ -70,26 +72,28 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         tick_upper: i32,
         desired_amounts: Vec<u128>,
         min_liquidity: u128,
-    ) -> Result<(Vec<u128>, u128), Error> {
+    ) -> (Vec<u128>, u128) {
         sender.require_auth();
         if get_is_killed_deposit(&e) {
-            return Err(Error::DepositKilled);
+            panic_with_error!(&e, Error::DepositKilled);
         }
         if desired_amounts.len() != 2 {
-            return Err(Error::InvalidAmount);
+            panic_with_error!(&e, Error::InvalidAmount);
         }
         let desired_amount0 = desired_amounts.get_unchecked(0);
         let desired_amount1 = desired_amounts.get_unchecked(1);
         if desired_amount0 == 0 && desired_amount1 == 0 {
-            return Err(Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
         }
 
-        Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
+        Self::check_ticks_internal(&e, tick_lower, tick_upper);
 
         // Auto-initialize price on empty pool from token ratio
         if get_total_raw_liquidity(&e) == 0 && desired_amount0 > 0 && desired_amount1 > 0 {
-            let sqrt_price_x96 = sqrt_price_from_amounts(&e, desired_amount0, desired_amount1)?;
-            let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)?;
+            let sqrt_price_x96 = sqrt_price_from_amounts(&e, desired_amount0, desired_amount1)
+                .unwrap_or_else(|err| panic_with_error!(&e, err));
+            let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)
+                .unwrap_or_else(|err| panic_with_error!(&e, err));
             set_slot0(
                 &e,
                 &Slot0 {
@@ -109,36 +113,42 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             tick_upper,
             desired_amount0,
             desired_amount1,
-        )?;
+        );
         if liquidity == 0 {
-            return Err(Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
         }
         if liquidity > i128::MAX as u128 {
-            return Err(Error::LiquidityAmountTooLarge);
+            panic_with_error!(&e, Error::LiquidityAmountTooLarge);
         }
         if liquidity < min_liquidity {
-            return Err(Error::InvalidAmount);
+            panic_with_error!(&e, Error::InvalidAmount);
         }
 
         // Compute actual token amounts for this liquidity (round up for pool safety)
         let slot = get_slot0(&e);
-        let sqrt_lower = sqrt_ratio_at_tick(&e, tick_lower)?;
-        let sqrt_upper = sqrt_ratio_at_tick(&e, tick_upper)?;
+        let sqrt_lower =
+            sqrt_ratio_at_tick(&e, tick_lower).unwrap_or_else(|err| panic_with_error!(&e, err));
+        let sqrt_upper =
+            sqrt_ratio_at_tick(&e, tick_upper).unwrap_or_else(|err| panic_with_error!(&e, err));
 
         let (amount0, amount1) = if slot.sqrt_price_x96 <= sqrt_lower {
             (
-                amount0_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true)?,
+                amount0_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true)
+                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
                 0,
             )
         } else if slot.sqrt_price_x96 < sqrt_upper {
             (
-                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, liquidity, true)?,
-                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, liquidity, true)?,
+                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, liquidity, true)
+                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
+                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, liquidity, true)
+                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
             )
         } else {
             (
                 0,
-                amount1_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true)?,
+                amount1_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true)
+                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
             )
         };
 
@@ -157,13 +167,13 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         set_reserve1(&e, &(get_reserve1(&e) + amount1));
 
         let mut position = Self::get_or_create_position(&e, &sender, tick_lower, tick_upper);
-        Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick)?;
+        Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick);
         position.liquidity = position.liquidity.saturating_add(liquidity);
         set_position(&e, &sender, tick_lower, tick_upper, &position);
-        Self::ensure_user_range_exists(&e, &sender, tick_lower, tick_upper)?;
+        Self::ensure_user_range_exists(&e, &sender, tick_lower, tick_upper);
 
-        Self::update_tick_liquidity(&e, tick_lower, liquidity as i128, false)?;
-        Self::update_tick_liquidity(&e, tick_upper, liquidity as i128, true)?;
+        Self::update_tick_liquidity(&e, tick_lower, liquidity as i128, false);
+        Self::update_tick_liquidity(&e, tick_upper, liquidity as i128, true);
 
         if slot.tick >= tick_lower && slot.tick < tick_upper {
             set_liquidity(&e, &get_liquidity(&e).saturating_add(liquidity));
@@ -182,7 +192,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Self::emit_position_update(&e, &sender, tick_lower, tick_upper, liquidity as i128);
         Self::emit_pool_state(&e, &get_slot0(&e), get_liquidity(&e));
 
-        Ok((Vec::from_array(&e, [amount0, amount1]), liquidity))
+        (Vec::from_array(&e, [amount0, amount1]), liquidity)
     }
 
     // Read-only preview for custom-range withdrawal principal.
@@ -193,26 +203,28 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         tick_lower: i32,
         tick_upper: i32,
         amount: u128,
-    ) -> Result<(u128, u128), Error> {
+    ) -> Vec<u128> {
         if amount == 0 {
-            return Err(Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
         }
         if amount > i128::MAX as u128 {
-            return Err(Error::LiquidityAmountTooLarge);
+            panic_with_error!(&e, Error::LiquidityAmountTooLarge);
         }
 
-        Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
+        Self::check_ticks_internal(&e, tick_lower, tick_upper);
 
         let position = match get_position(&e, &owner, tick_lower, tick_upper) {
             Some(pos) => pos,
-            None => return Err(Error::PositionNotFound),
+            None => panic_with_error!(&e, Error::PositionNotFound),
         };
         if position.liquidity < amount {
-            return Err(Error::InsufficientLiquidity);
+            panic_with_error!(&e, Error::InsufficientLiquidity);
         }
 
         let slot = get_slot0(&e);
-        Self::amounts_for_liquidity(&e, &slot, tick_lower, tick_upper, amount, false)
+        let (amount0, amount1) =
+            Self::amounts_for_liquidity(&e, &slot, tick_lower, tick_upper, amount, false);
+        Vec::from_array(&e, [amount0, amount1])
     }
 
     // Remove liquidity from a position and transfer tokens directly to owner wallet.
@@ -225,78 +237,84 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         tick_upper: i32,
         amount: u128,
         min_amounts: Vec<u128>,
-    ) -> Result<(u128, u128), Error> {
+    ) -> Vec<u128> {
         owner.require_auth();
         if amount == 0 {
-            return Err(Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
         }
         if amount > i128::MAX as u128 {
-            return Err(Error::LiquidityAmountTooLarge);
+            panic_with_error!(&e, Error::LiquidityAmountTooLarge);
         }
         if min_amounts.len() != 2 {
-            return Err(Error::InvalidAmount);
+            panic_with_error!(&e, Error::InvalidAmount);
         }
 
-        Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
+        Self::check_ticks_internal(&e, tick_lower, tick_upper);
 
         Self::recompute_user_weighted_liquidity(&e, &owner);
         Self::rewards_checkpoint_user(&e, &owner);
 
         let mut position = match get_position(&e, &owner, tick_lower, tick_upper) {
             Some(pos) => pos,
-            None => return Err(Error::PositionNotFound),
+            None => panic_with_error!(&e, Error::PositionNotFound),
         };
 
         let slot = get_slot0(&e);
-        Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick)?;
+        Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick);
 
         if position.liquidity < amount {
-            return Err(Error::InsufficientLiquidity);
+            panic_with_error!(&e, Error::InsufficientLiquidity);
         }
 
-        let sqrt_lower = sqrt_ratio_at_tick(&e, tick_lower)?;
-        let sqrt_upper = sqrt_ratio_at_tick(&e, tick_upper)?;
+        let sqrt_lower =
+            sqrt_ratio_at_tick(&e, tick_lower).unwrap_or_else(|err| panic_with_error!(&e, err));
+        let sqrt_upper =
+            sqrt_ratio_at_tick(&e, tick_upper).unwrap_or_else(|err| panic_with_error!(&e, err));
 
         let (amount0, amount1) = if slot.sqrt_price_x96 <= sqrt_lower {
             (
-                amount0_delta(&e, &sqrt_lower, &sqrt_upper, amount, false)?,
+                amount0_delta(&e, &sqrt_lower, &sqrt_upper, amount, false)
+                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
                 0,
             )
         } else if slot.sqrt_price_x96 < sqrt_upper {
             (
-                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, amount, false)?,
-                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, amount, false)?,
+                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, amount, false)
+                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
+                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, amount, false)
+                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
             )
         } else {
             (
                 0,
-                amount1_delta(&e, &sqrt_lower, &sqrt_upper, amount, false)?,
+                amount1_delta(&e, &sqrt_lower, &sqrt_upper, amount, false)
+                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
             )
         };
         let fees0 = position.tokens_owed_0;
         let fees1 = position.tokens_owed_1;
         let total_amount0 = match amount0.checked_add(fees0) {
             Some(v) => v,
-            None => return Err(Error::InvalidAmount),
+            None => panic_with_error!(&e, Error::InvalidAmount),
         };
         let total_amount1 = match amount1.checked_add(fees1) {
             Some(v) => v,
-            None => return Err(Error::InvalidAmount),
+            None => panic_with_error!(&e, Error::InvalidAmount),
         };
 
         if total_amount0 < min_amounts.get_unchecked(0)
             || total_amount1 < min_amounts.get_unchecked(1)
         {
-            return Err(Error::InvalidAmount);
+            panic_with_error!(&e, Error::InvalidAmount);
         }
 
         let reserve0_before = get_reserve0(&e);
         let reserve1_before = get_reserve1(&e);
         if reserve0_before < total_amount0 {
-            return Err(Error::InsufficientToken0);
+            panic_with_error!(&e, Error::InsufficientToken0);
         }
         if reserve1_before < total_amount1 {
-            return Err(Error::InsufficientToken1);
+            panic_with_error!(&e, Error::InsufficientToken1);
         }
 
         position.liquidity -= amount;
@@ -310,13 +328,13 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             set_position(&e, &owner, tick_lower, tick_upper, &position);
         }
 
-        Self::update_tick_liquidity(&e, tick_lower, -(amount as i128), false)?;
-        Self::update_tick_liquidity(&e, tick_upper, -(amount as i128), true)?;
+        Self::update_tick_liquidity(&e, tick_lower, -(amount as i128), false);
+        Self::update_tick_liquidity(&e, tick_upper, -(amount as i128), true);
 
         if slot.tick >= tick_lower && slot.tick < tick_upper {
             let active = get_liquidity(&e);
             if active < amount {
-                return Err(Error::LiquidityUnderflow);
+                panic_with_error!(&e, Error::LiquidityUnderflow);
             }
             set_liquidity(&e, &(active - amount));
         }
@@ -357,54 +375,43 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Self::emit_position_update(&e, &owner, tick_lower, tick_upper, -(amount as i128));
         Self::emit_pool_state(&e, &slot, get_liquidity(&e));
 
-        Ok((total_amount0, total_amount1))
+        Vec::from_array(&e, [total_amount0, total_amount1])
     }
 
     // Read-only preview for currently claimable swap fees on a single position.
     // Returns current tokens_owed values after fee accrual at current tick.
-    fn get_position_fees(
-        e: Env,
-        owner: Address,
-        tick_lower: i32,
-        tick_upper: i32,
-    ) -> Result<(u128, u128), Error> {
-        Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
+    fn get_position_fees(e: Env, owner: Address, tick_lower: i32, tick_upper: i32) -> Vec<u128> {
+        Self::check_ticks_internal(&e, tick_lower, tick_upper);
 
         let mut position = match get_position(&e, &owner, tick_lower, tick_upper) {
             Some(pos) => pos,
-            None => return Err(Error::PositionNotFound),
+            None => panic_with_error!(&e, Error::PositionNotFound),
         };
         let tick_current = get_slot0(&e).tick;
-        Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, tick_current)?;
+        Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, tick_current);
 
-        Ok((position.tokens_owed_0, position.tokens_owed_1))
+        Vec::from_array(&e, [position.tokens_owed_0, position.tokens_owed_1])
     }
 
     // Collect accrued swap fees from a position. Transfers up to amount0/1_requested
     // of owed tokens to owner. Fees accumulate from swaps that occur while the
     // position's range contains the active price. Returns (amount0, amount1) collected.
-    fn claim_position_fees(
-        e: Env,
-        owner: Address,
-        tick_lower: i32,
-        tick_upper: i32,
-    ) -> Result<(u128, u128), Error> {
+    fn claim_position_fees(e: Env, owner: Address, tick_lower: i32, tick_upper: i32) -> Vec<u128> {
         Self::collect_internal(
             &e,
             &owner,
             tick_lower,
             tick_upper,
-            u128::MAX,
-            u128::MAX,
+            Vec::from_array(&e, [u128::MAX, u128::MAX]),
             true,
         )
     }
 
     // Read-only preview of total claimable fees/tokens_owed across all user positions.
-    fn get_all_position_fees(e: Env, owner: Address) -> Result<(u128, u128), Error> {
+    fn get_all_position_fees(e: Env, owner: Address) -> Vec<u128> {
         let ranges = get_user_state(&e, &owner).positions;
         if ranges.len() == 0 {
-            return Ok((0, 0));
+            return Vec::from_array(&e, [0u128, 0u128]);
         }
 
         let tick_current = get_slot0(&e).tick;
@@ -421,23 +428,23 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
                     range.tick_lower,
                     range.tick_upper,
                     tick_current,
-                )?;
+                );
                 total0 = total0.saturating_add(position.tokens_owed_0);
                 total1 = total1.saturating_add(position.tokens_owed_1);
             }
         }
 
-        Ok((total0, total1))
+        Vec::from_array(&e, [total0, total1])
     }
 
     // Collect all currently claimable fees/tokens_owed across all user positions.
     // Useful for one-click "claim all fees" UX.
-    fn claim_all_position_fees(e: Env, owner: Address) -> Result<(u128, u128), Error> {
+    fn claim_all_position_fees(e: Env, owner: Address) -> Vec<u128> {
         owner.require_auth();
 
         let ranges = get_user_state(&e, &owner).positions;
         if ranges.len() == 0 {
-            return Ok((0, 0));
+            return Vec::from_array(&e, [0u128, 0u128]);
         }
 
         let tick_current = get_slot0(&e).tick;
@@ -457,7 +464,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
                 range.tick_lower,
                 range.tick_upper,
                 tick_current,
-            )?;
+            );
 
             total0 = total0.saturating_add(position.tokens_owed_0);
             total1 = total1.saturating_add(position.tokens_owed_1);
@@ -475,10 +482,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         let reserve0 = get_reserve0(&e);
         let reserve1 = get_reserve1(&e);
         if reserve0 < total0 {
-            return Err(Error::InsufficientToken0);
+            panic_with_error!(&e, Error::InsufficientToken0);
         }
         if reserve1 < total1 {
-            return Err(Error::InsufficientToken1);
+            panic_with_error!(&e, Error::InsufficientToken1);
         }
 
         let token0 = get_token0(&e);
@@ -498,7 +505,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             .update_reserves(Vec::from_array(&e, [reserve0 - total0, reserve1 - total1]));
         update_plane(&e);
 
-        Ok((total0, total1))
+        Vec::from_array(&e, [total0, total1])
     }
 
     // Current price state: sqrt_price_x96 (Q64.96) and tick index.

@@ -160,7 +160,7 @@ pub trait ConcentratedPoolExtensionsTrait {
         tick_lower: i32,
         tick_upper: i32,
         desired_amounts: Vec<u128>,
-    ) -> Result<(Vec<u128>, u128), Error>;
+    ) -> (Vec<u128>, u128);
 
     fn deposit_position(
         e: Env,
@@ -169,7 +169,7 @@ pub trait ConcentratedPoolExtensionsTrait {
         tick_upper: i32,
         desired_amounts: Vec<u128>,
         min_liquidity: u128,
-    ) -> Result<(Vec<u128>, u128), Error>;
+    ) -> (Vec<u128>, u128);
 
     fn estimate_withdraw_position(
         e: Env,
@@ -177,7 +177,7 @@ pub trait ConcentratedPoolExtensionsTrait {
         tick_lower: i32,
         tick_upper: i32,
         amount: u128,
-    ) -> Result<(u128, u128), Error>;
+    ) -> Vec<u128>;
 
     fn withdraw_position(
         e: Env,
@@ -186,24 +186,14 @@ pub trait ConcentratedPoolExtensionsTrait {
         tick_upper: i32,
         amount: u128,
         min_amounts: Vec<u128>,
-    ) -> Result<(u128, u128), Error>;
+    ) -> Vec<u128>;
 
-    fn get_position_fees(
-        e: Env,
-        owner: Address,
-        tick_lower: i32,
-        tick_upper: i32,
-    ) -> Result<(u128, u128), Error>;
+    fn get_position_fees(e: Env, owner: Address, tick_lower: i32, tick_upper: i32) -> Vec<u128>;
 
-    fn claim_position_fees(
-        e: Env,
-        owner: Address,
-        tick_lower: i32,
-        tick_upper: i32,
-    ) -> Result<(u128, u128), Error>;
+    fn claim_position_fees(e: Env, owner: Address, tick_lower: i32, tick_upper: i32) -> Vec<u128>;
 
-    fn get_all_position_fees(e: Env, owner: Address) -> Result<(u128, u128), Error>;
-    fn claim_all_position_fees(e: Env, owner: Address) -> Result<(u128, u128), Error>;
+    fn get_all_position_fees(e: Env, owner: Address) -> Vec<u128>;
+    fn claim_all_position_fees(e: Env, owner: Address) -> Vec<u128>;
 
     fn get_slot0(e: Env) -> Slot0;
     fn get_tick_spacing(e: Env) -> i32;

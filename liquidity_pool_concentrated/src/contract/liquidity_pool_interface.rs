@@ -135,22 +135,16 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, Error::InvalidAmount);
         }
 
-        let (tick_lower, tick_upper) = match Self::full_range_ticks(&e) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let (tick_lower, tick_upper) = Self::full_range_ticks(&e);
 
-        let (actual_amounts, liquidity) = match Self::deposit_position(
+        let (actual_amounts, liquidity) = Self::deposit_position(
             e.clone(),
             user.clone(),
             tick_lower,
             tick_upper,
             desired_amounts,
             min_shares,
-        ) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        );
 
         (actual_amounts, liquidity)
     }
@@ -161,21 +155,15 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, Error::InvalidAmount);
         }
 
-        let (tick_lower, tick_upper) = match Self::full_range_ticks(&e) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let (tick_lower, tick_upper) = Self::full_range_ticks(&e);
 
-        match Self::max_liquidity_for_amounts(
+        Self::max_liquidity_for_amounts(
             &e,
             tick_lower,
             tick_upper,
             desired_amounts.get_unchecked(0),
             desired_amounts.get_unchecked(1),
-        ) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        }
+        )
     }
 
     // Exact-input swap via token indexes (0 or 1). Swaps in_amount of token[in_idx]
@@ -189,10 +177,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         in_amount: u128,
         out_min: u128,
     ) -> u128 {
-        let zero_for_one = match Self::direction_from_indexes(in_idx, out_idx) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let zero_for_one = Self::direction_from_indexes(&e, in_idx, out_idx);
 
         let amount_specified = in_amount as i128;
         user.require_auth();
@@ -200,16 +185,13 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, Error::SwapKilled);
         }
 
-        let result = match Self::swap_internal(
+        let result = Self::swap_internal(
             &e,
             &user,
             zero_for_one,
             amount_specified,
             U256::from_u32(&e, 0),
-        ) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        );
 
         let amount_out = if zero_for_one {
             if result.amount1 > 0 {
@@ -232,21 +214,11 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
 
     // Simulates exact-input swap without executing. Returns expected output amount.
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
-        let zero_for_one = match Self::direction_from_indexes(in_idx, out_idx) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let zero_for_one = Self::direction_from_indexes(&e, in_idx, out_idx);
         let amount_specified = in_amount as i128;
 
-        let (amount0, amount1) = match Self::simulate_swap_amounts(
-            &e,
-            zero_for_one,
-            amount_specified,
-            U256::from_u32(&e, 0),
-        ) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let (amount0, amount1) =
+            Self::simulate_swap_amounts(&e, zero_for_one, amount_specified, U256::from_u32(&e, 0));
 
         if zero_for_one {
             if amount1 > 0 {
@@ -271,10 +243,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         out_amount: u128,
         in_max: u128,
     ) -> u128 {
-        let zero_for_one = match Self::direction_from_indexes(in_idx, out_idx) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let zero_for_one = Self::direction_from_indexes(&e, in_idx, out_idx);
 
         let out_amount_i128 = out_amount as i128;
         user.require_auth();
@@ -282,16 +251,13 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, Error::SwapKilled);
         }
 
-        let result = match Self::swap_internal(
+        let result = Self::swap_internal(
             &e,
             &user,
             zero_for_one,
             -out_amount_i128,
             U256::from_u32(&e, 0),
-        ) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        );
 
         let amount_in = if zero_for_one {
             if result.amount0 <= 0 {
@@ -314,21 +280,11 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
 
     // Simulates exact-output swap without executing. Returns expected input amount.
     fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128 {
-        let zero_for_one = match Self::direction_from_indexes(in_idx, out_idx) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let zero_for_one = Self::direction_from_indexes(&e, in_idx, out_idx);
         let out_amount_i128 = out_amount as i128;
 
-        let (amount0, amount1) = match Self::simulate_swap_amounts(
-            &e,
-            zero_for_one,
-            -out_amount_i128,
-            U256::from_u32(&e, 0),
-        ) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let (amount0, amount1) =
+            Self::simulate_swap_amounts(&e, zero_for_one, -out_amount_i128, U256::from_u32(&e, 0));
 
         if zero_for_one {
             if amount0 <= 0 {
@@ -351,24 +307,18 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, Error::InvalidAmount);
         }
 
-        let (tick_lower, tick_upper) = match Self::full_range_ticks(&e) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        let (tick_lower, tick_upper) = Self::full_range_ticks(&e);
 
-        let (amount0, amount1) = match Self::withdraw_position(
+        let amounts = Self::withdraw_position(
             e.clone(),
             user.clone(),
             tick_lower,
             tick_upper,
             share_amount,
             min_amounts,
-        ) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
+        );
 
-        Vec::from_array(&e, [amount0, amount1])
+        amounts
     }
 
     // Returns pool metadata: pool_type, fee, tick_spacing.
