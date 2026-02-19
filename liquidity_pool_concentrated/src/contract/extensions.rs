@@ -120,7 +120,11 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
 
         let tokens = Vec::from_array(&e, [token0, token1]);
         let amounts = Vec::from_array(&e, [amount0, amount1]);
-        PoolEvents::new(&e).deposit_liquidity(tokens, amounts, liquidity);
+        let events = PoolEvents::new(&e);
+        events.deposit_liquidity(tokens, amounts, liquidity);
+        events.update_reserves(Vec::from_array(&e, [get_reserve0(&e), get_reserve1(&e)]));
+        Self::emit_position_update(&e, &sender, tick_lower, tick_upper, liquidity as i128);
+        Self::emit_pool_state(&e, &get_slot0(&e), get_liquidity(&e));
 
         Ok((Vec::from_array(&e, [amount0, amount1]), liquidity))
     }
@@ -210,7 +214,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
 
         let tokens = Vec::from_array(&e, [get_token0(&e), get_token1(&e)]);
         let amounts = Vec::from_array(&e, [amount0, amount1]);
-        PoolEvents::new(&e).withdraw_liquidity(tokens, amounts, amount);
+        let events = PoolEvents::new(&e);
+        events.withdraw_liquidity(tokens, amounts, amount);
+        Self::emit_position_update(&e, &owner, tick_lower, tick_upper, -(amount as i128));
+        Self::emit_pool_state(&e, &slot, get_liquidity(&e));
 
         Ok((amount0, amount1))
     }

@@ -602,6 +602,31 @@ impl ConcentratedLiquidityPool {
         }
     }
 
+    // Concentrated-specific event: current pool price state.
+    // Emitted after swap, deposit_position, withdraw_position.
+    pub(super) fn emit_pool_state(e: &Env, slot: &Slot0, liquidity: u128) {
+        e.events().publish(
+            (Symbol::new(e, "pool_state"),),
+            (slot.sqrt_price_x96.clone(), slot.tick, liquidity as i128),
+        );
+    }
+
+    // Concentrated-specific event: tick-level liquidity change.
+    // Emitted on deposit_position (delta > 0) and withdraw_position (delta < 0).
+    // Backend uses this to maintain an incremental tick map for swap estimation.
+    pub(super) fn emit_position_update(
+        e: &Env,
+        user: &Address,
+        tick_lower: i32,
+        tick_upper: i32,
+        liquidity_delta: i128,
+    ) {
+        e.events().publish(
+            (Symbol::new(e, "position_update"), user.clone()),
+            (tick_lower, tick_upper, liquidity_delta),
+        );
+    }
+
     pub(super) fn collect_internal(
         e: &Env,
         owner: &Address,
@@ -647,9 +672,12 @@ impl ConcentratedLiquidityPool {
             SorobanTokenClient::new(e, &token1).transfer(&contract, owner, &(amount1 as i128));
         }
 
-        set_reserve0(e, &(get_reserve0(e) - amount0));
-        set_reserve1(e, &(get_reserve1(e) - amount1));
+        let res0 = get_reserve0(e) - amount0;
+        let res1 = get_reserve1(e) - amount1;
+        set_reserve0(e, &res0);
+        set_reserve1(e, &res1);
 
+        PoolEvents::new(e).update_reserves(Vec::from_array(e, [res0, res1]));
         update_plane(e);
 
         Ok((amount0, amount1))
@@ -1257,7 +1285,8 @@ impl ConcentratedLiquidityPool {
                 (-amount0).unsigned_abs(),
             )
         };
-        PoolEvents::new(e).trade(
+        let events = PoolEvents::new(e);
+        events.trade(
             sender.clone(),
             token_in,
             token_out,
@@ -1265,6 +1294,8 @@ impl ConcentratedLiquidityPool {
             out_amount,
             total_fee_amount,
         );
+        events.update_reserves(Vec::from_array(e, [res0, res1]));
+        Self::emit_pool_state(e, &slot, liquidity);
 
         Ok(SwapResult {
             amount0,
