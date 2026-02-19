@@ -960,11 +960,29 @@ impl ConcentratedLiquidityPool {
         desired_amount0: u128,
         desired_amount1: u128,
     ) -> Result<u128, Error> {
+        let slot = get_slot0(e);
+        Self::max_liquidity_for_amounts_at_slot(
+            e,
+            &slot,
+            tick_lower,
+            tick_upper,
+            desired_amount0,
+            desired_amount1,
+        )
+    }
+
+    pub(super) fn max_liquidity_for_amounts_at_slot(
+        e: &Env,
+        slot: &Slot0,
+        tick_lower: i32,
+        tick_upper: i32,
+        desired_amount0: u128,
+        desired_amount1: u128,
+    ) -> Result<u128, Error> {
         if desired_amount0 == 0 && desired_amount1 == 0 {
             return Ok(0);
         }
 
-        let slot = get_slot0(e);
         let sqrt_lower = sqrt_ratio_at_tick(e, tick_lower)?;
         let sqrt_upper = sqrt_ratio_at_tick(e, tick_upper)?;
 

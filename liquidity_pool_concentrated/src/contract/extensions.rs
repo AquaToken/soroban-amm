@@ -4,6 +4,58 @@ use super::*;
 // These are NOT available through the router; called directly on the pool contract.
 #[contractimpl]
 impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
+    // Read-only preview for custom-range deposit.
+    // Returns (actual_amounts, liquidity) exactly as deposit_position would produce.
+    fn estimate_deposit_position(
+        e: Env,
+        tick_lower: i32,
+        tick_upper: i32,
+        desired_amounts: Vec<u128>,
+    ) -> Result<(Vec<u128>, u128), Error> {
+        if desired_amounts.len() != 2 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let desired_amount0 = desired_amounts.get_unchecked(0);
+        let desired_amount1 = desired_amounts.get_unchecked(1);
+        if desired_amount0 == 0 && desired_amount1 == 0 {
+            return Err(Error::AmountShouldBeGreaterThanZero);
+        }
+
+        Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
+
+        // Match deposit_position behavior on empty pool: infer price from desired ratio.
+        let mut slot = get_slot0(&e);
+        if get_total_raw_liquidity(&e) == 0 && desired_amount0 > 0 && desired_amount1 > 0 {
+            let sqrt_price_x96 = sqrt_price_from_amounts(&e, desired_amount0, desired_amount1)?;
+            let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)?;
+            slot = Slot0 {
+                sqrt_price_x96,
+                tick,
+            };
+        }
+
+        let liquidity = Self::max_liquidity_for_amounts_at_slot(
+            &e,
+            &slot,
+            tick_lower,
+            tick_upper,
+            desired_amount0,
+            desired_amount1,
+        )?;
+        if liquidity == 0 {
+            return Err(Error::AmountShouldBeGreaterThanZero);
+        }
+        if liquidity > i128::MAX as u128 {
+            return Err(Error::LiquidityAmountTooLarge);
+        }
+
+        let (amount0, amount1) =
+            Self::amounts_for_liquidity(&e, &slot, tick_lower, tick_upper, liquidity, true)?;
+
+        Ok((Vec::from_array(&e, [amount0, amount1]), liquidity))
+    }
+
     // Add liquidity to a specific tick range [tick_lower, tick_upper).
     // `desired_amounts` is [amount0, amount1] — the maximum tokens the sender is willing
     // to spend. The contract computes the maximum liquidity mintable from these amounts
@@ -17,6 +69,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         tick_lower: i32,
         tick_upper: i32,
         desired_amounts: Vec<u128>,
+        min_liquidity: u128,
     ) -> Result<(Vec<u128>, u128), Error> {
         sender.require_auth();
         if get_is_killed_deposit(&e) {
@@ -62,6 +115,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
         if liquidity > i128::MAX as u128 {
             return Err(Error::LiquidityAmountTooLarge);
+        }
+        if liquidity < min_liquidity {
+            return Err(Error::InvalidAmount);
         }
 
         // Compute actual token amounts for this liquidity (round up for pool safety)
@@ -129,16 +185,46 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Ok((Vec::from_array(&e, [amount0, amount1]), liquidity))
     }
 
-    // Remove liquidity from a position. Withdrawn tokens + accrued fees are credited
-    // to position's tokens_owed fields — call claim_position_fees to actually transfer.
-    // Returns (amount0, amount1) that were credited. If position is fully withdrawn
-    // and has no owed tokens, it is deleted.
+    // Read-only preview for custom-range withdrawal principal.
+    // Returns only burn principal amounts (excludes fees auto-claimed by withdraw_position).
+    fn estimate_withdraw_position(
+        e: Env,
+        owner: Address,
+        tick_lower: i32,
+        tick_upper: i32,
+        amount: u128,
+    ) -> Result<(u128, u128), Error> {
+        if amount == 0 {
+            return Err(Error::AmountShouldBeGreaterThanZero);
+        }
+        if amount > i128::MAX as u128 {
+            return Err(Error::LiquidityAmountTooLarge);
+        }
+
+        Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
+
+        let position = match get_position(&e, &owner, tick_lower, tick_upper) {
+            Some(pos) => pos,
+            None => return Err(Error::PositionNotFound),
+        };
+        if position.liquidity < amount {
+            return Err(Error::InsufficientLiquidity);
+        }
+
+        let slot = get_slot0(&e);
+        Self::amounts_for_liquidity(&e, &slot, tick_lower, tick_upper, amount, false)
+    }
+
+    // Remove liquidity from a position and transfer tokens directly to owner wallet.
+    // This call always auto-claims all accrued fees for the position as well.
+    // Returns (amount0, amount1) total transferred by this withdraw call (principal + fees).
     fn withdraw_position(
         e: Env,
         owner: Address,
         tick_lower: i32,
         tick_upper: i32,
         amount: u128,
+        min_amounts: Vec<u128>,
     ) -> Result<(u128, u128), Error> {
         owner.require_auth();
         if amount == 0 {
@@ -146,6 +232,9 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
         if amount > i128::MAX as u128 {
             return Err(Error::LiquidityAmountTooLarge);
+        }
+        if min_amounts.len() != 2 {
+            return Err(Error::InvalidAmount);
         }
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
@@ -184,12 +273,37 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
                 amount1_delta(&e, &sqrt_lower, &sqrt_upper, amount, false)?,
             )
         };
+        let fees0 = position.tokens_owed_0;
+        let fees1 = position.tokens_owed_1;
+        let total_amount0 = match amount0.checked_add(fees0) {
+            Some(v) => v,
+            None => return Err(Error::InvalidAmount),
+        };
+        let total_amount1 = match amount1.checked_add(fees1) {
+            Some(v) => v,
+            None => return Err(Error::InvalidAmount),
+        };
+
+        if total_amount0 < min_amounts.get_unchecked(0)
+            || total_amount1 < min_amounts.get_unchecked(1)
+        {
+            return Err(Error::InvalidAmount);
+        }
+
+        let reserve0_before = get_reserve0(&e);
+        let reserve1_before = get_reserve1(&e);
+        if reserve0_before < total_amount0 {
+            return Err(Error::InsufficientToken0);
+        }
+        if reserve1_before < total_amount1 {
+            return Err(Error::InsufficientToken1);
+        }
 
         position.liquidity -= amount;
-        position.tokens_owed_0 = position.tokens_owed_0.saturating_add(amount0);
-        position.tokens_owed_1 = position.tokens_owed_1.saturating_add(amount1);
+        position.tokens_owed_0 = 0;
+        position.tokens_owed_1 = 0;
 
-        if position.liquidity == 0 && position.tokens_owed_0 == 0 && position.tokens_owed_1 == 0 {
+        if position.liquidity == 0 {
             remove_position(&e, &owner, tick_lower, tick_upper);
             Self::remove_user_range_if_empty(&e, &owner, tick_lower, tick_upper);
         } else {
@@ -210,16 +324,60 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         Self::update_user_raw_liquidity(&e, &owner, -(amount as i128));
         Self::recompute_user_weighted_liquidity(&e, &owner);
         Self::rewards_refresh_working_balance(&e, &owner);
+
+        let token0 = get_token0(&e);
+        let token1 = get_token1(&e);
+        let contract = e.current_contract_address();
+        if total_amount0 > 0 {
+            SorobanTokenClient::new(&e, &token0).transfer(
+                &contract,
+                &owner,
+                &(total_amount0 as i128),
+            );
+        }
+        if total_amount1 > 0 {
+            SorobanTokenClient::new(&e, &token1).transfer(
+                &contract,
+                &owner,
+                &(total_amount1 as i128),
+            );
+        }
+
+        let reserve0_after = reserve0_before - total_amount0;
+        let reserve1_after = reserve1_before - total_amount1;
+        set_reserve0(&e, &reserve0_after);
+        set_reserve1(&e, &reserve1_after);
         update_plane(&e);
 
         let tokens = Vec::from_array(&e, [get_token0(&e), get_token1(&e)]);
-        let amounts = Vec::from_array(&e, [amount0, amount1]);
+        let amounts = Vec::from_array(&e, [total_amount0, total_amount1]);
         let events = PoolEvents::new(&e);
         events.withdraw_liquidity(tokens, amounts, amount);
+        events.update_reserves(Vec::from_array(&e, [reserve0_after, reserve1_after]));
         Self::emit_position_update(&e, &owner, tick_lower, tick_upper, -(amount as i128));
         Self::emit_pool_state(&e, &slot, get_liquidity(&e));
 
-        Ok((amount0, amount1))
+        Ok((total_amount0, total_amount1))
+    }
+
+    // Read-only preview for currently claimable swap fees on a single position.
+    // Returns current tokens_owed values after fee accrual at current tick.
+    fn get_position_fees(
+        e: Env,
+        owner: Address,
+        tick_lower: i32,
+        tick_upper: i32,
+    ) -> Result<(u128, u128), Error> {
+        Self::check_ticks_internal(&e, tick_lower, tick_upper)?;
+
+        let mut position = match get_position(&e, &owner, tick_lower, tick_upper) {
+            Some(pos) => pos,
+            None => return Err(Error::PositionNotFound),
+        };
+        let tick_current = get_slot0(&e).tick;
+        Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, tick_current)?;
+
+        Ok((position.tokens_owed_0, position.tokens_owed_1))
     }
 
     // Collect accrued swap fees from a position. Transfers up to amount0/1_requested
@@ -230,18 +388,117 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         owner: Address,
         tick_lower: i32,
         tick_upper: i32,
-        amount0_requested: u128,
-        amount1_requested: u128,
     ) -> Result<(u128, u128), Error> {
         Self::collect_internal(
             &e,
             &owner,
             tick_lower,
             tick_upper,
-            amount0_requested,
-            amount1_requested,
+            u128::MAX,
+            u128::MAX,
             true,
         )
+    }
+
+    // Read-only preview of total claimable fees/tokens_owed across all user positions.
+    fn get_all_position_fees(e: Env, owner: Address) -> Result<(u128, u128), Error> {
+        let ranges = get_user_state(&e, &owner).positions;
+        if ranges.len() == 0 {
+            return Ok((0, 0));
+        }
+
+        let tick_current = get_slot0(&e).tick;
+        let mut total0 = 0u128;
+        let mut total1 = 0u128;
+
+        for i in 0..ranges.len() {
+            let range = ranges.get_unchecked(i);
+            if let Some(mut position) = get_position(&e, &owner, range.tick_lower, range.tick_upper)
+            {
+                Self::accrue_position_fees(
+                    &e,
+                    &mut position,
+                    range.tick_lower,
+                    range.tick_upper,
+                    tick_current,
+                )?;
+                total0 = total0.saturating_add(position.tokens_owed_0);
+                total1 = total1.saturating_add(position.tokens_owed_1);
+            }
+        }
+
+        Ok((total0, total1))
+    }
+
+    // Collect all currently claimable fees/tokens_owed across all user positions.
+    // Useful for one-click "claim all fees" UX.
+    fn claim_all_position_fees(e: Env, owner: Address) -> Result<(u128, u128), Error> {
+        owner.require_auth();
+
+        let ranges = get_user_state(&e, &owner).positions;
+        if ranges.len() == 0 {
+            return Ok((0, 0));
+        }
+
+        let tick_current = get_slot0(&e).tick;
+        let mut total0 = 0u128;
+        let mut total1 = 0u128;
+
+        for i in 0..ranges.len() {
+            let range = ranges.get_unchecked(i);
+            let mut position = match get_position(&e, &owner, range.tick_lower, range.tick_upper) {
+                Some(pos) => pos,
+                None => continue,
+            };
+
+            Self::accrue_position_fees(
+                &e,
+                &mut position,
+                range.tick_lower,
+                range.tick_upper,
+                tick_current,
+            )?;
+
+            total0 = total0.saturating_add(position.tokens_owed_0);
+            total1 = total1.saturating_add(position.tokens_owed_1);
+
+            position.tokens_owed_0 = 0;
+            position.tokens_owed_1 = 0;
+            if position.liquidity == 0 {
+                remove_position(&e, &owner, range.tick_lower, range.tick_upper);
+                Self::remove_user_range_if_empty(&e, &owner, range.tick_lower, range.tick_upper);
+            } else {
+                set_position(&e, &owner, range.tick_lower, range.tick_upper, &position);
+            }
+        }
+
+        let reserve0 = get_reserve0(&e);
+        let reserve1 = get_reserve1(&e);
+        if reserve0 < total0 {
+            return Err(Error::InsufficientToken0);
+        }
+        if reserve1 < total1 {
+            return Err(Error::InsufficientToken1);
+        }
+
+        let token0 = get_token0(&e);
+        let token1 = get_token1(&e);
+        let contract = e.current_contract_address();
+
+        if total0 > 0 {
+            SorobanTokenClient::new(&e, &token0).transfer(&contract, &owner, &(total0 as i128));
+        }
+        if total1 > 0 {
+            SorobanTokenClient::new(&e, &token1).transfer(&contract, &owner, &(total1 as i128));
+        }
+
+        set_reserve0(&e, &(reserve0 - total0));
+        set_reserve1(&e, &(reserve1 - total1));
+        PoolEvents::new(&e)
+            .update_reserves(Vec::from_array(&e, [reserve0 - total0, reserve1 - total1]));
+        update_plane(&e);
+
+        Ok((total0, total1))
     }
 
     // Current price state: sqrt_price_x96 (Q64.96) and tick index.

@@ -146,14 +146,11 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             tick_lower,
             tick_upper,
             desired_amounts,
+            min_shares,
         ) {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-
-        if liquidity < min_shares {
-            panic_with_error!(&e, Error::InvalidAmount);
-        }
 
         (actual_amounts, liquidity)
     }
@@ -347,8 +344,8 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
     }
 
     // Router-compatible withdraw: removes share_amount liquidity from user's full-range
-    // position, then collects all owed tokens (withdrawn + accrued fees).
-    // Returns [amount0, amount1] received. Reverts if below min_amounts.
+    // position and returns transferred amounts (principal + auto-claimed fees).
+    // Reverts if output is below min_amounts.
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
         if min_amounts.len() != 2 {
             panic_with_error!(&e, Error::InvalidAmount);
@@ -359,33 +356,17 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             Err(err) => panic_with_error!(&e, err),
         };
 
-        let (_burn_amount0, _burn_amount1) = match Self::withdraw_position(
+        let (amount0, amount1) = match Self::withdraw_position(
             e.clone(),
             user.clone(),
             tick_lower,
             tick_upper,
             share_amount,
+            min_amounts,
         ) {
             Ok(v) => v,
             Err(err) => panic_with_error!(&e, err),
         };
-
-        let (amount0, amount1) = match Self::collect_internal(
-            &e,
-            &user,
-            tick_lower,
-            tick_upper,
-            u128::MAX,
-            u128::MAX,
-            false,
-        ) {
-            Ok(v) => v,
-            Err(err) => panic_with_error!(&e, err),
-        };
-
-        if amount0 < min_amounts.get_unchecked(0) || amount1 < min_amounts.get_unchecked(1) {
-            panic_with_error!(&e, Error::InvalidAmount);
-        }
 
         Vec::from_array(&e, [amount0, amount1])
     }
