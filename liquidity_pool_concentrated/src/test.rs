@@ -886,9 +886,10 @@ fn test_withdraw_position_auto_claims_fees() {
         "expected non-zero fees before withdraw"
     );
 
-    // Partial withdraw should transfer principal + auto-claimed fees.
+    // Partial withdraw should transfer exactly what estimate_withdraw_position previews
+    // (principal + auto-claimed fees).
     let burn_amount = liquidity / 2;
-    let (principal0, principal1) = pair(setup.pool.estimate_withdraw_position(
+    let (estimated0, estimated1) = pair(setup.pool.estimate_withdraw_position(
         &setup.user,
         &-100,
         &100,
@@ -904,8 +905,8 @@ fn test_withdraw_position_auto_claims_fees() {
         &Vec::from_array(&setup.env, [0u128, 0u128]),
     ));
 
-    assert_eq!(withdraw0, principal0 + fees_before0);
-    assert_eq!(withdraw1, principal1 + fees_before1);
+    assert_eq!(withdraw0, estimated0);
+    assert_eq!(withdraw1, estimated1);
     assert_eq!(
         setup.token0.balance(&setup.user),
         bal0_before + withdraw0 as i128

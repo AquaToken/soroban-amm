@@ -195,8 +195,8 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         (Vec::from_array(&e, [amount0, amount1]), liquidity)
     }
 
-    // Read-only preview for custom-range withdrawal principal.
-    // Returns only burn principal amounts (excludes fees auto-claimed by withdraw_position).
+    // Read-only preview for custom-range withdrawal total.
+    // Returns burn principal + fees that will be auto-claimed by withdraw_position.
     fn estimate_withdraw_position(
         e: Env,
         owner: Address,
@@ -213,7 +213,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper);
 
-        let position = match get_position(&e, &owner, tick_lower, tick_upper) {
+        let mut position = match get_position(&e, &owner, tick_lower, tick_upper) {
             Some(pos) => pos,
             None => panic_with_error!(&e, Error::PositionNotFound),
         };
@@ -222,9 +222,28 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
 
         let slot = get_slot0(&e);
+        Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick);
+
         let (amount0, amount1) =
             Self::amounts_for_liquidity(&e, &slot, tick_lower, tick_upper, amount, false);
-        Vec::from_array(&e, [amount0, amount1])
+
+        let total_amount0 = match amount0.checked_add(position.tokens_owed_0) {
+            Some(v) => v,
+            None => panic_with_error!(&e, Error::InvalidAmount),
+        };
+        let total_amount1 = match amount1.checked_add(position.tokens_owed_1) {
+            Some(v) => v,
+            None => panic_with_error!(&e, Error::InvalidAmount),
+        };
+
+        if get_reserve0(&e) < total_amount0 {
+            panic_with_error!(&e, Error::InsufficientToken0);
+        }
+        if get_reserve1(&e) < total_amount1 {
+            panic_with_error!(&e, Error::InsufficientToken1);
+        }
+
+        Vec::from_array(&e, [total_amount0, total_amount1])
     }
 
     // Remove liquidity from a position and transfer tokens directly to owner wallet.
