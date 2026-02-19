@@ -3849,6 +3849,58 @@ fn test_rebasing_token_increases_withdrawal_amounts() {
 }
 
 #[test]
+fn test_rebasing_dust_ignored_when_pool_is_empty() {
+    let setup = Setup::new_with_config(&TestConfig {
+        rewards_count: 0,
+        reward_tps: 0,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    let deposit_amount = 100_0000000_u128;
+
+    for user in [&user1, &user2] {
+        setup
+            .token1_admin_client
+            .mint(user, &(deposit_amount as i128));
+        setup
+            .token2_admin_client
+            .mint(user, &(deposit_amount as i128));
+    }
+
+    liq_pool.deposit(
+        &user1,
+        &Vec::from_array(&e, [deposit_amount, deposit_amount]),
+        &0,
+    );
+
+    let user1_shares = setup.token_share.balance(&user1) as u128;
+    liq_pool.withdraw(&user1, &user1_shares, &Vec::from_array(&e, [0, 0]));
+
+    assert_eq!(liq_pool.get_total_shares(), 0);
+    assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [0, 0]));
+
+    // Simulate rebasing dust on token2 while total_shares == 0.
+    let dust_amount = 1_i128;
+    setup
+        .token2_admin_client
+        .mint(&liq_pool.address, &dust_amount);
+
+    // Empty pool guard should prevent syncing this dust into reserves.
+    assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [0, 0]));
+
+    let (_, minted_shares) = liq_pool.deposit(
+        &user2,
+        &Vec::from_array(&e, [deposit_amount, deposit_amount]),
+        &0,
+    );
+    assert!(minted_shares > 0);
+}
+
+#[test]
 fn test_rebasing_token_does_not_mint_extra_shares_on_deposit() {
     let setup = Setup::new_with_config(&TestConfig {
         rewards_count: 0,

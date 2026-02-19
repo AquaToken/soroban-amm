@@ -82,6 +82,13 @@ impl LiquidityPool {
         };
 
         let mut reserves = get_reserves(e);
+        let total_shares = get_total_shares(e);
+        if total_shares == 0 {
+            // With no outstanding shares, pool operations start from zero reserves.
+            // Ignore any external dust on balances.
+            return;
+        }
+
         let protocol_fees = get_protocol_fees(e);
         let mut reserves_changed = false;
 
