@@ -955,142 +955,44 @@ impl ConcentratedLiquidityPool {
         }
     }
 
-    pub(super) fn simulate_swap_amounts(
-        e: &Env,
+    /// Convert unsigned swap amounts to signed (amount0, amount1) pair.
+    /// Positive = user pays in, negative = user receives out.
+    fn swap_amounts_signed(
         zero_for_one: bool,
-        amount_specified: i128,
-        sqrt_price_limit_x96: U256,
-    ) -> Result<(i128, i128), Error> {
-        if amount_specified == 0 {
-            return Err(Error::InvalidAmount);
-        }
-
-        let exact_input = amount_specified > 0;
-
-        // Early exit: no positions in the pool — nothing to scan.
-        if get_total_raw_liquidity(e) == 0 {
-            if !exact_input {
-                return Err(Error::InsufficientLiquidity);
-            }
-            return Ok((0, 0));
-        }
-
-        let fee = get_fee(e);
-
-        let mut slot = get_slot0(e);
-        let price_limit = Self::validate_price_limit(e, &slot, zero_for_one, sqrt_price_limit_x96)?;
-        let mut liquidity = get_liquidity(e);
-
-        let mut amount_remaining = amount_specified.unsigned_abs();
-        let mut amount_calculated: u128 = 0;
-        let tick_spacing = get_tick_spacing(e);
-        let mut cc = ChunkCache::new(e);
-
-        while amount_remaining > 0 && slot.sqrt_price_x96 != price_limit {
-            let (next_tick, next_tick_initialized) = Self::find_initialized_tick_in_word(
-                e,
-                slot.tick,
-                tick_spacing,
-                zero_for_one,
-                &mut cc,
-            );
-            let next_tick_price = sqrt_ratio_at_tick(e, next_tick)?;
-
-            let sqrt_target = if zero_for_one {
-                if next_tick_price < price_limit {
-                    price_limit.clone()
-                } else {
-                    next_tick_price.clone()
-                }
-            } else if next_tick_price > price_limit {
-                price_limit.clone()
-            } else {
-                next_tick_price.clone()
-            };
-
-            let sqrt_price_start = slot.sqrt_price_x96.clone();
-            let step = Self::compute_swap_step(
-                e,
-                &slot.sqrt_price_x96,
-                &sqrt_target,
-                liquidity,
-                amount_remaining,
-                fee,
-                zero_for_one,
-                exact_input,
-            )?;
-
-            if exact_input {
-                amount_remaining = amount_remaining
-                    .saturating_sub(step.amount_in)
-                    .saturating_sub(step.fee_amount);
-                amount_calculated = amount_calculated.saturating_add(step.amount_out);
-            } else {
-                amount_remaining = amount_remaining.saturating_sub(step.amount_out);
-                amount_calculated = amount_calculated
-                    .saturating_add(step.amount_in)
-                    .saturating_add(step.fee_amount);
-            }
-
-            slot.sqrt_price_x96 = step.sqrt_next;
-
-            // Match Uniswap V3 semantics:
-            // cross tick only when we reached the actual next tick price,
-            // not when we stopped at an arbitrary price limit between ticks.
-            if slot.sqrt_price_x96 == next_tick_price {
-                if next_tick_initialized {
-                    let mut liquidity_net = cc.get_tick(e, next_tick, tick_spacing).liquidity_net;
-                    if zero_for_one {
-                        liquidity_net = -liquidity_net;
-                    }
-                    if liquidity_net < 0 {
-                        let dec = (-liquidity_net) as u128;
-                        if liquidity < dec {
-                            return Err(Error::LiquidityUnderflow);
-                        }
-                        liquidity -= dec;
-                    } else {
-                        liquidity = liquidity.saturating_add(liquidity_net as u128);
-                    }
-                }
-
-                slot.tick = if zero_for_one {
-                    next_tick.saturating_sub(1).max(MIN_TICK)
-                } else {
-                    next_tick.min(MAX_TICK)
-                };
-            } else if slot.sqrt_price_x96 != sqrt_price_start {
-                slot.tick = tick_at_sqrt_ratio(e, &slot.sqrt_price_x96)?;
-            }
-        }
-
-        if !exact_input && amount_remaining > 0 {
-            return Err(Error::InsufficientLiquidity);
-        }
-
-        let original_spec = amount_specified.unsigned_abs();
-        let amount_spec_used = original_spec.saturating_sub(amount_remaining);
-
+        exact_input: bool,
+        amount_spec_used: u128,
+        amount_calculated: u128,
+    ) -> (i128, i128) {
         if zero_for_one {
             if exact_input {
-                Ok((amount_spec_used as i128, -(amount_calculated as i128)))
+                (amount_spec_used as i128, -(amount_calculated as i128))
             } else {
-                Ok((amount_calculated as i128, -(amount_spec_used as i128)))
+                (amount_calculated as i128, -(amount_spec_used as i128))
             }
         } else if exact_input {
-            Ok((-(amount_calculated as i128), amount_spec_used as i128))
+            (-(amount_calculated as i128), amount_spec_used as i128)
         } else {
-            Ok((-(amount_spec_used as i128), amount_calculated as i128))
+            (-(amount_spec_used as i128), amount_calculated as i128)
         }
     }
 
-    pub(super) fn swap_internal(
+    /// Core swap loop shared by `simulate_swap_amounts` and `swap_internal`.
+    ///
+    /// When `dry_run == true` (simulation): reads tick data without modifying
+    /// fee_growth_outside, skips protocol-fee accounting and storage writes.
+    /// When `dry_run == false` (real swap): performs full cross_tick, accumulates
+    /// protocol fees / fee growth, and persists state changes.
+    ///
+    /// Returns (amount_spec_used, amount_calculated, total_fee_amount,
+    ///          final_slot, final_liquidity, pf_delta_0, pf_delta_1).
+    #[allow(clippy::too_many_arguments)]
+    fn swap_loop(
         e: &Env,
-        sender: &Address,
         zero_for_one: bool,
         amount_specified: i128,
         sqrt_price_limit_x96: U256,
-    ) -> Result<SwapResult, Error> {
+        dry_run: bool,
+    ) -> Result<(u128, u128, u128, Slot0, u128, u128, u128), Error> {
         if amount_specified == 0 {
             return Err(Error::InvalidAmount);
         }
@@ -1098,27 +1000,24 @@ impl ConcentratedLiquidityPool {
         let exact_input = amount_specified > 0;
 
         // Early exit: no positions in the pool — nothing to scan.
+        // Always error (matches standard/stableswap EmptyPool behavior).
         if get_total_raw_liquidity(e) == 0 {
-            if !exact_input {
-                return Err(Error::InsufficientLiquidity);
-            }
-            let slot = get_slot0(e);
-            return Ok(SwapResult {
-                amount0: 0,
-                amount1: 0,
-                liquidity: 0,
-                sqrt_price_x96: slot.sqrt_price_x96,
-                tick: slot.tick,
-            });
+            return Err(Error::InsufficientLiquidity);
         }
 
         let fee = get_fee(e);
-
         let mut slot = get_slot0(e);
         let price_limit = Self::validate_price_limit(e, &slot, zero_for_one, sqrt_price_limit_x96)?;
-
         let mut liquidity = get_liquidity(e);
-        let old_protocol_fees = get_protocol_fees(e);
+
+        let old_protocol_fees = if dry_run {
+            ProtocolFees {
+                token0: 0,
+                token1: 0,
+            }
+        } else {
+            get_protocol_fees(e)
+        };
         let mut protocol_fees = old_protocol_fees.clone();
 
         let mut amount_remaining = amount_specified.unsigned_abs();
@@ -1173,17 +1072,19 @@ impl ConcentratedLiquidityPool {
                     .saturating_add(step.fee_amount);
             }
 
-            let protocol_cut =
-                step.fee_amount * get_protocol_fee_fraction(e) as u128 / FEE_DENOMINATOR;
-            let fee_for_lp = step.fee_amount.saturating_sub(protocol_cut);
-            if zero_for_one {
-                protocol_fees.token0 = protocol_fees.token0.saturating_add(protocol_cut);
-            } else {
-                protocol_fees.token1 = protocol_fees.token1.saturating_add(protocol_cut);
+            // Protocol fee split + fee growth (real swap only).
+            if !dry_run {
+                let protocol_cut =
+                    step.fee_amount * get_protocol_fee_fraction(e) as u128 / FEE_DENOMINATOR;
+                let fee_for_lp = step.fee_amount.saturating_sub(protocol_cut);
+                if zero_for_one {
+                    protocol_fees.token0 = protocol_fees.token0.saturating_add(protocol_cut);
+                } else {
+                    protocol_fees.token1 = protocol_fees.token1.saturating_add(protocol_cut);
+                }
+                total_fee_amount = total_fee_amount.saturating_add(step.fee_amount);
+                Self::add_fee_growth_global(e, zero_for_one, fee_for_lp, liquidity)?;
             }
-
-            total_fee_amount = total_fee_amount.saturating_add(step.fee_amount);
-            Self::add_fee_growth_global(e, zero_for_one, fee_for_lp, liquidity)?;
 
             slot.sqrt_price_x96 = step.sqrt_next;
 
@@ -1192,11 +1093,16 @@ impl ConcentratedLiquidityPool {
             // not when we stopped at an arbitrary price limit between ticks.
             if slot.sqrt_price_x96 == next_tick_price {
                 if next_tick_initialized {
-                    let mut liquidity_net = Self::cross_tick(e, next_tick, &mut cc);
+                    // Real swap: cross_tick flips fee_growth_outside.
+                    // Simulation: read liquidity_net without side effects.
+                    let mut liquidity_net = if dry_run {
+                        cc.get_tick(e, next_tick, tick_spacing).liquidity_net
+                    } else {
+                        Self::cross_tick(e, next_tick, &mut cc)
+                    };
                     if zero_for_one {
                         liquidity_net = -liquidity_net;
                     }
-
                     if liquidity_net < 0 {
                         let dec = (-liquidity_net) as u128;
                         if liquidity < dec {
@@ -1218,37 +1124,69 @@ impl ConcentratedLiquidityPool {
             }
         }
 
-        cc.flush(e);
+        if !dry_run {
+            cc.flush(e);
+            set_protocol_fees(e, &protocol_fees);
+            set_liquidity(e, &liquidity);
+            set_slot0(e, &slot);
+            update_plane(e);
+        }
 
         if !exact_input && amount_remaining > 0 {
             return Err(Error::InsufficientLiquidity);
         }
 
-        set_protocol_fees(e, &protocol_fees);
-        set_liquidity(e, &liquidity);
-        set_slot0(e, &slot);
-
-        // Update reserves: net token flow minus protocol fee delta
+        let amount_spec_used = amount_specified.unsigned_abs().saturating_sub(amount_remaining);
         let pf_delta_0 = protocol_fees.token0 - old_protocol_fees.token0;
         let pf_delta_1 = protocol_fees.token1 - old_protocol_fees.token1;
 
-        update_plane(e);
+        Ok((
+            amount_spec_used,
+            amount_calculated,
+            total_fee_amount,
+            slot,
+            liquidity,
+            pf_delta_0,
+            pf_delta_1,
+        ))
+    }
 
-        let original_spec = amount_specified.unsigned_abs();
-        let amount_spec_used = original_spec.saturating_sub(amount_remaining);
+    pub(super) fn simulate_swap_amounts(
+        e: &Env,
+        zero_for_one: bool,
+        amount_specified: i128,
+        sqrt_price_limit_x96: U256,
+    ) -> Result<(i128, i128), Error> {
+        let exact_input = amount_specified > 0;
+        let (amount_spec_used, amount_calculated, ..) =
+            Self::swap_loop(e, zero_for_one, amount_specified, sqrt_price_limit_x96, true)?;
+        Ok(Self::swap_amounts_signed(
+            zero_for_one,
+            exact_input,
+            amount_spec_used,
+            amount_calculated,
+        ))
+    }
 
-        let (amount0, amount1) = if zero_for_one {
-            if exact_input {
-                (amount_spec_used as i128, -(amount_calculated as i128))
-            } else {
-                (amount_calculated as i128, -(amount_spec_used as i128))
-            }
-        } else if exact_input {
-            (-(amount_calculated as i128), amount_spec_used as i128)
-        } else {
-            (-(amount_spec_used as i128), amount_calculated as i128)
-        };
+    pub(super) fn swap_internal(
+        e: &Env,
+        sender: &Address,
+        zero_for_one: bool,
+        amount_specified: i128,
+        sqrt_price_limit_x96: U256,
+    ) -> Result<SwapResult, Error> {
+        let exact_input = amount_specified > 0;
+        let (amount_spec_used, amount_calculated, total_fee_amount, slot, liquidity, pf_delta_0, pf_delta_1) =
+            Self::swap_loop(e, zero_for_one, amount_specified, sqrt_price_limit_x96, false)?;
 
+        let (amount0, amount1) = Self::swap_amounts_signed(
+            zero_for_one,
+            exact_input,
+            amount_spec_used,
+            amount_calculated,
+        );
+
+        // Token transfers.
         let token0 = get_token0(e);
         let token1 = get_token1(e);
         let contract = e.current_contract_address();
@@ -1259,7 +1197,6 @@ impl ConcentratedLiquidityPool {
         if amount1 > 0 {
             SorobanTokenClient::new(e, &token1).transfer(sender, &contract, &amount1);
         }
-
         if amount0 < 0 {
             SorobanTokenClient::new(e, &token0).transfer(&contract, sender, &(-amount0));
         }
@@ -1284,6 +1221,7 @@ impl ConcentratedLiquidityPool {
         set_reserve0(e, &res0);
         set_reserve1(e, &res1);
 
+        // Event emission.
         let (token_in, token_out, in_amount, out_amount) = if zero_for_one {
             (
                 token0.clone(),
