@@ -14,9 +14,18 @@ fn test_swap_empty_pool() {
     let setup = Setup::default();
     setup.mint_user_tokens(10_0000000, 0);
 
-    assert_eq!(setup.pool.estimate_swap(&0, &1, &10_0000000), 0);
-    assert_eq!(setup.pool.swap(&setup.user, &0, &1, &10_0000000, &0), 0);
+    // Empty pool must reject swaps (matches standard/stableswap EmptyPool behavior).
+    let res = setup
+        .pool
+        .try_estimate_swap(&0, &1, &10_0000000);
+    assert!(res.is_err(), "estimate_swap on empty pool should error");
 
+    let res = setup
+        .pool
+        .try_swap(&setup.user, &0, &1, &10_0000000, &0);
+    assert!(res.is_err(), "swap on empty pool should error");
+
+    // User tokens unchanged.
     assert_eq!(setup.token0.balance(&setup.user), 10_0000000);
     assert_eq!(setup.token1.balance(&setup.user), 0);
 }
