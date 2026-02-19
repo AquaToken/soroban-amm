@@ -9,6 +9,10 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, Map, Symbol, Vec, U256};
 use utils::test_utils::jump;
 
+fn pair(values: Vec<u128>) -> (u128, u128) {
+    (values.get_unchecked(0), values.get_unchecked(1))
+}
+
 #[test]
 fn test_swap_empty_pool() {
     let setup = Setup::default();
@@ -623,13 +627,13 @@ fn test_partial_withdrawal_keeps_position() {
     let withdraw_amount = liquidity * 40 / 100; // ~40%
     let balance0_before = setup.token0.balance(&setup.user);
     let balance1_before = setup.token1.balance(&setup.user);
-    let (out0, out1) = setup.pool.withdraw_position(
+    let (out0, out1) = pair(setup.pool.withdraw_position(
         &setup.user,
         &-10,
         &10,
         &withdraw_amount,
         &Vec::from_array(&setup.env, [0u128, 0u128]),
-    );
+    ));
     assert_eq!(
         setup.token0.balance(&setup.user),
         balance0_before + out0 as i128
@@ -664,13 +668,13 @@ fn test_full_withdrawal_deletes_position_and_clears_ticks() {
     // Withdraw full amount
     let balance0_before = setup.token0.balance(&setup.user);
     let balance1_before = setup.token1.balance(&setup.user);
-    let (out0, out1) = setup.pool.withdraw_position(
+    let (out0, out1) = pair(setup.pool.withdraw_position(
         &setup.user,
         &-10,
         &10,
         &liquidity,
         &Vec::from_array(&setup.env, [0u128, 0u128]),
-    );
+    ));
     assert!(out0 > 0 || out1 > 0);
     assert_eq!(
         setup.token0.balance(&setup.user),
@@ -803,13 +807,13 @@ fn test_position_accrues_fees_from_swaps() {
     let balance0_before = setup.token0.balance(&setup.user);
     let balance1_before = setup.token1.balance(&setup.user);
 
-    let (_withdraw0, _withdraw1) = setup.pool.withdraw_position(
+    let (_withdraw0, _withdraw1) = pair(setup.pool.withdraw_position(
         &setup.user,
         &-100,
         &100,
         &liquidity,
         &Vec::from_array(&setup.env, [0u128, 0u128]),
-    );
+    ));
 
     let balance0_after = setup.token0.balance(&setup.user);
     let balance1_after = setup.token1.balance(&setup.user);
@@ -844,7 +848,7 @@ fn test_claim_position_fees_without_withdrawal() {
     let balance1_before = setup.token1.balance(&setup.user);
 
     // Claim fees without withdrawing liquidity
-    let (claimed0, claimed1) = setup.pool.claim_position_fees(&setup.user, &-100, &100);
+    let (claimed0, claimed1) = pair(setup.pool.claim_position_fees(&setup.user, &-100, &100));
 
     // Position still has liquidity
     let pos = setup.pool.get_position(&setup.user, &-100, &100);
@@ -876,7 +880,7 @@ fn test_withdraw_position_auto_claims_fees() {
     get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &10_0000000);
     setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
-    let (fees_before0, fees_before1) = setup.pool.get_position_fees(&setup.user, &-100, &100);
+    let (fees_before0, fees_before1) = pair(setup.pool.get_position_fees(&setup.user, &-100, &100));
     assert!(
         fees_before0 > 0 || fees_before1 > 0,
         "expected non-zero fees before withdraw"
@@ -884,19 +888,21 @@ fn test_withdraw_position_auto_claims_fees() {
 
     // Partial withdraw should transfer principal + auto-claimed fees.
     let burn_amount = liquidity / 2;
-    let (principal0, principal1) =
-        setup
-            .pool
-            .estimate_withdraw_position(&setup.user, &-100, &100, &burn_amount);
+    let (principal0, principal1) = pair(setup.pool.estimate_withdraw_position(
+        &setup.user,
+        &-100,
+        &100,
+        &burn_amount,
+    ));
     let bal0_before = setup.token0.balance(&setup.user);
     let bal1_before = setup.token1.balance(&setup.user);
-    let (withdraw0, withdraw1) = setup.pool.withdraw_position(
+    let (withdraw0, withdraw1) = pair(setup.pool.withdraw_position(
         &setup.user,
         &-100,
         &100,
         &burn_amount,
         &Vec::from_array(&setup.env, [0u128, 0u128]),
-    );
+    ));
 
     assert_eq!(withdraw0, principal0 + fees_before0);
     assert_eq!(withdraw1, principal1 + fees_before1);
@@ -915,7 +921,7 @@ fn test_withdraw_position_auto_claims_fees() {
 
     // Repeated claim should be a no-op.
     let (claimed0_second, claimed1_second) =
-        setup.pool.claim_position_fees(&setup.user, &-100, &100);
+        pair(setup.pool.claim_position_fees(&setup.user, &-100, &100));
     assert_eq!(claimed0_second, 0);
     assert_eq!(claimed1_second, 0);
 }
@@ -1338,16 +1344,18 @@ fn test_estimate_withdraw_position_matches_execute() {
         .deposit_position(&setup.user, &-150, &150, &amounts, &0);
 
     let burn = liquidity / 3;
-    let (est0, est1) = setup
-        .pool
-        .estimate_withdraw_position(&setup.user, &-150, &150, &burn);
-    let (actual0, actual1) = setup.pool.withdraw_position(
+    let (est0, est1) = pair(
+        setup
+            .pool
+            .estimate_withdraw_position(&setup.user, &-150, &150, &burn),
+    );
+    let (actual0, actual1) = pair(setup.pool.withdraw_position(
         &setup.user,
         &-150,
         &150,
         &burn,
         &Vec::from_array(&setup.env, [0u128, 0u128]),
-    );
+    ));
 
     assert_eq!(est0, actual0);
     assert_eq!(est1, actual1);
@@ -1367,8 +1375,8 @@ fn test_get_position_fees_matches_claim_position_fees() {
     get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &10_0000000);
     setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
-    let (preview0, preview1) = setup.pool.get_position_fees(&setup.user, &-100, &100);
-    let (claimed0, claimed1) = setup.pool.claim_position_fees(&setup.user, &-100, &100);
+    let (preview0, preview1) = pair(setup.pool.get_position_fees(&setup.user, &-100, &100));
+    let (claimed0, claimed1) = pair(setup.pool.claim_position_fees(&setup.user, &-100, &100));
 
     assert_eq!(preview0, claimed0);
     assert_eq!(preview1, claimed1);
@@ -1391,9 +1399,9 @@ fn test_claim_all_position_fees_and_estimate() {
     get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &25_0000000);
     setup.pool.swap(&swapper, &0, &1, &25_0000000, &0);
 
-    let (pos1_0, pos1_1) = setup.pool.get_position_fees(&setup.user, &-120, &120);
-    let (pos2_0, pos2_1) = setup.pool.get_position_fees(&setup.user, &-60, &60);
-    let (all0, all1) = setup.pool.get_all_position_fees(&setup.user);
+    let (pos1_0, pos1_1) = pair(setup.pool.get_position_fees(&setup.user, &-120, &120));
+    let (pos2_0, pos2_1) = pair(setup.pool.get_position_fees(&setup.user, &-60, &60));
+    let (all0, all1) = pair(setup.pool.get_all_position_fees(&setup.user));
 
     assert_eq!(all0, pos1_0 + pos2_0);
     assert_eq!(all1, pos1_1 + pos2_1);
@@ -1401,7 +1409,7 @@ fn test_claim_all_position_fees_and_estimate() {
 
     let bal0_before = setup.token0.balance(&setup.user);
     let bal1_before = setup.token1.balance(&setup.user);
-    let (claimed0, claimed1) = setup.pool.claim_all_position_fees(&setup.user);
+    let (claimed0, claimed1) = pair(setup.pool.claim_all_position_fees(&setup.user));
 
     assert_eq!(claimed0, all0);
     assert_eq!(claimed1, all1);
@@ -1414,15 +1422,15 @@ fn test_claim_all_position_fees_and_estimate() {
         bal1_before + claimed1 as i128
     );
 
-    let (left0, left1) = setup.pool.get_all_position_fees(&setup.user);
+    let (left0, left1) = pair(setup.pool.get_all_position_fees(&setup.user));
     assert_eq!(left0, 0);
     assert_eq!(left1, 0);
 
     let user2 = Address::generate(&setup.env);
-    let (empty0, empty1) = setup.pool.get_all_position_fees(&user2);
+    let (empty0, empty1) = pair(setup.pool.get_all_position_fees(&user2));
     assert_eq!(empty0, 0);
     assert_eq!(empty1, 0);
-    let (claimed_empty0, claimed_empty1) = setup.pool.claim_all_position_fees(&user2);
+    let (claimed_empty0, claimed_empty1) = pair(setup.pool.claim_all_position_fees(&user2));
     assert_eq!(claimed_empty0, 0);
     assert_eq!(claimed_empty1, 0);
 }
@@ -1460,8 +1468,8 @@ fn test_two_users_overlapping_positions() {
     setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
     // Both users can claim fees
-    let (u1_fee0, u1_fee1) = setup.pool.claim_position_fees(&setup.user, &-50, &50);
-    let (u2_fee0, u2_fee1) = setup.pool.claim_position_fees(&user2, &-20, &20);
+    let (u1_fee0, u1_fee1) = pair(setup.pool.claim_position_fees(&setup.user, &-50, &50));
+    let (u2_fee0, u2_fee1) = pair(setup.pool.claim_position_fees(&user2, &-20, &20));
 
     // Both should have received fees (proportional to liquidity share)
     assert!(u1_fee0 > 0 || u1_fee1 > 0, "user1 should get fees");
@@ -2530,8 +2538,8 @@ fn test_fee_growth_accuracy_across_tick_crossings() {
     );
 
     // Collect fees for both LPs
-    let (wide_fee0, wide_fee1) = pool.claim_position_fees(&lp1, &-100, &100);
-    let (narrow_fee0, narrow_fee1) = pool.claim_position_fees(&lp2, &-20, &20);
+    let (wide_fee0, wide_fee1) = pair(pool.claim_position_fees(&lp1, &-100, &100));
+    let (narrow_fee0, narrow_fee1) = pair(pool.claim_position_fees(&lp2, &-20, &20));
 
     // Both LPs should have earned fees
     assert!(
@@ -2633,8 +2641,8 @@ fn test_fee_proportionality_same_range() {
     );
 
     // Claim fees for both users
-    let (u1_fee0, u1_fee1) = setup.pool.claim_position_fees(&setup.user, &-50, &50);
-    let (u2_fee0, u2_fee1) = setup.pool.claim_position_fees(&user2, &-50, &50);
+    let (u1_fee0, u1_fee1) = pair(setup.pool.claim_position_fees(&setup.user, &-50, &50));
+    let (u2_fee0, u2_fee1) = pair(setup.pool.claim_position_fees(&user2, &-50, &50));
 
     // Both should have received fees
     assert!(u1_fee0 > 0 || u1_fee1 > 0, "user1 should get fees");
@@ -2769,13 +2777,13 @@ fn test_min_max_tick_boundary_deposit_and_swap() {
     );
 
     // Verify position can be withdrawn
-    let (withdraw0, withdraw1) = pool.withdraw_position(
+    let (withdraw0, withdraw1) = pair(pool.withdraw_position(
         &user,
         &min_tick_aligned,
         &max_tick_aligned,
         &liq,
         &Vec::from_array(&env, [0u128, 0u128]),
-    );
+    ));
     // Should have earned fees from both swaps and received them on withdraw.
     assert!(
         withdraw0 > 0 || withdraw1 > 0,
@@ -2847,14 +2855,14 @@ fn test_zero_liquidity_gap_no_fee_growth() {
     );
 
     // Position A earned fees (swap went through its range)
-    let (fee_a0, fee_a1) = pool.claim_position_fees(&user, &-60, &-20);
+    let (fee_a0, fee_a1) = pair(pool.claim_position_fees(&user, &-60, &-20));
     assert!(
         fee_a0 > 0,
         "position A should earn fees from swap through its range"
     );
 
     // Position B earned zero fees (swap never entered its range)
-    let (fee_b0, fee_b1) = pool.claim_position_fees(&user, &40, &80);
+    let (fee_b0, fee_b1) = pair(pool.claim_position_fees(&user, &40, &80));
     assert_eq!(
         fee_b0, 0,
         "position B should earn zero token0 fees (out of range)"
@@ -2957,14 +2965,14 @@ fn test_tick_crossing_fee_growth_outside_flip() {
 
     // Verify fee accounting still works correctly after the flip:
     // Position should have accrued fees from both swaps while it was in range
-    let (claimed0, _claimed1) = pool.claim_position_fees(&user, &-20, &20);
+    let (claimed0, _claimed1) = pair(pool.claim_position_fees(&user, &-20, &20));
     assert!(
         claimed0 > 0,
         "position should have earned token0 fees before tick crossing"
     );
 
     // Catch position should also have fees from the second swap segment
-    let (catch_fee0, _catch_fee1) = pool.claim_position_fees(&user, &-40, &-20);
+    let (catch_fee0, _catch_fee1) = pair(pool.claim_position_fees(&user, &-40, &-20));
     assert!(
         catch_fee0 > 0,
         "catch position should earn fees from swap that crossed into its range"
@@ -2989,7 +2997,7 @@ fn test_tick_crossing_fee_growth_outside_flip() {
     );
 
     // Main position should accrue new fees from the return swap
-    let (_claimed0_2, claimed1_2) = pool.claim_position_fees(&user, &-20, &20);
+    let (_claimed0_2, claimed1_2) = pair(pool.claim_position_fees(&user, &-20, &20));
     assert!(
         claimed1_2 > 0,
         "position should earn token1 fees from return swap"
@@ -3083,13 +3091,13 @@ fn test_position_reinit_after_full_withdraw() {
     setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
     // Fully withdraw
-    let (owed0, owed1) = setup.pool.withdraw_position(
+    let (owed0, owed1) = pair(setup.pool.withdraw_position(
         &setup.user,
         &-30,
         &30,
         &liq1,
         &Vec::from_array(&setup.env, [0u128, 0u128]),
-    );
+    ));
     assert!(
         owed0 > 0 || owed1 > 0,
         "should have owed tokens from withdraw"
@@ -3165,7 +3173,7 @@ fn test_fee_accrual_during_second_deposit() {
     );
 
     // User can claim those fees
-    let (claimed0, claimed1) = setup.pool.claim_position_fees(&setup.user, &-50, &50);
+    let (claimed0, claimed1) = pair(setup.pool.claim_position_fees(&setup.user, &-50, &50));
     assert!(claimed0 > 0, "should be able to claim accrued fees");
 
     let pos_after = setup.pool.get_position(&setup.user, &-50, &50);
@@ -3204,7 +3212,7 @@ fn test_protocol_fee_zero_percent() {
     );
 
     // LP should get ALL the fees (30 bps of input)
-    let (lp_fee0, _lp_fee1) = setup.pool.claim_position_fees(&setup.user, &-50, &50);
+    let (lp_fee0, _lp_fee1) = pair(setup.pool.claim_position_fees(&setup.user, &-50, &50));
     let expected_total_fee = 20_0000000u128 * 30 / 10000;
     let tolerance = expected_total_fee / 100 + 1;
     assert!(
@@ -3246,7 +3254,7 @@ fn test_protocol_fee_one_hundred_percent() {
     );
 
     // LP should get zero fees
-    let (lp_fee0, lp_fee1) = setup.pool.claim_position_fees(&setup.user, &-50, &50);
+    let (lp_fee0, lp_fee1) = pair(setup.pool.claim_position_fees(&setup.user, &-50, &50));
     assert_eq!(lp_fee0, 0, "LP should get zero fees at 100% protocol fee");
     assert_eq!(lp_fee1, 0, "LP should get zero fees at 100% protocol fee");
 }
@@ -3384,8 +3392,8 @@ fn test_two_users_same_tick_range_fee_tracking() {
     setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
     // Both should earn identical fees (same liquidity, same range)
-    let (u1_fee0, u1_fee1) = setup.pool.claim_position_fees(&setup.user, &-30, &30);
-    let (u2_fee0, u2_fee1) = setup.pool.claim_position_fees(&user2, &-30, &30);
+    let (u1_fee0, u1_fee1) = pair(setup.pool.claim_position_fees(&setup.user, &-30, &30));
+    let (u2_fee0, u2_fee1) = pair(setup.pool.claim_position_fees(&user2, &-30, &30));
 
     assert_eq!(
         u1_fee0, u2_fee0,
@@ -3424,6 +3432,6 @@ fn test_two_users_same_tick_range_fee_tracking() {
     get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &30_0000000);
     setup.pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
-    let (u2_fee0_2, _u2_fee1_2) = setup.pool.claim_position_fees(&user2, &-30, &30);
+    let (u2_fee0_2, _u2_fee1_2) = pair(setup.pool.claim_position_fees(&user2, &-30, &30));
     assert!(u2_fee0_2 > 0, "user2 should earn fees from second swap");
 }

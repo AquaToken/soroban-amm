@@ -7,6 +7,10 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{vec, Address, Vec};
 
+fn pair(values: Vec<u128>) -> (u128, u128) {
+    (values.get_unchecked(0), values.get_unchecked(1))
+}
+
 #[test]
 fn test_integration() {
     let setup = Setup::default();
@@ -297,17 +301,17 @@ fn test_concentrated_pool_positions() {
     conc_pool.swap(&swapper, &0, &1, &10_0000000, &0);
 
     // Collect position fees
-    let (fee0, fee1) = conc_pool.claim_position_fees(&user, &-120, &120);
+    let (fee0, fee1) = pair(conc_pool.claim_position_fees(&user, &-120, &120));
     assert!(fee0 > 0 || fee1 > 0, "should collect fees");
 
     // Withdraw position
-    let (withdraw0, withdraw1) = conc_pool.withdraw_position(
+    let (withdraw0, withdraw1) = pair(conc_pool.withdraw_position(
         &user,
         &-120,
         &120,
         &liquidity,
         &Vec::from_array(&setup.env, [0u128, 0u128]),
-    );
+    ));
     assert!(
         withdraw0 > 0 || withdraw1 > 0,
         "withdraw should transfer principal (and auto-claimed fees)"
