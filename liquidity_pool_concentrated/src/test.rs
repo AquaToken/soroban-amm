@@ -15,14 +15,10 @@ fn test_swap_empty_pool() {
     setup.mint_user_tokens(10_0000000, 0);
 
     // Empty pool must reject swaps (matches standard/stableswap EmptyPool behavior).
-    let res = setup
-        .pool
-        .try_estimate_swap(&0, &1, &10_0000000);
+    let res = setup.pool.try_estimate_swap(&0, &1, &10_0000000);
     assert!(res.is_err(), "estimate_swap on empty pool should error");
 
-    let res = setup
-        .pool
-        .try_swap(&setup.user, &0, &1, &10_0000000, &0);
+    let res = setup.pool.try_swap(&setup.user, &0, &1, &10_0000000, &0);
     assert!(res.is_err(), "swap on empty pool should error");
 
     // User tokens unchanged.

@@ -244,7 +244,12 @@ pub fn tick_at_sqrt_ratio(e: &Env, sqrt_price_x96: &U256) -> Result<i32, Error> 
 
     // Arithmetic shifts by 128 after applying low/high error bounds.
     let tick_low = (log_hi - if log_lo < TICK_LOW_ERROR { 1 } else { 0 }) as i32;
-    let tick_hi = (log_hi + if log_lo.overflowing_add(TICK_HI_ERROR).1 { 1 } else { 0 }) as i32;
+    let tick_hi = (log_hi
+        + if log_lo.overflowing_add(TICK_HI_ERROR).1 {
+            1
+        } else {
+            0
+        }) as i32;
 
     if tick_low == tick_hi {
         Ok(tick_low)
@@ -719,7 +724,10 @@ mod test {
         let max_minus_one = max.sub(&U256::from_u32(&e, 1));
 
         assert_eq!(tick_at_sqrt_ratio(&e, &min).unwrap(), MIN_TICK);
-        assert_eq!(tick_at_sqrt_ratio(&e, &max_minus_one).unwrap(), MAX_TICK - 1);
+        assert_eq!(
+            tick_at_sqrt_ratio(&e, &max_minus_one).unwrap(),
+            MAX_TICK - 1
+        );
 
         for tick in [-500_000, -50_000, 50_000, 500_000] {
             let lower = sqrt_ratio_at_tick(&e, tick).unwrap();

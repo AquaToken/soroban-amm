@@ -1136,7 +1136,9 @@ impl ConcentratedLiquidityPool {
             return Err(Error::InsufficientLiquidity);
         }
 
-        let amount_spec_used = amount_specified.unsigned_abs().saturating_sub(amount_remaining);
+        let amount_spec_used = amount_specified
+            .unsigned_abs()
+            .saturating_sub(amount_remaining);
         let pf_delta_0 = protocol_fees.token0 - old_protocol_fees.token0;
         let pf_delta_1 = protocol_fees.token1 - old_protocol_fees.token1;
 
@@ -1158,8 +1160,13 @@ impl ConcentratedLiquidityPool {
         sqrt_price_limit_x96: U256,
     ) -> Result<(i128, i128), Error> {
         let exact_input = amount_specified > 0;
-        let (amount_spec_used, amount_calculated, ..) =
-            Self::swap_loop(e, zero_for_one, amount_specified, sqrt_price_limit_x96, true)?;
+        let (amount_spec_used, amount_calculated, ..) = Self::swap_loop(
+            e,
+            zero_for_one,
+            amount_specified,
+            sqrt_price_limit_x96,
+            true,
+        )?;
         Ok(Self::swap_amounts_signed(
             zero_for_one,
             exact_input,
@@ -1176,8 +1183,21 @@ impl ConcentratedLiquidityPool {
         sqrt_price_limit_x96: U256,
     ) -> Result<SwapResult, Error> {
         let exact_input = amount_specified > 0;
-        let (amount_spec_used, amount_calculated, total_fee_amount, slot, liquidity, pf_delta_0, pf_delta_1) =
-            Self::swap_loop(e, zero_for_one, amount_specified, sqrt_price_limit_x96, false)?;
+        let (
+            amount_spec_used,
+            amount_calculated,
+            total_fee_amount,
+            slot,
+            liquidity,
+            pf_delta_0,
+            pf_delta_1,
+        ) = Self::swap_loop(
+            e,
+            zero_for_one,
+            amount_specified,
+            sqrt_price_limit_x96,
+            false,
+        )?;
 
         let (amount0, amount1) = Self::swap_amounts_signed(
             zero_for_one,
