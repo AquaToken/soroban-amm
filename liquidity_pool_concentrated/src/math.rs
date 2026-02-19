@@ -185,19 +185,95 @@ pub fn tick_at_sqrt_ratio(e: &Env, sqrt_price_x96: &U256) -> Result<i32, Error> 
         return Err(Error::PriceOutOfBounds);
     }
 
-    let mut low = MIN_TICK;
-    let mut high = MAX_TICK;
-    while low < high {
-        let mid = low + ((high - low + 1) / 2);
-        let sqrt_mid = sqrt_ratio_at_tick(e, mid)?;
-        if sqrt_mid <= *sqrt_price_x96 {
-            low = mid;
+    const LOG_SQRT10001: u128 = 255_738_958_999_603_826_347_141;
+    const TICK_LOW_ERROR: u128 = 3_402_992_956_809_132_418_596_140_100_660_247_210;
+    const TICK_HI_ERROR: u128 = 291_339_464_771_989_622_907_027_621_153_398_088_495;
+
+    // Convert Q64.96 -> Q128.128.
+    let ratio = sqrt_price_x96.shl(32);
+    let ratio_hi_u256 = ratio.shr(128);
+    let ratio_hi = ratio_hi_u256.to_u128().ok_or(Error::LiquidityOverflow)?;
+    let ratio_lo = ratio
+        .sub(&ratio_hi_u256.shl(128))
+        .to_u128()
+        .ok_or(Error::LiquidityOverflow)?;
+
+    let msb: u32 = if ratio_hi > 0 {
+        128 + (127 - ratio_hi.leading_zeros())
+    } else {
+        127 - ratio_lo.leading_zeros()
+    };
+
+    // Normalize so r is in [2^127, 2^128).
+    let mut r: u128 = if msb >= 128 {
+        let s = msb - 127;
+        (ratio_hi << (128 - s)) | (ratio_lo >> s)
+    } else {
+        ratio_lo << (127 - msb)
+    };
+
+    // Fixed-point log2 in Q64.64.
+    let mut log_2: i128 = ((msb as i128) - 128) << 64;
+    for bit_pos in (50u32..=63u32).rev() {
+        let (sq_hi, sq_lo) = widening_mul(r, r);
+        let f = sq_hi >> 127; // 0 or 1
+        log_2 |= (f as i128) << bit_pos;
+        r = if f == 0 {
+            // (r * r) >> 127
+            (sq_hi << 1) | (sq_lo >> 127)
         } else {
-            high = mid - 1;
-        }
+            // ((r * r) >> 127) >> 1 == (r * r) >> 128
+            sq_hi
+        };
     }
 
-    Ok(low)
+    // Convert log2 -> log_sqrt(1.0001), represented as signed 128.128.
+    let neg = log_2 < 0;
+    let abs_log_2 = log_2.unsigned_abs();
+    let (mul_hi, mul_lo) = widening_mul(abs_log_2, LOG_SQRT10001);
+
+    // Signed 256-bit representation split into (hi, lo):
+    // value = hi * 2^128 + lo, where hi is signed and lo is unsigned.
+    let (log_hi, log_lo): (i128, u128) = if !neg {
+        (mul_hi as i128, mul_lo)
+    } else if mul_lo == 0 {
+        (-(mul_hi as i128), 0)
+    } else {
+        (-(mul_hi as i128) - 1, mul_lo.wrapping_neg())
+    };
+
+    // Arithmetic shifts by 128 after applying low/high error bounds.
+    let tick_low = (log_hi - if log_lo < TICK_LOW_ERROR { 1 } else { 0 }) as i32;
+    let tick_hi = (log_hi + if log_lo.overflowing_add(TICK_HI_ERROR).1 { 1 } else { 0 }) as i32;
+
+    if tick_low == tick_hi {
+        Ok(tick_low)
+    } else if sqrt_ratio_at_tick(e, tick_hi)? <= *sqrt_price_x96 {
+        Ok(tick_hi)
+    } else {
+        Ok(tick_low)
+    }
+}
+
+/// 128-bit x 128-bit -> 256-bit unsigned multiply.
+/// Returns (hi, lo) where result = hi * 2^128 + lo.
+fn widening_mul(a: u128, b: u128) -> (u128, u128) {
+    let a0 = a & 0xFFFF_FFFF_FFFF_FFFF;
+    let a1 = a >> 64;
+    let b0 = b & 0xFFFF_FFFF_FFFF_FFFF;
+    let b1 = b >> 64;
+
+    let p00 = a0 * b0;
+    let p01 = a0 * b1;
+    let p10 = a1 * b0;
+    let p11 = a1 * b1;
+
+    let mid = (p00 >> 64) + (p01 & 0xFFFF_FFFF_FFFF_FFFF) + (p10 & 0xFFFF_FFFF_FFFF_FFFF);
+
+    let lo = (p00 & 0xFFFF_FFFF_FFFF_FFFF) | ((mid & 0xFFFF_FFFF_FFFF_FFFF) << 64);
+    let hi = p11 + (p01 >> 64) + (p10 >> 64) + (mid >> 64);
+
+    (hi, lo)
 }
 
 pub fn amount0_delta(
@@ -580,8 +656,9 @@ pub fn sqrt_price_from_amounts(e: &Env, amount0: u128, amount1: u128) -> Result<
 mod test {
     use super::{
         max_sqrt_ratio, min_sqrt_ratio, sqrt_ratio_at_tick, tick_at_sqrt_ratio, u256_max, u256_one,
-        wrapping_add_u256, wrapping_sub_u256,
+        widening_mul, wrapping_add_u256, wrapping_sub_u256,
     };
+    use crate::storage::{MAX_TICK, MIN_TICK};
     use soroban_sdk::{Env, U256};
 
     #[test]
@@ -592,6 +669,63 @@ mod test {
             let sqrt = sqrt_ratio_at_tick(&e, tick).unwrap();
             let actual_tick = tick_at_sqrt_ratio(&e, &sqrt).unwrap();
             assert_eq!(actual_tick, tick);
+        }
+    }
+
+    #[test]
+    fn tick_at_sqrt_ratio_v3_parity() {
+        let e = Env::default();
+
+        for tick in [
+            MIN_TICK,
+            MIN_TICK + 1,
+            -100_000,
+            -1,
+            0,
+            1,
+            100_000,
+            MAX_TICK - 2,
+            MAX_TICK - 1,
+        ] {
+            let sqrt = sqrt_ratio_at_tick(&e, tick).unwrap();
+            assert_eq!(tick_at_sqrt_ratio(&e, &sqrt).unwrap(), tick);
+
+            if tick < MAX_TICK {
+                let next = sqrt_ratio_at_tick(&e, tick + 1).unwrap();
+                let just_below_next = next.sub(&U256::from_u32(&e, 1));
+                assert_eq!(tick_at_sqrt_ratio(&e, &just_below_next).unwrap(), tick);
+            }
+        }
+    }
+
+    #[test]
+    fn widening_mul_basic() {
+        assert_eq!(widening_mul(1, 1), (0, 1));
+
+        let max64 = u64::MAX as u128;
+        assert_eq!(widening_mul(max64, max64), (0, max64 * max64));
+
+        assert_eq!(widening_mul(1u128 << 127, 2), (1, 0));
+        assert_eq!(widening_mul(u128::MAX, 2), (1, u128::MAX - 1));
+        assert_eq!(widening_mul(u128::MAX, u128::MAX), (u128::MAX - 1, 1));
+    }
+
+    #[test]
+    fn tick_at_sqrt_ratio_boundaries() {
+        let e = Env::default();
+
+        let min = min_sqrt_ratio(&e);
+        let max = max_sqrt_ratio(&e);
+        let max_minus_one = max.sub(&U256::from_u32(&e, 1));
+
+        assert_eq!(tick_at_sqrt_ratio(&e, &min).unwrap(), MIN_TICK);
+        assert_eq!(tick_at_sqrt_ratio(&e, &max_minus_one).unwrap(), MAX_TICK - 1);
+
+        for tick in [-500_000, -50_000, 50_000, 500_000] {
+            let lower = sqrt_ratio_at_tick(&e, tick).unwrap();
+            let upper = sqrt_ratio_at_tick(&e, tick + 1).unwrap();
+            let mid = lower.add(&upper).div(&U256::from_u32(&e, 2));
+            assert_eq!(tick_at_sqrt_ratio(&e, &mid).unwrap(), tick);
         }
     }
 
