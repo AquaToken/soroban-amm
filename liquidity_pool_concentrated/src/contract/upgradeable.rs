@@ -6,7 +6,7 @@ use super::*;
 #[contractimpl]
 impl UpgradeableContract for ConcentratedLiquidityPool {
     fn version() -> u32 {
-        180
+        200
     }
 
     fn contract_name(e: Env) -> Symbol {

@@ -81,7 +81,7 @@ impl UpgradeableContract for LiquidityPoolPlane {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        180
+        200
     }
 
     // Get contract type symbolic name
