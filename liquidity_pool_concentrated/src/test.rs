@@ -1,6 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::math::wrapping_sub_u256;
 use crate::testutils::{
     create_pool_contract, create_token_contract, deploy_rewards_gauge, get_token_admin_client,
     Setup,
@@ -15,6 +16,69 @@ mod pool_plane {
 
 fn pair(values: Vec<u128>) -> (u128, u128) {
     (values.get_unchecked(0), values.get_unchecked(1))
+}
+
+fn fee_growth_inside_from_state(
+    setup: &Setup<'_>,
+    tick_lower: i32,
+    tick_upper: i32,
+) -> (U256, U256) {
+    let slot = setup.pool.get_slot0();
+    let fee_growth_global_0 = setup.pool.get_fee_growth_global_0_x128();
+    let fee_growth_global_1 = setup.pool.get_fee_growth_global_1_x128();
+    let lower = setup.pool.get_tick(&tick_lower);
+    let upper = setup.pool.get_tick(&tick_upper);
+
+    let fee_growth_below_0 = if slot.tick >= tick_lower {
+        lower.fee_growth_outside_0_x128
+    } else {
+        wrapping_sub_u256(
+            &setup.env,
+            &fee_growth_global_0,
+            &lower.fee_growth_outside_0_x128,
+        )
+    };
+    let fee_growth_below_1 = if slot.tick >= tick_lower {
+        lower.fee_growth_outside_1_x128
+    } else {
+        wrapping_sub_u256(
+            &setup.env,
+            &fee_growth_global_1,
+            &lower.fee_growth_outside_1_x128,
+        )
+    };
+
+    let fee_growth_above_0 = if slot.tick < tick_upper {
+        upper.fee_growth_outside_0_x128
+    } else {
+        wrapping_sub_u256(
+            &setup.env,
+            &fee_growth_global_0,
+            &upper.fee_growth_outside_0_x128,
+        )
+    };
+    let fee_growth_above_1 = if slot.tick < tick_upper {
+        upper.fee_growth_outside_1_x128
+    } else {
+        wrapping_sub_u256(
+            &setup.env,
+            &fee_growth_global_1,
+            &upper.fee_growth_outside_1_x128,
+        )
+    };
+
+    (
+        wrapping_sub_u256(
+            &setup.env,
+            &wrapping_sub_u256(&setup.env, &fee_growth_global_0, &fee_growth_below_0),
+            &fee_growth_above_0,
+        ),
+        wrapping_sub_u256(
+            &setup.env,
+            &wrapping_sub_u256(&setup.env, &fee_growth_global_1, &fee_growth_below_1),
+            &fee_growth_above_1,
+        ),
+    )
 }
 
 #[test]
@@ -3220,6 +3284,86 @@ fn test_fee_accrual_during_second_deposit() {
 
     let pos_after = setup.pool.get_position(&setup.user, &-50, &50);
     assert_eq!(pos_after.tokens_owed_0, 0);
+}
+
+#[test]
+fn test_deposit_position_snapshots_after_tick_initialization() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(5000_0000000, 5000_0000000);
+
+    let desired = Vec::from_array(&setup.env, [1000_0000000, 1000_0000000]);
+    let (_base_amounts, base_liquidity) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &-887260, &887260, &desired, &0);
+    assert!(base_liquidity > 0);
+
+    // Generate non-zero fee growth before creating a new in-range position.
+    setup.pool.swap(&setup.user, &0, &1, &2_0462601, &2_0196431);
+    let slot = setup.pool.get_slot0();
+    assert!(slot.tick >= -160 && slot.tick < 60);
+
+    let (_amounts, range_liquidity) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &-160, &60, &desired, &0);
+    assert!(range_liquidity > 0);
+
+    let position = setup.pool.get_position(&setup.user, &-160, &60);
+    let (inside0, inside1) = fee_growth_inside_from_state(&setup, -160, 60);
+
+    assert_eq!(
+        position.fee_growth_inside_0_last_x128, inside0,
+        "position fee snapshot must match on-chain inside growth after mint",
+    );
+    assert_eq!(
+        position.fee_growth_inside_1_last_x128, inside1,
+        "position fee snapshot must match on-chain inside growth after mint",
+    );
+}
+
+#[test]
+fn test_withdraw_position_after_swap_ok() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(5000_0000000, 5000_0000000);
+
+    // corrupt state
+    let desired = Vec::from_array(&setup.env, [1000_0000000, 1000_0000000]);
+    let (_, full_range_liquidity) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &-887260, &887260, &desired, &0);
+    setup.pool.swap(&setup.user, &0, &1, &2_0462601, &2_0196431);
+    let (_, positon1_liquidity) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &-100, &-20, &desired, &0);
+    let (_, positon2_liquidity) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &-160, &60, &desired, &0);
+
+    setup.pool.withdraw_position(
+        &setup.user,
+        &-887260,
+        &887260,
+        &full_range_liquidity,
+        &Vec::from_array(&setup.env, [0, 0]),
+    );
+    setup.pool.withdraw_position(
+        &setup.user,
+        &-100,
+        &-20,
+        &positon1_liquidity,
+        &Vec::from_array(&setup.env, [0, 0]),
+    );
+    setup.pool.withdraw_position(
+        &setup.user,
+        &-160,
+        &60,
+        &positon2_liquidity,
+        &Vec::from_array(&setup.env, [0, 0]),
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

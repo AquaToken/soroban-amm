@@ -170,14 +170,14 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         set_reserve0(&e, &(get_reserve0(&e) + amount0));
         set_reserve1(&e, &(get_reserve1(&e) + amount1));
 
+        Self::update_tick_liquidity(&e, tick_lower, liquidity as i128, false);
+        Self::update_tick_liquidity(&e, tick_upper, liquidity as i128, true);
+
         let mut position = Self::get_or_create_position(&e, &sender, tick_lower, tick_upper);
         Self::accrue_position_fees(&e, &mut position, tick_lower, tick_upper, slot.tick);
         position.liquidity = position.liquidity.saturating_add(liquidity);
         set_position(&e, &sender, tick_lower, tick_upper, &position);
         Self::ensure_user_range_exists(&e, &sender, tick_lower, tick_upper);
-
-        Self::update_tick_liquidity(&e, tick_lower, liquidity as i128, false);
-        Self::update_tick_liquidity(&e, tick_upper, liquidity as i128, true);
 
         if slot.tick >= tick_lower && slot.tick < tick_upper {
             set_liquidity(&e, &get_liquidity(&e).saturating_add(liquidity));
