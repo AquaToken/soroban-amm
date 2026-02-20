@@ -87,6 +87,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper);
+        let is_full_range = {
+            let (full_range_lower, full_range_upper) = Self::full_range_ticks(&e);
+            tick_lower == full_range_lower && tick_upper == full_range_upper
+        };
 
         // Auto-initialize price on empty pool from token ratio
         if get_total_raw_liquidity(&e) == 0 && desired_amount0 > 0 && desired_amount1 > 0 {
@@ -177,6 +181,14 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
 
         if slot.tick >= tick_lower && slot.tick < tick_upper {
             set_liquidity(&e, &get_liquidity(&e).saturating_add(liquidity));
+        }
+        if is_full_range {
+            let full_range_liquidity = get_full_range_liquidity(&e);
+            let next_full_range_liquidity = match full_range_liquidity.checked_add(liquidity) {
+                Some(value) => value,
+                None => panic_with_error!(&e, Error::LiquidityOverflow),
+            };
+            set_full_range_liquidity(&e, &next_full_range_liquidity);
         }
 
         Self::update_user_raw_liquidity(&e, &sender, liquidity as i128);
@@ -269,6 +281,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper);
+        let is_full_range = {
+            let (full_range_lower, full_range_upper) = Self::full_range_ticks(&e);
+            tick_lower == full_range_lower && tick_upper == full_range_upper
+        };
 
         Self::recompute_user_weighted_liquidity(&e, &owner);
         Self::rewards_checkpoint_user(&e, &owner);
@@ -356,6 +372,13 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
                 panic_with_error!(&e, Error::LiquidityUnderflow);
             }
             set_liquidity(&e, &(active - amount));
+        }
+        if is_full_range {
+            let full_range_liquidity = get_full_range_liquidity(&e);
+            if full_range_liquidity < amount {
+                panic_with_error!(&e, Error::LiquidityUnderflow);
+            }
+            set_full_range_liquidity(&e, &(full_range_liquidity - amount));
         }
 
         Self::update_user_raw_liquidity(&e, &owner, -(amount as i128));

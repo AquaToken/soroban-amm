@@ -6,9 +6,9 @@ pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
 use crate::math::{amount0_delta, amount1_delta, sqrt_ratio_at_tick};
 use crate::storage::{
-    chunk_address, get_chunk_bitmap_word, get_fee, get_liquidity, get_plane, get_protocol_fees,
-    get_slot0, get_tick_spacing, get_token0, get_token1, ChunkCache, MAX_TICK, MIN_TICK,
-    TICKS_PER_CHUNK,
+    chunk_address, get_chunk_bitmap_word, get_fee, get_full_range_liquidity, get_liquidity,
+    get_plane, get_protocol_fees, get_slot0, get_tick_spacing, get_token0, get_token1, ChunkCache,
+    MAX_TICK, MIN_TICK, TICKS_PER_CHUNK,
 };
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{Env, Symbol, Vec, U256};
@@ -36,6 +36,28 @@ fn exact_tick_steps_for_spacing(spacing: i32) -> u32 {
         steps += 1;
     }
     steps
+}
+
+fn full_range_ticks_for_spacing(spacing: i32) -> Option<(i32, i32)> {
+    if spacing <= 0 {
+        return None;
+    }
+
+    let mut tick_lower = MIN_TICK - (MIN_TICK % spacing);
+    if tick_lower < MIN_TICK {
+        tick_lower = tick_lower.saturating_add(spacing);
+    }
+
+    let mut tick_upper = MAX_TICK - (MAX_TICK % spacing);
+    if tick_upper > MAX_TICK {
+        tick_upper = tick_upper.saturating_sub(spacing);
+    }
+
+    if tick_lower >= tick_upper {
+        return None;
+    }
+
+    Some((tick_lower, tick_upper))
 }
 
 fn compress_tick(tick: i32, spacing: i32) -> i32 {
@@ -263,11 +285,64 @@ fn compute_amounts(
     }
 }
 
+fn compute_full_range_reserves(e: &Env, spacing: i32, full_range_liquidity: u128) -> (u128, u128) {
+    if full_range_liquidity == 0 {
+        return (0, 0);
+    }
+
+    let (tick_lower, tick_upper) = match full_range_ticks_for_spacing(spacing) {
+        Some(ticks) => ticks,
+        None => return (0, 0),
+    };
+
+    let sqrt_lower = match sqrt_ratio_at_tick(e, tick_lower) {
+        Ok(value) => value,
+        Err(_) => return (0, 0),
+    };
+    let sqrt_upper = match sqrt_ratio_at_tick(e, tick_upper) {
+        Ok(value) => value,
+        Err(_) => return (0, 0),
+    };
+
+    let slot = get_slot0(e);
+    if slot.sqrt_price_x96 <= sqrt_lower {
+        (
+            amount0_delta(e, &sqrt_lower, &sqrt_upper, full_range_liquidity, false).unwrap_or(0),
+            0,
+        )
+    } else if slot.sqrt_price_x96 < sqrt_upper {
+        (
+            amount0_delta(
+                e,
+                &slot.sqrt_price_x96,
+                &sqrt_upper,
+                full_range_liquidity,
+                false,
+            )
+            .unwrap_or(0),
+            amount1_delta(
+                e,
+                &sqrt_lower,
+                &slot.sqrt_price_x96,
+                full_range_liquidity,
+                false,
+            )
+            .unwrap_or(0),
+        )
+    } else {
+        (
+            0,
+            amount1_delta(e, &sqrt_lower, &sqrt_upper, full_range_liquidity, false).unwrap_or(0),
+        )
+    }
+}
+
 fn collect_exact_direction_steps(
     e: &Env,
     zero_for_one: bool,
     steps: u32,
     spacing: i32,
+    base_liquidity: u128,
 ) -> Vec<u128> {
     let mut result = Vec::new(e);
     if spacing <= 0 {
@@ -284,7 +359,7 @@ fn collect_exact_direction_steps(
 
     let compressed_current = compress_tick(slot.tick, spacing);
     let mut sqrt_cursor = slot.sqrt_price_x96;
-    let mut liquidity = get_liquidity(e);
+    let mut liquidity = base_liquidity;
     let mut exhausted = false;
     let mut cc = ChunkCache::new(e);
 
@@ -439,15 +514,35 @@ fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
     let reserve1 = balance1.saturating_sub(fees.token1);
     let spacing = get_tick_spacing(e);
     let exact_steps = exact_tick_steps_for_spacing(spacing);
+    let full_range_liquidity = get_full_range_liquidity(e);
+    let active_liquidity = get_liquidity(e);
+    let non_full_range_active_liquidity = active_liquidity.saturating_sub(full_range_liquidity);
+    let (full_range_reserve0, full_range_reserve1) =
+        compute_full_range_reserves(e, spacing, full_range_liquidity);
     let spacing_u128 = if spacing > 0 { spacing as u128 } else { 0 };
 
-    let mut reserves = Vec::from_array(e, [reserve0, reserve1]);
-    let steps_0_to_1 = collect_exact_direction_steps(e, true, exact_steps, spacing);
+    let mut reserves = Vec::from_array(
+        e,
+        [reserve0, reserve1, full_range_reserve0, full_range_reserve1],
+    );
+    let steps_0_to_1 = collect_exact_direction_steps(
+        e,
+        true,
+        exact_steps,
+        spacing,
+        non_full_range_active_liquidity,
+    );
     for value in steps_0_to_1.iter() {
         reserves.push_back(value);
     }
 
-    let steps_1_to_0 = collect_exact_direction_steps(e, false, exact_steps, spacing);
+    let steps_1_to_0 = collect_exact_direction_steps(
+        e,
+        false,
+        exact_steps,
+        spacing,
+        non_full_range_active_liquidity,
+    );
     for value in steps_1_to_0.iter() {
         reserves.push_back(value);
     }
@@ -478,7 +573,7 @@ pub fn update_plane(e: &Env) {
 
 #[cfg(test)]
 mod tests {
-    use super::exact_tick_steps_for_spacing;
+    use super::{exact_tick_steps_for_spacing, full_range_ticks_for_spacing};
 
     #[test]
     fn test_exact_tick_steps_for_spacing_bounds() {
@@ -488,5 +583,14 @@ mod tests {
         assert_eq!(exact_tick_steps_for_spacing(10), 35);
         assert_eq!(exact_tick_steps_for_spacing(60), 14);
         assert_eq!(exact_tick_steps_for_spacing(200), 8);
+    }
+
+    #[test]
+    fn test_full_range_ticks_for_spacing() {
+        assert_eq!(full_range_ticks_for_spacing(0), None);
+        assert_eq!(full_range_ticks_for_spacing(-1), None);
+        assert_eq!(full_range_ticks_for_spacing(1), Some((-887_272, 887_272)));
+        assert_eq!(full_range_ticks_for_spacing(10), Some((-887_270, 887_270)));
+        assert_eq!(full_range_ticks_for_spacing(60), Some((-887_220, 887_220)));
     }
 }

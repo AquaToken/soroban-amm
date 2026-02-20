@@ -9,6 +9,10 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, Map, Symbol, Vec, U256};
 use utils::test_utils::jump;
 
+mod pool_plane {
+    soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_plane_contract.wasm");
+}
+
 fn pair(values: Vec<u128>) -> (u128, u128) {
     (values.get_unchecked(0), values.get_unchecked(1))
 }
@@ -115,6 +119,43 @@ fn test_router_happy_flow() {
         setup.token1.balance(&setup.user) as u128,
         initial_user_1 - spent1 + out + withdrawn.get_unchecked(1)
     );
+}
+
+#[test]
+fn test_plane_snapshot_full_range_component_updates() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(5_000_0000000, 5_000_0000000);
+
+    let full_range_amounts = Vec::from_array(&setup.env, [2_000_0000000u128, 2_000_0000000u128]);
+    let (_full_range_spent, full_range_liquidity) =
+        setup.pool.deposit(&setup.user, &full_range_amounts, &0);
+    assert!(full_range_liquidity > 0);
+
+    let narrow_amounts = Vec::from_array(&setup.env, [1_000_0000000u128, 1_000_0000000u128]);
+    let (_narrow_spent, narrow_liquidity) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &-100, &100, &narrow_amounts, &0);
+    assert!(narrow_liquidity > 0);
+
+    let plane = pool_plane::Client::new(&setup.env, &setup.plane);
+    let pools = Vec::from_array(&setup.env, [setup.pool.address.clone()]);
+    let snapshot = plane.get(&pools);
+    let (_pool_type, init_args, reserves) = snapshot.get_unchecked(0);
+    assert_eq!(init_args.get_unchecked(0), 1);
+    assert!(reserves.get_unchecked(2) > 0);
+    assert!(reserves.get_unchecked(3) > 0);
+
+    setup.pool.withdraw(
+        &setup.user,
+        &full_range_liquidity,
+        &Vec::from_array(&setup.env, [0u128, 0u128]),
+    );
+
+    let snapshot_after = plane.get(&pools);
+    let (_pool_type_after, _init_args_after, reserves_after) = snapshot_after.get_unchecked(0);
+    assert_eq!(reserves_after.get_unchecked(2), 0);
+    assert_eq!(reserves_after.get_unchecked(3), 0);
 }
 
 #[test]

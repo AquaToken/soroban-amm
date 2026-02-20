@@ -70,6 +70,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         set_is_killed_deposit(&e, &false);
         set_is_killed_swap(&e, &false);
         set_claim_killed(&e, &false);
+        set_full_range_liquidity(&e, &0);
         set_reserve0(&e, &0);
         set_reserve1(&e, &0);
 

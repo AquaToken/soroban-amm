@@ -62,6 +62,7 @@ pub enum DataKey {
     // ── Rewards: distance-weighted liquidity ──
     TotalRawLiquidity,      // u128 — sum of all users' raw liquidity
     TotalWeightedLiquidity, // u128 — sum of all users' weighted liquidity
+    FullRangeLiquidity,     // u128 — total liquidity in canonical full-range positions
 
     ClaimKilled, // bool — reward claim kill switch
 
@@ -138,6 +139,12 @@ generate_instance_storage_getter_and_setter_with_default!(
 generate_instance_storage_getter_and_setter_with_default!(
     total_weighted_liquidity,
     DataKey::TotalWeightedLiquidity,
+    u128,
+    0
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    full_range_liquidity,
+    DataKey::FullRangeLiquidity,
     u128,
     0
 );

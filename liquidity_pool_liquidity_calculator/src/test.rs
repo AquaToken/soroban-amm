@@ -124,7 +124,7 @@ fn test_concentrated_pool_type() {
         &pool,
         &Symbol::new(&e, "concentrated"),
         &Vec::from_array(&e, [1_u128, 30_u128, 1_u128, 0_u128]),
-        &Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128]),
+        &Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128, 0_u128, 0_u128]),
     );
 
     let calculator = create_contract(&e);
@@ -147,7 +147,8 @@ fn test_concentrated_pool_type_plane_v1_snapshot() {
     let admin = Address::generate(&e);
     let pool = Address::generate(&e);
 
-    let mut reserves = Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128]);
+    let mut reserves =
+        Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128, 0_u128, 0_u128]);
     for _ in 0..20 {
         reserves.push_back(25_0000000_u128);
         reserves.push_back(24_9250000_u128);
@@ -194,7 +195,8 @@ fn test_concentrated_liquidity_is_higher_than_standard_for_same_fee() {
         &Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128]),
     );
 
-    let mut concentrated_reserves = Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128]);
+    let mut concentrated_reserves =
+        Vec::from_array(&e, [1_000_0000000_u128, 1_000_0000000_u128, 0_u128, 0_u128]);
     for _ in 0..20 {
         concentrated_reserves.push_back(75_0000000_u128);
         concentrated_reserves.push_back(74_7750000_u128);
@@ -226,6 +228,69 @@ fn test_concentrated_liquidity_is_higher_than_standard_for_same_fee() {
             ],
         )
     );
+}
+
+#[test]
+fn test_concentrated_full_range_component_changes_score() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let pool_without_full_range = Address::generate(&e);
+    let pool_with_full_range = Address::generate(&e);
+
+    let mut without_full_range_reserves =
+        Vec::from_array(&e, [100_0000000_u128, 100_0000000_u128, 0_u128, 0_u128]);
+    let mut with_full_range_reserves = Vec::from_array(
+        &e,
+        [
+            8_100_0000000_u128,
+            8_100_0000000_u128,
+            8_000_0000000_u128,
+            8_000_0000000_u128,
+        ],
+    );
+    for _ in 0..20 {
+        without_full_range_reserves.push_back(2_5000000_u128);
+        without_full_range_reserves.push_back(2_4750000_u128);
+        with_full_range_reserves.push_back(2_5000000_u128);
+        with_full_range_reserves.push_back(2_4750000_u128);
+    }
+    for _ in 0..20 {
+        without_full_range_reserves.push_back(2_5000000_u128);
+        without_full_range_reserves.push_back(2_4750000_u128);
+        with_full_range_reserves.push_back(2_5000000_u128);
+        with_full_range_reserves.push_back(2_4750000_u128);
+    }
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &pool_without_full_range,
+        &Symbol::new(&e, "concentrated"),
+        &Vec::from_array(&e, [1_u128, 30_u128, 1_u128, 20_u128]),
+        &without_full_range_reserves,
+    );
+    plane.update(
+        &pool_with_full_range,
+        &Symbol::new(&e, "concentrated"),
+        &Vec::from_array(&e, [1_u128, 30_u128, 1_u128, 20_u128]),
+        &with_full_range_reserves,
+    );
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [pool_without_full_range, pool_with_full_range],
+    ));
+    let without_full_range = results.get_unchecked(0).to_u128().unwrap();
+    let with_full_range = results.get_unchecked(1).to_u128().unwrap();
+
+    assert!(with_full_range > without_full_range);
+    assert!(with_full_range > without_full_range.saturating_mul(10));
 }
 
 #[test]

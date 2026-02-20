@@ -68,6 +68,9 @@ pub fn get_liquidity(e: &Env, data: &ConcentratedPoolData, in_idx: u32, out_idx:
         return 0;
     }
 
+    let full_range_in = data.full_range_in(in_idx).min(reserve_in);
+    let full_range_out = data.full_range_out(out_idx).min(reserve_out);
+
     let fee_fraction = data.fee;
     let exact_steps = if data.tick_spacing > 0 { data.steps } else { 0 };
 
@@ -77,8 +80,11 @@ pub fn get_liquidity(e: &Env, data: &ConcentratedPoolData, in_idx: u32, out_idx:
         weighted_near_window(e, data, in_idx, exact_steps);
 
     // Remaining range is approximated with one average factor.
-    let remaining_in = reserve_in.saturating_sub(near_raw_in);
-    let coverage = near_weighted_out
+    let remaining_in = reserve_in
+        .saturating_sub(full_range_in)
+        .saturating_sub(near_raw_in);
+    let covered_out = near_weighted_out.saturating_add(full_range_out);
+    let coverage = covered_out
         .fixed_mul_floor(e, &PRECISION, &reserve_out)
         .min(PRECISION);
     let base_tail_multiplier = (PRECISION.saturating_add(coverage)) / 2;
@@ -91,7 +97,11 @@ pub fn get_liquidity(e: &Env, data: &ConcentratedPoolData, in_idx: u32, out_idx:
         base_tail_multiplier.fixed_mul_floor(e, &distance_tail_multiplier, &PRECISION);
     let tail_in = remaining_in.fixed_mul_floor(e, &tail_multiplier, &PRECISION);
 
-    let effective_input = near_weighted_in.saturating_add(tail_in);
+    // Full-range positions are scored separately using standard-pool math
+    // and do not participate in the concentrated near/tail approximation.
+    let effective_input = full_range_in
+        .saturating_add(near_weighted_in)
+        .saturating_add(tail_in);
     if effective_input == 0 {
         return 0;
     }

@@ -14,20 +14,43 @@ pub struct ConcentratedPoolData {
     pub(crate) fee: u128,
     pub(crate) tick_spacing: i32,
     pub(crate) steps: u32,
+    pub(crate) full_range_reserve0: u128,
+    pub(crate) full_range_reserve1: u128,
     pub(crate) reserves: Vec<u128>,
 }
 
 impl ConcentratedPoolData {
+    const RESERVES_PREFIX_SIZE: u32 = 4;
+
     pub(crate) fn reserve(&self, idx: u32) -> u128 {
         self.reserves.get(idx).unwrap_or(0)
     }
 
+    pub(crate) fn full_range_in(&self, in_idx: u32) -> u128 {
+        if in_idx == 0 {
+            self.full_range_reserve0
+        } else {
+            self.full_range_reserve1
+        }
+    }
+
+    pub(crate) fn full_range_out(&self, out_idx: u32) -> u128 {
+        if out_idx == 0 {
+            self.full_range_reserve0
+        } else {
+            self.full_range_reserve1
+        }
+    }
+
     pub(crate) fn step_0_to_1(&self, step: u32) -> (u128, u128) {
-        self.step_pair(step, 2)
+        self.step_pair(step, Self::RESERVES_PREFIX_SIZE)
     }
 
     pub(crate) fn step_1_to_0(&self, step: u32) -> (u128, u128) {
-        self.step_pair(step, 2 + self.steps.saturating_mul(2))
+        self.step_pair(
+            step,
+            Self::RESERVES_PREFIX_SIZE + self.steps.saturating_mul(2),
+        )
     }
 
     fn step_pair(&self, step: u32, base_offset: u32) -> (u128, u128) {
@@ -50,6 +73,7 @@ pub(crate) fn parse_concentrated_data(
 ) -> ConcentratedPoolData {
     // The only supported format:
     // init_args: [version=1, fee, tick_spacing, steps]
+    // reserves: [reserve0, reserve1, full_range_reserve0, full_range_reserve1, ...steps]
     let version = init_args.get(0).unwrap();
     if version != 1 {
         panic!("invalid concentrated plane data version");
@@ -72,6 +96,8 @@ pub(crate) fn parse_concentrated_data(
         fee,
         tick_spacing: tick_spacing as i32,
         steps,
+        full_range_reserve0: reserves.get(2).unwrap_or(0),
+        full_range_reserve1: reserves.get(3).unwrap_or(0),
         reserves,
     }
 }
