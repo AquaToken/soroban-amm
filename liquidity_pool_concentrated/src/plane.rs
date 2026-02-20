@@ -15,7 +15,7 @@ use soroban_sdk::{Env, Symbol, Vec, U256};
 
 const PLANE_DATA_VERSION: u128 = 1;
 const MIN_EXACT_TICK_STEPS: u32 = 8;
-const MAX_EXACT_TICK_STEPS: u32 = 48;
+const MAX_EXACT_TICK_STEPS: u32 = 35;
 // Weight function is (p_ref/p)^8. Around 1% tail weight is reached near ~5.7k ticks.
 const TARGET_PRICE_DISTANCE_TICKS: u32 = 6_000;
 
@@ -579,7 +579,7 @@ mod tests {
     fn test_exact_tick_steps_for_spacing_bounds() {
         assert_eq!(exact_tick_steps_for_spacing(0), 0);
         assert_eq!(exact_tick_steps_for_spacing(-1), 0);
-        assert_eq!(exact_tick_steps_for_spacing(1), 48);
+        assert_eq!(exact_tick_steps_for_spacing(1), 35);
         assert_eq!(exact_tick_steps_for_spacing(10), 35);
         assert_eq!(exact_tick_steps_for_spacing(60), 14);
         assert_eq!(exact_tick_steps_for_spacing(200), 8);
