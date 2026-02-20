@@ -4,6 +4,11 @@ use crate::plane::ConcentratedPoolData;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::Env;
 
+// Fixed-point scaling for geometric step growth approximation.
+const STEP_GROWTH_SCALE: u128 = 1_000_000_000_000;
+// sqrt(1.0001) in STEP_GROWTH_SCALE precision.
+const SQRT_TICK_BASE_FP: u128 = 1_000_049_998_750;
+
 fn step_amounts(data: &ConcentratedPoolData, in_idx: u32, step: u32) -> (u128, u128) {
     if in_idx == 0 {
         data.step_0_to_1(step)
@@ -23,14 +28,60 @@ fn relative_price_weight(price: u128, reference_price: u128) -> u128 {
     }
 }
 
-fn weighted_near_window(
+fn chunk_liquidity(e: &Env, fee_fraction: u128, amount_in: u128) -> u128 {
+    if amount_in == 0 {
+        return 0;
+    }
+
+    amount_in.fixed_mul_floor(e, &FEE_MULTIPLIER, &(56 * (FEE_MULTIPLIER - fee_fraction)))
+}
+
+fn fixed_pow_step_growth(e: &Env, mut base: u128, mut exp: u32) -> u128 {
+    let mut result = STEP_GROWTH_SCALE;
+    while exp > 0 {
+        if exp & 1 == 1 {
+            result = result.fixed_mul_floor(e, &base, &STEP_GROWTH_SCALE);
+        }
+        exp >>= 1;
+        if exp > 0 {
+            base = base.fixed_mul_floor(e, &base, &STEP_GROWTH_SCALE);
+        }
+    }
+    result
+}
+
+fn step_virtual_input(e: &Env, amount_in: u128, tick_spacing: i32, step: u32) -> u128 {
+    if amount_in == 0 || tick_spacing <= 0 {
+        return amount_in;
+    }
+
+    // step k spans (k+1)*tick_spacing ticks because boundaries grow as
+    // triangular numbers: 1, 3, 6, ... spacing-intervals from the current tick.
+    let delta_ticks = (tick_spacing as u32).saturating_mul(step.saturating_add(1));
+    if delta_ticks == 0 {
+        return amount_in;
+    }
+
+    // Local virtual reserve for the monotonic piece:
+    //   x_piece = dx / (sqrt(price_ratio) - 1),
+    // where sqrt(price_ratio) = (sqrt(1.0001))^delta_ticks.
+    let sqrt_growth = fixed_pow_step_growth(e, SQRT_TICK_BASE_FP, delta_ticks);
+    if sqrt_growth <= STEP_GROWTH_SCALE {
+        return amount_in;
+    }
+
+    let sqrt_growth_minus_one = sqrt_growth.saturating_sub(STEP_GROWTH_SCALE);
+    amount_in.fixed_mul_floor(e, &STEP_GROWTH_SCALE, &sqrt_growth_minus_one)
+}
+
+fn near_window_liquidity(
     e: &Env,
     data: &ConcentratedPoolData,
     in_idx: u32,
     steps: u32,
-) -> (u128, u128, u128, u128) {
-    let mut weighted_in = 0u128;
-    let mut weighted_out = 0u128;
+) -> (u128, u128, u128) {
+    let fee_fraction = data.fee;
+    let mut near_liquidity = 0u128;
     let mut raw_in = 0u128;
     let mut reference_price = 0u128;
     let mut edge_weight = 0u128;
@@ -38,8 +89,19 @@ fn weighted_near_window(
     for step in 0..steps {
         let (amount_in, amount_out) = step_amounts(data, in_idx, step);
         if amount_in == 0 || amount_out == 0 {
-            break;
+            // Plane snapshots may contain zero-sized near ticks because of integer
+            // rounding, while farther monotonic chunks still have non-zero depth.
+            // Skip zeros instead of stopping the whole piecewise accumulation.
+            continue;
         }
+
+        // Each monotonic step is treated as an independent local pool segment.
+        // Convert step swap depth into local virtual reserve and apply
+        // the closed-form branch formula per segment.
+        let virtual_in = step_virtual_input(e, amount_in, data.tick_spacing, step);
+        near_liquidity =
+            near_liquidity.saturating_add(chunk_liquidity(e, fee_fraction, virtual_in));
+        raw_in = raw_in.saturating_add(amount_in);
 
         let price = amount_in.fixed_mul_floor(e, &PRECISION, &amount_out);
         if price == 0 {
@@ -50,15 +112,10 @@ fn weighted_near_window(
             reference_price = price;
         }
 
-        let weight = relative_price_weight(price, reference_price);
-        weighted_in = weighted_in.saturating_add(amount_in.fixed_mul_floor(e, &weight, &PRECISION));
-        weighted_out =
-            weighted_out.saturating_add(amount_out.fixed_mul_floor(e, &weight, &PRECISION));
-        raw_in = raw_in.saturating_add(amount_in);
-        edge_weight = weight;
+        edge_weight = relative_price_weight(price, reference_price);
     }
 
-    (weighted_in, weighted_out, raw_in, edge_weight)
+    (near_liquidity, raw_in, edge_weight)
 }
 
 pub fn get_liquidity(e: &Env, data: &ConcentratedPoolData, in_idx: u32, out_idx: u32) -> u128 {
@@ -69,42 +126,30 @@ pub fn get_liquidity(e: &Env, data: &ConcentratedPoolData, in_idx: u32, out_idx:
     }
 
     let full_range_in = data.full_range_in(in_idx).min(reserve_in);
-    let full_range_out = data.full_range_out(out_idx).min(reserve_out);
 
     let fee_fraction = data.fee;
     let exact_steps = if data.tick_spacing > 0 { data.steps } else { 0 };
 
-    // Near the current price we take exact full-tick depth from plane snapshot.
-    // Step contributions are distance-weighted by relative price to the current region.
-    let (near_weighted_in, near_weighted_out, near_raw_in, edge_weight) =
-        weighted_near_window(e, data, in_idx, exact_steps);
+    // Near the current price we sum exact monotonic step contributions from plane snapshot.
+    let (near_liquidity, near_raw_in, edge_weight) =
+        near_window_liquidity(e, data, in_idx, exact_steps);
 
-    // Remaining range is approximated with one average factor.
+    // Remaining range is represented as one far-tail segment discounted by edge distance.
     let remaining_in = reserve_in
         .saturating_sub(full_range_in)
         .saturating_sub(near_raw_in);
-    let covered_out = near_weighted_out.saturating_add(full_range_out);
-    let coverage = covered_out
-        .fixed_mul_floor(e, &PRECISION, &reserve_out)
-        .min(PRECISION);
-    let base_tail_multiplier = (PRECISION.saturating_add(coverage)) / 2;
-    let distance_tail_multiplier = if edge_weight == 0 {
-        PRECISION / 2
+    let tail_in = if edge_weight == 0 {
+        // If no exact near-window steps are available, fallback to a single
+        // unweighted segment so concentrated snapshots without steps don't
+        // collapse to zero liquidity.
+        remaining_in
     } else {
-        edge_weight
+        remaining_in.fixed_mul_floor(e, &edge_weight, &PRECISION)
     };
-    let tail_multiplier =
-        base_tail_multiplier.fixed_mul_floor(e, &distance_tail_multiplier, &PRECISION);
-    let tail_in = remaining_in.fixed_mul_floor(e, &tail_multiplier, &PRECISION);
+    let full_range_liquidity = chunk_liquidity(e, fee_fraction, full_range_in);
+    let tail_liquidity = chunk_liquidity(e, fee_fraction, tail_in);
 
-    // Full-range positions are scored separately using standard-pool math
-    // and do not participate in the concentrated near/tail approximation.
-    let effective_input = full_range_in
-        .saturating_add(near_weighted_in)
-        .saturating_add(tail_in);
-    if effective_input == 0 {
-        return 0;
-    }
-
-    effective_input.fixed_mul_floor(e, &FEE_MULTIPLIER, &(56 * (FEE_MULTIPLIER - fee_fraction)))
+    full_range_liquidity
+        .saturating_add(near_liquidity)
+        .saturating_add(tail_liquidity)
 }

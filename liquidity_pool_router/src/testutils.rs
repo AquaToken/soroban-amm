@@ -48,11 +48,14 @@ pub fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(stableswap_pool::WASM)
 }
 
-pub const CONCENTRATED_POOL_WASM: &[u8] =
-    include_bytes!("../../contracts/soroban_liquidity_pool_concentrated_contract.wasm");
+pub mod concentrated_pool {
+    soroban_sdk::contractimport!(
+        file = "../contracts/soroban_liquidity_pool_concentrated_contract.wasm"
+    );
+}
 
 pub fn install_concentrated_liq_pool_hash(e: &Env) -> BytesN<32> {
-    e.deployer().upload_contract_wasm(CONCENTRATED_POOL_WASM)
+    e.deployer().upload_contract_wasm(concentrated_pool::WASM)
 }
 
 mod pool_plane {

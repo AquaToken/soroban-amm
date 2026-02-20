@@ -34,14 +34,6 @@ impl ConcentratedPoolData {
         }
     }
 
-    pub(crate) fn full_range_out(&self, out_idx: u32) -> u128 {
-        if out_idx == 0 {
-            self.full_range_reserve0
-        } else {
-            self.full_range_reserve1
-        }
-    }
-
     pub(crate) fn step_0_to_1(&self, step: u32) -> (u128, u128) {
         self.step_pair(step, Self::RESERVES_PREFIX_SIZE)
     }

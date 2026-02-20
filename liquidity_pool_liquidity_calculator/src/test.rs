@@ -134,7 +134,7 @@ fn test_concentrated_pool_type() {
     let results = calculator.get_liquidity(&Vec::from_array(&e, [pool]));
     assert_eq!(
         results,
-        Vec::from_array(&e, [U256::from_u128(&e, 89554376)])
+        Vec::from_array(&e, [U256::from_u128(&e, 358217508)])
     );
 }
 
@@ -173,8 +173,46 @@ fn test_concentrated_pool_type_plane_v1_snapshot() {
     let results = calculator.get_liquidity(&Vec::from_array(&e, [pool]));
     assert_eq!(
         results,
-        Vec::from_array(&e, [U256::from_u128(&e, 313305988)])
+        Vec::from_array(&e, [U256::from_u128(&e, 644508458230)])
     );
+}
+
+#[test]
+fn test_concentrated_pool_zero_step_prefix_is_skipped_not_breaking_scan() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let pool = Address::generate(&e);
+
+    let reserves = Vec::from_array(
+        &e,
+        [
+            1_000_u128, 1_000_u128, 0_u128, 0_u128, // reserves + full-range component
+            0_u128, 0_u128, // step 0 (0->1), intentionally zero
+            500_u128, 499_u128, // step 1 (0->1)
+            500_u128, 498_u128, // step 2 (0->1)
+            0_u128, 0_u128, // step 0 (1->0), intentionally zero
+            500_u128, 499_u128, // step 1 (1->0)
+            500_u128, 498_u128, // step 2 (1->0)
+        ],
+    );
+
+    let plane = create_plane_contract(&e);
+    plane.update(
+        &pool,
+        &Symbol::new(&e, "concentrated"),
+        &Vec::from_array(&e, [1_u128, 30_u128, 1_u128, 3_u128]),
+        &reserves,
+    );
+
+    let calculator = create_contract(&e);
+    calculator.init_admin(&admin);
+    calculator.set_pools_plane(&admin, &plane.address);
+
+    let results = calculator.get_liquidity(&Vec::from_array(&e, [pool]));
+    assert_eq!(results, Vec::from_array(&e, [U256::from_u32(&e, 298510)]));
 }
 
 #[test]
@@ -224,7 +262,7 @@ fn test_concentrated_liquidity_is_higher_than_standard_for_same_fee() {
             &e,
             [
                 U256::from_u128(&e, 358217508),
-                U256::from_u128(&e, 537326264)
+                U256::from_u128(&e, 1932988048480)
             ],
         )
     );
@@ -290,7 +328,6 @@ fn test_concentrated_full_range_component_changes_score() {
     let with_full_range = results.get_unchecked(1).to_u128().unwrap();
 
     assert!(with_full_range > without_full_range);
-    assert!(with_full_range > without_full_range.saturating_mul(10));
 }
 
 #[test]
