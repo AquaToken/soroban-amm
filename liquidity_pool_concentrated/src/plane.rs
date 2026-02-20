@@ -14,7 +14,29 @@ use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{Env, Symbol, Vec, U256};
 
 const PLANE_DATA_VERSION: u128 = 1;
-const EXACT_TICK_STEPS: u32 = 20;
+const MIN_EXACT_TICK_STEPS: u32 = 8;
+const MAX_EXACT_TICK_STEPS: u32 = 48;
+// Weight function is (p_ref/p)^8. Around 1% tail weight is reached near ~5.7k ticks.
+const TARGET_PRICE_DISTANCE_TICKS: u32 = 6_000;
+
+fn exact_tick_steps_for_spacing(spacing: i32) -> u32 {
+    if spacing <= 0 {
+        return 0;
+    }
+
+    let spacing_u32 = spacing as u32;
+    let mut steps = MIN_EXACT_TICK_STEPS;
+    while steps < MAX_EXACT_TICK_STEPS {
+        // For steps = N, far boundary is N*(N+1)/2 spacing-intervals away.
+        let boundary_count = steps.saturating_mul(steps.saturating_add(1)) / 2;
+        let covered_ticks = boundary_count.saturating_mul(spacing_u32);
+        if covered_ticks >= TARGET_PRICE_DISTANCE_TICKS {
+            break;
+        }
+        steps += 1;
+    }
+    steps
+}
 
 fn compress_tick(tick: i32, spacing: i32) -> i32 {
     let mut compressed = tick / spacing;
@@ -416,15 +438,16 @@ fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
     let reserve0 = balance0.saturating_sub(fees.token0);
     let reserve1 = balance1.saturating_sub(fees.token1);
     let spacing = get_tick_spacing(e);
+    let exact_steps = exact_tick_steps_for_spacing(spacing);
     let spacing_u128 = if spacing > 0 { spacing as u128 } else { 0 };
 
     let mut reserves = Vec::from_array(e, [reserve0, reserve1]);
-    let steps_0_to_1 = collect_exact_direction_steps(e, true, EXACT_TICK_STEPS, spacing);
+    let steps_0_to_1 = collect_exact_direction_steps(e, true, exact_steps, spacing);
     for value in steps_0_to_1.iter() {
         reserves.push_back(value);
     }
 
-    let steps_1_to_0 = collect_exact_direction_steps(e, false, EXACT_TICK_STEPS, spacing);
+    let steps_1_to_0 = collect_exact_direction_steps(e, false, exact_steps, spacing);
     for value in steps_1_to_0.iter() {
         reserves.push_back(value);
     }
@@ -436,7 +459,7 @@ fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
                 PLANE_DATA_VERSION,
                 get_fee(e) as u128,
                 spacing_u128,
-                EXACT_TICK_STEPS as u128,
+                exact_steps as u128,
             ],
         ),
         reserves,
@@ -451,4 +474,19 @@ pub fn update_plane(e: &Env) {
         &init_args,
         &reserves,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::exact_tick_steps_for_spacing;
+
+    #[test]
+    fn test_exact_tick_steps_for_spacing_bounds() {
+        assert_eq!(exact_tick_steps_for_spacing(0), 0);
+        assert_eq!(exact_tick_steps_for_spacing(-1), 0);
+        assert_eq!(exact_tick_steps_for_spacing(1), 48);
+        assert_eq!(exact_tick_steps_for_spacing(10), 35);
+        assert_eq!(exact_tick_steps_for_spacing(60), 14);
+        assert_eq!(exact_tick_steps_for_spacing(200), 8);
+    }
 }

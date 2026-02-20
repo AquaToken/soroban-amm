@@ -4,8 +4,6 @@ use crate::plane::ConcentratedPoolData;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::Env;
 
-const EXACT_TICK_STEPS: u32 = 20;
-
 fn step_amounts(data: &ConcentratedPoolData, in_idx: u32, step: u32) -> (u128, u128) {
     if in_idx == 0 {
         data.step_0_to_1(step)
@@ -71,11 +69,7 @@ pub fn get_liquidity(e: &Env, data: &ConcentratedPoolData, in_idx: u32, out_idx:
     }
 
     let fee_fraction = data.fee;
-    let exact_steps = if data.tick_spacing > 0 {
-        data.steps.min(EXACT_TICK_STEPS)
-    } else {
-        0
-    };
+    let exact_steps = if data.tick_spacing > 0 { data.steps } else { 0 };
 
     // Near the current price we take exact full-tick depth from plane snapshot.
     // Step contributions are distance-weighted by relative price to the current region.
