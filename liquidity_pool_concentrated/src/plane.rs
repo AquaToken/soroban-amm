@@ -337,12 +337,44 @@ fn compute_full_range_reserves(e: &Env, spacing: i32, full_range_liquidity: u128
     }
 }
 
+// Compute the liquidity_net adjustment needed to exclude full-range position
+// contributions at a given tick. Full-range positions add +L at lower tick and
+// -L at upper tick (encoded as liquidity_net += L for lower, liquidity_net -= L
+// for upper via the is_upper convention). To exclude their contribution we must
+// subtract the same delta they added.
+fn full_range_liquidity_net_adjustment(
+    tick: i32,
+    spacing: i32,
+    full_range_lower: i32,
+    full_range_upper: i32,
+    full_range_liquidity: u128,
+) -> i128 {
+    if full_range_liquidity == 0 || spacing <= 0 {
+        return 0;
+    }
+    let compressed = compress_tick(tick, spacing);
+    let fr_lower_compressed = compress_tick(full_range_lower, spacing);
+    let fr_upper_compressed = compress_tick(full_range_upper, spacing);
+    let fl = full_range_liquidity as i128;
+
+    if compressed == fr_lower_compressed {
+        // Full-range deposit added +L to liquidity_net here → subtract it
+        -fl
+    } else if compressed == fr_upper_compressed {
+        // Full-range deposit subtracted L from liquidity_net here → add it back
+        fl
+    } else {
+        0
+    }
+}
+
 fn collect_exact_direction_steps(
     e: &Env,
     zero_for_one: bool,
     steps: u32,
     spacing: i32,
     base_liquidity: u128,
+    full_range_liquidity: u128,
 ) -> Vec<u128> {
     let mut result = Vec::new(e);
     if spacing <= 0 {
@@ -362,6 +394,9 @@ fn collect_exact_direction_steps(
     let mut liquidity = base_liquidity;
     let mut exhausted = false;
     let mut cc = ChunkCache::new(e);
+
+    // Canonical full-range tick boundaries for adjusting liquidity_net on crossing.
+    let (fr_lower, fr_upper) = full_range_ticks_for_spacing(spacing).unwrap_or((0, 0));
 
     // Track the compressed tick of the cursor for bitmap scanning.
     // For zero_for_one, cursor starts at compressed_current and moves down.
@@ -443,7 +478,7 @@ fn collect_exact_direction_steps(
             };
 
             if init_in_range {
-                let (init_tick, liquidity_net) = maybe_init.unwrap();
+                let (init_tick, raw_liquidity_net) = maybe_init.unwrap();
                 let sqrt_init = match sqrt_ratio_at_tick(e, init_tick) {
                     Ok(v) => v,
                     Err(_) => break,
@@ -455,7 +490,18 @@ fn collect_exact_direction_steps(
                 step_in = step_in.saturating_add(amt_in);
                 step_out = step_out.saturating_add(amt_out);
 
-                // Cross the tick: apply liquidity delta returned by find_initialized_tick
+                // Exclude full-range position contribution from liquidity_net
+                // so the step collector tracks only non-full-range liquidity.
+                let adj = full_range_liquidity_net_adjustment(
+                    init_tick,
+                    spacing,
+                    fr_lower,
+                    fr_upper,
+                    full_range_liquidity,
+                );
+                let liquidity_net = raw_liquidity_net.saturating_add(adj);
+
+                // Cross the tick: apply adjusted liquidity delta
                 liquidity = apply_liquidity_net(liquidity, liquidity_net, zero_for_one);
                 sqrt_cursor = sqrt_init;
                 cursor_compressed = compress_tick(init_tick, spacing);
@@ -531,6 +577,7 @@ fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
         exact_steps,
         spacing,
         non_full_range_active_liquidity,
+        full_range_liquidity,
     );
     for value in steps_0_to_1.iter() {
         reserves.push_back(value);
@@ -542,6 +589,7 @@ fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
         exact_steps,
         spacing,
         non_full_range_active_liquidity,
+        full_range_liquidity,
     );
     for value in steps_1_to_0.iter() {
         reserves.push_back(value);
@@ -573,7 +621,10 @@ pub fn update_plane(e: &Env) {
 
 #[cfg(test)]
 mod tests {
-    use super::{exact_tick_steps_for_spacing, full_range_ticks_for_spacing};
+    use super::{
+        exact_tick_steps_for_spacing, full_range_liquidity_net_adjustment,
+        full_range_ticks_for_spacing,
+    };
 
     #[test]
     fn test_exact_tick_steps_for_spacing_bounds() {
@@ -592,5 +643,42 @@ mod tests {
         assert_eq!(full_range_ticks_for_spacing(1), Some((-887_272, 887_272)));
         assert_eq!(full_range_ticks_for_spacing(10), Some((-887_270, 887_270)));
         assert_eq!(full_range_ticks_for_spacing(60), Some((-887_220, 887_220)));
+    }
+
+    #[test]
+    fn test_full_range_liquidity_net_adjustment() {
+        let spacing = 20;
+        let (fr_lower, fr_upper) = full_range_ticks_for_spacing(spacing).unwrap();
+        let fl: u128 = 1_000_000;
+
+        // At the full-range lower tick: subtract full-range contribution
+        assert_eq!(
+            full_range_liquidity_net_adjustment(fr_lower, spacing, fr_lower, fr_upper, fl),
+            -(fl as i128)
+        );
+
+        // At the full-range upper tick: add back full-range contribution
+        assert_eq!(
+            full_range_liquidity_net_adjustment(fr_upper, spacing, fr_lower, fr_upper, fl),
+            fl as i128
+        );
+
+        // At an unrelated tick: no adjustment
+        assert_eq!(
+            full_range_liquidity_net_adjustment(0, spacing, fr_lower, fr_upper, fl),
+            0
+        );
+
+        // With zero full-range liquidity: no adjustment anywhere
+        assert_eq!(
+            full_range_liquidity_net_adjustment(fr_lower, spacing, fr_lower, fr_upper, 0),
+            0
+        );
+
+        // With zero spacing: no adjustment
+        assert_eq!(
+            full_range_liquidity_net_adjustment(fr_lower, 0, fr_lower, fr_upper, fl),
+            0
+        );
     }
 }
