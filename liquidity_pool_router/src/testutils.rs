@@ -151,7 +151,7 @@ impl Default for Setup<'_> {
         let emergency_admin = Address::generate(&env);
         let payment_for_creation_address = Address::generate(&env);
 
-        let reward_token = create_token_contract(&env, &reward_admin);
+        let reward_token = test_token::Client::new(&env, &tokens[0].address);
         let reward_boost_token = create_token_contract(&env, &reward_admin);
 
         let pool_hash = install_liq_pool_hash(&env);

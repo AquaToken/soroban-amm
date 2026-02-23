@@ -92,7 +92,7 @@ fn test_constant_product_pool() {
     let setup = Setup::default();
     let e = setup.env;
     let router = setup.router;
-    let [token1, token2, _, _] = setup.tokens;
+    let [_, token1, token2, _] = setup.tokens;
 
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     let user1 = Address::generate(&e);
@@ -320,7 +320,7 @@ fn test_stableswap_pool() {
     let e = setup.env;
     let admin = setup.admin;
     let router = setup.router;
-    let [token1, token2, _, _] = setup.tokens;
+    let [_, token1, token2, _] = setup.tokens;
 
     let reward_token = setup.reward_token;
 
@@ -449,7 +449,7 @@ fn test_stableswap_3_pool() {
     let setup = Setup::default();
     let e = setup.env;
     let router = setup.router;
-    let [token1, token2, token3, _] = setup.tokens;
+    let [_, token1, token2, token3] = setup.tokens;
     let reward_token = setup.reward_token;
     let payment_for_creation_address = router.get_init_pool_payment_address();
 
@@ -697,7 +697,7 @@ fn test_simple_ongoing_reward() {
     let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
-    let [token1, token2, _, _] = setup.tokens;
+    let [_, token1, token2, _] = setup.tokens;
     let reward_token = setup.reward_token;
 
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
@@ -1141,7 +1141,7 @@ fn test_rewards_distribution() {
     let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
-    let [token1, token2, _, _] = setup.tokens;
+    let [_, token1, token2, _] = setup.tokens;
     let reward_token = setup.reward_token;
 
     let user1 = Address::generate(&e);
@@ -1155,7 +1155,7 @@ fn test_rewards_distribution() {
     );
 
     let tokens1 = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
-    let tokens2 = Vec::from_array(&e, [token1.address.clone(), reward_token.address.clone()]);
+    let tokens2 = Vec::from_array(&e, [reward_token.address.clone(), token1.address.clone()]);
 
     reward_token.mint(&user1, &2000_0000000);
     reward_token.mint(&router.address, &2_000_000_0000000);
@@ -2208,7 +2208,7 @@ fn test_event_correct() {
     let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
-    let [token1, token2, _, _] = setup.tokens;
+    let [_, token1, token2, _] = setup.tokens;
     let reward_token = setup.reward_token;
 
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
@@ -2831,10 +2831,10 @@ fn test_rewards_distribution_without_outstanding_rewards() {
     let router = setup.router;
     let admin = setup.admin;
 
-    let [token, _, _, _] = setup.tokens;
+    let [_, token, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
 
-    let tokens = Vec::from_array(&e, [token.address.clone(), reward_token.address.clone()]);
+    let tokens = Vec::from_array(&e, [reward_token.address.clone(), token.address.clone()]);
     let user = Address::generate(&e);
 
     reward_token.mint(&user, &200000_0000000);
@@ -2854,7 +2854,7 @@ fn test_rewards_distribution_without_outstanding_rewards() {
         &user,
         &tokens,
         &standard_pool_hash1,
-        &Vec::from_array(&e, [30399483, 2420176738]),
+        &Vec::from_array(&e, [2420176738, 30399483]),
         &0,
     );
 
@@ -4123,7 +4123,7 @@ fn test_rewards_distribution_reward_token_lock() {
     let e = setup.env;
     let router = setup.router;
     let admin = setup.admin;
-    let [token1, token2, _, _] = setup.tokens;
+    let [_, token1, token2, _] = setup.tokens;
     let reward_token = setup.reward_token;
 
     let user = Address::generate(&e);

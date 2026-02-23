@@ -694,9 +694,16 @@ impl AdminInterface for LiquidityPoolRouter {
     fn set_reward_token(e: Env, admin: Address, reward_token: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        get_rewards_manager(&e)
-            .storage()
-            .put_reward_token(reward_token);
+
+        let rewards_storage = get_rewards_manager(&e).storage();
+        if rewards_storage.has_reward_token() {
+            if rewards_storage.get_reward_token() != reward_token {
+                panic_with_error!(&e, LiquidityPoolRouterError::RewardTokenChangeWhileActive);
+            }
+            return;
+        }
+
+        rewards_storage.put_reward_token(reward_token);
     }
 
     fn set_reward_boost_config(
