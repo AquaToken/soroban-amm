@@ -492,8 +492,8 @@ impl ConcentratedLiquidityPool {
         rewards_gauge::operations::checkpoint_user(
             e,
             user,
-            manager.get_working_balance(user, 0),
-            manager.get_working_supply(0),
+            manager.get_working_balance(user, user_weighted),
+            manager.get_working_supply(total_weighted),
         );
         manager.update_working_balance(user, total_weighted, user_weighted);
     }
