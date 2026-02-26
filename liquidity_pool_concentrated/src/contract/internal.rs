@@ -1313,7 +1313,11 @@ impl ConcentratedLiquidityPool {
             in_client.transfer(&contract, sender, &(refund as i128));
         }
         if actual_out > 0 {
-            SorobanTokenClient::new(e, out_token).transfer(&contract, sender, &(actual_out as i128));
+            SorobanTokenClient::new(e, out_token).transfer(
+                &contract,
+                sender,
+                &(actual_out as i128),
+            );
         }
 
         // Reserve tracking: reserves change by net token flow minus protocol fee delta.
