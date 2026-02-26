@@ -2490,7 +2490,8 @@ fn test_exact_output_swap_crossing_multiple_ticks() {
     let swapper = Address::generate(&env);
     get_token_admin_client(&env, &token0.address).mint(&swapper, &(estimated_in as i128 * 2));
 
-    let actual_in = pool.swap_strict_receive(&swapper, &0, &1, &desired_out, &u128::MAX);
+    let in_max = estimated_in * 2;
+    let actual_in = pool.swap_strict_receive(&swapper, &0, &1, &desired_out, &in_max);
     let actual_out = desired_out;
     assert_eq!(
         actual_out, desired_out,
@@ -2514,7 +2515,7 @@ fn test_exact_output_swap_crossing_multiple_ticks() {
     // Verify balances are consistent
     assert_eq!(
         token0.balance(&swapper),
-        (estimated_in as i128 * 2) - actual_in as i128
+        (in_max as i128) - actual_in as i128
     );
     assert_eq!(token1.balance(&swapper), actual_out as i128);
 }
@@ -2571,7 +2572,7 @@ fn test_exact_output_swap_one_for_zero_crossing_ticks() {
     let swapper = Address::generate(&env);
     get_token_admin_client(&env, &token1.address).mint(&swapper, &(estimated_in as i128 * 2));
 
-    let actual_in = pool.swap_strict_receive(&swapper, &1, &0, &desired_out, &u128::MAX);
+    let actual_in = pool.swap_strict_receive(&swapper, &1, &0, &desired_out, &(estimated_in * 2));
     let actual_out = desired_out;
     assert_eq!(actual_out, desired_out);
     assert_eq!(actual_in, estimated_in);

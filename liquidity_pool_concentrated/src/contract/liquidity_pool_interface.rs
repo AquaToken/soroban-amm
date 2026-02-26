@@ -192,6 +192,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             zero_for_one,
             amount_specified,
             U256::from_u32(&e, 0),
+            in_amount,
         );
 
         let amount_out = if zero_for_one {
@@ -258,9 +259,11 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             zero_for_one,
             -out_amount_i128,
             U256::from_u32(&e, 0),
+            in_max,
         );
 
-        let amount_in = if zero_for_one {
+        // InMaxNotSatisfied is checked inside swap_internal before transfer.
+        if zero_for_one {
             if result.amount0 <= 0 {
                 panic_with_error!(&e, Error::InvalidAmount);
             }
@@ -270,13 +273,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
                 panic_with_error!(&e, Error::InvalidAmount);
             }
             result.amount1 as u128
-        };
-
-        if amount_in > in_max {
-            panic_with_error!(&e, LiquidityPoolValidationError::InMaxNotSatisfied);
         }
-
-        amount_in
     }
 
     // Simulates exact-output swap without executing. Returns expected input amount.

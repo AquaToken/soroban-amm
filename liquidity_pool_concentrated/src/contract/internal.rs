@@ -1244,12 +1244,16 @@ impl ConcentratedLiquidityPool {
         )
     }
 
+    /// `user_max_in`: the user-specified maximum input amount, known at signing time.
+    /// For exact-input swaps this is `in_amount`; for exact-output it is `in_max`.
+    /// Auth-deterministic: always transfers `user_max_in` from user, refunds excess.
     pub(super) fn swap_internal(
         e: &Env,
         sender: &Address,
         zero_for_one: bool,
         amount_specified: i128,
         sqrt_price_limit_x96: U256,
+        user_max_in: u128,
     ) -> SwapResult {
         let exact_input = amount_specified > 0;
         let (
@@ -1275,22 +1279,41 @@ impl ConcentratedLiquidityPool {
             amount_calculated,
         );
 
-        // Token transfers.
+        // Token transfers (auth-deterministic: transfer user_max_in, refund excess).
         let token0 = get_token0(e);
         let token1 = get_token1(e);
         let contract = e.current_contract_address();
 
-        if amount0 > 0 {
-            SorobanTokenClient::new(e, &token0).transfer(sender, &contract, &amount0);
+        let (in_token, out_token) = if zero_for_one {
+            (&token0, &token1)
+        } else {
+            (&token1, &token0)
+        };
+        let actual_in = if zero_for_one {
+            amount0 as u128
+        } else {
+            amount1 as u128
+        };
+        let actual_out = if zero_for_one {
+            (-amount1) as u128
+        } else {
+            (-amount0) as u128
+        };
+
+        if actual_in > user_max_in {
+            panic_with_error!(e, LiquidityPoolValidationError::InMaxNotSatisfied);
         }
-        if amount1 > 0 {
-            SorobanTokenClient::new(e, &token1).transfer(sender, &contract, &amount1);
+
+        let in_client = SorobanTokenClient::new(e, in_token);
+        if user_max_in > 0 {
+            in_client.transfer(sender, &contract, &(user_max_in as i128));
         }
-        if amount0 < 0 {
-            SorobanTokenClient::new(e, &token0).transfer(&contract, sender, &(-amount0));
+        let refund = user_max_in - actual_in;
+        if refund > 0 {
+            in_client.transfer(&contract, sender, &(refund as i128));
         }
-        if amount1 < 0 {
-            SorobanTokenClient::new(e, &token1).transfer(&contract, sender, &(-amount1));
+        if actual_out > 0 {
+            SorobanTokenClient::new(e, out_token).transfer(&contract, sender, &(actual_out as i128));
         }
 
         // Reserve tracking: reserves change by net token flow minus protocol fee delta.
