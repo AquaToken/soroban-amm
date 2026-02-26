@@ -130,7 +130,7 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
         if new_fraction as u128 > FEE_DENOMINATOR {
-            panic_with_error!(&e, Error::InvalidFee);
+            panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
         set_protocol_fee_fraction(&e, &new_fraction);
         PoolEvents::new(&e).set_protocol_fee_fraction(new_fraction);

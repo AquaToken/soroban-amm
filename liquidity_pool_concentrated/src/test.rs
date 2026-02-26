@@ -103,18 +103,18 @@ fn test_auto_price_on_empty_pool() {
     let setup = Setup::default();
     setup.mint_user_tokens(1_000_0000000, 2_000_0000000);
 
-    // Pool initialized at tick 0 (1:1), but first deposit with 1:2 ratio should auto-set price
+    // First deposit with 1:2 ratio. Price 2.0 → tick ≈ 6931. depositing 1000 ticks each side
+    // Range must contain the derived tick.
     let amounts = Vec::from_array(&setup.env, [1_000_0000000u128, 2_000_0000000u128]);
-    let (_actual, liq) = setup
+    let (actual, liq) = setup
         .pool
-        .deposit_position(&setup.user, &-100, &100, &amounts, &0);
+        .deposit_position(&setup.user, &5931, &7931, &amounts, &0);
     assert!(liq > 0);
-
-    // Verify price was set based on ratio (not default 1:1)
-    let slot = setup.pool.get_slot0();
-    let tick = slot.tick;
-    // tick for price 2.0 ≈ 6931, should be positive for price > 1
-    assert!(tick > 0, "tick should be positive for price > 1");
+    assert_eq!(setup.pool.get_slot0().tick, 6931);
+    assert_eq!(
+        actual,
+        Vec::from_array(&setup.env, [998_4051017, 2000_0000000])
+    );
 }
 
 #[test]
@@ -534,7 +534,7 @@ fn test_deposit_position_tick_upper_too_high() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2114)")]
+#[should_panic(expected = "Error(Contract, #2018)")]
 fn test_deposit_position_zero_amount() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -545,7 +545,7 @@ fn test_deposit_position_zero_amount() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #212)")]
+#[should_panic(expected = "Error(Contract, #2118)")]
 fn test_withdraw_position_not_found() {
     let setup = Setup::default();
     setup.pool.withdraw_position(
@@ -558,7 +558,7 @@ fn test_withdraw_position_not_found() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #213)")]
+#[should_panic(expected = "Error(Contract, #2121)")]
 fn test_withdraw_position_insufficient_liquidity() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -576,7 +576,7 @@ fn test_withdraw_position_insufficient_liquidity() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2114)")]
+#[should_panic(expected = "Error(Contract, #2018)")]
 fn test_withdraw_position_zero_amount() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -654,14 +654,18 @@ fn test_claim_killed() {
 #[test]
 fn test_deposit_position_below_price_token0_only() {
     let setup = Setup::default();
-    setup.mint_user_tokens(100_0000000, 100_0000000);
+    setup.mint_user_tokens(200_0000000, 200_0000000);
+
+    // Initialize pool with a deposit at tick 0 (equal amounts, range contains tick 0)
+    let init_amounts = Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-100, &100, &init_amounts, &0);
 
     let initial_0 = setup.token0.balance(&setup.user);
     let initial_1 = setup.token1.balance(&setup.user);
 
-    // Deposit below current tick (0): only token0 needed
-    // Current price at tick 0, deposit at range [10, 20] which is ABOVE tick 0
-    // → only token0
+    // Deposit at range [10, 20] which is ABOVE tick 0 → only token0
     let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
     setup
         .pool
@@ -674,7 +678,13 @@ fn test_deposit_position_below_price_token0_only() {
 #[test]
 fn test_deposit_position_above_price_token1_only() {
     let setup = Setup::default();
-    setup.mint_user_tokens(100_0000000, 100_0000000);
+    setup.mint_user_tokens(200_0000000, 200_0000000);
+
+    // Initialize pool with a deposit at tick 0 (equal amounts, range contains tick 0)
+    let init_amounts = Vec::from_array(&setup.env, [50_0000000u128, 50_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-100, &100, &init_amounts, &0);
 
     let initial_0 = setup.token0.balance(&setup.user);
     let initial_1 = setup.token1.balance(&setup.user);
@@ -1151,10 +1161,11 @@ fn test_swap_crossing_multiple_ticks() {
     get_token_admin_client(&env, &token0.address).mint(&user, &1_000_0000000);
     get_token_admin_client(&env, &token1.address).mint(&user, &1_000_0000000);
 
-    // Stacked positions at different ranges (small amounts to allow tick crossings)
+    // Stacked positions at different ranges (small amounts to allow tick crossings).
+    // [-10, 10] goes first to auto-initialize the pool price at tick 0.
     let amounts = Vec::from_array(&env, [1_0000000u128, 1_0000000u128]);
-    pool.deposit_position(&user, &-50, &-10, &amounts, &0);
     pool.deposit_position(&user, &-10, &10, &amounts, &0);
+    pool.deposit_position(&user, &-50, &-10, &amounts, &0);
     pool.deposit_position(&user, &10, &50, &amounts, &0);
 
     let slot_before = pool.get_slot0();
@@ -1212,22 +1223,19 @@ fn test_swap_across_liquidity_gap() {
     get_token_admin_client(&env, &token0.address).mint(&user, &1_000_0000000);
     get_token_admin_client(&env, &token1.address).mint(&user, &1_000_0000000);
 
-    // Position below current price (only token1 deposited)
-    let amounts_below = Vec::from_array(&env, [10_0000000u128, 10_0000000u128]);
+    // First deposit must provide both tokens to initialize the pool price.
+    let init_amounts = Vec::from_array(&env, [100u128, 100u128]);
+    pool.deposit_position(&user, &-10, &10, &init_amounts, &0);
+
+    // Position below current price (only token1 deposited).
+    let amounts_below = Vec::from_array(&env, [0u128, 10_0000000u128]);
     let (_, liq_below) = pool.deposit_position(&user, &-60, &-20, &amounts_below, &0);
     assert!(liq_below > 0, "below-range position should have liquidity");
 
-    // Position above current price (only token0 deposited)
-    let amounts_above = Vec::from_array(&env, [10_0000000u128, 10_0000000u128]);
+    // Position above current price (only token0 deposited).
+    let amounts_above = Vec::from_array(&env, [10_0000000u128, 0u128]);
     let (_, liq_above) = pool.deposit_position(&user, &20, &60, &amounts_above, &0);
     assert!(liq_above > 0, "above-range position should have liquidity");
-
-    // Active liquidity at tick 0 should be 0 (gap between positions)
-    assert_eq!(
-        pool.get_active_liquidity(),
-        0,
-        "no active liquidity in the gap"
-    );
 
     // Swap zero_for_one: price moves down, should cross gap and reach [-60, -20]
     let swapper = Address::generate(&env);
@@ -1287,7 +1295,7 @@ fn test_set_protocol_fee_fraction() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2105)")]
+#[should_panic(expected = "Error(Contract, #2003)")]
 fn test_set_protocol_fee_fraction_too_high() {
     let setup = Setup::default();
     // FEE_DENOMINATOR = 10_000, so 10_001 is invalid
@@ -1421,12 +1429,15 @@ fn test_estimate_deposit_position_matches_execute() {
     let setup = Setup::default();
     setup.mint_user_tokens(2_000_0000000, 2_000_0000000);
 
+    // Range must contain the derived tick from amounts ratio (tick ~2513 for 700:900).
     let desired = Vec::from_array(&setup.env, [700_000000u128, 900_000000u128]);
-    let (est_amounts, est_liq) = setup.pool.estimate_deposit_position(&-200, &200, &desired);
+    let (est_amounts, est_liq) = setup
+        .pool
+        .estimate_deposit_position(&-3000, &3000, &desired);
     let (actual_amounts, actual_liq) =
         setup
             .pool
-            .deposit_position(&setup.user, &-200, &200, &desired, &0);
+            .deposit_position(&setup.user, &-3000, &3000, &desired, &0);
 
     assert_eq!(est_liq, actual_liq);
     assert_eq!(
@@ -1587,15 +1598,16 @@ fn test_multiple_positions_same_user() {
     let setup = Setup::default();
     setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
 
-    // User creates multiple positions at different ranges
-    let amounts1 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
-    let (_, liq1) = setup
-        .pool
-        .deposit_position(&setup.user, &-100, &-50, &amounts1, &0);
+    // User creates multiple positions at different ranges.
+    // [-10, 10] goes first to auto-initialize the pool price at tick 0.
     let amounts2 = Vec::from_array(&setup.env, [200_0000000u128, 200_0000000u128]);
     let (_, liq2) = setup
         .pool
         .deposit_position(&setup.user, &-10, &10, &amounts2, &0);
+    let amounts1 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq1) = setup
+        .pool
+        .deposit_position(&setup.user, &-100, &-50, &amounts1, &0);
     let amounts3 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
     let (_, liq3) = setup
         .pool
@@ -1734,7 +1746,7 @@ fn test_boost_already_initialized() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
+#[should_panic(expected = "Error(Contract, #2007)")]
 fn test_swap_same_token_index() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -1748,7 +1760,7 @@ fn test_swap_same_token_index() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
+#[should_panic(expected = "Error(Contract, #2008)")]
 fn test_swap_out_of_range_index() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -1762,7 +1774,7 @@ fn test_swap_out_of_range_index() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
+#[should_panic(expected = "Error(Contract, #2006)")]
 fn test_swap_output_below_minimum() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -1776,7 +1788,7 @@ fn test_swap_output_below_minimum() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
+#[should_panic(expected = "Error(Contract, #2020)")]
 fn test_swap_strict_receive_input_above_max() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -1792,7 +1804,7 @@ fn test_swap_strict_receive_input_above_max() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
+#[should_panic(expected = "Error(Contract, #2001)")]
 fn test_deposit_wrong_amounts_length() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -1805,7 +1817,7 @@ fn test_deposit_wrong_amounts_length() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
+#[should_panic(expected = "Error(Contract, #2001)")]
 fn test_withdraw_wrong_min_amounts_length() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -1821,7 +1833,7 @@ fn test_withdraw_wrong_min_amounts_length() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
+#[should_panic(expected = "Error(Contract, #2006)")]
 fn test_withdraw_below_min_amounts() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -1839,7 +1851,7 @@ fn test_withdraw_below_min_amounts() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2103)")]
+#[should_panic(expected = "Error(Contract, #2006)")]
 fn test_deposit_min_shares_not_met() {
     let setup = Setup::default();
     setup.mint_user_tokens(100_0000000, 100_0000000);
@@ -1856,7 +1868,7 @@ fn test_deposit_min_shares_not_met() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2121)")]
+#[should_panic(expected = "Error(Contract, #2002)")]
 fn test_initialize_tokens_not_sorted() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1894,7 +1906,7 @@ fn test_initialize_tokens_not_sorted() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2121)")]
+#[should_panic(expected = "Error(Contract, #2002)")]
 fn test_initialize_duplicate_tokens() {
     let env = Env::default();
     env.mock_all_auths();
@@ -2461,9 +2473,10 @@ fn test_exact_output_swap_crossing_multiple_ticks() {
     get_token_admin_client(&env, &token0.address).mint(&user, &2_000_0000000);
     get_token_admin_client(&env, &token1.address).mint(&user, &2_000_0000000);
 
+    // [-10, 10] goes first to auto-initialize the pool price at tick 0.
     let amounts = Vec::from_array(&env, [1_0000000u128, 1_0000000u128]);
-    pool.deposit_position(&user, &-50, &-10, &amounts, &0);
     pool.deposit_position(&user, &-10, &10, &amounts, &0);
+    pool.deposit_position(&user, &-50, &-10, &amounts, &0);
     pool.deposit_position(&user, &10, &50, &amounts, &0);
 
     // Desired exact output: large enough to cross multiple ticks (zero_for_one)
@@ -2544,9 +2557,10 @@ fn test_exact_output_swap_one_for_zero_crossing_ticks() {
     get_token_admin_client(&env, &token0.address).mint(&user, &2_000_0000000);
     get_token_admin_client(&env, &token1.address).mint(&user, &2_000_0000000);
 
+    // [-10, 10] goes first to auto-initialize the pool price at tick 0.
     let amounts = Vec::from_array(&env, [1_0000000u128, 1_0000000u128]);
-    pool.deposit_position(&user, &-50, &-10, &amounts, &0);
     pool.deposit_position(&user, &-10, &10, &amounts, &0);
+    pool.deposit_position(&user, &-50, &-10, &amounts, &0);
     pool.deposit_position(&user, &10, &50, &amounts, &0);
 
     // Exact output in the opposite direction (one_for_zero): want token0 out
@@ -2939,12 +2953,32 @@ fn test_zero_liquidity_gap_no_fee_growth() {
     get_token_admin_client(&env, &token0.address).mint(&user, &1_000_0000000);
     get_token_admin_client(&env, &token1.address).mint(&user, &1_000_0000000);
 
+    // First deposit must provide both tokens to initialize the pool price.
+    pool.deposit_position(
+        &user,
+        &-10,
+        &10,
+        &Vec::from_array(&env, [100u128, 100u128]),
+        &0,
+    );
+
     // Two positions with a gap at [0, 40]:
-    // Position A: [-60, -20] (below current price)
-    // Position B: [40, 80] (above gap)
-    let amounts = Vec::from_array(&env, [50_0000000u128, 50_0000000u128]);
-    let (_, liq_a) = pool.deposit_position(&user, &-60, &-20, &amounts, &0);
-    let (_, liq_b) = pool.deposit_position(&user, &40, &80, &amounts, &0);
+    // Position A: [-60, -20] (below current price at tick 0) → only token1
+    // Position B: [40, 80] (above current price) → only token0
+    let (_, liq_a) = pool.deposit_position(
+        &user,
+        &-60,
+        &-20,
+        &Vec::from_array(&env, [0u128, 50_0000000u128]),
+        &0,
+    );
+    let (_, liq_b) = pool.deposit_position(
+        &user,
+        &40,
+        &80,
+        &Vec::from_array(&env, [50_0000000u128, 0u128]),
+        &0,
+    );
     assert!(liq_a > 0 && liq_b > 0);
 
     // Swap zero_for_one: price slides from tick 0, through gap, into position A
@@ -3494,13 +3528,33 @@ fn test_bitmap_word_boundary_crossing() {
     get_token_admin_client(&env, &token0.address).mint(&user, &1_000_0000000);
     get_token_admin_client(&env, &token1.address).mint(&user, &1_000_0000000);
 
-    // Position in word 0: [10, 50]
-    let amounts = Vec::from_array(&env, [50_0000000u128, 50_0000000u128]);
-    let (_, liq_pos) = pool.deposit_position(&user, &10, &50, &amounts, &0);
+    // Initial two-token deposit required on empty pool (AllCoinsRequired)
+    pool.deposit_position(
+        &user,
+        &-10,
+        &10,
+        &Vec::from_array(&env, [100u128, 100u128]),
+        &0,
+    );
+
+    // Position in word 0: [10, 50] — above current tick 0, only token0
+    let (_, liq_pos) = pool.deposit_position(
+        &user,
+        &10,
+        &50,
+        &Vec::from_array(&env, [50_0000000u128, 0u128]),
+        &0,
+    );
     assert!(liq_pos > 0);
 
-    // Position in word -1: [-50, -10]
-    let (_, liq_neg) = pool.deposit_position(&user, &-50, &-10, &amounts, &0);
+    // Position in word -1: [-50, -10] — below current tick 0, only token1
+    let (_, liq_neg) = pool.deposit_position(
+        &user,
+        &-50,
+        &-10,
+        &Vec::from_array(&env, [0u128, 50_0000000u128]),
+        &0,
+    );
     assert!(liq_neg > 0);
 
     // Verify bitmap words are set in different words
@@ -3620,4 +3674,95 @@ fn test_two_users_same_tick_range_fee_tracking() {
 
     let (u2_fee0_2, _u2_fee1_2) = pair(setup.pool.claim_position_fees(&user2, &-30, &30));
     assert!(u2_fee0_2 > 0, "user2 should earn fees from second swap");
+}
+
+#[test]
+fn test_deposit_position_auto_init_both_tokens_used() {
+    // First deposit with unequal amounts. Range must contain the derived tick.
+    // price = 200/100 = 2.0 → tick ≈ 6931
+    let setup = Setup::default();
+    setup.mint_user_tokens(100_0000000, 200_0000000);
+
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 200_0000000u128]);
+    let (actual, liq) = setup
+        .pool
+        .deposit_position(&setup.user, &6000, &8000, &amounts, &0);
+    assert!(liq > 0);
+
+    let actual0 = actual.get_unchecked(0);
+    let actual1 = actual.get_unchecked(1);
+    assert!(actual0 > 0, "token0 must be used");
+    assert!(actual1 > 0, "token1 must be used");
+
+    // Verify user balances reflect the transfer-and-refund pattern
+    assert_eq!(
+        setup.token0.balance(&setup.user) as u128,
+        100_0000000 - actual0,
+        "user token0 balance should equal mint - actual0"
+    );
+    assert_eq!(
+        setup.token1.balance(&setup.user) as u128,
+        200_0000000 - actual1,
+        "user token1 balance should equal mint - actual1"
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2107)")]
+fn test_deposit_position_auto_init_tick_out_of_range() {
+    // Price ratio doesn't match the tick range → should panic with TickOutOfBounds
+    // price = 200/100 = 2.0 → tick ≈ 6931, but range is [-60, 60)
+    let setup = Setup::default();
+    setup.mint_user_tokens(100_0000000, 200_0000000);
+
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 200_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-60, &60, &amounts, &0);
+}
+
+#[test]
+fn test_deposit_position_refund_excess() {
+    // Verify that desired amounts are transferred in and excess is refunded.
+    let setup = Setup::default();
+    setup.mint_user_tokens(500_0000000, 500_0000000);
+
+    // First deposit with equal amounts to initialize pool at 1:1 price
+    let init_amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-100, &100, &init_amounts, &0);
+
+    let bal0_before = setup.token0.balance(&setup.user) as u128;
+    let bal1_before = setup.token1.balance(&setup.user) as u128;
+
+    // Second deposit: offer asymmetric amounts; excess should be refunded
+    let desired = Vec::from_array(&setup.env, [200_0000000u128, 100_0000000u128]);
+    let (actual, liq) = setup
+        .pool
+        .deposit_position(&setup.user, &-50, &50, &desired, &0);
+    assert!(liq > 0);
+
+    let actual0 = actual.get_unchecked(0);
+    let actual1 = actual.get_unchecked(1);
+
+    // User should only have spent actual amounts (desired transferred in, excess refunded)
+    let bal0_after = setup.token0.balance(&setup.user) as u128;
+    let bal1_after = setup.token1.balance(&setup.user) as u128;
+    assert_eq!(
+        bal0_before - bal0_after,
+        actual0,
+        "user should have spent exactly actual0"
+    );
+    assert_eq!(
+        bal1_before - bal1_after,
+        actual1,
+        "user should have spent exactly actual1"
+    );
+
+    // At least one token should have had excess refunded (asymmetric desired)
+    assert!(
+        actual0 < 200_0000000 || actual1 < 100_0000000,
+        "at least one token should have excess refunded"
+    );
 }

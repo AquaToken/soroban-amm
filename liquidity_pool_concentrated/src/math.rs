@@ -2,7 +2,7 @@ use crate::errors::ConcentratedPoolError as Error;
 use crate::storage::{MAX_TICK, MIN_TICK};
 use crate::u512::mul_div_u256 as u512_mul_div;
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{Bytes, Env, U256};
+use soroban_sdk::{panic_with_error, Bytes, Env, U256};
 use utils::u256_math::ExtraMath;
 
 const Q96_SHIFT: u32 = 96;
@@ -94,49 +94,45 @@ pub fn wrapping_add_u256(e: &Env, a: &U256, b: &U256) -> U256 {
     }
 }
 
-fn u256_to_u128(value: &U256) -> Result<u128, Error> {
-    value.to_u128().ok_or(Error::LiquidityOverflow)
+fn u256_to_u128(e: &Env, value: &U256) -> u128 {
+    value
+        .to_u128()
+        .unwrap_or_else(|| panic_with_error!(e, Error::LiquidityOverflow))
 }
 
-fn u256_div_round_up(e: &Env, numerator: &U256, denominator: &U256) -> Result<U256, Error> {
+fn u256_div_round_up(e: &Env, numerator: &U256, denominator: &U256) -> U256 {
     let zero = u256_zero(e);
     if *denominator == zero {
-        return Err(Error::InvalidAmount);
+        panic_with_error!(e, Error::InvalidAmount);
     }
     if *numerator == zero {
-        return Ok(zero);
+        return zero;
     }
 
     let quotient = numerator.div(denominator);
     let remainder = numerator.rem_euclid(denominator);
     if remainder != zero {
-        Ok(quotient.add(&u256_one(e)))
+        quotient.add(&u256_one(e))
     } else {
-        Ok(quotient)
+        quotient
     }
 }
 
-fn u256_mul_shift_128(e: &Env, a: &U256, b: &U256) -> Result<U256, Error> {
-    Ok(a.fixed_mul_floor(e, b, &u256_q128(e)))
+fn u256_mul_shift_128(e: &Env, a: &U256, b: &U256) -> U256 {
+    a.fixed_mul_floor(e, b, &u256_q128(e))
 }
 
-fn u256_mul_div(
-    e: &Env,
-    a: &U256,
-    b: &U256,
-    denominator: &U256,
-    round_up: bool,
-) -> Result<U256, Error> {
+fn u256_mul_div(e: &Env, a: &U256, b: &U256, denominator: &U256, round_up: bool) -> U256 {
     let zero = u256_zero(e);
     if *denominator == zero {
-        return Err(Error::InvalidAmount);
+        panic_with_error!(e, Error::InvalidAmount);
     }
 
-    Ok(if round_up {
+    if round_up {
         a.fixed_mul_ceil(e, b, denominator)
     } else {
         a.fixed_mul_floor(e, b, denominator)
-    })
+    }
 }
 
 pub fn min_sqrt_ratio(e: &Env) -> U256 {
@@ -147,9 +143,9 @@ pub fn max_sqrt_ratio(e: &Env) -> U256 {
     U256::from_be_bytes(e, &Bytes::from_array(e, &MAX_SQRT_RATIO_BYTES))
 }
 
-pub fn sqrt_ratio_at_tick(e: &Env, tick: i32) -> Result<U256, Error> {
+pub fn sqrt_ratio_at_tick(e: &Env, tick: i32) -> U256 {
     if !(MIN_TICK..=MAX_TICK).contains(&tick) {
-        return Err(Error::TickOutOfBounds);
+        panic_with_error!(e, Error::TickOutOfBounds);
     }
 
     let abs_tick = if tick < 0 {
@@ -161,7 +157,7 @@ pub fn sqrt_ratio_at_tick(e: &Env, tick: i32) -> Result<U256, Error> {
     let mut ratio = u256_q128(e);
     for (i, mul) in TICK_MULTIPLIERS.iter().enumerate() {
         if abs_tick & (1u32 << i) != 0 {
-            ratio = u256_mul_shift_128(e, &ratio, &u256_from_u128(e, *mul))?;
+            ratio = u256_mul_shift_128(e, &ratio, &u256_from_u128(e, *mul));
         }
     }
 
@@ -175,14 +171,14 @@ pub fn sqrt_ratio_at_tick(e: &Env, tick: i32) -> Result<U256, Error> {
         sqrt_price_x96 = sqrt_price_x96.add(&u256_one(e));
     }
 
-    Ok(sqrt_price_x96)
+    sqrt_price_x96
 }
 
-pub fn tick_at_sqrt_ratio(e: &Env, sqrt_price_x96: &U256) -> Result<i32, Error> {
+pub fn tick_at_sqrt_ratio(e: &Env, sqrt_price_x96: &U256) -> i32 {
     let min = min_sqrt_ratio(e);
     let max = max_sqrt_ratio(e);
     if *sqrt_price_x96 < min || *sqrt_price_x96 >= max {
-        return Err(Error::PriceOutOfBounds);
+        panic_with_error!(e, Error::PriceOutOfBounds);
     }
 
     const LOG_SQRT10001: u128 = 255_738_958_999_603_826_347_141;
@@ -192,11 +188,9 @@ pub fn tick_at_sqrt_ratio(e: &Env, sqrt_price_x96: &U256) -> Result<i32, Error> 
     // Convert Q64.96 -> Q128.128.
     let ratio = sqrt_price_x96.shl(32);
     let ratio_hi_u256 = ratio.shr(128);
-    let ratio_hi = ratio_hi_u256.to_u128().ok_or(Error::LiquidityOverflow)?;
-    let ratio_lo = ratio
-        .sub(&ratio_hi_u256.shl(128))
-        .to_u128()
-        .ok_or(Error::LiquidityOverflow)?;
+    let ratio_hi = u256_to_u128(e, &ratio_hi_u256);
+    let ratio_lo_u256 = ratio.sub(&ratio_hi_u256.shl(128));
+    let ratio_lo = u256_to_u128(e, &ratio_lo_u256);
 
     let msb: u32 = if ratio_hi > 0 {
         128 + (127 - ratio_hi.leading_zeros())
@@ -252,11 +246,11 @@ pub fn tick_at_sqrt_ratio(e: &Env, sqrt_price_x96: &U256) -> Result<i32, Error> 
         }) as i32;
 
     if tick_low == tick_hi {
-        Ok(tick_low)
-    } else if sqrt_ratio_at_tick(e, tick_hi)? <= *sqrt_price_x96 {
-        Ok(tick_hi)
+        tick_low
+    } else if sqrt_ratio_at_tick(e, tick_hi) <= *sqrt_price_x96 {
+        tick_hi
     } else {
-        Ok(tick_low)
+        tick_low
     }
 }
 
@@ -287,9 +281,9 @@ pub fn amount0_delta(
     sqrt_price_b_x96: &U256,
     liquidity: u128,
     round_up: bool,
-) -> Result<u128, Error> {
+) -> u128 {
     if liquidity == 0 {
-        return Ok(0);
+        return 0;
     }
 
     let mut sa = sqrt_price_a_x96.clone();
@@ -298,28 +292,25 @@ pub fn amount0_delta(
         core::mem::swap(&mut sa, &mut sb);
     }
     if sa == u256_zero(e) {
-        return Err(Error::InvalidSqrtPrice);
+        panic_with_error!(e, Error::InvalidSqrtPrice);
     }
 
     // amount0 = L * Q96 * (sb - sa) / (sa * sb)
-    // Matches Uniswap V3's two-step approach:
-    //   temp = mulDiv(L * Q96, sb - sa, sb)   [U512 intermediate for ~384-bit product]
-    //   amount0 = temp / sa                    [or divRoundingUp]
     let diff = sb.sub(&sa);
     let liquidity_u256 = u256_from_u128(e, liquidity);
-    let numerator1 = liquidity_u256.mul(&u256_q96(e)); // L * Q96, ~224 bits, fits U256
+    let numerator1 = liquidity_u256.mul(&u256_q96(e));
 
     // Step 1: numerator1 * diff / sb (uses U512 for ~384-bit intermediate)
     let temp = u512_mul_div(e, &numerator1, &diff, &sb, round_up);
 
     // Step 2: temp / sa
     let amount_u256 = if round_up {
-        u256_div_round_up(e, &temp, &sa)?
+        u256_div_round_up(e, &temp, &sa)
     } else {
         temp.div(&sa)
     };
 
-    u256_to_u128(&amount_u256)
+    u256_to_u128(e, &amount_u256)
 }
 
 pub fn amount1_delta(
@@ -328,9 +319,9 @@ pub fn amount1_delta(
     sqrt_price_b_x96: &U256,
     liquidity: u128,
     round_up: bool,
-) -> Result<u128, Error> {
+) -> u128 {
     if liquidity == 0 {
-        return Ok(0);
+        return 0;
     }
 
     let mut sa = sqrt_price_a_x96.clone();
@@ -340,13 +331,11 @@ pub fn amount1_delta(
     }
 
     // amount1 = L * (sb - sa) / Q96
-    // Uses U512 intermediate for L * diff product (~128 + 160 = 288 bits).
-    // Matches Uniswap V3: FullMath.mulDiv(liquidity, sqrtRatioBX96 - sqrtRatioAX96, Q96)
     let diff = sb.sub(&sa);
     let liquidity_u256 = u256_from_u128(e, liquidity);
     let amount_u256 = u512_mul_div(e, &liquidity_u256, &diff, &u256_q96(e), round_up);
 
-    u256_to_u128(&amount_u256)
+    u256_to_u128(e, &amount_u256)
 }
 
 pub fn mul_div_u128(
@@ -355,21 +344,21 @@ pub fn mul_div_u128(
     numerator: u128,
     denominator: u128,
     round_up: bool,
-) -> Result<u128, Error> {
+) -> u128 {
     if denominator == 0 {
-        return Err(Error::InvalidAmount);
+        panic_with_error!(e, Error::InvalidAmount);
     }
 
-    Ok(if round_up {
+    if round_up {
         amount.fixed_mul_ceil(e, &numerator, &denominator)
     } else {
         amount.fixed_mul_floor(e, &numerator, &denominator)
-    })
+    }
 }
 
-pub fn fee_growth_delta_x128(e: &Env, fee_amount: u128, liquidity: u128) -> Result<U256, Error> {
+pub fn fee_growth_delta_x128(e: &Env, fee_amount: u128, liquidity: u128) -> U256 {
     if fee_amount == 0 || liquidity == 0 {
-        return Ok(U256::from_u32(e, 0));
+        return U256::from_u32(e, 0);
     }
 
     u256_mul_div(
@@ -381,13 +370,9 @@ pub fn fee_growth_delta_x128(e: &Env, fee_amount: u128, liquidity: u128) -> Resu
     )
 }
 
-pub fn mul_div_fee_growth(
-    e: &Env,
-    growth_delta_x128: &U256,
-    liquidity: u128,
-) -> Result<u128, Error> {
+pub fn mul_div_fee_growth(e: &Env, growth_delta_x128: &U256, liquidity: u128) -> u128 {
     if liquidity == 0 {
-        return Ok(0);
+        return 0;
     }
 
     let value = u256_mul_div(
@@ -396,26 +381,20 @@ pub fn mul_div_fee_growth(
         &u256_from_u128(e, liquidity),
         &u256_q128(e),
         false,
-    )?;
+    );
 
-    u256_to_u128(&value)
+    u256_to_u128(e, &value)
 }
 
 // Compute maximum liquidity mintable from a given amount of token0.
-//
-// Inverse of amount0_delta:
-//   L = amount0 * sqrtA * sqrtB / (Q96 * (sqrtB - sqrtA))
-//
-// Computed as: L = amount0 * mulDiv(sqrtA, sqrtB, Q96) / (sqrtB - sqrtA)
-// Uses U512 intermediates to avoid overflow.
 pub fn liquidity_for_amount0(
     e: &Env,
     sqrt_price_a_x96: &U256,
     sqrt_price_b_x96: &U256,
     amount0: u128,
-) -> Result<u128, Error> {
+) -> u128 {
     if amount0 == 0 {
-        return Ok(0);
+        return 0;
     }
 
     let mut sa = sqrt_price_a_x96.clone();
@@ -426,33 +405,25 @@ pub fn liquidity_for_amount0(
 
     let diff = sb.sub(&sa);
     if diff == u256_zero(e) {
-        return Ok(0);
+        return 0;
     }
 
-    // intermediate = sqrtA * sqrtB / Q96 (via U512 to handle ~320-bit product)
     let intermediate = u512_mul_div(e, &sa, &sb, &u256_q96(e), false);
-
-    // L = amount0 * intermediate / diff (round down)
     let amount_u256 = u256_from_u128(e, amount0);
     let result = u512_mul_div(e, &amount_u256, &intermediate, &diff, false);
 
-    u256_to_u128(&result)
+    u256_to_u128(e, &result)
 }
 
 // Compute maximum liquidity mintable from a given amount of token1.
-//
-// Inverse of amount1_delta:
-//   L = amount1 * Q96 / (sqrtB - sqrtA)
-//
-// Uses U512 intermediate for amount1 * Q96 product (~224 bits).
 pub fn liquidity_for_amount1(
     e: &Env,
     sqrt_price_a_x96: &U256,
     sqrt_price_b_x96: &U256,
     amount1: u128,
-) -> Result<u128, Error> {
+) -> u128 {
     if amount1 == 0 {
-        return Ok(0);
+        return 0;
     }
 
     let mut sa = sqrt_price_a_x96.clone();
@@ -463,198 +434,134 @@ pub fn liquidity_for_amount1(
 
     let diff = sb.sub(&sa);
     if diff == u256_zero(e) {
-        return Ok(0);
+        return 0;
     }
 
-    // L = amount1 * Q96 / diff (round down)
     let amount_u256 = u256_from_u128(e, amount1);
     let result = u512_mul_div(e, &amount_u256, &u256_q96(e), &diff, false);
 
-    u256_to_u128(&result)
+    u256_to_u128(e, &result)
 }
 
 // Compute next sqrt price given token0 input/output amount.
-//
-// When adding token0 (price decreases):
-//   sqrt_next = L * sqrt_current * Q96 / (L * Q96 + amount * sqrt_current)
-//
-// When removing token0 (price increases):
-//   sqrt_next = L * sqrt_current * Q96 / (L * Q96 - amount * sqrt_current)
-//
-// Uses U512 for the `amount * sqrt_current` product which can exceed 256 bits.
 pub fn get_next_sqrt_price_from_amount0(
     e: &Env,
     sqrt_price_x96: &U256,
     liquidity: u128,
     amount: u128,
     add: bool,
-) -> Result<U256, Error> {
+) -> U256 {
     if amount == 0 {
-        return Ok(sqrt_price_x96.clone());
+        return sqrt_price_x96.clone();
     }
 
     let liq = u256_from_u128(e, liquidity);
     let q96 = u256_q96(e);
 
-    // numerator1 = L * Q96 (fits in ~224 bits for realistic values)
     let numerator1 = liq.mul(&q96);
-
-    // product = amount * sqrt_price (can overflow U256: ~128 + 160 = 288 bits)
-    // Use U512 mul-div: amount * sqrt / 1 for the product value,
-    // but we only need it for addition/subtraction with numerator1.
-    //
-    // Restructure to avoid overflow where possible:
-    // denominator = numerator1 +/- amount * sqrt
-    //
-    // If amount * sqrt fits in U256, use direct arithmetic.
-    // Otherwise, use the Uniswap V3 fallback:
-    //   sqrt_next = numerator1 / (numerator1 / sqrt + amount)  [for add case]
     let amt = u256_from_u128(e, amount);
-    let zero = u256_zero(e);
     let max_u256 = U256::from_be_bytes(e, &Bytes::from_array(e, &[0xFF; 32]));
 
     if add {
-        // Check if amount * sqrt overflows U256
         let threshold = max_u256.div(sqrt_price_x96);
         if amt <= threshold {
-            // No overflow: direct formula
             let product = amt.mul(sqrt_price_x96);
             let denominator = numerator1.add(&product);
-            // sqrt_next = numerator1 * sqrt / denominator (round up)
-            Ok(u512_mul_div(
-                e,
-                &numerator1,
-                sqrt_price_x96,
-                &denominator,
-                true,
-            ))
+            u512_mul_div(e, &numerator1, sqrt_price_x96, &denominator, true)
         } else {
-            // Overflow fallback: sqrt_next = numerator1 / (numerator1 / sqrt + amount)
             let term = numerator1.div(sqrt_price_x96);
             let denominator = term.add(&amt);
-            Ok(u256_div_round_up(e, &numerator1, &denominator)?)
+            u256_div_round_up(e, &numerator1, &denominator)
         }
     } else {
-        // Removing token0 (price increases)
         let threshold = max_u256.div(sqrt_price_x96);
         if amt <= threshold {
             let product = amt.mul(sqrt_price_x96);
             if numerator1 <= product {
-                return Err(Error::PriceOutOfBounds);
+                panic_with_error!(e, Error::PriceOutOfBounds);
             }
             let denominator = numerator1.sub(&product);
-            if denominator == zero {
-                return Err(Error::PriceOutOfBounds);
+            if denominator == u256_zero(e) {
+                panic_with_error!(e, Error::PriceOutOfBounds);
             }
-            Ok(u512_mul_div(
-                e,
-                &numerator1,
-                sqrt_price_x96,
-                &denominator,
-                true,
-            ))
+            u512_mul_div(e, &numerator1, sqrt_price_x96, &denominator, true)
         } else {
-            // Overflow means product > numerator1 for realistic values
-            return Err(Error::PriceOutOfBounds);
+            panic_with_error!(e, Error::PriceOutOfBounds);
         }
     }
 }
 
 // Compute next sqrt price given token1 input/output amount.
-//
-// When adding token1 (price increases):
-//   sqrt_next = sqrt_current + amount * Q96 / L
-//
-// When removing token1 (price decreases):
-//   sqrt_next = sqrt_current - amount * Q96 / L
-//
-// Uses U512 for `amount * Q96` which can exceed 256 bits.
 pub fn get_next_sqrt_price_from_amount1(
     e: &Env,
     sqrt_price_x96: &U256,
     liquidity: u128,
     amount: u128,
     add: bool,
-) -> Result<U256, Error> {
+) -> U256 {
     let liq = u256_from_u128(e, liquidity);
     let q96 = u256_q96(e);
     let amt = u256_from_u128(e, amount);
 
-    // Matches Uniswap V3's getNextSqrtPriceFromAmount1RoundingDown:
-    // - add:      quotient rounds DOWN → result (sqrt + q) rounds DOWN
-    // - subtract: quotient rounds UP   → result (sqrt - q) rounds DOWN
     if add {
         let quotient = u512_mul_div(e, &amt, &q96, &liq, false);
-        Ok(sqrt_price_x96.add(&quotient))
+        sqrt_price_x96.add(&quotient)
     } else {
         let quotient = u512_mul_div(e, &amt, &q96, &liq, true);
         if *sqrt_price_x96 <= quotient {
-            return Err(Error::PriceOutOfBounds);
+            panic_with_error!(e, Error::PriceOutOfBounds);
         }
-        Ok(sqrt_price_x96.sub(&quotient))
+        sqrt_price_x96.sub(&quotient)
     }
 }
 
 // Compute next sqrt price given an input amount.
-// Dispatches based on swap direction (zero_for_one).
 pub fn get_next_sqrt_price_from_input(
     e: &Env,
     sqrt_price_x96: &U256,
     liquidity: u128,
     amount_in: u128,
     zero_for_one: bool,
-) -> Result<U256, Error> {
+) -> U256 {
     if zero_for_one {
-        // Selling token0 → price goes down → use amount0 formula (add)
         get_next_sqrt_price_from_amount0(e, sqrt_price_x96, liquidity, amount_in, true)
     } else {
-        // Selling token1 → price goes up → use amount1 formula (add)
         get_next_sqrt_price_from_amount1(e, sqrt_price_x96, liquidity, amount_in, true)
     }
 }
 
 // Compute next sqrt price given an output amount.
-// Dispatches based on swap direction (zero_for_one).
 pub fn get_next_sqrt_price_from_output(
     e: &Env,
     sqrt_price_x96: &U256,
     liquidity: u128,
     amount_out: u128,
     zero_for_one: bool,
-) -> Result<U256, Error> {
+) -> U256 {
     if zero_for_one {
-        // Buying token1 (output) → use amount1 formula (remove)
         get_next_sqrt_price_from_amount1(e, sqrt_price_x96, liquidity, amount_out, false)
     } else {
-        // Buying token0 (output) → use amount0 formula (remove)
         get_next_sqrt_price_from_amount0(e, sqrt_price_x96, liquidity, amount_out, false)
     }
 }
 
 // Compute sqrt_price_x96 from a token amount ratio.
-//
 // sqrt_price_x96 = sqrt(amount1 / amount0) * 2^96
-//                = sqrt(amount1 * 2^192 / amount0)
-//
-// Uses U512 intermediate for the amount1 * 2^192 product (~321 bits).
-// Validates result against min/max sqrt ratio bounds.
-pub fn sqrt_price_from_amounts(e: &Env, amount0: u128, amount1: u128) -> Result<U256, Error> {
+pub fn sqrt_price_from_amounts(e: &Env, amount0: u128, amount1: u128) -> U256 {
     if amount0 == 0 || amount1 == 0 {
-        return Err(Error::InvalidAmount);
+        panic_with_error!(e, Error::InvalidAmount);
     }
     let q96 = u256_q96(e);
-    let q192 = q96.mul(&q96); // 2^192, fits U256 (193 bits)
+    let q192 = q96.mul(&q96);
     let amount0_u256 = u256_from_u128(e, amount0);
     let amount1_u256 = u256_from_u128(e, amount1);
-    // amount1 * 2^192 / amount0, using U512 intermediate (up to 321-bit numerator)
     let ratio_q192 = u512_mul_div(e, &amount1_u256, &q192, &amount0_u256, false);
-    let sqrt_price = ratio_q192.sqrt(); // ~97 bits, exactly sqrt_price_x96 range
+    let sqrt_price = ratio_q192.sqrt();
 
-    // Validate bounds
     if sqrt_price < min_sqrt_ratio(e) || sqrt_price >= max_sqrt_ratio(e) {
-        return Err(Error::PriceOutOfBounds);
+        panic_with_error!(e, Error::PriceOutOfBounds);
     }
-    Ok(sqrt_price)
+    sqrt_price
 }
 
 #[cfg(test)]
@@ -671,8 +578,8 @@ mod test {
         let e = Env::default();
 
         for tick in [-887_272, -100_000, -1, 0, 1, 100_000, 887_271] {
-            let sqrt = sqrt_ratio_at_tick(&e, tick).unwrap();
-            let actual_tick = tick_at_sqrt_ratio(&e, &sqrt).unwrap();
+            let sqrt = sqrt_ratio_at_tick(&e, tick);
+            let actual_tick = tick_at_sqrt_ratio(&e, &sqrt);
             assert_eq!(actual_tick, tick);
         }
     }
@@ -692,13 +599,13 @@ mod test {
             MAX_TICK - 2,
             MAX_TICK - 1,
         ] {
-            let sqrt = sqrt_ratio_at_tick(&e, tick).unwrap();
-            assert_eq!(tick_at_sqrt_ratio(&e, &sqrt).unwrap(), tick);
+            let sqrt = sqrt_ratio_at_tick(&e, tick);
+            assert_eq!(tick_at_sqrt_ratio(&e, &sqrt), tick);
 
             if tick < MAX_TICK {
-                let next = sqrt_ratio_at_tick(&e, tick + 1).unwrap();
+                let next = sqrt_ratio_at_tick(&e, tick + 1);
                 let just_below_next = next.sub(&U256::from_u32(&e, 1));
-                assert_eq!(tick_at_sqrt_ratio(&e, &just_below_next).unwrap(), tick);
+                assert_eq!(tick_at_sqrt_ratio(&e, &just_below_next), tick);
             }
         }
     }
@@ -723,17 +630,14 @@ mod test {
         let max = max_sqrt_ratio(&e);
         let max_minus_one = max.sub(&U256::from_u32(&e, 1));
 
-        assert_eq!(tick_at_sqrt_ratio(&e, &min).unwrap(), MIN_TICK);
-        assert_eq!(
-            tick_at_sqrt_ratio(&e, &max_minus_one).unwrap(),
-            MAX_TICK - 1
-        );
+        assert_eq!(tick_at_sqrt_ratio(&e, &min), MIN_TICK);
+        assert_eq!(tick_at_sqrt_ratio(&e, &max_minus_one), MAX_TICK - 1);
 
         for tick in [-500_000, -50_000, 50_000, 500_000] {
-            let lower = sqrt_ratio_at_tick(&e, tick).unwrap();
-            let upper = sqrt_ratio_at_tick(&e, tick + 1).unwrap();
+            let lower = sqrt_ratio_at_tick(&e, tick);
+            let upper = sqrt_ratio_at_tick(&e, tick + 1);
             let mid = lower.add(&upper).div(&U256::from_u32(&e, 2));
-            assert_eq!(tick_at_sqrt_ratio(&e, &mid).unwrap(), tick);
+            assert_eq!(tick_at_sqrt_ratio(&e, &mid), tick);
         }
     }
 
@@ -763,7 +667,6 @@ mod test {
         let e = Env::default();
         let a = U256::from_u128(&e, 10);
         let b = U256::from_u128(&e, 30);
-        // (2^256 - 1) - 30 + 10 + 1 = 2^256 - 20
         let expected = u256_max(&e).sub(&U256::from_u128(&e, 19));
         assert_eq!(wrapping_sub_u256(&e, &a, &b), expected);
     }
@@ -773,14 +676,8 @@ mod test {
         let e = Env::default();
         let a = U256::from_u128(&e, 50);
         let b = U256::from_u128(&e, 200);
-        // (a - b) + (b - a) should equal 0 mod 2^256
-        // i.e. wrapping_sub(a, b) + wrapping_sub(b, a) = 0
         let diff1 = wrapping_sub_u256(&e, &a, &b);
         let diff2 = wrapping_sub_u256(&e, &b, &a);
-        // diff2 = 150, diff1 = 2^256 - 150, sum = 2^256 which wraps to 0
-        // Verify via: wrapping_sub(diff1, wrapping_sub(0, diff2)) == 0
-        // Simpler: diff2 is just b - a = 150, and wrapping_sub(diff1, 0) should invert
-        // Actually verify the concrete values:
         assert_eq!(diff2, U256::from_u128(&e, 150));
         let expected_diff1 =
             wrapping_sub_u256(&e, &U256::from_u32(&e, 0), &U256::from_u128(&e, 150));
@@ -792,7 +689,6 @@ mod test {
         let e = Env::default();
         let zero = U256::from_u32(&e, 0);
         let one = u256_one(&e);
-        // 0 - 1 mod 2^256 = 2^256 - 1 = U256::MAX
         assert_eq!(wrapping_sub_u256(&e, &zero, &one), u256_max(&e));
     }
 
@@ -801,11 +697,8 @@ mod test {
         let e = Env::default();
         let max = u256_max(&e);
         let zero = U256::from_u32(&e, 0);
-        // MAX - 0 = MAX
         assert_eq!(wrapping_sub_u256(&e, &max, &zero), max);
-        // MAX - MAX = 0
         assert_eq!(wrapping_sub_u256(&e, &max, &max), zero);
-        // 0 - MAX = 1
         assert_eq!(wrapping_sub_u256(&e, &zero, &max), U256::from_u32(&e, 1));
     }
 
@@ -831,7 +724,6 @@ mod test {
         let e = Env::default();
         let max = u256_max(&e);
         let one = u256_one(&e);
-        // MAX + 1 mod 2^256 = 0
         assert_eq!(wrapping_add_u256(&e, &max, &one), U256::from_u32(&e, 0));
     }
 
@@ -839,8 +731,7 @@ mod test {
     fn wrapping_add_overflow_both_large() {
         let e = Env::default();
         let max = u256_max(&e);
-        // MAX + MAX mod 2^256 = (2^256 - 1) + (2^256 - 1) mod 2^256 = 2^257 - 2 mod 2^256 = 2^256 - 2
-        let expected = max.sub(&u256_one(&e)); // MAX - 1
+        let expected = max.sub(&u256_one(&e));
         assert_eq!(wrapping_add_u256(&e, &max, &max), expected);
     }
 
@@ -849,7 +740,6 @@ mod test {
         let e = Env::default();
         let a = U256::from_u128(&e, 12345);
         let b = U256::from_u128(&e, 67890);
-        // (a + b) - b = a
         let sum = wrapping_add_u256(&e, &a, &b);
         assert_eq!(wrapping_sub_u256(&e, &sum, &b), a);
     }
@@ -859,7 +749,6 @@ mod test {
         let e = Env::default();
         let max = u256_max(&e);
         let val = U256::from_u128(&e, 100);
-        // (MAX + val) wraps, then subtract val should give MAX
         let sum = wrapping_add_u256(&e, &max, &val);
         assert_eq!(wrapping_sub_u256(&e, &sum, &val), max);
     }

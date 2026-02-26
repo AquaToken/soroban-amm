@@ -26,10 +26,10 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, Error::PoolAlreadyInitialized);
         }
         if tokens.len() != 2 {
-            panic_with_error!(&e, Error::InvalidTickRange);
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
         if fee as u128 >= FEE_DENOMINATOR {
-            panic_with_error!(&e, Error::InvalidFee);
+            panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
         if tick_spacing <= 0 {
             panic_with_error!(&e, Error::InvalidTickSpacing);
@@ -74,7 +74,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         set_reserve0(&e, &0);
         set_reserve1(&e, &0);
 
-        let sqrt_price_x96 = sqrt_ratio_at_tick(&e, 0).unwrap();
+        let sqrt_price_x96 = sqrt_ratio_at_tick(&e, 0);
         set_slot0(
             &e,
             &Slot0 {
@@ -133,7 +133,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         min_shares: u128,
     ) -> (Vec<u128>, u128) {
         if desired_amounts.len() != 2 {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         let (tick_lower, tick_upper) = Self::full_range_ticks(&e);
@@ -153,7 +153,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
     // Estimates liquidity for a full-range deposit without executing it.
     fn estimate_deposit(e: Env, desired_amounts: Vec<u128>) -> u128 {
         if desired_amounts.len() != 2 {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         let (tick_lower, tick_upper) = Self::full_range_ticks(&e);
@@ -207,7 +207,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         };
 
         if amount_out < out_min {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
         amount_out
@@ -273,7 +273,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         };
 
         if amount_in > in_max {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::InMaxNotSatisfied);
         }
 
         amount_in
@@ -305,7 +305,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
     // Reverts if output is below min_amounts.
     fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128> {
         if min_amounts.len() != 2 {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         let (tick_lower, tick_upper) = Self::full_range_ticks(&e);

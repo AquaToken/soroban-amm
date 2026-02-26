@@ -273,14 +273,14 @@ fn compute_amounts(
     if zero_for_one {
         // Selling token0 for token1: price goes down (sqrt_a > sqrt_b)
         (
-            amount0_delta(e, sqrt_b, sqrt_a, liquidity, true).unwrap_or(0),
-            amount1_delta(e, sqrt_b, sqrt_a, liquidity, false).unwrap_or(0),
+            amount0_delta(e, sqrt_b, sqrt_a, liquidity, true),
+            amount1_delta(e, sqrt_b, sqrt_a, liquidity, false),
         )
     } else {
         // Selling token1 for token0: price goes up (sqrt_a < sqrt_b)
         (
-            amount1_delta(e, sqrt_a, sqrt_b, liquidity, true).unwrap_or(0),
-            amount0_delta(e, sqrt_a, sqrt_b, liquidity, false).unwrap_or(0),
+            amount1_delta(e, sqrt_a, sqrt_b, liquidity, true),
+            amount0_delta(e, sqrt_a, sqrt_b, liquidity, false),
         )
     }
 }
@@ -295,19 +295,13 @@ fn compute_full_range_reserves(e: &Env, spacing: i32, full_range_liquidity: u128
         None => return (0, 0),
     };
 
-    let sqrt_lower = match sqrt_ratio_at_tick(e, tick_lower) {
-        Ok(value) => value,
-        Err(_) => return (0, 0),
-    };
-    let sqrt_upper = match sqrt_ratio_at_tick(e, tick_upper) {
-        Ok(value) => value,
-        Err(_) => return (0, 0),
-    };
+    let sqrt_lower = sqrt_ratio_at_tick(e, tick_lower);
+    let sqrt_upper = sqrt_ratio_at_tick(e, tick_upper);
 
     let slot = get_slot0(e);
     if slot.sqrt_price_x96 <= sqrt_lower {
         (
-            amount0_delta(e, &sqrt_lower, &sqrt_upper, full_range_liquidity, false).unwrap_or(0),
+            amount0_delta(e, &sqrt_lower, &sqrt_upper, full_range_liquidity, false),
             0,
         )
     } else if slot.sqrt_price_x96 < sqrt_upper {
@@ -318,21 +312,19 @@ fn compute_full_range_reserves(e: &Env, spacing: i32, full_range_liquidity: u128
                 &sqrt_upper,
                 full_range_liquidity,
                 false,
-            )
-            .unwrap_or(0),
+            ),
             amount1_delta(
                 e,
                 &sqrt_lower,
                 &slot.sqrt_price_x96,
                 full_range_liquidity,
                 false,
-            )
-            .unwrap_or(0),
+            ),
         )
     } else {
         (
             0,
-            amount1_delta(e, &sqrt_lower, &sqrt_upper, full_range_liquidity, false).unwrap_or(0),
+            amount1_delta(e, &sqrt_lower, &sqrt_upper, full_range_liquidity, false),
         )
     }
 }
@@ -424,15 +416,7 @@ fn collect_exact_direction_steps(
             .min(MAX_TICK)
         };
 
-        let sqrt_step_target = match sqrt_ratio_at_tick(e, target_tick) {
-            Ok(value) => value,
-            Err(_) => {
-                result.push_back(0);
-                result.push_back(0);
-                exhausted = true;
-                continue;
-            }
-        };
+        let sqrt_step_target = sqrt_ratio_at_tick(e, target_tick);
 
         if sqrt_step_target == sqrt_cursor || liquidity == 0 {
             result.push_back(0);
@@ -479,10 +463,7 @@ fn collect_exact_direction_steps(
 
             if init_in_range {
                 let (init_tick, raw_liquidity_net) = maybe_init.unwrap();
-                let sqrt_init = match sqrt_ratio_at_tick(e, init_tick) {
-                    Ok(v) => v,
-                    Err(_) => break,
-                };
+                let sqrt_init = sqrt_ratio_at_tick(e, init_tick);
 
                 // Compute amounts from cursor to initialized tick
                 let (amt_in, amt_out) =

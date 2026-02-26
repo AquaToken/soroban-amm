@@ -560,10 +560,8 @@ impl ConcentratedLiquidityPool {
         let delta_0 = wrapping_sub_u256(e, &inside_0, &position.fee_growth_inside_0_last_x128);
         let delta_1 = wrapping_sub_u256(e, &inside_1, &position.fee_growth_inside_1_last_x128);
 
-        let owed_0 = mul_div_fee_growth(e, &delta_0, position.liquidity)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
-        let owed_1 = mul_div_fee_growth(e, &delta_1, position.liquidity)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        let owed_0 = mul_div_fee_growth(e, &delta_0, position.liquidity);
+        let owed_1 = mul_div_fee_growth(e, &delta_1, position.liquidity);
 
         position.tokens_owed_0 = position.tokens_owed_0.saturating_add(owed_0);
         position.tokens_owed_1 = position.tokens_owed_1.saturating_add(owed_1);
@@ -631,7 +629,7 @@ impl ConcentratedLiquidityPool {
             owner.require_auth();
         }
         if requested_amounts.len() != 2 {
-            panic_with_error!(e, Error::InvalidAmount);
+            panic_with_error!(e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         let mut position = match get_position(e, owner, tick_lower, tick_upper) {
@@ -724,8 +722,7 @@ impl ConcentratedLiquidityPool {
             return;
         }
 
-        let growth_delta = fee_growth_delta_x128(e, fee_amount_for_lp, liquidity)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        let growth_delta = fee_growth_delta_x128(e, fee_amount_for_lp, liquidity);
         if zero_for_one {
             let next = wrapping_add_u256(e, &get_fee_growth_global_0_x128(e), &growth_delta);
             set_fee_growth_global_0_x128(e, &next);
@@ -759,15 +756,12 @@ impl ConcentratedLiquidityPool {
 
         if exact_input {
             let amount_remaining_less_fee =
-                mul_div_u128(e, amount_remaining, fee_complement, FEE_DENOMINATOR, false)
-                    .unwrap_or_else(|err| panic_with_error!(e, err));
+                mul_div_u128(e, amount_remaining, fee_complement, FEE_DENOMINATOR, false);
 
             let amount_in_to_target = if zero_for_one {
                 amount0_delta(e, sqrt_target, sqrt_current, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             } else {
                 amount1_delta(e, sqrt_current, sqrt_target, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             };
 
             let sqrt_next = if amount_remaining_less_fee >= amount_in_to_target {
@@ -779,8 +773,7 @@ impl ConcentratedLiquidityPool {
                     liquidity,
                     amount_remaining_less_fee,
                     zero_for_one,
-                )
-                .unwrap_or_else(|err| panic_with_error!(e, err));
+                );
                 // Clamp to [target, current] range
                 if zero_for_one {
                     computed.max(sqrt_target.clone())
@@ -793,23 +786,18 @@ impl ConcentratedLiquidityPool {
 
             let amount_in = if zero_for_one {
                 amount0_delta(e, &sqrt_next, sqrt_current, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             } else {
                 amount1_delta(e, sqrt_current, &sqrt_next, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             };
 
             let amount_out = if zero_for_one {
                 amount1_delta(e, &sqrt_next, sqrt_current, liquidity, false)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             } else {
                 amount0_delta(e, sqrt_current, &sqrt_next, liquidity, false)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             };
 
             let fee_amount = if max_reached {
                 mul_div_u128(e, amount_in, fee, fee_complement, true)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             } else {
                 amount_remaining.saturating_sub(amount_in)
             };
@@ -823,10 +811,8 @@ impl ConcentratedLiquidityPool {
         } else {
             let amount_out_to_target = if zero_for_one {
                 amount1_delta(e, sqrt_target, sqrt_current, liquidity, false)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             } else {
                 amount0_delta(e, sqrt_current, sqrt_target, liquidity, false)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             };
 
             let sqrt_next = if amount_remaining >= amount_out_to_target {
@@ -838,8 +824,7 @@ impl ConcentratedLiquidityPool {
                     liquidity,
                     amount_remaining,
                     zero_for_one,
-                )
-                .unwrap_or_else(|err| panic_with_error!(e, err));
+                );
                 // Clamp to [target, current] range
                 if zero_for_one {
                     computed.max(sqrt_target.clone())
@@ -850,26 +835,21 @@ impl ConcentratedLiquidityPool {
 
             let amount_in = if zero_for_one {
                 amount0_delta(e, &sqrt_next, sqrt_current, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             } else {
                 amount1_delta(e, sqrt_current, &sqrt_next, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             };
 
             let mut amount_out = if zero_for_one {
                 amount1_delta(e, &sqrt_next, sqrt_current, liquidity, false)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             } else {
                 amount0_delta(e, sqrt_current, &sqrt_next, liquidity, false)
-                    .unwrap_or_else(|err| panic_with_error!(e, err))
             };
 
             if amount_out > amount_remaining {
                 amount_out = amount_remaining;
             }
 
-            let fee_amount = mul_div_u128(e, amount_in, fee, fee_complement, true)
-                .unwrap_or_else(|err| panic_with_error!(e, err));
+            let fee_amount = mul_div_u128(e, amount_in, fee, fee_complement, true);
 
             SwapStep {
                 sqrt_next,
@@ -912,10 +892,39 @@ impl ConcentratedLiquidityPool {
     }
 
     pub(super) fn direction_from_indexes(e: &Env, in_idx: u32, out_idx: u32) -> bool {
-        if in_idx > 1 || out_idx > 1 || in_idx == out_idx {
-            panic_with_error!(e, Error::InvalidAmount);
+        if in_idx == out_idx {
+            panic_with_error!(e, LiquidityPoolValidationError::CannotSwapSameToken);
+        }
+        if in_idx > 1 {
+            panic_with_error!(e, LiquidityPoolValidationError::InTokenOutOfBounds);
+        }
+        if out_idx > 1 {
+            panic_with_error!(e, LiquidityPoolValidationError::OutTokenOutOfBounds);
         }
         in_idx == 0 && out_idx == 1
+    }
+
+    /// Compute the initial price for a deposit from the amount ratio.
+    ///
+    /// Derives tick directly: price = a1/a0 → tick.
+    /// Panics if the derived tick falls outside [tick_lower, tick_upper) —
+    /// the caller must provide amounts whose price ratio matches the deposit range.
+    /// Only called on the very first deposit when the pool has zero liquidity.
+    pub(super) fn init_sqrt_price_for_range(
+        e: &Env,
+        tick_lower: i32,
+        tick_upper: i32,
+        desired_amount0: u128,
+        desired_amount1: u128,
+    ) -> (U256, i32) {
+        let sqrt_price = sqrt_price_from_amounts(e, desired_amount0, desired_amount1);
+        let tick = tick_at_sqrt_ratio(e, &sqrt_price);
+
+        if tick < tick_lower || tick >= tick_upper {
+            panic_with_error!(e, Error::TickOutOfBounds);
+        }
+
+        (sqrt_price, tick)
     }
 
     pub(super) fn full_range_ticks(e: &Env) -> (i32, i32) {
@@ -946,29 +955,23 @@ impl ConcentratedLiquidityPool {
         liquidity: u128,
         round_up: bool,
     ) -> (u128, u128) {
-        let sqrt_lower =
-            sqrt_ratio_at_tick(e, tick_lower).unwrap_or_else(|err| panic_with_error!(e, err));
-        let sqrt_upper =
-            sqrt_ratio_at_tick(e, tick_upper).unwrap_or_else(|err| panic_with_error!(e, err));
+        let sqrt_lower = sqrt_ratio_at_tick(e, tick_lower);
+        let sqrt_upper = sqrt_ratio_at_tick(e, tick_upper);
 
         if slot.sqrt_price_x96 <= sqrt_lower {
             (
-                amount0_delta(e, &sqrt_lower, &sqrt_upper, liquidity, round_up)
-                    .unwrap_or_else(|err| panic_with_error!(e, err)),
+                amount0_delta(e, &sqrt_lower, &sqrt_upper, liquidity, round_up),
                 0,
             )
         } else if slot.sqrt_price_x96 < sqrt_upper {
             (
-                amount0_delta(e, &slot.sqrt_price_x96, &sqrt_upper, liquidity, round_up)
-                    .unwrap_or_else(|err| panic_with_error!(e, err)),
-                amount1_delta(e, &sqrt_lower, &slot.sqrt_price_x96, liquidity, round_up)
-                    .unwrap_or_else(|err| panic_with_error!(e, err)),
+                amount0_delta(e, &slot.sqrt_price_x96, &sqrt_upper, liquidity, round_up),
+                amount1_delta(e, &sqrt_lower, &slot.sqrt_price_x96, liquidity, round_up),
             )
         } else {
             (
                 0,
-                amount1_delta(e, &sqrt_lower, &sqrt_upper, liquidity, round_up)
-                    .unwrap_or_else(|err| panic_with_error!(e, err)),
+                amount1_delta(e, &sqrt_lower, &sqrt_upper, liquidity, round_up),
             )
         }
     }
@@ -1003,10 +1006,8 @@ impl ConcentratedLiquidityPool {
             return 0;
         }
 
-        let sqrt_lower =
-            sqrt_ratio_at_tick(e, tick_lower).unwrap_or_else(|err| panic_with_error!(e, err));
-        let sqrt_upper =
-            sqrt_ratio_at_tick(e, tick_upper).unwrap_or_else(|err| panic_with_error!(e, err));
+        let sqrt_lower = sqrt_ratio_at_tick(e, tick_lower);
+        let sqrt_upper = sqrt_ratio_at_tick(e, tick_upper);
 
         // Analytical formulas (inverse of amount0_delta / amount1_delta):
         // - Below range:  only token0 needed → L = liquidity_for_amount0(sqrtLower, sqrtUpper, amount0)
@@ -1014,15 +1015,11 @@ impl ConcentratedLiquidityPool {
         // - In range:     L = min(L0_from_current_to_upper, L1_from_lower_to_current)
         if slot.sqrt_price_x96 <= sqrt_lower {
             liquidity_for_amount0(e, &sqrt_lower, &sqrt_upper, desired_amount0)
-                .unwrap_or_else(|err| panic_with_error!(e, err))
         } else if slot.sqrt_price_x96 >= sqrt_upper {
             liquidity_for_amount1(e, &sqrt_lower, &sqrt_upper, desired_amount1)
-                .unwrap_or_else(|err| panic_with_error!(e, err))
         } else {
-            let l0 = liquidity_for_amount0(e, &slot.sqrt_price_x96, &sqrt_upper, desired_amount0)
-                .unwrap_or_else(|err| panic_with_error!(e, err));
-            let l1 = liquidity_for_amount1(e, &sqrt_lower, &slot.sqrt_price_x96, desired_amount1)
-                .unwrap_or_else(|err| panic_with_error!(e, err));
+            let l0 = liquidity_for_amount0(e, &slot.sqrt_price_x96, &sqrt_upper, desired_amount0);
+            let l1 = liquidity_for_amount1(e, &sqrt_lower, &slot.sqrt_price_x96, desired_amount1);
             l0.min(l1)
         }
     }
@@ -1066,7 +1063,7 @@ impl ConcentratedLiquidityPool {
         dry_run: bool,
     ) -> (u128, u128, u128, Slot0, u128, u128, u128) {
         if amount_specified == 0 {
-            panic_with_error!(e, Error::InvalidAmount);
+            panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
         let exact_input = amount_specified > 0;
@@ -1074,7 +1071,7 @@ impl ConcentratedLiquidityPool {
         // Early exit: no positions in the pool — nothing to scan.
         // Always error (matches standard/stableswap EmptyPool behavior).
         if get_total_raw_liquidity(e) == 0 {
-            panic_with_error!(e, Error::InsufficientLiquidity);
+            panic_with_error!(e, LiquidityPoolValidationError::EmptyPool);
         }
 
         let fee = get_fee(e);
@@ -1106,8 +1103,7 @@ impl ConcentratedLiquidityPool {
                 zero_for_one,
                 &mut cc,
             );
-            let next_tick_price =
-                sqrt_ratio_at_tick(e, next_tick).unwrap_or_else(|err| panic_with_error!(e, err));
+            let next_tick_price = sqrt_ratio_at_tick(e, next_tick);
 
             let sqrt_target = if zero_for_one {
                 if next_tick_price < price_limit {
@@ -1193,8 +1189,7 @@ impl ConcentratedLiquidityPool {
                     next_tick.min(MAX_TICK)
                 };
             } else if slot.sqrt_price_x96 != sqrt_price_start {
-                slot.tick = tick_at_sqrt_ratio(e, &slot.sqrt_price_x96)
-                    .unwrap_or_else(|err| panic_with_error!(e, err));
+                slot.tick = tick_at_sqrt_ratio(e, &slot.sqrt_price_x96);
             }
         }
 

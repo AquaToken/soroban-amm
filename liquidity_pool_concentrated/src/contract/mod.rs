@@ -47,6 +47,7 @@ use liqidity_pool_rewards_gauge as rewards_gauge;
 use liqidity_pool_rewards_gauge::interface::RewardsGaugeInterface;
 use liquidity_pool_events::Events as PoolEvents;
 use liquidity_pool_events::LiquidityPoolEvents;
+use liquidity_pool_validation_errors::LiquidityPoolValidationError;
 use rewards::concentrated_weight::{apply_multiplier, position_multiplier_bps};
 use rewards::events::Events as RewardEvents;
 use rewards::storage::{

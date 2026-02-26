@@ -212,4 +212,8 @@ pub trait ConcentratedPoolExtensionsTrait {
 
     // Batch-read tick info for the specified ticks.
     fn get_ticks_batch(e: Env, ticks: Vec<i32>) -> Vec<TickInfo>;
+
+    // Compute the tick corresponding to the price ratio amount1/amount0.
+    // Useful for frontends to derive the initial price tick before the first deposit.
+    fn tick_from_amounts(e: Env, amount0: u128, amount1: u128) -> i32;
 }

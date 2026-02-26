@@ -13,24 +13,27 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         desired_amounts: Vec<u128>,
     ) -> (Vec<u128>, u128) {
         if desired_amounts.len() != 2 {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         let desired_amount0 = desired_amounts.get_unchecked(0);
         let desired_amount1 = desired_amounts.get_unchecked(1);
         if desired_amount0 == 0 && desired_amount1 == 0 {
-            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, LiquidityPoolValidationError::ZeroAmount);
         }
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper);
 
-        // Match deposit_position behavior on empty pool: infer price from desired ratio.
+        // Match deposit_position behavior on empty pool: find optimal price for the tick range.
         let mut slot = get_slot0(&e);
         if get_total_raw_liquidity(&e) == 0 && desired_amount0 > 0 && desired_amount1 > 0 {
-            let sqrt_price_x96 = sqrt_price_from_amounts(&e, desired_amount0, desired_amount1)
-                .unwrap_or_else(|err| panic_with_error!(&e, err));
-            let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)
-                .unwrap_or_else(|err| panic_with_error!(&e, err));
+            let (sqrt_price_x96, tick) = Self::init_sqrt_price_for_range(
+                &e,
+                tick_lower,
+                tick_upper,
+                desired_amount0,
+                desired_amount1,
+            );
             slot = Slot0 {
                 sqrt_price_x96,
                 tick,
@@ -46,7 +49,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             desired_amount1,
         );
         if liquidity == 0 {
-            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, LiquidityPoolValidationError::ZeroAmount);
         }
         if liquidity > i128::MAX as u128 {
             panic_with_error!(&e, Error::LiquidityAmountTooLarge);
@@ -78,12 +81,12 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, Error::DepositKilled);
         }
         if desired_amounts.len() != 2 {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
         let desired_amount0 = desired_amounts.get_unchecked(0);
         let desired_amount1 = desired_amounts.get_unchecked(1);
         if desired_amount0 == 0 && desired_amount1 == 0 {
-            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, LiquidityPoolValidationError::ZeroAmount);
         }
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper);
@@ -92,19 +95,27 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             tick_lower == full_range_lower && tick_upper == full_range_upper
         };
 
-        // Auto-initialize price on empty pool from token ratio
-        if get_total_raw_liquidity(&e) == 0 && desired_amount0 > 0 && desired_amount1 > 0 {
-            let sqrt_price_x96 = sqrt_price_from_amounts(&e, desired_amount0, desired_amount1)
-                .unwrap_or_else(|err| panic_with_error!(&e, err));
-            let tick = tick_at_sqrt_ratio(&e, &sqrt_price_x96)
-                .unwrap_or_else(|err| panic_with_error!(&e, err));
-            set_slot0(
-                &e,
-                &Slot0 {
-                    sqrt_price_x96,
-                    tick,
-                },
-            );
+        // Auto-initialize price on empty pool from token amount ratio.
+        // First deposit MUST provide both tokens to establish the initial price.
+        if get_total_raw_liquidity(&e) == 0 {
+            if desired_amount0 > 0 && desired_amount1 > 0 {
+                let (sqrt_price_x96, tick) = Self::init_sqrt_price_for_range(
+                    &e,
+                    tick_lower,
+                    tick_upper,
+                    desired_amount0,
+                    desired_amount1,
+                );
+                set_slot0(
+                    &e,
+                    &Slot0 {
+                        sqrt_price_x96,
+                        tick,
+                    },
+                );
+            } else {
+                panic_with_error!(&e, LiquidityPoolValidationError::AllCoinsRequired);
+            }
         }
 
         Self::recompute_user_weighted_liquidity(&e, &sender);
@@ -119,52 +130,58 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             desired_amount1,
         );
         if liquidity == 0 {
-            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, LiquidityPoolValidationError::ZeroAmount);
         }
         if liquidity > i128::MAX as u128 {
             panic_with_error!(&e, Error::LiquidityAmountTooLarge);
         }
         if liquidity < min_liquidity {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
         // Compute actual token amounts for this liquidity (round up for pool safety)
         let slot = get_slot0(&e);
-        let sqrt_lower =
-            sqrt_ratio_at_tick(&e, tick_lower).unwrap_or_else(|err| panic_with_error!(&e, err));
-        let sqrt_upper =
-            sqrt_ratio_at_tick(&e, tick_upper).unwrap_or_else(|err| panic_with_error!(&e, err));
+        let sqrt_lower = sqrt_ratio_at_tick(&e, tick_lower);
+        let sqrt_upper = sqrt_ratio_at_tick(&e, tick_upper);
 
         let (amount0, amount1) = if slot.sqrt_price_x96 <= sqrt_lower {
             (
-                amount0_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
+                amount0_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true),
                 0,
             )
         } else if slot.sqrt_price_x96 < sqrt_upper {
             (
-                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
-                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
+                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, liquidity, true),
+                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, liquidity, true),
             )
         } else {
             (
                 0,
-                amount1_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true)
-                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
+                amount1_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true),
             )
         };
 
         let token0 = get_token0(&e);
         let token1 = get_token1(&e);
         let contract = e.current_contract_address();
+        let token0_client = SorobanTokenClient::new(&e, &token0);
+        let token1_client = SorobanTokenClient::new(&e, &token1);
 
-        if amount0 > 0 {
-            SorobanTokenClient::new(&e, &token0).transfer(&sender, &contract, &(amount0 as i128));
+        // Transfer full desired amounts (auth-deterministic: amounts are known at signing time),
+        // then refund excess back to the sender.
+        if desired_amount0 > 0 {
+            token0_client.transfer(&sender, &contract, &(desired_amount0 as i128));
         }
-        if amount1 > 0 {
-            SorobanTokenClient::new(&e, &token1).transfer(&sender, &contract, &(amount1 as i128));
+        if desired_amount1 > 0 {
+            token1_client.transfer(&sender, &contract, &(desired_amount1 as i128));
+        }
+        let refund0 = desired_amount0 - amount0;
+        let refund1 = desired_amount1 - amount1;
+        if refund0 > 0 {
+            token0_client.transfer(&contract, &sender, &(refund0 as i128));
+        }
+        if refund1 > 0 {
+            token1_client.transfer(&contract, &sender, &(refund1 as i128));
         }
 
         set_reserve0(&e, &(get_reserve0(&e) + amount0));
@@ -217,7 +234,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         amount: u128,
     ) -> Vec<u128> {
         if amount == 0 {
-            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, LiquidityPoolValidationError::ZeroAmount);
         }
         if amount > i128::MAX as u128 {
             panic_with_error!(&e, Error::LiquidityAmountTooLarge);
@@ -249,10 +266,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         };
 
         if get_reserve0(&e) < total_amount0 {
-            panic_with_error!(&e, Error::InsufficientToken0);
+            panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
         }
         if get_reserve1(&e) < total_amount1 {
-            panic_with_error!(&e, Error::InsufficientToken1);
+            panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
         }
 
         Vec::from_array(&e, [total_amount0, total_amount1])
@@ -271,13 +288,13 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     ) -> Vec<u128> {
         owner.require_auth();
         if amount == 0 {
-            panic_with_error!(&e, Error::AmountShouldBeGreaterThanZero);
+            panic_with_error!(&e, LiquidityPoolValidationError::ZeroAmount);
         }
         if amount > i128::MAX as u128 {
             panic_with_error!(&e, Error::LiquidityAmountTooLarge);
         }
         if min_amounts.len() != 2 {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
         }
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper);
@@ -301,29 +318,23 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, Error::InsufficientLiquidity);
         }
 
-        let sqrt_lower =
-            sqrt_ratio_at_tick(&e, tick_lower).unwrap_or_else(|err| panic_with_error!(&e, err));
-        let sqrt_upper =
-            sqrt_ratio_at_tick(&e, tick_upper).unwrap_or_else(|err| panic_with_error!(&e, err));
+        let sqrt_lower = sqrt_ratio_at_tick(&e, tick_lower);
+        let sqrt_upper = sqrt_ratio_at_tick(&e, tick_upper);
 
         let (amount0, amount1) = if slot.sqrt_price_x96 <= sqrt_lower {
             (
-                amount0_delta(&e, &sqrt_lower, &sqrt_upper, amount, false)
-                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
+                amount0_delta(&e, &sqrt_lower, &sqrt_upper, amount, false),
                 0,
             )
         } else if slot.sqrt_price_x96 < sqrt_upper {
             (
-                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, amount, false)
-                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
-                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, amount, false)
-                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
+                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, amount, false),
+                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, amount, false),
             )
         } else {
             (
                 0,
-                amount1_delta(&e, &sqrt_lower, &sqrt_upper, amount, false)
-                    .unwrap_or_else(|err| panic_with_error!(&e, err)),
+                amount1_delta(&e, &sqrt_lower, &sqrt_upper, amount, false),
             )
         };
         let fees0 = position.tokens_owed_0;
@@ -340,16 +351,16 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         if total_amount0 < min_amounts.get_unchecked(0)
             || total_amount1 < min_amounts.get_unchecked(1)
         {
-            panic_with_error!(&e, Error::InvalidAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
         let reserve0_before = get_reserve0(&e);
         let reserve1_before = get_reserve1(&e);
         if reserve0_before < total_amount0 {
-            panic_with_error!(&e, Error::InsufficientToken0);
+            panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
         }
         if reserve1_before < total_amount1 {
-            panic_with_error!(&e, Error::InsufficientToken1);
+            panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
         }
 
         position.liquidity -= amount;
@@ -524,10 +535,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         let reserve0 = get_reserve0(&e);
         let reserve1 = get_reserve1(&e);
         if reserve0 < total0 {
-            panic_with_error!(&e, Error::InsufficientToken0);
+            panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
         }
         if reserve1 < total1 {
-            panic_with_error!(&e, Error::InsufficientToken1);
+            panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
         }
 
         let token0 = get_token0(&e);
@@ -634,5 +645,13 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             result.push_back(get_tick(&e, ticks.get(i).unwrap(), spacing));
         }
         result
+    }
+
+    // Compute the tick for a given token amount ratio.
+    // tick = tick_at_sqrt_ratio(sqrt(amount1 / amount0) * 2^96)
+    // Useful for frontends to determine the initial price tick before the first deposit.
+    fn tick_from_amounts(e: Env, amount0: u128, amount1: u128) -> i32 {
+        let sqrt_price = sqrt_price_from_amounts(&e, amount0, amount1);
+        tick_at_sqrt_ratio(&e, &sqrt_price)
     }
 }
