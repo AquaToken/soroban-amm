@@ -349,14 +349,11 @@ impl ChunkCache {
 pub fn get_user_state(e: &Env, user: &Address) -> UserState {
     let key = DataKey::User(user.clone());
     bump_persistent(e, &key);
-    e.storage()
-        .persistent()
-        .get(&key)
-        .unwrap_or(UserState {
-            positions: Vec::new(e),
-            raw_liquidity: 0,
-            weighted_liquidity: 0,
-        })
+    e.storage().persistent().get(&key).unwrap_or(UserState {
+        positions: Vec::new(e),
+        raw_liquidity: 0,
+        weighted_liquidity: 0,
+    })
 }
 
 pub fn set_user_state(e: &Env, user: &Address, state: &UserState) {
