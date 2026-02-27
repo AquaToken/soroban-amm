@@ -55,7 +55,6 @@ impl Token {
         let admin = AccessControl::new(&e).get_role(&Role::Admin);
         admin.require_auth();
 
-
         receive_balance(&e, to.clone(), amount);
         TokenUtils::new(&e).events().mint(admin, to, amount);
     }
@@ -71,7 +70,6 @@ impl token::Interface for Token {
         from.require_auth();
 
         check_nonnegative_amount(&e, amount);
-
 
         write_allowance(&e, from.clone(), spender.clone(), amount, expiration_ledger);
         TokenUtils::new(&e)
@@ -89,7 +87,6 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(&e, amount);
 
-
         checkpoint_user_rewards(&e, from.clone());
         checkpoint_user_rewards(&e, to.clone());
 
@@ -106,7 +103,6 @@ impl token::Interface for Token {
         spender.require_auth();
 
         check_nonnegative_amount(&e, amount);
-
 
         checkpoint_user_rewards(&e, from.clone());
         checkpoint_user_rewards(&e, to.clone());
@@ -126,7 +122,6 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(&e, amount);
 
-
         spend_balance(&e, from.clone(), amount);
         TokenUtils::new(&e).events().burn(from, amount);
     }
@@ -135,7 +130,6 @@ impl token::Interface for Token {
         spender.require_auth();
 
         check_nonnegative_amount(&e, amount);
-
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
