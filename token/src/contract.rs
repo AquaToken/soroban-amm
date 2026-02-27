@@ -18,7 +18,6 @@ use soroban_sdk::{
 };
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
-use utils::bump::bump_instance;
 
 fn check_nonnegative_amount(e: &Env, amount: i128) {
     if amount < 0 {
@@ -56,7 +55,6 @@ impl Token {
         let admin = AccessControl::new(&e).get_role(&Role::Admin);
         admin.require_auth();
 
-        bump_instance(&e);
 
         receive_balance(&e, to.clone(), amount);
         TokenUtils::new(&e).events().mint(admin, to, amount);
@@ -66,7 +64,6 @@ impl Token {
 #[contractimpl]
 impl token::Interface for Token {
     fn allowance(e: Env, from: Address, spender: Address) -> i128 {
-        bump_instance(&e);
         read_allowance(&e, from, spender).amount
     }
 
@@ -75,7 +72,6 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(&e, amount);
 
-        bump_instance(&e);
 
         write_allowance(&e, from.clone(), spender.clone(), amount, expiration_ledger);
         TokenUtils::new(&e)
@@ -84,7 +80,6 @@ impl token::Interface for Token {
     }
 
     fn balance(e: Env, id: Address) -> i128 {
-        bump_instance(&e);
         read_balance(&e, id)
     }
 
@@ -94,7 +89,6 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(&e, amount);
 
-        bump_instance(&e);
 
         checkpoint_user_rewards(&e, from.clone());
         checkpoint_user_rewards(&e, to.clone());
@@ -113,7 +107,6 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(&e, amount);
 
-        bump_instance(&e);
 
         checkpoint_user_rewards(&e, from.clone());
         checkpoint_user_rewards(&e, to.clone());
@@ -133,7 +126,6 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(&e, amount);
 
-        bump_instance(&e);
 
         spend_balance(&e, from.clone(), amount);
         TokenUtils::new(&e).events().burn(from, amount);
@@ -144,7 +136,6 @@ impl token::Interface for Token {
 
         check_nonnegative_amount(&e, amount);
 
-        bump_instance(&e);
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
