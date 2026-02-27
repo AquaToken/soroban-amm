@@ -13,7 +13,7 @@ use crate::storage::{
     get_is_killed_swap, get_plane, get_protocol_fee_a, get_protocol_fee_b,
     get_protocol_fee_fraction, get_protocol_fees, get_reserve_a, get_reserve_b, get_reserves,
     get_router, get_token_a, get_token_b, get_token_future_wasm, get_tokens, has_plane,
-    put_fee_fraction, put_reserve_a, put_reserve_b, put_reserves, put_token_a, put_token_b,
+    put_reserves, set_fee_fraction, set_reserve_a, set_reserve_b, set_token_a, set_token_b,
     set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
     set_plane, set_protocol_fee_a, set_protocol_fee_b, set_protocol_fee_fraction, set_router,
     set_token_future_wasm,
@@ -264,14 +264,14 @@ impl LiquidityPoolTrait for LiquidityPool {
         if protocol_fee_fraction as u128 > FEE_MULTIPLIER - 1 {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
-        put_fee_fraction(&e, fee_fraction);
+        set_fee_fraction(&e, &fee_fraction);
         set_protocol_fee_fraction(&e, &protocol_fee_fraction);
 
-        put_token_a(&e, token_a);
-        put_token_b(&e, token_b);
+        set_token_a(&e, &token_a);
+        set_token_b(&e, &token_b);
         put_token_share(&e, share_contract);
-        put_reserve_a(&e, 0);
-        put_reserve_b(&e, 0);
+        set_reserve_a(&e, &0);
+        set_reserve_b(&e, &0);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -375,8 +375,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             pool::get_deposit_amounts(&e, desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
 
         // Increase reserves
-        put_reserve_a(&e, reserve_a + amounts.0);
-        put_reserve_b(&e, reserve_b + amounts.1);
+        set_reserve_a(&e, &(reserve_a + amounts.0));
+        set_reserve_b(&e, &(reserve_b + amounts.1));
 
         if amounts.0 < desired_a {
             token_a_client.transfer(
@@ -416,8 +416,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
         mint_shares(&e, &user, shares_to_mint as i128);
-        put_reserve_a(&e, new_reserve_a);
-        put_reserve_b(&e, new_reserve_b);
+        set_reserve_a(&e, &new_reserve_a);
+        set_reserve_b(&e, &new_reserve_b);
 
         // Checkpoint resulting working balance
         let mut rewards_manager = rewards.manager();
@@ -554,9 +554,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         sell_token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
 
         if in_idx == 0 {
-            put_reserve_a(&e, reserve_a + in_amount);
+            set_reserve_a(&e, &(reserve_a + in_amount));
         } else {
-            put_reserve_b(&e, reserve_b + in_amount);
+            set_reserve_b(&e, &(reserve_b + in_amount));
         }
 
         let (mut new_reserve_a, mut new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -608,8 +608,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             new_reserve_b = new_reserve_b - out_b;
             set_protocol_fee_a(&e, &(get_protocol_fee_a(&e) + protocol_fee));
         }
-        put_reserve_a(&e, new_reserve_a);
-        put_reserve_b(&e, new_reserve_b);
+        set_reserve_a(&e, &new_reserve_a);
+        set_reserve_b(&e, &new_reserve_b);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -741,9 +741,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         );
 
         if in_idx == 0 {
-            put_reserve_a(&e, reserve_a + in_amount);
+            set_reserve_a(&e, &(reserve_a + in_amount));
         } else {
-            put_reserve_b(&e, reserve_b + in_amount);
+            set_reserve_b(&e, &(reserve_b + in_amount));
         }
 
         let (mut new_reserve_a, mut new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -804,8 +804,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             new_reserve_b = new_reserve_b - out_amount;
             set_protocol_fee_a(&e, &(get_protocol_fee_a(&e) + protocol_fee));
         }
-        put_reserve_a(&e, new_reserve_a);
-        put_reserve_b(&e, new_reserve_b);
+        set_reserve_a(&e, &new_reserve_a);
+        set_reserve_b(&e, &new_reserve_b);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -912,8 +912,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         transfer_b(&e, &user, out_b);
         let new_reserve_a = reserve_a - out_a;
         let new_reserve_b = reserve_b - out_b;
-        put_reserve_a(&e, new_reserve_a);
-        put_reserve_b(&e, new_reserve_b);
+        set_reserve_a(&e, &new_reserve_a);
+        set_reserve_b(&e, &new_reserve_b);
 
         // Checkpoint resulting working balance
         let mut rewards_manager = rewards.manager();
