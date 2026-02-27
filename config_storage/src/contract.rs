@@ -13,6 +13,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
+use utils::bump::bump_instance;
 
 #[contract]
 pub struct ConfigStorage;
@@ -46,12 +47,14 @@ impl ConfigStorage {
             }
         }
 
+        bump_instance(&e);
         e.storage()
             .instance()
             .set(&key, &(e.ledger().timestamp(), value));
     }
 
     pub fn get_value(e: Env, key: Val) -> Option<Val> {
+        bump_instance(&e);
         match e.storage().instance().get::<Val, (u64, Val)>(&key) {
             Some((_timestamp, value)) => Some(value),
             None => None,
@@ -60,6 +63,7 @@ impl ConfigStorage {
 
     // handful for delayed operations when it's important to know when the value was set
     pub fn get_value_updated_at(e: Env, key: Val) -> u64 {
+        bump_instance(&e);
         match e.storage().instance().get::<Val, (u64, Val)>(&key) {
             Some((timestamp, _value)) => timestamp,
             None => 0,

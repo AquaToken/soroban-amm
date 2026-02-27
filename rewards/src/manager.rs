@@ -11,6 +11,7 @@ use crate::storage::{
 use crate::RewardsConfig;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec, U256};
+use utils::bump::bump_instance;
 
 // `Manager` orchestrates the reward logic, pulling data and methods from `Storage`.
 // It relies on Storage sub-traits to handle actual storage I/O.
@@ -189,6 +190,7 @@ impl Manager {
 
         let config = PoolRewardConfig { tps, expired_at };
 
+        bump_instance(&self.env);
         self.storage.set_pool_reward_config(&config);
     }
 
