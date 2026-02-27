@@ -174,20 +174,13 @@ impl WorkingBalancesStorageTrait for Storage {
     fn get_working_balance(&self, user: &Address) -> u128 {
         let key = DataKey::WorkingBalance(user.clone());
         bump_persistent(&self.env, &key);
-        self.env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap()
+        self.env.storage().persistent().get(&key).unwrap()
     }
 
     fn has_working_balance(&self, user: &Address) -> bool {
         let key = DataKey::WorkingBalance(user.clone());
         bump_persistent(&self.env, &key);
-        self.env
-            .storage()
-            .persistent()
-            .has(&key)
+        self.env.storage().persistent().has(&key)
     }
 
     fn set_working_balance(&self, user: &Address, value: u128) {
@@ -412,19 +405,12 @@ impl Storage {
     pub fn get_user_rewards_state(&self, user: &Address) -> bool {
         let key = DataKey::UserRewardsState(user.clone());
         bump_persistent(&self.env, &key);
-        self.env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(true)
+        self.env.storage().persistent().get(&key).unwrap_or(true)
     }
 
     pub fn set_user_rewards_state(&self, user: &Address, value: bool) {
         let key = DataKey::UserRewardsState(user.clone());
         bump_persistent(&self.env, &key);
-        self.env
-            .storage()
-            .persistent()
-            .set(&key, &value)
+        self.env.storage().persistent().set(&key, &value)
     }
 }

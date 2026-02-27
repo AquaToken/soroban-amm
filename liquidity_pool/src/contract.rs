@@ -13,9 +13,9 @@ use crate::storage::{
     get_is_killed_swap, get_plane, get_protocol_fee_a, get_protocol_fee_b,
     get_protocol_fee_fraction, get_protocol_fees, get_reserve_a, get_reserve_b, get_reserves,
     get_router, get_token_a, get_token_b, get_token_future_wasm, get_tokens, has_plane,
-    put_reserves, set_fee_fraction, set_reserve_a, set_reserve_b, set_token_a, set_token_b,
-    set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
-    set_plane, set_protocol_fee_a, set_protocol_fee_b, set_protocol_fee_fraction, set_router,
+    put_reserves, set_fee_fraction, set_gauge_future_wasm, set_is_killed_claim,
+    set_is_killed_deposit, set_is_killed_swap, set_plane, set_protocol_fee_a, set_protocol_fee_b,
+    set_protocol_fee_fraction, set_reserve_a, set_reserve_b, set_router, set_token_a, set_token_b,
     set_token_future_wasm,
 };
 use crate::token::{create_contract, transfer_a, transfer_b};
