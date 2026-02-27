@@ -25,6 +25,8 @@ members = [
     "liquidity_pool_reward_gauge",
     "config_storage",
     "liquidity_pool_config_storage",
+    "batcher",
+    "guard",
 ]
 
 [workspace.package]

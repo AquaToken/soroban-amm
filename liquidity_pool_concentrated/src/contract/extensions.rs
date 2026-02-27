@@ -2,6 +2,7 @@ use super::*;
 
 // Concentrated pool extensions — methods specific to tick-based liquidity.
 // These are NOT available through the router; called directly on the pool contract.
+// For router-compatible full-range operations, see LiquidityPoolInterfaceTrait.
 #[contractimpl]
 impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     // Read-only preview for custom-range deposit.
@@ -62,12 +63,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
     }
 
     // Add liquidity to a specific tick range [tick_lower, tick_upper).
-    // `desired_amounts` is [amount0, amount1] — the maximum tokens the sender is willing
-    // to spend. The contract computes the maximum liquidity mintable from these amounts
-    // at the current price and transfers only the actual tokens needed.
-    // Returns (actual_amounts: Vec<u128>, liquidity: u128).
-    // On an empty pool (zero total liquidity), the price is auto-initialized from the
-    // token ratio — no separate initialize_price call needed.
+    // `desired_amounts` is [amount0, amount1] — the maximum the sender is willing to spend.
+    // Computes max liquidity, transfers desired amounts, refunds excess.
+    // On an empty pool, auto-initializes price from sqrt(amount1/amount0);
+    // both tokens required (AllCoinsRequired), derived tick must be in range.
     fn deposit_position(
         e: Env,
         sender: Address,

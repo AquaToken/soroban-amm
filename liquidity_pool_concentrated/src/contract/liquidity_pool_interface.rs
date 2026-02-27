@@ -10,9 +10,10 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         Symbol::new(&e, "concentrated")
     }
 
-    // One-time pool setup. Called by router during pool creation.
+    // One-time pool setup. Called by router's init_concentrated_pool.
     // Sets tokens, fee, tick spacing, access roles, default protocol fee (50%),
-    // and initial price at tick 0 (1:1). Price is auto-set on first deposit from token ratio.
+    // and placeholder price at tick 0. The actual price is auto-set on first deposit
+    // from the token amount ratio.
     fn initialize(
         e: Env,
         admin: Address,

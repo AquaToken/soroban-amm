@@ -1290,6 +1290,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
 
 [[package]]
+name = "soroban-batcher"
+version = "2.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "soroban-builtin-sdk-macros"
 version = "25.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1396,6 +1403,13 @@ name = "soroban-fixed-point-math"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "671e84e393a03992963c8763f8f5d8998c99e5079e03a56ab23e5dd9f7d99db5"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "soroban-guard"
+version = "2.0.0"
 dependencies = [
  "soroban-sdk",
 ]

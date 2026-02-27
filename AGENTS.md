@@ -52,7 +52,8 @@ This document provides comprehensive architecture details and development guidel
 │                        liquidity_pool_router                                 │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │  Entry point for all pool operations:                                │   │
-│  │  • Pool discovery & creation (init_standard_pool, init_stableswap)   │   │
+│  │  • Pool discovery & creation (init_standard_pool, init_stableswap,   │   │
+│  │    init_concentrated_pool)                                          │   │
 │  │  • Deposits, swaps, withdrawals (proxied to specific pools)          │   │
 │  │  • Multi-hop swaps (swap_chained, swap_chained_strict_receive)       │   │
 │  │  • Global rewards configuration (config_global_rewards)               │   │
@@ -60,25 +61,24 @@ This document provides comprehensive architecture details and development guidel
 │  └──────────────────────────────────────────────────────────────────────┘   │
 └────────────────────────────────────┬────────────────────────────────────────┘
                                      │
-          ┌──────────────────────────┼──────────────────────────┐
-          │                          │                          │
-          ▼                          ▼                          ▼
-┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────────┐
-│   liquidity_pool    │  │ liquidity_pool_     │  │ liquidity_pool_plane    │
-│   (Constant Prod)   │  │ stableswap          │  │                         │
-│                     │  │ (Curve-style)       │  │ Lightweight data store  │
-│  xy=k formula       │  │                     │  │ for pool metadata:      │
-│  2 tokens only      │  │  StableSwap math    │  │ • pool type             │
-│  Fixed fee tiers:   │  │  2-4 tokens         │  │ • reserves              │
-│  0.1%, 0.3%, 1%     │  │  Amp parameter (A)  │  │ • init parameters       │
-│                     │  │  Virtual price      │  │                         │
-│                     │  │  Configurable fee   │  │ Updated on every pool   │
-│                     │  │                     │  │ action                  │
-└─────────┬───────────┘  └──────────┬──────────┘  └─────────────────────────┘
-          │                         │                          ▲
-          │                         │                          │
-          └────────────┬────────────┘                          │
-                       │                                       │
+      ┌─────────────────┼─────────────────┬──────────────────────┐
+      │                 │                 │                      │
+      ▼                 ▼                 ▼                      ▼
+┌───────────────┐ ┌───────────────┐ ┌──────────────────┐ ┌─────────────────┐
+│ liquidity_    │ │ liquidity_    │ │ liquidity_pool_  │ │ liquidity_pool_ │
+│ pool          │ │ pool_         │ │ concentrated     │ │ plane           │
+│ (Const Prod)  │ │ stableswap    │ │ (Uni V3-style)   │ │                 │
+│               │ │ (Curve-style) │ │                  │ │ Lightweight     │
+│ xy=k formula  │ │               │ │ Tick-based conc. │ │ data store for  │
+│ 2 tokens only │ │ StableSwap    │ │ liquidity, custom│ │ pool metadata:  │
+│ Fee tiers:    │ │ math, 2-4     │ │ price ranges     │ │ • pool type     │
+│ 0.1%/0.3%/1%  │ │ tokens, amp A │ │ 2 tokens, fee    │ │ • reserves      │
+│               │ │               │ │ tiers: 10/30/100 │ │ • init params   │
+└───────┬───────┘ └───────┬───────┘ └────────┬─────────┘ └─────────────────┘
+        │                 │                  │                    ▲
+        │                 │                  │                    │
+        └────────┬────────┴──────────────────┘                   │
+                 │                                               │
                        ▼                                       │
           ┌────────────────────────┐                           │
           │      token_share       │                           │
@@ -118,6 +118,22 @@ This document provides comprehensive architecture details and development guidel
 └──────────────────────┴────────────────────────┴─────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Utility Contracts                                     │
+├────────────────────────────────────┬────────────────────────────────────────┤
+│   batcher                          │   guard                                │
+│                                    │                                        │
+│   Multicall: batches multiple      │   Return-value validator: invokes a   │
+│   contract calls into a single     │   contract call and asserts the       │
+│   atomic transaction.              │   result matches an expected value.   │
+│                                    │                                        │
+│   Used for multi-claim rewards     │   Used with batcher to verify         │
+│   across pools and safe            │   upgrade correctness:                │
+│   atomic upgrades.                 │   batch(pool.upgrade,                 │
+│                                    │     guard(pool.get_version),          │
+│                                    │     guard(pool.get_type))             │
+└────────────────────────────────────┴────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
 │                    liquidity_pool_liquidity_calculator                       │
 │                                                                              │
 │   Batch liquidity calculation for multiple pools                             │
@@ -136,6 +152,7 @@ This document provides comprehensive architecture details and development guidel
 |-------|-------------|-----------|
 | `liquidity_pool` | Constant product AMM (xy=k) | `contract.rs`, `pool.rs`, `pool_interface.rs` |
 | `liquidity_pool_stableswap` | StableSwap AMM (Curve-style) | `contract.rs`, `pool_interface.rs`, `normalize.rs` |
+| `liquidity_pool_concentrated` | Concentrated liquidity AMM (Uniswap V3-style) | `contract/`, `math.rs`, `u512.rs`, `storage.rs` |
 | `liquidity_pool_router` | Entry point, pool factory, rewards orchestration | `contract.rs`, `router_interface.rs`, `pool_interface.rs` |
 | `liquidity_pool_plane` | Lightweight pool metadata store | `contract.rs`, `interface.rs` |
 | `liquidity_pool_liquidity_calculator` | Batch liquidity calculations | `contract.rs`, `calculator.rs` |
@@ -143,6 +160,8 @@ This document provides comprehensive architecture details and development guidel
 | `fees_collector` | Protocol fees collection | `contract.rs` |
 | `locker_feed` | Locked token supply oracle | `contract.rs` |
 | `config_storage` | Shared configuration storage | `contract.rs` |
+| `batcher` | Multicall — atomic batch execution of multiple contract calls | `src/lib.rs` |
+| `guard` | Return-value validator — asserts contract call results match expected values | `src/lib.rs` |
 
 ### Shared Libraries (non-deployable)
 
@@ -281,6 +300,69 @@ fn distribute_outstanding_reward(user, from, tokens, pool_index) -> u128
 - Configured via `configure_init_pool_payment(admin, token, standard_amount, stable_amount, to)`
 - Different amounts for standard vs stableswap pools
 
+### liquidity_pool_concentrated (Uniswap V3-style)
+
+**Purpose**: Tick-based concentrated liquidity pool with custom price ranges.
+
+**Key Files**:
+- `contract/mod.rs` — imports, struct, submodule declarations
+- `contract/internal.rs` — core logic (swap loop, fee growth, tick/bitmap management)
+- `contract/extensions.rs` — public trait: `deposit_position`, `withdraw_position`, `claim_position_fees`, getters
+- `contract/liquidity_pool_interface.rs` — router-compatible trait: `deposit` (full-range), `withdraw`, `swap`
+- `contract/admin.rs` — admin operations (kill switches, protocol fees)
+- `math.rs` — pure math (tick↔sqrt_price, amount deltas, fee growth)
+- `u512.rs` — 512-bit mul-div for overflow-safe arithmetic
+- `storage.rs` — storage accessors, constants
+- `errors.rs` — error enum (shared 1xx/2xx codes + concentrated-specific 21xx)
+
+**Pool Creation & Price Initialization**:
+
+The initial price is set by the first deposit's token ratio (`sqrt_price = sqrt(amount1/amount0)`).
+To prevent front-running price manipulation, pool creation and first deposit should be
+batched atomically via the batcher contract:
+
+1. `router.init_concentrated_pool(tokens, fee)` — deploys pool, sets placeholder price at tick 0
+2. `pool.deposit_position(sender, tick_lower, tick_upper, [amount0, amount1], min_liq)` — sets actual price from amounts
+
+Or with a full-range deposit:
+
+1. `router.init_concentrated_pool(tokens, fee)` — deploys pool
+2. `router.deposit(user, tokens, pool_index, [amount0, amount1], min_shares)` — full-range deposit, sets price
+
+After the first deposit (`total_raw_liquidity > 0`), the price cannot be re-initialized.
+Without batching, there is a window between pool creation and first deposit where an
+attacker could front-run with a dust deposit at a manipulated price ratio.
+
+**Deposit Behavior**:
+- First deposit on empty pool: requires both tokens (`AllCoinsRequired`), derives price from ratio
+- Subsequent deposits: use existing price, compute max liquidity from desired amounts
+- Out-of-range deposit: takes only one token (above range → token1 only, below → token0 only)
+- Auth-deterministic: transfers full `desired_amounts`, refunds excess
+
+**Swap Behavior**:
+- Exact-input (`swap`): transfers `in_amount` from user, refunds unused portion
+- Exact-output (`swap_strict_receive`): transfers `in_max` from user, refunds excess; reverts with `InMaxNotSatisfied` if actual cost exceeds `in_max`
+- Both modes are auth-deterministic: transfer amounts are function parameters known at signing time
+
+**Interface (Extensions — direct pool calls)**:
+```rust
+fn deposit_position(sender, tick_lower, tick_upper, desired_amounts, min_liquidity) -> (Vec<u128>, u128)
+fn withdraw_position(owner, tick_lower, tick_upper, amount, min_amounts) -> Vec<u128>
+fn claim_position_fees(owner, tick_lower, tick_upper) -> Vec<u128>
+fn claim_all_position_fees(owner) -> Vec<u128>
+fn get_slot0() -> Slot0                    // current sqrt_price and tick
+fn get_position(owner, tick_lower, tick_upper) -> PositionData
+fn tick_from_amounts(amount0, amount1) -> i32  // helper for frontends
+```
+
+**Interface (Router-compatible — full-range)**:
+```rust
+fn deposit(user, desired_amounts, min_shares) -> (Vec<u128>, u128)
+fn withdraw(user, share_amount, min_amounts) -> Vec<u128>
+fn swap(user, in_idx, out_idx, in_amount, out_min) -> u128
+fn swap_strict_receive(user, in_idx, out_idx, out_amount, in_max) -> u128
+```
+
 ### liquidity_pool_plane
 
 **Purpose**: Lightweight external storage for pool metadata
@@ -321,6 +403,72 @@ fn get_liquidity(pools: Vec<Address>) -> Vec<U256>
 - For standard pools: Sum of liquidity for both swap directions
 - For stableswap pools: Uses invariant D calculation
 - Reads pool data from plane for efficiency
+
+### batcher
+
+**Purpose**: Multicall contract — executes multiple contract calls in a single atomic transaction.
+
+**Interface**:
+```rust
+fn batch(
+    auth_users: Vec<Address>,       // addresses that must authorize the batch
+    batch: Vec<(Address, Symbol, Vec<Val>)>,  // [(contract, fn_name, args), ...]
+    return_result: bool,            // whether to collect and return results
+) -> Vec<Val>
+```
+
+**Key Properties**:
+- All calls execute atomically — if any call fails, the entire batch reverts
+- Requires authorization from all `auth_users` before execution
+- Results are optionally collected and returned as `Vec<Val>`
+
+**Use Cases**:
+- Multi-claim: batch reward claims across multiple pools in one transaction
+- Atomic upgrade + validation (combined with guard contract)
+- Any multi-step operation that must succeed or fail as a unit
+
+### guard
+
+**Purpose**: Return-value validator — invokes a contract call and asserts the result matches an expected value.
+
+**Interface**:
+```rust
+fn assert_result(
+    auth_users: Vec<Address>,    // addresses that must authorize
+    contract: Address,           // target contract
+    fn_name: Symbol,             // function to call
+    args: Vec<Val>,              // function arguments
+    expected_result: Val,        // expected return value
+) -> Val                         // actual result (if assertion passes)
+```
+
+**Error Codes**:
+```rust
+ResultsMismatch = 101,   // actual != expected
+UnsupportedType = 102,   // ScVal type not supported for comparison
+InvalidValue = 103,      // type extraction failed
+TypesMismatch = 104,     // comparing values of different types
+```
+
+**Key Properties**:
+- Deep recursive comparison supporting nested `Vec`, `Map`, scalars, `Address`, `Symbol`, etc.
+- Panics with `ResultsMismatch` if the actual result differs from expected
+- Type-safe: panics with `TypesMismatch` if comparing incompatible types
+
+**Combined Batcher + Guard Pattern**:
+```
+// Atomic upgrade with post-upgrade validation:
+batcher.batch(
+    [admin],
+    [
+        (pool, "upgrade", [new_wasm_hash]),
+        (guard, "assert_result", [[], pool, "get_version", [], expected_version]),
+        (guard, "assert_result", [[], pool, "get_type", [], expected_type]),
+    ],
+    false,
+)
+// If upgrade breaks version or type → guard panics → entire batch reverts
+```
 
 ---
 
@@ -689,9 +837,10 @@ fn pool_gauge_schedule_reward(
 | Range | Category | Crate |
 |-------|----------|-------|
 | 1xx | Access Control | `access_control` |
-| 2xx | Pool Operations | `liquidity_pool`, `liquidity_pool_stableswap` |
+| 2xx | Pool Operations (shared) | `liquidity_pool`, `liquidity_pool_stableswap`, `liquidity_pool_concentrated` |
 | 3xx | Router Operations | `liquidity_pool_router` |
-| 20xx | Validation Errors | `liquidity_pool_validation_errors` |
+| 20xx | Validation Errors (shared) | `liquidity_pool_validation_errors` |
+| 21xx | Concentrated Pool Specific | `liquidity_pool_concentrated` |
 | 29xx | Stableswap Specific | `liquidity_pool_stableswap` |
 
 ### Access Control Errors
@@ -763,6 +912,27 @@ CannotComparePools = 2017,
 ZeroAmount = 2018,
 InsufficientBalance = 2019,
 InMaxNotSatisfied = 2020,
+```
+
+### Concentrated Pool Errors (21xx)
+```rust
+InvalidTickRange = 2101,
+InvalidAmount = 2103,
+InvalidSqrtPrice = 2104,
+InvalidTickSpacing = 2106,
+TickOutOfBounds = 2107,
+PriceOutOfBounds = 2108,
+TickNotSpacedCorrectly = 2109,
+TickLowerNotLessThanUpper = 2110,
+TickLowerTooLow = 2111,
+TickUpperTooHigh = 2112,
+InvalidPriceLimit = 2113,
+PositionNotFound = 2118,
+TooManyPositions = 2119,
+LiquidityAmountTooLarge = 2120,
+InsufficientLiquidity = 2121,
+LiquidityOverflow = 2122,
+LiquidityUnderflow = 2123,
 ```
 
 ### Stableswap Specific Errors (2902-2908)
