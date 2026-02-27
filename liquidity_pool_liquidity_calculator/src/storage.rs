@@ -23,6 +23,9 @@ pub(crate) fn get_plane(e: &Env) -> Address {
     let key = DataKey::Plane;
     e.storage()
         .instance()
+        .extend_ttl(PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+    e.storage()
+        .instance()
         .get(&key)
         .expect("unable to get plane")
 }

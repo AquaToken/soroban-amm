@@ -230,6 +230,7 @@ pub fn put_admin_actions_deadline(e: &Env, value: &u64) {
 }
 
 pub(crate) fn has_plane(e: &Env) -> bool {
+    bump_instance(e);
     let key = DataKey::Plane;
     e.storage().instance().has(&key)
 }

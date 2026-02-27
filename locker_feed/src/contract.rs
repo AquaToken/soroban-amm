@@ -64,6 +64,7 @@ impl LockerFeed {
 
     // total supply getter
     pub fn total_supply(e: Env) -> u128 {
+        bump_instance(&e);
         e.storage()
             .instance()
             .get(&DataKey::TotalSupply)

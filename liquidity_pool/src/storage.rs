@@ -146,6 +146,7 @@ pub fn put_fee_fraction(e: &Env, value: u32) {
 }
 
 pub(crate) fn has_plane(e: &Env) -> bool {
+    bump_instance(e);
     let key = DataKey::Plane;
     e.storage().instance().has(&key)
 }
