@@ -266,11 +266,13 @@ pub fn get_tick(e: &Env, tick: i32, spacing: i32) -> TickInfo {
 // word_pos = chunk_pos >> 8. bit_pos = chunk_pos & 255.
 pub fn get_chunk_bitmap_word(e: &Env, word_pos: i32) -> soroban_sdk::U256 {
     let key = DataKey::ChunkBitmap(word_pos);
-    let v: Option<soroban_sdk::U256> = e.storage().persistent().get(&key);
-    if v.is_some() {
-        bump_persistent(e, &key);
+    match e.storage().persistent().get(&key) {
+        Some(word) => {
+            bump_persistent(e, &key);
+            word
+        }
+        None => soroban_sdk::U256::from_u32(e, 0),
     }
-    v.unwrap_or_else(|| soroban_sdk::U256::from_u32(e, 0))
 }
 
 pub fn set_chunk_bitmap_word(e: &Env, word_pos: i32, word: &soroban_sdk::U256) {
@@ -354,15 +356,17 @@ impl ChunkCache {
 // Merged positions + raw/weighted liquidity to save 2 footprint entries per user operation.
 pub fn get_user_state(e: &Env, user: &Address) -> UserState {
     let key = DataKey::User(user.clone());
-    let v: Option<UserState> = e.storage().persistent().get(&key);
-    if v.is_some() {
-        bump_persistent(e, &key);
+    match e.storage().persistent().get(&key) {
+        Some(state) => {
+            bump_persistent(e, &key);
+            state
+        }
+        None => UserState {
+            positions: Vec::new(e),
+            raw_liquidity: 0,
+            weighted_liquidity: 0,
+        },
     }
-    v.unwrap_or(UserState {
-        positions: Vec::new(e),
-        raw_liquidity: 0,
-        weighted_liquidity: 0,
-    })
 }
 
 pub fn set_user_state(e: &Env, user: &Address, state: &UserState) {

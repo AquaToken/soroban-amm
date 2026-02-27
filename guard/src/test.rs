@@ -44,11 +44,11 @@ fn test() {
                 &plane_client.address,
                 &Symbol::new(&e, "version"),
                 &vec![&e],
-                &105_u32.into_val(&e),
+                &200_u32.into_val(&e),
             )
         )
         .unwrap(),
-        105
+        200
     );
     assert!(guard
         .try_assert_result(

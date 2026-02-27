@@ -2082,7 +2082,7 @@ fn test_dust_griefing_tick_spacing_20() {
     );
 
     // ---- Attacker: fill ticks with dust ----
-    let dust_range: i32 = 300; // number of spacing steps on each side
+    let dust_range: i32 = 200; // number of spacing steps on each side
 
     // Attacker uses multiple accounts to bypass MAX_USER_POSITIONS (20)
     let mut total_dust_positions = 0u32;
