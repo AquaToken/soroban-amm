@@ -169,8 +169,11 @@ pub fn get_position(
     tick_upper: i32,
 ) -> Option<PositionData> {
     let key = DataKey::Position(owner.clone(), tick_lower, tick_upper);
-    bump_persistent(e, &key);
-    e.storage().persistent().get(&key)
+    let v = e.storage().persistent().get(&key);
+    if v.is_some() {
+        bump_persistent(e, &key);
+    }
+    v
 }
 
 pub fn set_position(
@@ -181,8 +184,8 @@ pub fn set_position(
     value: &PositionData,
 ) {
     let key = DataKey::Position(owner.clone(), tick_lower, tick_upper);
-    bump_persistent(e, &key);
     e.storage().persistent().set(&key, value);
+    bump_persistent(e, &key);
 }
 
 pub fn remove_position(e: &Env, owner: &Address, tick_lower: i32, tick_upper: i32) {
@@ -215,14 +218,17 @@ pub fn chunk_address(compressed_tick: i32) -> (i32, u32) {
 
 pub fn get_tick_chunk(e: &Env, chunk_pos: i32) -> Option<Vec<TickData>> {
     let key = DataKey::TickChunk(chunk_pos);
-    bump_persistent(e, &key);
-    e.storage().persistent().get(&key)
+    let v = e.storage().persistent().get(&key);
+    if v.is_some() {
+        bump_persistent(e, &key);
+    }
+    v
 }
 
 pub fn set_tick_chunk(e: &Env, chunk_pos: i32, chunk: &Vec<TickData>) {
     let key = DataKey::TickChunk(chunk_pos);
-    bump_persistent(e, &key);
     e.storage().persistent().set(&key, chunk);
+    bump_persistent(e, &key);
 }
 
 // Allocate a zeroed chunk: Vec of TICKS_PER_CHUNK TickData entries.
@@ -260,17 +266,17 @@ pub fn get_tick(e: &Env, tick: i32, spacing: i32) -> TickInfo {
 // word_pos = chunk_pos >> 8. bit_pos = chunk_pos & 255.
 pub fn get_chunk_bitmap_word(e: &Env, word_pos: i32) -> soroban_sdk::U256 {
     let key = DataKey::ChunkBitmap(word_pos);
-    bump_persistent(e, &key);
-    e.storage()
-        .persistent()
-        .get(&key)
-        .unwrap_or_else(|| soroban_sdk::U256::from_u32(e, 0))
+    let v: Option<soroban_sdk::U256> = e.storage().persistent().get(&key);
+    if v.is_some() {
+        bump_persistent(e, &key);
+    }
+    v.unwrap_or_else(|| soroban_sdk::U256::from_u32(e, 0))
 }
 
 pub fn set_chunk_bitmap_word(e: &Env, word_pos: i32, word: &soroban_sdk::U256) {
     let key = DataKey::ChunkBitmap(word_pos);
-    bump_persistent(e, &key);
     e.storage().persistent().set(&key, word);
+    bump_persistent(e, &key);
 }
 
 // ── Chunk cache (write-back with explicit flush) ──
@@ -348,8 +354,11 @@ impl ChunkCache {
 // Merged positions + raw/weighted liquidity to save 2 footprint entries per user operation.
 pub fn get_user_state(e: &Env, user: &Address) -> UserState {
     let key = DataKey::User(user.clone());
-    bump_persistent(e, &key);
-    e.storage().persistent().get(&key).unwrap_or(UserState {
+    let v: Option<UserState> = e.storage().persistent().get(&key);
+    if v.is_some() {
+        bump_persistent(e, &key);
+    }
+    v.unwrap_or(UserState {
         positions: Vec::new(e),
         raw_liquidity: 0,
         weighted_liquidity: 0,
@@ -358,8 +367,8 @@ pub fn get_user_state(e: &Env, user: &Address) -> UserState {
 
 pub fn set_user_state(e: &Env, user: &Address, state: &UserState) {
     let key = DataKey::User(user.clone());
-    bump_persistent(e, &key);
     e.storage().persistent().set(&key, state);
+    bump_persistent(e, &key);
 }
 
 // Convenience read-only accessors — delegate to get_user_state.
