@@ -25,6 +25,8 @@ tasks:
       - task -d liquidity_pool_provider_swap_fee_factory build || exit 1
       - task -d fees_collector build || exit 1
       - task -d rewards_gauge build || exit 1
+      - task -d batcher build || exit 1
+      - task -d guard build || exit 1
 
   test:
     cmds:
@@ -49,19 +51,19 @@ tasks:
   _check_bindings_tranfer_ownership:
     vars:
       WASMS:
-        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' -and -not -name 'soroban_rewards_gauge_contract.wasm' \)
+        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' -and -not -name 'soroban_rewards_gauge_contract.wasm' -and -not -name 'soroban_batcher.wasm' -and -not -name 'soroban_guard.wasm' \)
     cmds:
       - for: { var: WASMS }
         cmd:
           echo "Checking bindings for {{ .ITEM }}" &&
-          stellar contract info interface --wasm {{ .ITEM }} | grep commit_transfer_ownership && 
+          stellar contract info interface --wasm {{ .ITEM }} | grep commit_transfer_ownership &&
           stellar contract info interface --wasm {{ .ITEM }} | grep apply_transfer_ownership
           || exit 1
 
   _check_bindings_delayed_upgrade:
     vars:
       WASMS:
-        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' -and -not -name 'soroban_rewards_gauge_contract.wasm' \)
+        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' -and -not -name 'soroban_rewards_gauge_contract.wasm' -and -not -name 'soroban_batcher.wasm' -and -not -name 'soroban_guard.wasm' \)
     cmds:
       - for: { var: WASMS }
         cmd:
