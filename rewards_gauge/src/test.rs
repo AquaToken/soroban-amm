@@ -607,3 +607,104 @@ fn test_reward_numeric_overflow() {
         .contract
         .get_user_reward(&setup.pool_address, &user, &0, &282842712474);
 }
+
+// Reproduces the production incident where gauges_claim tried to transfer
+// 4_399_524_056 AQUA from a gauge that held only 4_399_523_980 AQUA (deficit 76).
+//
+// Root cause: the old get_user_reward on the LP contract called
+// update_working_balance and stored wb_boosted > ws_raw in LP storage *without*
+// first checkpointing the gauge.  A subsequent gauges_claim used wb_boosted with
+// an inv that had been accumulated using ws_raw as the denominator, producing
+//   to_claim = wb_boosted × inv / P  >  gen_t1 = gauge_balance  → panic.
+//
+// The defensive cap in claim() limits the transfer to (accumulated − claimed),
+// so the gauge pays exactly what it generated (the 76-stroop excess is dust).
+#[test]
+fn test_inv_accumulated_with_pre_boost_ws_causes_overflow() {
+    let setup = Setup::with_mocked_pool();
+    let e = &setup.env;
+
+    let ws_raw: u128 = 4_399_523_980;
+    let wb_boosted: u128 = 4_399_524_056; // ws_raw + 76
+
+    let week = 604_800u64;
+    let tps = ws_raw / week as u128;
+    let gen_t1 = tps * week as u128;
+
+    let some_user = Address::generate(e);
+    let real_user = Address::generate(e);
+    let distributor = Address::generate(e);
+    let reward_token_sac = StellarAssetClient::new(e, &setup.reward_token.address);
+    reward_token_sac.mint(&distributor, &(gen_t1 as i128));
+
+    // Schedule rewards with the un-boosted working supply as denominator.
+    setup.contract.schedule_rewards_config(
+        &setup.pool_address,
+        &distributor,
+        &None,
+        &week,
+        &tps,
+        &ws_raw,
+    );
+
+    // Advance a full week so that inv is locked in with ws_raw as denominator.
+    jump(e, week);
+    setup
+        .contract
+        .checkpoint_user(&setup.pool_address, &some_user, &0, &ws_raw);
+
+    // Claim with wb_boosted > ws_raw.  Without the defensive cap this would panic
+    // because to_claim = wb_boosted × inv / P  >  gen_t1 = gauge balance.
+    // With the cap the transfer is limited to gen_t1; the 76-stroop excess is dust.
+    let claimed = setup
+        .contract
+        .claim(&setup.pool_address, &real_user, &wb_boosted, &ws_raw);
+    assert_eq!(
+        claimed, gen_t1,
+        "claim must be capped at generated tokens; \
+         wb ({wb_boosted}) > ws ({ws_raw}) overflows without the defensive cap",
+    );
+}
+
+// Shows that get_user_reward returns a value > generated when wb > ws.
+// This is the invariant violation that the old LP get_user_reward side-effect
+// created by writing a boosted wb to LP storage without a prior gauge checkpoint.
+// The gauge's claim() caps the actual transfer; this getter exposes the inflated figure.
+#[test]
+fn test_reward_amount_exceeds_generated_when_wb_exceeds_pre_boost_ws() {
+    let setup = Setup::with_mocked_pool();
+    let e = &setup.env;
+
+    let ws: u128 = 1_000_0000000;
+    let wb: u128 = ws + 76;
+    let week = 604_800u64;
+    let tps = ws / week as u128;
+    let gen = tps * week as u128;
+
+    let some_user = Address::generate(e);
+    let real_user = Address::generate(e);
+    let distributor = Address::generate(e);
+    let reward_token_sac = StellarAssetClient::new(e, &setup.reward_token.address);
+    reward_token_sac.mint(&distributor, &(gen as i128));
+
+    setup.contract.schedule_rewards_config(
+        &setup.pool_address,
+        &distributor,
+        &None,
+        &week,
+        &tps,
+        &ws,
+    );
+    jump(e, week);
+    setup
+        .contract
+        .checkpoint_user(&setup.pool_address, &some_user, &0, &ws);
+
+    let reward = setup
+        .contract
+        .get_user_reward(&setup.pool_address, &real_user, &wb, &ws);
+    assert!(
+        reward > gen,
+        "reward {reward} must exceed generated {gen} when wb ({wb}) > ws ({ws})",
+    );
+}
