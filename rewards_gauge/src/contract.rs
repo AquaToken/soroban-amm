@@ -104,8 +104,15 @@ impl RewardsGauge {
         let mut user_data = checkpoint_user(&e, &global_data, &user, working_balance);
 
         let user_reward = user_data.to_claim;
+        // Defensive cap: never transfer more than (accumulated - claimed).
+        // Prevents a panic if the working_balance > working_supply invariant was violated
+        // upstream (e.g. a read-only getter mutated LP storage without first checkpointing
+        // the gauge).
+        let max_payable = global_data.accumulated.saturating_sub(global_data.claimed);
+        let transfer_amount = user_reward.min(max_payable);
+
         user_data.to_claim = 0;
-        global_data.claimed += user_reward;
+        global_data.claimed += transfer_amount;
         set_global_reward_data(&e, &global_data);
         set_user_reward_data(&e, user.clone(), &user_data);
 
@@ -114,10 +121,10 @@ impl RewardsGauge {
         Client::new(&e, &reward_token).transfer(
             &e.current_contract_address(),
             &user,
-            &(user_reward as i128),
+            &(transfer_amount as i128),
         );
 
-        user_reward
+        transfer_amount
     }
 
     pub fn get_user_reward(
