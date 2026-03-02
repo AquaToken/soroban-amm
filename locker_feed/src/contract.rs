@@ -14,6 +14,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
+use utils::bump::bump_instance;
 
 #[derive(Clone)]
 #[contracttype]
@@ -55,6 +56,7 @@ impl LockerFeed {
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&operations_admin, &Role::OperationsAdmin);
 
+        bump_instance(&e);
         e.storage()
             .instance()
             .set(&DataKey::TotalSupply, &total_supply);
@@ -62,6 +64,7 @@ impl LockerFeed {
 
     // total supply getter
     pub fn total_supply(e: Env) -> u128 {
+        bump_instance(&e);
         e.storage()
             .instance()
             .get(&DataKey::TotalSupply)

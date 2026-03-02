@@ -1,4 +1,5 @@
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
+use utils::bump::{bump_instance, bump_persistent};
 use utils::storage_errors::StorageError;
 
 // ------------------------------------
@@ -93,6 +94,7 @@ pub trait BoostTokenStorageTrait {
 
 impl BoostTokenStorageTrait for Storage {
     fn get_reward_boost_token(&self) -> Address {
+        bump_instance(&self.env);
         match self
             .env
             .storage()
@@ -105,6 +107,7 @@ impl BoostTokenStorageTrait for Storage {
     }
 
     fn put_reward_boost_token(&self, contract: Address) {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -112,6 +115,7 @@ impl BoostTokenStorageTrait for Storage {
     }
 
     fn has_reward_boost_token(&self) -> bool {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -131,6 +135,7 @@ pub trait BoostFeedStorageTrait {
 
 impl BoostFeedStorageTrait for Storage {
     fn get_reward_boost_feed(&self) -> Address {
+        bump_instance(&self.env);
         match self.env.storage().instance().get(&DataKey::RewardBoostFeed) {
             Some(v) => v,
             None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
@@ -138,6 +143,7 @@ impl BoostFeedStorageTrait for Storage {
     }
 
     fn put_reward_boost_feed(&self, contract: Address) {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -145,6 +151,7 @@ impl BoostFeedStorageTrait for Storage {
     }
 
     fn has_reward_boost_feed(&self) -> bool {
+        bump_instance(&self.env);
         self.env.storage().instance().has(&DataKey::RewardBoostFeed)
     }
 }
@@ -165,26 +172,29 @@ pub trait WorkingBalancesStorageTrait {
 
 impl WorkingBalancesStorageTrait for Storage {
     fn get_working_balance(&self, user: &Address) -> u128 {
-        self.env
-            .storage()
-            .persistent()
-            .get(&DataKey::WorkingBalance(user.clone()))
-            .unwrap()
+        let key = DataKey::WorkingBalance(user.clone());
+        let v = self.env.storage().persistent().get(&key).unwrap();
+        bump_persistent(&self.env, &key);
+        v
     }
 
     fn has_working_balance(&self, user: &Address) -> bool {
-        self.env
-            .storage()
-            .persistent()
-            .has(&DataKey::WorkingBalance(user.clone()))
+        let key = DataKey::WorkingBalance(user.clone());
+        let exists = self.env.storage().persistent().has(&key);
+        if exists {
+            bump_persistent(&self.env, &key);
+        }
+        exists
     }
 
     fn set_working_balance(&self, user: &Address, value: u128) {
         let key = DataKey::WorkingBalance(user.clone());
         self.env.storage().persistent().set(&key, &value);
+        bump_persistent(&self.env, &key);
     }
 
     fn get_working_supply(&self) -> u128 {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -193,6 +203,7 @@ impl WorkingBalancesStorageTrait for Storage {
     }
 
     fn set_working_supply(&self, value: u128) {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -200,6 +211,7 @@ impl WorkingBalancesStorageTrait for Storage {
     }
 
     fn has_working_supply(&self) -> bool {
+        bump_instance(&self.env);
         self.env.storage().instance().has(&DataKey::WorkingSupply)
     }
 }
@@ -218,6 +230,7 @@ pub trait PoolRewardsStorageTrait {
 
 impl PoolRewardsStorageTrait for Storage {
     fn get_pool_reward_config(&self) -> PoolRewardConfig {
+        bump_instance(&self.env);
         match self
             .env
             .storage()
@@ -233,6 +246,7 @@ impl PoolRewardsStorageTrait for Storage {
     }
 
     fn set_pool_reward_config(&self, config: &PoolRewardConfig) {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -240,6 +254,7 @@ impl PoolRewardsStorageTrait for Storage {
     }
 
     fn get_pool_reward_data(&self) -> PoolRewardData {
+        bump_instance(&self.env);
         match self.env.storage().instance().get(&DataKey::PoolRewardData) {
             Some(v) => v,
             None => PoolRewardData {
@@ -252,6 +267,7 @@ impl PoolRewardsStorageTrait for Storage {
     }
 
     fn set_pool_reward_data(&self, data: &PoolRewardData) {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -270,22 +286,18 @@ pub trait UserRewardsStorageTrait {
 
 impl UserRewardsStorageTrait for Storage {
     fn get_user_reward_data(&self, user: &Address) -> Option<UserRewardData> {
-        match self
-            .env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserRewardData(user.clone()))
-        {
-            Some(data) => data,
-            None => None,
+        let key = DataKey::UserRewardData(user.clone());
+        let data: Option<UserRewardData> = self.env.storage().persistent().get(&key);
+        if data.is_some() {
+            bump_persistent(&self.env, &key);
         }
+        data
     }
 
     fn set_user_reward_data(&self, user: &Address, config: &UserRewardData) {
-        self.env
-            .storage()
-            .persistent()
-            .set(&DataKey::UserRewardData(user.clone()), config);
+        let key = DataKey::UserRewardData(user.clone());
+        self.env.storage().persistent().set(&key, config);
+        bump_persistent(&self.env, &key);
     }
 }
 
@@ -306,7 +318,10 @@ impl RewardInvDataStorageTrait for Storage {
         }
 
         let value = match self.env.storage().persistent().get::<_, Vec<u128>>(&key) {
-            Some(v) => v,
+            Some(v) => {
+                bump_persistent(&self.env, &key);
+                v
+            }
             None => {
                 // fallback to legacy key
                 let key_old = DataKey::RewardInvData(pow, page_number);
@@ -334,6 +349,7 @@ impl RewardInvDataStorageTrait for Storage {
         let key = DataKey::RewardInvDataV2(pow, page_number);
         self.inv_cache.set(key.clone(), value.clone());
         self.env.storage().persistent().set(&key, &value);
+        bump_persistent(&self.env, &key);
     }
 }
 
@@ -349,6 +365,7 @@ pub trait RewardTokenStorageTrait {
 
 impl RewardTokenStorageTrait for Storage {
     fn get_reward_token(&self) -> Address {
+        bump_instance(&self.env);
         match self.env.storage().instance().get(&DataKey::RewardToken) {
             Some(v) => v,
             None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
@@ -356,6 +373,7 @@ impl RewardTokenStorageTrait for Storage {
     }
 
     fn put_reward_token(&self, contract: Address) {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -363,6 +381,7 @@ impl RewardTokenStorageTrait for Storage {
     }
 
     fn has_reward_token(&self) -> bool {
+        bump_instance(&self.env);
         self.env.storage().instance().has(&DataKey::RewardToken)
     }
 }
@@ -371,6 +390,7 @@ impl RewardTokenStorageTrait for Storage {
 impl Storage {
     // excluded shares shouldn't be counted for rewards
     pub fn get_total_excluded_shares(&self) -> u128 {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -379,6 +399,7 @@ impl Storage {
     }
 
     pub fn set_total_excluded_shares(&self, value: u128) {
+        bump_instance(&self.env);
         self.env
             .storage()
             .instance()
@@ -386,17 +407,17 @@ impl Storage {
     }
 
     pub fn get_user_rewards_state(&self, user: &Address) -> bool {
-        self.env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserRewardsState(user.clone()))
-            .unwrap_or(true)
+        let key = DataKey::UserRewardsState(user.clone());
+        let v: Option<bool> = self.env.storage().persistent().get(&key);
+        if v.is_some() {
+            bump_persistent(&self.env, &key);
+        }
+        v.unwrap_or(true)
     }
 
     pub fn set_user_rewards_state(&self, user: &Address, value: bool) {
-        self.env
-            .storage()
-            .persistent()
-            .set(&DataKey::UserRewardsState(user.clone()), &value)
+        let key = DataKey::UserRewardsState(user.clone());
+        self.env.storage().persistent().set(&key, &value);
+        bump_persistent(&self.env, &key)
     }
 }

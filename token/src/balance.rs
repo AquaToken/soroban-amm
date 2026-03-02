@@ -1,5 +1,6 @@
 use crate::errors::TokenError;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+use utils::bump::bump_persistent;
 
 #[derive(Clone)]
 #[contracttype]
@@ -10,14 +11,18 @@ enum DataKey {
 fn write_balance(e: &Env, addr: Address, amount: i128) {
     let key = DataKey::Balance(addr);
     e.storage().persistent().set(&key, &amount);
+    bump_persistent(e, &key);
 }
 
 pub fn read_balance(e: &Env, addr: Address) -> i128 {
     let key = DataKey::Balance(addr);
-    e.storage()
-        .persistent()
-        .get::<DataKey, i128>(&key)
-        .unwrap_or(0)
+    match e.storage().persistent().get::<DataKey, i128>(&key) {
+        Some(balance) => {
+            bump_persistent(e, &key);
+            balance
+        }
+        None => 0,
+    }
 }
 
 pub fn receive_balance(e: &Env, addr: Address, amount: i128) {
