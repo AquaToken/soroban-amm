@@ -13,6 +13,7 @@ use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, FromVal, IntoVal, Map, Symbol, Val, Vec,
     U256,
 };
+use utils::test_rebasing_token;
 use utils::test_utils::{
     assert_approx_eq_abs, assert_approx_eq_abs_u256, install_dummy_wasm, jump,
 };
@@ -4013,4 +4014,87 @@ fn test_rewards_distribution_reward_token_lock() {
         reward_token.balance(&stable_pool_address) as u128,
         stable_pool_tps1 * 200
     );
+}
+
+/// Regression test: swap_chained_strict_receive with a rebasing input token.
+///
+/// Rebasing tokens use ceil-rounding on transfer(amount→shares).
+/// The old "take max, refund change, then swap" pattern caused:
+///   ceil(max_in * r) - ceil(change * r) < ceil(estimated * r)
+/// -> InsufficientBalance on the pool's transfer call.
+///
+/// The fix defers the refund until after swaps, using balance delta.
+#[test]
+fn test_chained_swap_strict_receive_rebasing_token() {
+    let setup = Setup::default();
+    let e = setup.env;
+    let router = setup.router;
+    let admin = setup.admin;
+    let [_, token2, _, _] = setup.tokens;
+
+    // Deploy rebasing token (K=103, K_SCALE=100): ceil-rounds on transfer
+    let rebasing_addr = e.register(test_rebasing_token::RebasingToken, ());
+    let rebasing = test_rebasing_token::RebasingTokenClient::new(&e, &rebasing_addr);
+    rebasing.initialize(&admin, &103, &100);
+
+    // Sort tokens for pool creation
+    let tokens_pair = if rebasing_addr < token2.address {
+        Vec::from_array(&e, [rebasing_addr.clone(), token2.address.clone()])
+    } else {
+        Vec::from_array(&e, [token2.address.clone(), rebasing_addr.clone()])
+    };
+
+    router.mock_all_auths().configure_init_pool_payment(
+        &admin,
+        &testutils::create_token_contract(&e, &admin).address,
+        &0,
+        &0,
+        &router.address,
+    );
+    let (pool_hash, _) = router
+        .mock_all_auths()
+        .init_standard_pool(&admin, &tokens_pair, &30);
+
+    // Deposit liquidity
+    let liq: i128 = 500_000_0000000;
+    rebasing.mock_all_auths().mint(&admin, &liq);
+    test_token::Client::new(&e, &token2.address)
+        .mock_all_auths()
+        .mint(&admin, &liq);
+    router.mock_all_auths().deposit(
+        &admin,
+        &tokens_pair,
+        &pool_hash,
+        &Vec::from_array(&e, [liq as u128, liq as u128]),
+        &0,
+    );
+
+    // Swap: rebasing -> token2, with generous max_in to ensure surplus
+    let swapper = Address::generate(&e);
+    rebasing.mock_all_auths().mint(&swapper, &10_0000000);
+    let balance_before = rebasing.balance(&swapper);
+
+    let out_amount: u128 = 1_0000000;
+    let max_in = balance_before as u128;
+
+    let actual_in = router.mock_all_auths().swap_chained_strict_receive(
+        &swapper,
+        &vec![
+            &e,
+            (
+                tokens_pair.clone(),
+                pool_hash.clone(),
+                token2.address.clone(),
+            ),
+        ],
+        &rebasing_addr,
+        &out_amount,
+        &max_in,
+    );
+
+    assert!(actual_in > 0 && actual_in < max_in);
+    assert_eq!(token2.balance(&swapper), out_amount as i128);
+    assert_eq!(token2.balance(&router.address), 0);
+    assert_eq!(rebasing.balance(&router.address), 0);
+    assert!(rebasing.balance(&swapper) < balance_before);
 }
