@@ -301,11 +301,9 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             None => panic_with_error!(&e, Error::PathIsEmpty),
         };
 
-        SorobanTokenClient::new(&e, &token_in).transfer(
-            &user,
-            &e.current_contract_address(),
-            &(in_max as i128),
-        );
+        let input_token_client = SorobanTokenClient::new(&e, &token_in);
+        let balance_before: i128 = input_token_client.balance(&e.current_contract_address());
+        input_token_client.transfer(&user, &e.current_contract_address(), &(in_max as i128));
         let router = get_router(&e);
         e.authorize_as_current_contract(vec![
             &e,
@@ -339,14 +337,19 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             &(out_amount as i128),
         );
 
-        // return surplus to the user
-        let surplus = in_max - amount_in;
-        if surplus > 0 {
-            SorobanTokenClient::new(&e, &token_in).transfer(
-                &e.current_contract_address(),
-                &user,
-                &(surplus as i128),
-            );
+        // Refund remaining input tokens to user based on actual balance delta.
+        // Safe for rebasing tokens where computed surplus may differ by 1 share.
+        // When token_in == token_out, the delta also includes the provider fee
+        // (gross_out - out_amount) which must stay in the contract for claim_fees.
+        let balance_after: i128 = input_token_client.balance(&e.current_contract_address());
+        let fee_in_delta: i128 = if token_in == token_out {
+            (gross_out - out_amount) as i128
+        } else {
+            0
+        };
+        let refund = balance_after - balance_before - fee_in_delta;
+        if refund > 0 {
+            input_token_client.transfer(&e.current_contract_address(), &user, &refund);
         }
         Events::new(&e).charge_provider_fee(token_out, gross_out - out_amount);
         amount_in
