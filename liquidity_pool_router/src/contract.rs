@@ -1839,22 +1839,24 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
             last_token_out = Some(token_out);
         }
 
-        // Refund remaining input tokens to user based on actual balance delta.
-        // This is safe for rebasing tokens where ceil-rounded split transfers
-        // can lose shares, and safe when Router holds pre-existing balances.
-        let balance_after: i128 = input_token_client.balance(&e.current_contract_address());
-        let refund = balance_after - balance_before;
-        if refund > 0 {
-            input_token_client.transfer(&e.current_contract_address(), &user, &refund);
-        }
-
-        // Finally, transfer the received output tokens to the user.
+        // Transfer the received output tokens to the user first, so that
+        // the subsequent balance delta for token_in excludes the output
+        // (matters when token_in == final_token, e.g. A → B → A chains).
         let final_token = last_token_out.unwrap();
         SorobanTokenClient::new(&e, &final_token).transfer(
             &e.current_contract_address(),
             &user,
             &(current_in as i128),
         );
+
+        // Refund remaining input tokens to user based on actual balance delta.
+        // Safe for rebasing tokens where ceil-rounded split transfers can
+        // lose shares, and safe when Router holds pre-existing balances.
+        let balance_after: i128 = input_token_client.balance(&e.current_contract_address());
+        let refund = balance_after - balance_before;
+        if refund > 0 {
+            input_token_client.transfer(&e.current_contract_address(), &user, &refund);
+        }
 
         total_required_input
     }

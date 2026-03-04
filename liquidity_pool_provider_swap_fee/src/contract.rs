@@ -339,8 +339,15 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
 
         // Refund remaining input tokens to user based on actual balance delta.
         // Safe for rebasing tokens where computed surplus may differ by 1 share.
+        // When token_in == token_out, the delta also includes the provider fee
+        // (gross_out - out_amount) which must stay in the contract for claim_fees.
         let balance_after: i128 = input_token_client.balance(&e.current_contract_address());
-        let refund = balance_after - balance_before;
+        let fee_in_delta: i128 = if token_in == token_out {
+            (gross_out - out_amount) as i128
+        } else {
+            0
+        };
+        let refund = balance_after - balance_before - fee_in_delta;
         if refund > 0 {
             input_token_client.transfer(&e.current_contract_address(), &user, &refund);
         }
