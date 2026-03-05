@@ -2349,6 +2349,7 @@ fn test_chained_swap() {
     assert_eq!(token1.balance(&router.address), 0);
     assert_eq!(token2.balance(&router.address), 0);
     assert_eq!(token3.balance(&router.address), 0);
+    e.cost_estimate().budget().reset_tracker();
     assert_eq!(
         router
             .mock_auths(&[MockAuth {
@@ -2386,6 +2387,7 @@ fn test_chained_swap() {
             ),
         96
     );
+    e.cost_estimate().budget().print();
     assert_eq!(
         e.auths(),
         std::vec![(
@@ -2495,6 +2497,7 @@ fn test_chained_swap_strict_receive() {
     assert_eq!(token1.balance(&router.address), 0);
     assert_eq!(token2.balance(&router.address), 0);
     assert_eq!(token3.balance(&router.address), 0);
+    e.cost_estimate().budget().reset_tracker();
     assert_eq!(
         router
             .mock_auths(&[MockAuth {
@@ -2532,6 +2535,7 @@ fn test_chained_swap_strict_receive() {
             ),
         100
     );
+    e.cost_estimate().budget().print();
     assert_eq!(
         e.auths(),
         std::vec![(
