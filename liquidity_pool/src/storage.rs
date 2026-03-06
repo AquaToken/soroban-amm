@@ -29,6 +29,8 @@ pub enum DataKey {
     ProtocolFeeFraction, // part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
     ProtocolFeeA,
     ProtocolFeeB,
+
+    ReservesSyncLedger,
 }
 
 generate_instance_storage_getter_and_setter_with_default!(
@@ -83,6 +85,13 @@ generate_instance_storage_getter_and_setter!(
     gauge_future_wasm,
     DataKey::GaugeFutureWASM,
     BytesN<32>
+);
+
+generate_instance_storage_getter_and_setter_with_default!(
+    reserves_sync_ledger,
+    DataKey::ReservesSyncLedger,
+    u32,
+    0
 );
 
 pub(crate) fn has_plane(e: &Env) -> bool {
