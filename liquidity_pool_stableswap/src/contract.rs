@@ -834,8 +834,6 @@ impl LiquidityPool {
 
         if reserves_changed {
             put_reserves(e, &reserves);
-            // update plane data for every pool update
-            update_plane(e);
         }
 
         set_reserves_sync_ledger(e, &current_ledger);

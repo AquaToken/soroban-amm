@@ -3,7 +3,8 @@ extern crate std;
 
 use crate::testutils::{
     create_token_contract, estimate_vm_overhead, get_token_admin_client, measure_budget_with_vm,
-    Setup, SetupV170, POOL_MASTER, POOL_V170, ROUTER_MASTER, ROUTER_V170, TOKEN_MASTER, TOKEN_V170,
+    Setup, SetupV170, PLANE_MASTER, PLANE_V170, POOL_MASTER, POOL_V170, ROUTER_MASTER, ROUTER_V170,
+    TOKEN_MASTER, TOKEN_V170,
 };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
@@ -99,8 +100,10 @@ fn bench_2pool_strict_send() {
         &ROUTER_MASTER,
         &POOL_MASTER,
         &TOKEN_MASTER,
+        &PLANE_MASTER,
         n,
         4 * n + 2,
+        n,
         || {
             setup
                 .router
@@ -128,8 +131,10 @@ fn bench_3pool_strict_send() {
         &ROUTER_MASTER,
         &POOL_MASTER,
         &TOKEN_MASTER,
+        &PLANE_MASTER,
         n,
         4 * n + 2,
+        n,
         || {
             setup
                 .router
@@ -157,8 +162,10 @@ fn bench_4pool_strict_send() {
         &ROUTER_MASTER,
         &POOL_MASTER,
         &TOKEN_MASTER,
+        &PLANE_MASTER,
         n,
         4 * n + 2,
+        n,
         || {
             setup
                 .router
@@ -186,8 +193,10 @@ fn bench_5pool_strict_send() {
         &ROUTER_MASTER,
         &POOL_MASTER,
         &TOKEN_MASTER,
+        &PLANE_MASTER,
         n,
         4 * n + 2,
+        n,
         || {
             setup
                 .router
@@ -218,8 +227,10 @@ fn bench_2pool_strict_receive() {
         &ROUTER_MASTER,
         &POOL_MASTER,
         &TOKEN_MASTER,
+        &PLANE_MASTER,
         n,
         4 * n + 5,
+        n,
         || {
             setup.router.swap_chained_strict_receive(
                 &user,
@@ -252,8 +263,10 @@ fn bench_3pool_strict_receive() {
         &ROUTER_MASTER,
         &POOL_MASTER,
         &TOKEN_MASTER,
+        &PLANE_MASTER,
         n,
         4 * n + 5,
+        n,
         || {
             setup.router.swap_chained_strict_receive(
                 &user,
@@ -286,8 +299,10 @@ fn bench_4pool_strict_receive() {
         &ROUTER_MASTER,
         &POOL_MASTER,
         &TOKEN_MASTER,
+        &PLANE_MASTER,
         n,
         4 * n + 5,
+        n,
         || {
             setup.router.swap_chained_strict_receive(
                 &user,
@@ -320,8 +335,10 @@ fn bench_5pool_strict_receive() {
         &ROUTER_MASTER,
         &POOL_MASTER,
         &TOKEN_MASTER,
+        &PLANE_MASTER,
         n,
         4 * n + 5,
+        n,
         || {
             setup.router.swap_chained_strict_receive(
                 &user,
@@ -398,8 +415,10 @@ fn bench_v170_2pool_strict_send() {
         &ROUTER_V170,
         &POOL_V170,
         &TOKEN_V170,
+        &PLANE_V170,
         n,
         2 * n + 2,
+        n,
         || {
             setup
                 .router
@@ -427,8 +446,10 @@ fn bench_v170_3pool_strict_send() {
         &ROUTER_V170,
         &POOL_V170,
         &TOKEN_V170,
+        &PLANE_V170,
         n,
         2 * n + 2,
+        n,
         || {
             setup
                 .router
@@ -457,8 +478,10 @@ fn bench_v170_2pool_strict_receive() {
         &ROUTER_V170,
         &POOL_V170,
         &TOKEN_V170,
+        &PLANE_V170,
         n,
         3 * n + 3,
+        n,
         || {
             setup.router.swap_chained_strict_receive(
                 &user,
@@ -491,8 +514,10 @@ fn bench_v170_3pool_strict_receive() {
         &ROUTER_V170,
         &POOL_V170,
         &TOKEN_V170,
+        &PLANE_V170,
         n,
         3 * n + 3,
+        n,
         || {
             setup.router.swap_chained_strict_receive(
                 &user,
@@ -524,8 +549,10 @@ fn bench_v170_4pool_strict_send() {
         &ROUTER_V170,
         &POOL_V170,
         &TOKEN_V170,
+        &PLANE_V170,
         n,
         2 * n + 2,
+        n,
         || {
             setup
                 .router
@@ -553,8 +580,10 @@ fn bench_v170_5pool_strict_send() {
         &ROUTER_V170,
         &POOL_V170,
         &TOKEN_V170,
+        &PLANE_V170,
         n,
         2 * n + 2,
+        n,
         || {
             setup
                 .router
@@ -583,8 +612,10 @@ fn bench_v170_4pool_strict_receive() {
         &ROUTER_V170,
         &POOL_V170,
         &TOKEN_V170,
+        &PLANE_V170,
         n,
         3 * n + 3,
+        n,
         || {
             setup.router.swap_chained_strict_receive(
                 &user,
@@ -617,8 +648,10 @@ fn bench_v170_5pool_strict_receive() {
         &ROUTER_V170,
         &POOL_V170,
         &TOKEN_V170,
+        &PLANE_V170,
         n,
         3 * n + 3,
+        n,
         || {
             setup.router.swap_chained_strict_receive(
                 &user,
@@ -674,33 +707,57 @@ fn bench_optimization_projections() {
         let opt_swap_skip_sync = 4 * n + 5;
         let opt_swap_no_refund = 4 * n + 3;
 
-        let vm_pre_opt =
-            estimate_vm_overhead("", &ROUTER_MASTER, &POOL_MASTER, &TOKEN_MASTER, n, pre_opt);
+        // plane_calls: pre-opt has update_plane in both sync_reserves and swap end = 2*n
+        // implemented: skip-dup-sync means only swap-end update_plane = n
+        let vm_pre_opt = estimate_vm_overhead(
+            "",
+            &ROUTER_MASTER,
+            &POOL_MASTER,
+            &TOKEN_MASTER,
+            &PLANE_MASTER,
+            n,
+            pre_opt,
+            2 * n,
+        );
         let vm_implemented = estimate_vm_overhead(
             "",
             &ROUTER_MASTER,
             &POOL_MASTER,
             &TOKEN_MASTER,
+            &PLANE_MASTER,
             n,
             implemented,
+            n,
         );
-        let vm_opt_swap =
-            estimate_vm_overhead("", &ROUTER_MASTER, &POOL_MASTER, &TOKEN_MASTER, n, opt_swap);
+        let vm_opt_swap = estimate_vm_overhead(
+            "",
+            &ROUTER_MASTER,
+            &POOL_MASTER,
+            &TOKEN_MASTER,
+            &PLANE_MASTER,
+            n,
+            opt_swap,
+            2 * n,
+        );
         let vm_opt_swap_skip_sync = estimate_vm_overhead(
             "",
             &ROUTER_MASTER,
             &POOL_MASTER,
             &TOKEN_MASTER,
+            &PLANE_MASTER,
             n,
             opt_swap_skip_sync,
+            n,
         );
         let vm_opt_swap_no_refund = estimate_vm_overhead(
             "",
             &ROUTER_MASTER,
             &POOL_MASTER,
             &TOKEN_MASTER,
+            &PLANE_MASTER,
             n,
             opt_swap_no_refund,
+            n,
         );
 
         let total = |vm: u64| -> f64 { (measured + vm) as f64 / 1_048_576.0 };

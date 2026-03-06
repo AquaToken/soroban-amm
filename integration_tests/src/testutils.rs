@@ -134,6 +134,20 @@ pub(crate) const TOKEN_MASTER: WasmStats = WasmStats {
     data_segment_bytes: 465,
 };
 
+pub(crate) const PLANE_MASTER: WasmStats = WasmStats {
+    wasm_bytes: 7428,
+    instructions: 49,
+    functions: 49,
+    globals: 4,
+    table_entries: 0,
+    types: 17,
+    data_segments: 1,
+    elem_segments: 0,
+    imports: 23,
+    exports: 18,
+    data_segment_bytes: 472,
+};
+
 // v1.7.0 contract stats
 pub(crate) const ROUTER_V170: WasmStats = WasmStats {
     wasm_bytes: 42459,
@@ -174,6 +188,19 @@ pub(crate) const TOKEN_V170: WasmStats = WasmStats {
     exports: 23,
     data_segment_bytes: 459,
 };
+pub(crate) const PLANE_V170: WasmStats = WasmStats {
+    wasm_bytes: 7452,
+    instructions: 50,
+    functions: 50,
+    globals: 3,
+    table_entries: 0,
+    types: 17,
+    data_segments: 1,
+    elem_segments: 0,
+    imports: 23,
+    exports: 18,
+    data_segment_bytes: 472,
+};
 
 /// Estimate VM memory overhead for a swap scenario.
 ///
@@ -188,8 +215,10 @@ pub(crate) fn estimate_vm_overhead(
     router: &WasmStats,
     pool: &WasmStats,
     token: &WasmStats,
+    plane: &WasmStats,
     num_pools: u64,
     token_calls: u64,
+    plane_calls: u64,
 ) -> u64 {
     // Router: 1 first call
     let router_mem = router.first_call_mem();
@@ -209,7 +238,14 @@ pub(crate) fn estimate_vm_overhead(
         0
     };
 
-    let total = router_mem + pool_mem + token_mem;
+    // Plane: 1 first call, rest cached
+    let plane_mem = if plane_calls > 0 {
+        plane.first_call_mem() + (plane_calls - 1) * plane.cached_call_mem()
+    } else {
+        0
+    };
+
+    let total = router_mem + pool_mem + token_mem + plane_mem;
     std::println!("=== VM overhead estimate: {} ===", label);
     std::println!(
         "  Router (1 first):   {} ({:.2} MB)",
@@ -227,6 +263,12 @@ pub(crate) fn estimate_vm_overhead(
         token_calls,
         token_mem,
         token_mem as f64 / 1_048_576.0
+    );
+    std::println!(
+        "  Plane ({} calls):    {} ({:.2} MB)",
+        plane_calls,
+        plane_mem,
+        plane_mem as f64 / 1_048_576.0
     );
     std::println!(
         "  Total VM overhead:  {} ({:.2} MB)",
@@ -275,8 +317,10 @@ pub(crate) fn measure_budget_with_vm<F>(
     router: &WasmStats,
     pool: &WasmStats,
     token: &WasmStats,
+    plane: &WasmStats,
     num_pools: u64,
     token_calls: u64,
+    plane_calls: u64,
     f: F,
 ) where
     F: FnOnce(),
@@ -287,7 +331,16 @@ pub(crate) fn measure_budget_with_vm<F>(
     let measured_mem = env.cost_estimate().budget().memory_bytes_cost();
     let measured_cpu = env.cost_estimate().budget().cpu_instruction_cost();
 
-    let vm_mem = estimate_vm_overhead(label, router, pool, token, num_pools, token_calls);
+    let vm_mem = estimate_vm_overhead(
+        label,
+        router,
+        pool,
+        token,
+        plane,
+        num_pools,
+        token_calls,
+        plane_calls,
+    );
     let total_mem = measured_mem + vm_mem;
 
     std::println!("=== Combined estimate: {} ===", label);

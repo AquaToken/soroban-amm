@@ -7,10 +7,9 @@ pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 use crate::math::{amount0_delta, amount1_delta, sqrt_ratio_at_tick};
 use crate::storage::{
     chunk_address, get_chunk_bitmap_word, get_fee, get_full_range_liquidity, get_liquidity,
-    get_plane, get_protocol_fees, get_slot0, get_tick_spacing, get_token0, get_token1, ChunkCache,
-    MAX_TICK, MIN_TICK, TICKS_PER_CHUNK,
+    get_plane, get_reserve0, get_reserve1, get_slot0, get_tick_spacing, ChunkCache, MAX_TICK,
+    MIN_TICK, TICKS_PER_CHUNK,
 };
-use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{Env, Symbol, Vec, U256};
 
 const PLANE_DATA_VERSION: u128 = 1;
@@ -531,14 +530,8 @@ fn collect_exact_direction_steps(
 }
 
 fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
-    let contract = e.current_contract_address();
-    let fees = get_protocol_fees(e);
-
-    let balance0 = SorobanTokenClient::new(e, &get_token0(e)).balance(&contract) as u128;
-    let balance1 = SorobanTokenClient::new(e, &get_token1(e)).balance(&contract) as u128;
-
-    let reserve0 = balance0.saturating_sub(fees.token0);
-    let reserve1 = balance1.saturating_sub(fees.token1);
+    let reserve0 = get_reserve0(e);
+    let reserve1 = get_reserve1(e);
     let spacing = get_tick_spacing(e);
     let exact_steps = exact_tick_steps_for_spacing(spacing);
     let full_range_liquidity = get_full_range_liquidity(e);
