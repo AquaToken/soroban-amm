@@ -12,11 +12,11 @@ use crate::storage::{
     get_fee_fraction, get_gauge_future_wasm, get_is_killed_claim, get_is_killed_deposit,
     get_is_killed_swap, get_plane, get_protocol_fee_a, get_protocol_fee_b,
     get_protocol_fee_fraction, get_protocol_fees, get_reserve_a, get_reserve_b, get_reserves,
-    get_router, get_token_a, get_token_b, get_token_future_wasm, get_tokens, has_plane,
-    put_reserves, set_fee_fraction, set_gauge_future_wasm, set_is_killed_claim,
-    set_is_killed_deposit, set_is_killed_swap, set_plane, set_protocol_fee_a, set_protocol_fee_b,
-    set_protocol_fee_fraction, set_reserve_a, set_reserve_b, set_router, set_token_a, set_token_b,
-    set_token_future_wasm,
+    get_reserves_sync_ledger, get_router, get_token_a, get_token_b, get_token_future_wasm,
+    get_tokens, has_plane, put_reserves, set_fee_fraction, set_gauge_future_wasm,
+    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane, set_protocol_fee_a,
+    set_protocol_fee_b, set_protocol_fee_fraction, set_reserve_a, set_reserve_b,
+    set_reserves_sync_ledger, set_router, set_token_a, set_token_b, set_token_future_wasm,
 };
 use crate::token::{create_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -72,6 +72,11 @@ impl LiquidityPool {
     // Allows pool to work with tokens that can increase their balances via rebases.
     // negative rebases / fee-on-transfer not supported.
     fn _sync_reserves(e: &Env) {
+        let current_ledger = e.ledger().sequence();
+        if get_reserves_sync_ledger(e) == current_ledger {
+            return;
+        }
+
         let tokens = get_tokens(e);
         let pool_address = e.current_contract_address();
 
@@ -86,6 +91,7 @@ impl LiquidityPool {
         if total_shares == 0 {
             // With no outstanding shares, pool operations start from zero reserves.
             // Ignore any external dust on balances.
+            set_reserves_sync_ledger(e, &current_ledger);
             return;
         }
 
@@ -123,6 +129,8 @@ impl LiquidityPool {
             // update plane data for every pool update
             update_plane(e);
         }
+
+        set_reserves_sync_ledger(e, &current_ledger);
     }
 }
 
@@ -733,12 +741,11 @@ impl LiquidityPoolTrait for LiquidityPool {
         let sell_token_client = SorobanTokenClient::new(&e, &sell_token);
         sell_token_client.transfer(&user, &e.current_contract_address(), &(in_max as i128));
 
-        // Return the difference
-        sell_token_client.transfer(
-            &e.current_contract_address(),
-            &user,
-            &((in_max - in_amount) as i128),
-        );
+        // Return the difference if any
+        let refund = in_max - in_amount;
+        if refund > 0 {
+            sell_token_client.transfer(&e.current_contract_address(), &user, &(refund as i128));
+        }
 
         if in_idx == 0 {
             set_reserve_a(&e, &(reserve_a + in_amount));
