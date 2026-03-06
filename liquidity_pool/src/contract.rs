@@ -126,8 +126,6 @@ impl LiquidityPool {
 
         if reserves_changed {
             put_reserves(e, &reserves);
-            // update plane data for every pool update
-            update_plane(e);
         }
 
         set_reserves_sync_ledger(e, &current_ledger);
@@ -1230,7 +1228,7 @@ impl UpgradeableContract for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        180
+        200
     }
 
     // Get contract type symbolic name
