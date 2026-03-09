@@ -41,6 +41,8 @@ enum DataKey {
 
     ProtocolFeeFraction, // part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
     ProtocolFees,
+
+    ReservesSyncLedger,
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
@@ -271,6 +273,13 @@ pub fn get_precision_mul(e: &Env) -> Vec<u128> {
         }
     }
 }
+
+generate_instance_storage_getter_and_setter_with_default!(
+    reserves_sync_ledger,
+    DataKey::ReservesSyncLedger,
+    u32,
+    0
+);
 
 pub(crate) fn put_protocol_fees(e: &Env, value: &Vec<u128>) {
     bump_instance(e);
