@@ -134,6 +134,49 @@ pub(crate) const TOKEN_MASTER: WasmStats = WasmStats {
     data_segment_bytes: 465,
 };
 
+pub(crate) const CONC_POOL_MASTER: WasmStats = WasmStats {
+    wasm_bytes: 84940,
+    instructions: 361,
+    functions: 361,
+    globals: 4,
+    table_entries: 0,
+    types: 62,
+    data_segments: 30,
+    elem_segments: 0,
+    imports: 59,
+    exports: 101,
+    data_segment_bytes: 2575,
+};
+pub(crate) const STABLESWAP_POOL_MASTER: WasmStats = WasmStats {
+    wasm_bytes: 64053,
+    instructions: 293,
+    functions: 293,
+    globals: 4,
+    table_entries: 0,
+    types: 49,
+    data_segments: 7,
+    elem_segments: 0,
+    imports: 60,
+    exports: 92,
+    data_segment_bytes: 1823,
+};
+
+// yTIME1 custom token (CC52SIPHNMTBMHSBYTUI3R53PPMBGTEOJ566GFMSREBFA3KVJ4MY7OBT)
+// Much larger than standard soroban_token (60KB vs 10KB)
+pub(crate) const YTIME1_TOKEN: WasmStats = WasmStats {
+    wasm_bytes: 60954,
+    instructions: 101,
+    functions: 101,
+    globals: 4,
+    table_entries: 8,
+    types: 32,
+    data_segments: 7,
+    elem_segments: 1,
+    imports: 34,
+    exports: 37,
+    data_segment_bytes: 2223,
+};
+
 pub(crate) const PLANE_MASTER: WasmStats = WasmStats {
     wasm_bytes: 7428,
     instructions: 49,
@@ -276,6 +319,149 @@ pub(crate) fn estimate_vm_overhead(
         total as f64 / 1_048_576.0
     );
     total
+}
+
+/// Estimate VM memory overhead for a mixed-pool swap scenario.
+/// Each pool type (different WASM) has its own first_call/cached_call overhead.
+/// `pools`: slice of (label, stats, num_invocations) for each unique pool WASM type.
+/// `custom_token_calls`: calls to custom WASM tokens (have VM cost). SAC tokens = 0 VM cost.
+///   Pass 0 for all-SAC scenario (our tests). On mainnet, count calls to non-SAC tokens.
+pub(crate) fn estimate_vm_overhead_mixed(
+    label: &str,
+    router: &WasmStats,
+    pools: &[(&str, &WasmStats, u64)],
+    token: &WasmStats,
+    plane: &WasmStats,
+    custom_token_calls: u64,
+    plane_calls: u64,
+) -> u64 {
+    let router_mem = router.first_call_mem();
+
+    let mut pool_mem_total = 0u64;
+    let mut pool_calls_total = 0u64;
+    for &(plabel, stats, calls) in pools {
+        if calls > 0 {
+            let mem = stats.first_call_mem() + (calls - 1) * stats.cached_call_mem();
+            pool_calls_total += calls;
+            pool_mem_total += mem;
+            std::println!(
+                "    {} ({} calls): {} ({:.2} MB)",
+                plabel,
+                calls,
+                mem,
+                mem as f64 / 1_048_576.0
+            );
+        }
+    }
+
+    // Only custom WASM tokens have VM overhead; SAC tokens run natively (0 cost).
+    let token_mem = if custom_token_calls > 0 {
+        token.first_call_mem() + (custom_token_calls - 1) * token.cached_call_mem()
+    } else {
+        0
+    };
+
+    let plane_mem = if plane_calls > 0 {
+        plane.first_call_mem() + (plane_calls - 1) * plane.cached_call_mem()
+    } else {
+        0
+    };
+
+    let total = router_mem + pool_mem_total + token_mem + plane_mem;
+    std::println!("=== VM overhead estimate: {} ===", label);
+    std::println!(
+        "  Router (1 first):   {} ({:.2} MB)",
+        router_mem,
+        router_mem as f64 / 1_048_576.0
+    );
+    std::println!(
+        "  Pools ({} calls):    {} ({:.2} MB)",
+        pool_calls_total,
+        pool_mem_total,
+        pool_mem_total as f64 / 1_048_576.0
+    );
+    std::println!(
+        "  Custom tokens ({} calls): {} ({:.2} MB)",
+        custom_token_calls,
+        token_mem,
+        token_mem as f64 / 1_048_576.0
+    );
+    std::println!(
+        "  Plane ({} calls):    {} ({:.2} MB)",
+        plane_calls,
+        plane_mem,
+        plane_mem as f64 / 1_048_576.0
+    );
+    std::println!(
+        "  Total VM overhead:  {} ({:.2} MB)",
+        total,
+        total as f64 / 1_048_576.0
+    );
+    total
+}
+
+/// Combined measurement for mixed-pool scenarios.
+pub(crate) fn measure_budget_with_vm_mixed<F>(
+    env: &Env,
+    label: &str,
+    router: &WasmStats,
+    pools: &[(&str, &WasmStats, u64)],
+    token: &WasmStats,
+    plane: &WasmStats,
+    custom_token_calls: u64,
+    plane_calls: u64,
+    f: F,
+) where
+    F: FnOnce(),
+{
+    env.cost_estimate().budget().reset_unlimited();
+    env.cost_estimate().budget().reset_tracker();
+    f();
+    let measured_mem = env.cost_estimate().budget().memory_bytes_cost();
+    let measured_cpu = env.cost_estimate().budget().cpu_instruction_cost();
+
+    let vm_mem = estimate_vm_overhead_mixed(
+        label,
+        router,
+        pools,
+        token,
+        plane,
+        custom_token_calls,
+        plane_calls,
+    );
+    let total_mem = measured_mem + vm_mem;
+
+    std::println!("=== Combined estimate: {} ===", label);
+    std::println!(
+        "  Measured memory:  {} ({:.2} MB)",
+        measured_mem,
+        measured_mem as f64 / 1_048_576.0
+    );
+    std::println!(
+        "  VM overhead:      {} ({:.2} MB)",
+        vm_mem,
+        vm_mem as f64 / 1_048_576.0
+    );
+    std::println!(
+        "  TOTAL estimated:  {} ({:.2} MB)",
+        total_mem,
+        total_mem as f64 / 1_048_576.0
+    );
+    std::println!("  Measured CPU:     {}", measured_cpu);
+    std::println!("  Mainnet limit:    41943040 (40.00 MB)");
+    if total_mem > 41943040 {
+        std::println!(
+            "  *** EXCEEDS MAINNET LIMIT by {:.2} MB ***",
+            (total_mem - 41943040) as f64 / 1_048_576.0
+        );
+    } else {
+        std::println!(
+            "  Headroom:         {:.2} MB ({:.1}%)",
+            (41943040 - total_mem) as f64 / 1_048_576.0,
+            (41943040 - total_mem) as f64 / 41943040.0 * 100.0
+        );
+    }
+    std::println!();
 }
 
 pub(crate) fn measure_budget<F>(env: &Env, label: &str, f: F)
