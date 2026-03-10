@@ -1,4 +1,5 @@
 use crate::errors::ConcentratedPoolError as Error;
+use crate::events::ClaimFees;
 use crate::math::{
     amount0_delta, amount1_delta, fee_growth_delta_x128, get_next_sqrt_price_from_input,
     get_next_sqrt_price_from_output, liquidity_for_amount0, liquidity_for_amount1, max_sqrt_ratio,

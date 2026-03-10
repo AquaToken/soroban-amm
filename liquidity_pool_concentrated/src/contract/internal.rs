@@ -668,6 +668,17 @@ impl ConcentratedLiquidityPool {
             SorobanTokenClient::new(e, &token1).transfer(&contract, owner, &(amount1 as i128));
         }
 
+        if amount0 > 0 || amount1 > 0 {
+            ClaimFees {
+                owner: owner.clone(),
+                token0,
+                token1,
+                amount0: amount0 as i128,
+                amount1: amount1 as i128,
+            }
+            .publish(e);
+        }
+
         let res0 = get_reserve0(e) - amount0;
         let res1 = get_reserve1(e) - amount1;
         set_reserve0(e, &res0);

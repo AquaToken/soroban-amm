@@ -500,6 +500,8 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
 
         let tick_current = get_slot0(&e).tick;
+        let token0 = get_token0(&e);
+        let token1 = get_token1(&e);
         let mut total0 = 0u128;
         let mut total1 = 0u128;
 
@@ -531,6 +533,17 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             }
         }
 
+        if total0 > 0 || total1 > 0 {
+            ClaimFees {
+                owner: owner.clone(),
+                token0: token0.clone(),
+                token1: token1.clone(),
+                amount0: total0 as i128,
+                amount1: total1 as i128,
+            }
+            .publish(&e);
+        }
+
         let reserve0 = get_reserve0(&e);
         let reserve1 = get_reserve1(&e);
         if reserve0 < total0 {
@@ -540,8 +553,6 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
         }
 
-        let token0 = get_token0(&e);
-        let token1 = get_token1(&e);
         let contract = e.current_contract_address();
 
         if total0 > 0 {

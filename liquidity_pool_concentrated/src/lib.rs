@@ -2,6 +2,7 @@
 
 mod contract;
 mod errors;
+mod events;
 mod math;
 mod plane;
 mod plane_interface;
