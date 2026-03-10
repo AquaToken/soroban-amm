@@ -1416,9 +1416,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-ledger-snapshot"
-version = "25.1.1"
+version = "25.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66d569a1315f05216d024653ad87541aa15d3ff26dad9f8a98719cb53ccf2bf3"
+checksum = "760124fb65a2acdea7d241b8efdfab9a39287ae8dc5bf8feb6fd9dfb664c1ad5"
 dependencies = [
  "serde",
  "serde_json",
@@ -1562,9 +1562,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-sdk"
-version = "25.1.1"
+version = "25.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "add8d19cfd2c9941bbdc7c8223c3cf9d7ff9af4554ba3bd4ae93e16b19b08aea"
+checksum = "5fb27e93f8d3fc3a815d24c60ec11e893c408a36693ec9c823322f954fa096ae"
 dependencies = [
  "arbitrary",
  "bytes-lit",
@@ -1586,9 +1586,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-sdk-macros"
-version = "25.1.1"
+version = "25.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0107e34575ec704ce29407695462e79e6b0e13ce7af6431b2f15c313e34464"
+checksum = "dec603a62a90abdef898f8402471a24d8b58a0043b9a998ed6a607a19a5dabe1"
 dependencies = [
  "darling 0.20.11",
  "heck",
@@ -1606,11 +1606,12 @@ dependencies = [
 
 [[package]]
 name = "soroban-spec"
-version = "25.1.1"
+version = "25.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53a1c9f6ccc6aa78518545e3cf542bd26f11d9085328a2e1c06c90514733fe15"
+checksum = "24718fac3af127fc6910eb6b1d3ccd8403201b6ef0aca73b5acabe4bc3dd42ed"
 dependencies = [
  "base64",
+ "sha2",
  "stellar-xdr",
  "thiserror",
  "wasmparser",
@@ -1618,9 +1619,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-spec-rust"
-version = "25.1.1"
+version = "25.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8247d3c6256b544b2461606c6892351bb22978d751e07c1aea744377053d852"
+checksum = "93c558bca7a693ec8ed67d2d8c8f5b300f3772141d619a4a694ad5dd48461256"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -1645,9 +1646,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-token-sdk"
-version = "25.1.1"
+version = "25.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3453ba37338708ceb8680bc79f6c453f94e6dc5989085002436e9ae341abc0fd"
+checksum = "7257d888e42da01d031cfc388d4c9c10e4e13388a4e04deabf812fa7d33f0af3"
 dependencies = [
  "soroban-sdk",
 ]
