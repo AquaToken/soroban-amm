@@ -1,6 +1,6 @@
 use crate::errors::ConcentratedPoolError as Error;
 use crate::storage::{MAX_TICK, MIN_TICK};
-use crate::u512::mul_div_u256 as u512_mul_div;
+use crate::u512::{mul_div_ceil, mul_div_floor};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{panic_with_error, Bytes, Env, U256};
 use utils::u256_math::ExtraMath;
@@ -301,7 +301,11 @@ pub fn amount0_delta(
     let numerator1 = liquidity_u256.mul(&u256_q96(e));
 
     // Step 1: numerator1 * diff / sb (uses U512 for ~384-bit intermediate)
-    let temp = u512_mul_div(e, &numerator1, &diff, &sb, round_up);
+    let temp = if round_up {
+        mul_div_ceil(e, &numerator1, &diff, &sb)
+    } else {
+        mul_div_floor(e, &numerator1, &diff, &sb)
+    };
 
     // Step 2: temp / sa
     let amount_u256 = if round_up {
@@ -333,7 +337,11 @@ pub fn amount1_delta(
     // amount1 = L * (sb - sa) / Q96
     let diff = sb.sub(&sa);
     let liquidity_u256 = u256_from_u128(e, liquidity);
-    let amount_u256 = u512_mul_div(e, &liquidity_u256, &diff, &u256_q96(e), round_up);
+    let amount_u256 = if round_up {
+        mul_div_ceil(e, &liquidity_u256, &diff, &u256_q96(e))
+    } else {
+        mul_div_floor(e, &liquidity_u256, &diff, &u256_q96(e))
+    };
 
     u256_to_u128(e, &amount_u256)
 }
@@ -408,9 +416,9 @@ pub fn liquidity_for_amount0(
         return 0;
     }
 
-    let intermediate = u512_mul_div(e, &sa, &sb, &u256_q96(e), false);
+    let intermediate = mul_div_floor(e, &sa, &sb, &u256_q96(e));
     let amount_u256 = u256_from_u128(e, amount0);
-    let result = u512_mul_div(e, &amount_u256, &intermediate, &diff, false);
+    let result = mul_div_floor(e, &amount_u256, &intermediate, &diff);
 
     u256_to_u128(e, &result)
 }
@@ -438,7 +446,7 @@ pub fn liquidity_for_amount1(
     }
 
     let amount_u256 = u256_from_u128(e, amount1);
-    let result = u512_mul_div(e, &amount_u256, &u256_q96(e), &diff, false);
+    let result = mul_div_floor(e, &amount_u256, &u256_q96(e), &diff);
 
     u256_to_u128(e, &result)
 }
@@ -467,7 +475,7 @@ pub fn get_next_sqrt_price_from_amount0(
         if amt <= threshold {
             let product = amt.mul(sqrt_price_x96);
             let denominator = numerator1.add(&product);
-            u512_mul_div(e, &numerator1, sqrt_price_x96, &denominator, true)
+            mul_div_ceil(e, &numerator1, sqrt_price_x96, &denominator)
         } else {
             let term = numerator1.div(sqrt_price_x96);
             let denominator = term.add(&amt);
@@ -484,7 +492,7 @@ pub fn get_next_sqrt_price_from_amount0(
             if denominator == u256_zero(e) {
                 panic_with_error!(e, Error::PriceOutOfBounds);
             }
-            u512_mul_div(e, &numerator1, sqrt_price_x96, &denominator, true)
+            mul_div_ceil(e, &numerator1, sqrt_price_x96, &denominator)
         } else {
             panic_with_error!(e, Error::PriceOutOfBounds);
         }
@@ -504,10 +512,10 @@ pub fn get_next_sqrt_price_from_amount1(
     let amt = u256_from_u128(e, amount);
 
     if add {
-        let quotient = u512_mul_div(e, &amt, &q96, &liq, false);
+        let quotient = mul_div_floor(e, &amt, &q96, &liq);
         sqrt_price_x96.add(&quotient)
     } else {
-        let quotient = u512_mul_div(e, &amt, &q96, &liq, true);
+        let quotient = mul_div_ceil(e, &amt, &q96, &liq);
         if *sqrt_price_x96 <= quotient {
             panic_with_error!(e, Error::PriceOutOfBounds);
         }
@@ -555,7 +563,7 @@ pub fn sqrt_price_from_amounts(e: &Env, amount0: u128, amount1: u128) -> U256 {
     let q192 = q96.mul(&q96);
     let amount0_u256 = u256_from_u128(e, amount0);
     let amount1_u256 = u256_from_u128(e, amount1);
-    let ratio_q192 = u512_mul_div(e, &amount1_u256, &q192, &amount0_u256, false);
+    let ratio_q192 = mul_div_floor(e, &amount1_u256, &q192, &amount0_u256);
     let sqrt_price = ratio_q192.sqrt();
 
     if sqrt_price < min_sqrt_ratio(e) || sqrt_price >= max_sqrt_ratio(e) {
