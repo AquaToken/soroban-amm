@@ -3,11 +3,11 @@ extern crate std;
 
 use crate::math::wrapping_sub_u256;
 use crate::testutils::{
-    create_pool_contract, create_token_contract, deploy_rewards_gauge, get_token_admin_client,
-    Setup,
+    assert_claim_fees_event, count_claim_fees_events, create_pool_contract, create_token_contract,
+    deploy_rewards_gauge, get_token_admin_client, Setup,
 };
-use soroban_sdk::testutils::{Address as _, Events};
-use soroban_sdk::{vec, Address, Env, IntoVal, Map, Symbol, TryFromVal, Val, Vec, U256};
+use soroban_sdk::testutils::Address as _;
+use soroban_sdk::{Address, Env, Map, Symbol, Vec, U256};
 use utils::test_utils::jump;
 
 mod pool_plane {
@@ -3771,99 +3771,6 @@ fn test_deposit_position_refund_excess() {
 // ═══════════════════════════════════════════════════════════════════════════
 // claim_fees event tests
 // ═══════════════════════════════════════════════════════════════════════════
-
-fn is_claim_fees_topic(topic: &soroban_sdk::xdr::ScVal) -> bool {
-    matches!(topic, soroban_sdk::xdr::ScVal::Symbol(s) if s.0.as_slice() == b"claim_fees")
-}
-
-fn count_claim_fees_events(env: &Env, contract: &Address) -> usize {
-    env.events()
-        .all()
-        .filter_by_contract(contract)
-        .events()
-        .iter()
-        .filter(|e| match &e.body {
-            soroban_sdk::xdr::ContractEventBody::V0(body) => {
-                body.topics.first().map_or(false, is_claim_fees_topic)
-            }
-        })
-        .count()
-}
-
-fn assert_claim_fees_event(
-    env: &Env,
-    contract: &Address,
-    owner: &Address,
-    token0: &Address,
-    token1: &Address,
-    amount0: u128,
-    amount1: u128,
-) {
-    // Build expected event as soroban_sdk Vec for PartialEq comparison
-    let expected: Vec<(Address, Val, Val)> = vec![
-        env,
-        (
-            contract.clone(),
-            (
-                Symbol::new(env, "claim_fees"),
-                owner.clone(),
-                token0.clone(),
-                token1.clone(),
-            )
-                .into_val(env),
-            (amount0 as i128, amount1 as i128).into_val(env),
-        ),
-    ];
-
-    // Extract only claim_fees events
-    let all_contract = env.events().all().filter_by_contract(contract);
-    let claim_events: std::vec::Vec<_> = all_contract
-        .events()
-        .iter()
-        .filter(|e| match &e.body {
-            soroban_sdk::xdr::ContractEventBody::V0(body) => {
-                body.topics.first().map_or(false, is_claim_fees_topic)
-            }
-        })
-        .cloned()
-        .collect();
-
-    assert!(
-        !claim_events.is_empty(),
-        "expected at least one claim_fees event"
-    );
-
-    // Compare using ContractEvents PartialEq with Vec<(Address, Vec<Val>, Val)>
-    // Since we can't construct ContractEvents directly, verify via XDR conversion
-    let event = &claim_events[0];
-    let soroban_sdk::xdr::ContractEventBody::V0(body) = &event.body;
-
-    // Verify topics: [claim_fees, owner, token0, token1]
-    assert_eq!(body.topics.len(), 4, "claim_fees should have 4 topics");
-    assert!(is_claim_fees_topic(&body.topics[0]));
-
-    let topic_owner: Address =
-        Address::try_from_val(env, &Val::try_from_val(env, &body.topics[1]).unwrap()).unwrap();
-    let topic_token0: Address =
-        Address::try_from_val(env, &Val::try_from_val(env, &body.topics[2]).unwrap()).unwrap();
-    let topic_token1: Address =
-        Address::try_from_val(env, &Val::try_from_val(env, &body.topics[3]).unwrap()).unwrap();
-    assert_eq!(&topic_owner, owner, "owner mismatch in claim_fees event");
-    assert_eq!(&topic_token0, token0, "token0 mismatch in claim_fees event");
-    assert_eq!(&topic_token1, token1, "token1 mismatch in claim_fees event");
-
-    // Verify body: (amount0, amount1)
-    let data_val: Val = Val::try_from_val(env, &body.data).unwrap();
-    let (actual0, actual1): (i128, i128) = <(i128, i128)>::try_from_val(env, &data_val).unwrap();
-    assert_eq!(
-        actual0, amount0 as i128,
-        "amount0 mismatch in claim_fees event"
-    );
-    assert_eq!(
-        actual1, amount1 as i128,
-        "amount1 mismatch in claim_fees event"
-    );
-}
 
 #[test]
 fn test_claim_position_fees_emits_claim_fees_event() {

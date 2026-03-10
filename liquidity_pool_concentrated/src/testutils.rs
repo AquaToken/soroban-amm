@@ -7,6 +7,7 @@ use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{Address, Env, Vec};
+use utils::test_utils::{count_events, event_data, event_topic_as_address, get_events_by_name};
 
 mod pool_plane {
     soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_plane_contract.wasm");
@@ -199,4 +200,44 @@ impl Setup<'_> {
         get_token_admin_client(&self.env, &self.token0.address).mint(&self.user, &amount0);
         get_token_admin_client(&self.env, &self.token1.address).mint(&self.user, &amount1);
     }
+}
+
+// ── claim_fees event helpers ────────────────────────────────────────────
+
+pub(crate) fn count_claim_fees_events(env: &Env, contract: &Address) -> usize {
+    count_events(env, contract, "claim_fees")
+}
+
+pub(crate) fn assert_claim_fees_event(
+    env: &Env,
+    contract: &Address,
+    owner: &Address,
+    token0: &Address,
+    token1: &Address,
+    amount0: u128,
+    amount1: u128,
+) {
+    let events = get_events_by_name(env, contract, "claim_fees");
+    assert!(!events.is_empty(), "expected at least one claim_fees event");
+
+    let event = &events[0];
+    assert_eq!(
+        &event_topic_as_address(env, event, 1),
+        owner,
+        "owner mismatch"
+    );
+    assert_eq!(
+        &event_topic_as_address(env, event, 2),
+        token0,
+        "token0 mismatch"
+    );
+    assert_eq!(
+        &event_topic_as_address(env, event, 3),
+        token1,
+        "token1 mismatch"
+    );
+
+    let (actual0, actual1): (i128, i128) = event_data(env, event);
+    assert_eq!(actual0, amount0 as i128, "amount0 mismatch");
+    assert_eq!(actual1, amount1 as i128, "amount1 mismatch");
 }
