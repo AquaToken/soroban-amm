@@ -1,4 +1,5 @@
 use super::*;
+use crate::bitmap;
 
 impl ConcentratedLiquidityPool {
     pub(super) fn has_admin_role(e: &Env) -> bool {
@@ -34,113 +35,11 @@ impl ConcentratedLiquidityPool {
         v.unsigned_abs()
     }
 
-    pub(super) fn u256_to_array(v: &U256) -> [u8; 32] {
-        let bytes = v.to_be_bytes();
-        let mut out = [0u8; 32];
-        bytes.copy_into_slice(&mut out);
-        out
-    }
-
-    pub(super) fn u256_from_array(e: &Env, bytes: &[u8; 32]) -> U256 {
-        U256::from_be_bytes(e, &Bytes::from_array(e, bytes))
-    }
-
-    pub(super) fn bit_is_set(word: &[u8; 32], bit_pos: u32) -> bool {
-        if bit_pos >= 256 {
-            return false;
-        }
-
-        let byte_idx = 31usize - (bit_pos / 8) as usize;
-        let bit_idx = (bit_pos % 8) as u8;
-        (word[byte_idx] & (1u8 << bit_idx)) != 0
-    }
-
-    pub(super) fn set_bit(word: &mut [u8; 32], bit_pos: u32, value: bool) {
-        if bit_pos >= 256 {
-            return;
-        }
-
-        let byte_idx = 31usize - (bit_pos / 8) as usize;
-        let bit_idx = (bit_pos % 8) as u8;
-        let mask = 1u8 << bit_idx;
-        if value {
-            word[byte_idx] |= mask;
-        } else {
-            word[byte_idx] &= !mask;
-        }
-    }
-
-    pub(super) fn find_prev_set_bit(word: &[u8; 32], from_bit: u32) -> Option<u32> {
-        let from_bit = from_bit.min(255);
-        // Big-endian: byte 0 = bits 255..248, byte 31 = bits 7..0
-        let start_byte = (255 - from_bit) / 8;
-        let start_bit_in_byte = from_bit % 8;
-
-        // Check the first (partial) byte — mask off bits above from_bit
-        let mask = ((1u16 << (start_bit_in_byte + 1)) - 1) as u8;
-        let masked = word[start_byte as usize] & mask;
-        if masked != 0 {
-            let top_bit = 7 - masked.leading_zeros();
-            return Some((31 - start_byte) * 8 + top_bit);
-        }
-
-        // Scan remaining bytes downward (higher byte index = lower bits)
-        for byte_idx in (start_byte + 1)..32 {
-            if word[byte_idx as usize] != 0 {
-                let top_bit = 7 - word[byte_idx as usize].leading_zeros();
-                return Some((31 - byte_idx) * 8 + top_bit);
-            }
-        }
-
-        None
-    }
-
-    pub(super) fn find_next_set_bit(word: &[u8; 32], from_bit: u32) -> Option<u32> {
-        let from_bit = from_bit.min(255);
-        let start_byte = (255 - from_bit) / 8;
-        let start_bit_in_byte = from_bit % 8;
-
-        // Check the first (partial) byte — mask off bits below from_bit
-        let mask = !((1u8 << start_bit_in_byte).wrapping_sub(1));
-        let masked = word[start_byte as usize] & mask;
-        if masked != 0 {
-            let low_bit = masked.trailing_zeros();
-            return Some((31 - start_byte) * 8 + low_bit);
-        }
-
-        // Scan remaining bytes upward (lower byte index = higher bits)
-        if start_byte > 0 {
-            for byte_idx in (0..start_byte).rev() {
-                if word[byte_idx as usize] != 0 {
-                    let low_bit = word[byte_idx as usize].trailing_zeros();
-                    return Some((31 - byte_idx) * 8 + low_bit);
-                }
-            }
-        }
-
-        None
-    }
-
-    pub(super) fn compress_tick(tick: i32, spacing: i32) -> i32 {
-        let mut compressed = tick / spacing;
-        if tick < 0 && tick % spacing != 0 {
-            compressed -= 1;
-        }
-        compressed
-    }
-
-    // Chunk bitmap addressing: 1 bit per chunk.
-    pub(super) fn chunk_bitmap_position(chunk_pos: i32) -> (i32, u32) {
-        let word_pos = chunk_pos >> 8;
-        let bit_pos = (chunk_pos & 255) as u32;
-        (word_pos, bit_pos)
-    }
-
     pub(super) fn update_chunk_bitmap_bit(e: &Env, chunk_pos: i32, has_initialized: bool) {
-        let (word_pos, bit_pos) = Self::chunk_bitmap_position(chunk_pos);
-        let mut word = Self::u256_to_array(&get_chunk_bitmap_word(e, word_pos));
-        Self::set_bit(&mut word, bit_pos, has_initialized);
-        set_chunk_bitmap_word(e, word_pos, &Self::u256_from_array(e, &word));
+        let (word_pos, bit_pos) = bitmap::chunk_bitmap_position(chunk_pos);
+        let mut word = bitmap::u256_to_array(&get_chunk_bitmap_word(e, word_pos));
+        bitmap::set_bit(&mut word, bit_pos, has_initialized);
+        set_chunk_bitmap_word(e, word_pos, &bitmap::u256_from_array(e, &word));
     }
 
     // Check if any tick in a chunk is initialized (liquidity_gross > 0).
@@ -173,14 +72,6 @@ impl ConcentratedLiquidityPool {
         None
     }
 
-    fn clamp_tick(tick: i32) -> i32 {
-        tick.max(MIN_TICK).min(MAX_TICK)
-    }
-
-    fn compressed_to_tick(compressed: i32, spacing: i32) -> i32 {
-        Self::clamp_tick(compressed.saturating_mul(spacing))
-    }
-
     // Two-level search: scan within current chunk, then across chunks via chunk bitmap.
     // Returns (next_tick, initialized) — same contract as the old find_initialized_tick_in_word.
     pub(super) fn find_initialized_tick_in_word(
@@ -190,7 +81,7 @@ impl ConcentratedLiquidityPool {
         lte: bool,
         cc: &mut ChunkCache,
     ) -> (i32, bool) {
-        let compressed = Self::compress_tick(tick, spacing);
+        let compressed = bitmap::compress_tick(tick, spacing);
 
         if lte {
             // --- Scanning downward ---
@@ -201,23 +92,23 @@ impl ConcentratedLiquidityPool {
                 for s in (0..=slot).rev() {
                     if chunk.get(s).unwrap().2 > 0 {
                         let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
-                        return (Self::compressed_to_tick(found_compressed, spacing), true);
+                        return (bitmap::compressed_to_tick(found_compressed, spacing), true);
                     }
                 }
             }
 
             // 2. Use chunk bitmap to find previous chunk with initialized ticks
-            let (bm_word_pos, bm_bit_pos) = Self::chunk_bitmap_position(chunk_pos);
-            let word = Self::u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
+            let (bm_word_pos, bm_bit_pos) = bitmap::chunk_bitmap_position(chunk_pos);
+            let word = bitmap::u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
 
             // Search for set bit below current chunk in this bitmap word
             if bm_bit_pos > 0 {
-                if let Some(found_bit) = Self::find_prev_set_bit(&word, bm_bit_pos - 1) {
+                if let Some(found_bit) = bitmap::find_prev_set_bit(&word, bm_bit_pos - 1) {
                     let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
                     let chunk = cc.get_or_create_chunk(e, found_chunk_pos);
                     if let Some(s) = Self::scan_chunk_highest_init(&chunk) {
                         let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
-                        return (Self::compressed_to_tick(found_compressed, spacing), true);
+                        return (bitmap::compressed_to_tick(found_compressed, spacing), true);
                     }
                 }
             }
@@ -225,7 +116,7 @@ impl ConcentratedLiquidityPool {
             // Not found in this bitmap word — return boundary
             let boundary_compressed = (bm_word_pos << 8) * TICKS_PER_CHUNK;
             (
-                Self::compressed_to_tick(boundary_compressed, spacing),
+                bitmap::compressed_to_tick(boundary_compressed, spacing),
                 false,
             )
         } else {
@@ -238,22 +129,22 @@ impl ConcentratedLiquidityPool {
                 for s in slot..TICKS_PER_CHUNK as u32 {
                     if chunk.get(s).unwrap().2 > 0 {
                         let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
-                        return (Self::compressed_to_tick(found_compressed, spacing), true);
+                        return (bitmap::compressed_to_tick(found_compressed, spacing), true);
                     }
                 }
             }
 
             // 2. Use chunk bitmap to find next chunk with initialized ticks
-            let (bm_word_pos, bm_bit_pos) = Self::chunk_bitmap_position(chunk_pos);
-            let word = Self::u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
+            let (bm_word_pos, bm_bit_pos) = bitmap::chunk_bitmap_position(chunk_pos);
+            let word = bitmap::u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
 
             if bm_bit_pos < 255 {
-                if let Some(found_bit) = Self::find_next_set_bit(&word, bm_bit_pos + 1) {
+                if let Some(found_bit) = bitmap::find_next_set_bit(&word, bm_bit_pos + 1) {
                     let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
                     let chunk = cc.get_or_create_chunk(e, found_chunk_pos);
                     if let Some(s) = Self::scan_chunk_lowest_init(&chunk) {
                         let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
-                        return (Self::compressed_to_tick(found_compressed, spacing), true);
+                        return (bitmap::compressed_to_tick(found_compressed, spacing), true);
                     }
                 }
             }
@@ -262,7 +153,7 @@ impl ConcentratedLiquidityPool {
             let boundary_compressed =
                 ((bm_word_pos << 8) + 255) * TICKS_PER_CHUNK + (TICKS_PER_CHUNK - 1);
             (
-                Self::compressed_to_tick(boundary_compressed, spacing),
+                bitmap::compressed_to_tick(boundary_compressed, spacing),
                 false,
             )
         }
@@ -275,7 +166,7 @@ impl ConcentratedLiquidityPool {
         is_upper: bool,
     ) {
         let spacing = get_tick_spacing(e);
-        let compressed = Self::compress_tick(tick_idx, spacing);
+        let compressed = bitmap::compress_tick(tick_idx, spacing);
         let (chunk_pos, slot_idx) = chunk_address(compressed);
 
         let mut chunk = get_or_create_tick_chunk(e, chunk_pos);
@@ -692,7 +583,7 @@ impl ConcentratedLiquidityPool {
 
     pub(super) fn cross_tick(e: &Env, tick_idx: i32, cc: &mut ChunkCache) -> i128 {
         let spacing = get_tick_spacing(e);
-        let compressed = Self::compress_tick(tick_idx, spacing);
+        let compressed = bitmap::compress_tick(tick_idx, spacing);
         let (chunk_pos, slot_idx) = chunk_address(compressed);
 
         let mut chunk = cc.get_or_create_chunk(e, chunk_pos);

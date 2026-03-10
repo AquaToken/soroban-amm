@@ -4,6 +4,10 @@ pub mod pool_plane {
 
 pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
+use crate::bitmap::{
+    chunk_bitmap_position, compress_tick, compressed_to_tick, find_next_set_bit, find_prev_set_bit,
+    u256_to_array,
+};
 use crate::math::{amount0_delta, amount1_delta, sqrt_ratio_at_tick};
 use crate::storage::{
     chunk_address, get_chunk_bitmap_word, get_fee, get_full_range_liquidity, get_liquidity,
@@ -59,14 +63,6 @@ fn full_range_ticks_for_spacing(spacing: i32) -> Option<(i32, i32)> {
     Some((tick_lower, tick_upper))
 }
 
-fn compress_tick(tick: i32, spacing: i32) -> i32 {
-    let mut compressed = tick / spacing;
-    if tick < 0 && tick % spacing != 0 {
-        compressed -= 1;
-    }
-    compressed
-}
-
 fn apply_liquidity_net(liquidity: u128, liquidity_net: i128, zero_for_one: bool) -> u128 {
     if zero_for_one {
         if liquidity_net >= 0 {
@@ -86,76 +82,6 @@ fn push_empty_steps(out: &mut Vec<u128>, steps: u32) {
         out.push_back(0);
         out.push_back(0);
     }
-}
-
-// ── Bitmap helpers (duplicated from contract/internal.rs for plane use) ──
-
-fn u256_to_array(v: &U256) -> [u8; 32] {
-    let bytes = v.to_be_bytes();
-    let mut out = [0u8; 32];
-    bytes.copy_into_slice(&mut out);
-    out
-}
-
-// Chunk bitmap addressing: 1 bit per chunk_pos.
-fn chunk_bitmap_position(chunk_pos: i32) -> (i32, u32) {
-    let word_pos = chunk_pos >> 8;
-    let bit_pos = (chunk_pos & 255) as u32;
-    (word_pos, bit_pos)
-}
-
-fn clamp_tick(tick: i32) -> i32 {
-    tick.max(MIN_TICK).min(MAX_TICK)
-}
-
-fn compressed_to_tick(compressed: i32, spacing: i32) -> i32 {
-    clamp_tick(compressed.saturating_mul(spacing))
-}
-
-fn find_prev_set_bit(word: &[u8; 32], from_bit: u32) -> Option<u32> {
-    let from_bit = from_bit.min(255);
-    let start_byte = (255 - from_bit) / 8;
-    let start_bit_in_byte = from_bit % 8;
-
-    let mask = ((1u16 << (start_bit_in_byte + 1)) - 1) as u8;
-    let masked = word[start_byte as usize] & mask;
-    if masked != 0 {
-        let top_bit = 7 - masked.leading_zeros();
-        return Some((31 - start_byte) * 8 + top_bit);
-    }
-
-    for byte_idx in (start_byte + 1)..32 {
-        if word[byte_idx as usize] != 0 {
-            let top_bit = 7 - word[byte_idx as usize].leading_zeros();
-            return Some((31 - byte_idx) * 8 + top_bit);
-        }
-    }
-
-    None
-}
-
-fn find_next_set_bit(word: &[u8; 32], from_bit: u32) -> Option<u32> {
-    let from_bit = from_bit.min(255);
-    let start_byte = (255 - from_bit) / 8;
-    let start_bit_in_byte = from_bit % 8;
-
-    let mask = !((1u8 << start_bit_in_byte).wrapping_sub(1));
-    let masked = word[start_byte as usize] & mask;
-    if masked != 0 {
-        let low_bit = masked.trailing_zeros();
-        return Some((31 - start_byte) * 8 + low_bit);
-    }
-
-    if start_byte > 0 {
-        for byte_idx in (0..start_byte).rev() {
-            if word[byte_idx as usize] != 0 {
-                let low_bit = word[byte_idx as usize].trailing_zeros();
-                return Some((31 - byte_idx) * 8 + low_bit);
-            }
-        }
-    }
-
-    None
 }
 
 // Two-level chunk-based tick search.
