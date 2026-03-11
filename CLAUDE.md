@@ -92,6 +92,15 @@ Workspace dependencies are defined in root `Cargo.toml` `[workspace.dependencies
 - Authorization pattern: `admin.require_auth()` then `AccessControl::new(&e).assert_address_has_role(...)` or use helpers like `require_operations_admin_or_owner`
 - Events use `liquidity_pool_events`: `PoolEvents::new(&e).deposit_liquidity(...)`, `PoolEvents::new(&e).trade(...)`
 
+## Development Workflow
+
+- **Work incrementally**: make a small change, verify it compiles/passes tests, then continue. Prefer a sequence of small validated edits over one large change. Do not attempt to rewrite or restructure large portions of a codebase in a single step.
+- **Follow existing conventions**: before modifying a file, read it first and understand the code style, patterns, and imports used. When creating new modules or tests, look at existing ones in the same crate and mimic the approach.
+- **Check library availability**: never assume a dependency is available. Before using a new crate, check `Cargo.toml` (workspace and local) to confirm it's already in use. If it's new, add it to workspace dependencies first.
+- **Concurrent agents**: if you notice unexpected changes in the worktree or staging area that you did not make, ignore them and continue with your task. Multiple agents or the user may work in the codebase concurrently.
+- **Verify after changes**: after modifying contract code, run `cargo test -p <package-name>` (or at minimum a compile check) to confirm nothing is broken before moving on.
+- **Check regression at the end**: check implementation doesn't break existing functionality by running complete tests suite: `task test`
+
 ## CI
 
 GitHub Actions (`.github/workflows/rust.yml`) runs on PRs to master/develop/audit: format check → bindings check → all tests. Uses `soroban-cli` v23.3.0.
