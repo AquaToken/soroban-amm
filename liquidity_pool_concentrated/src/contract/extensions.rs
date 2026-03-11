@@ -413,6 +413,17 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             );
         }
 
+        if fees0 > 0 || fees1 > 0 {
+            ClaimFees {
+                owner: owner.clone(),
+                token0: token0.clone(),
+                token1: token1.clone(),
+                amount0: fees0 as i128,
+                amount1: fees1 as i128,
+            }
+            .publish(&e);
+        }
+
         let reserve0_after = reserve0_before - total_amount0;
         let reserve1_after = reserve1_before - total_amount1;
         set_reserve0(&e, &reserve0_after);

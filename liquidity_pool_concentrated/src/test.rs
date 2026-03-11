@@ -1022,6 +1022,24 @@ fn test_withdraw_position_auto_claims_fees() {
 
     assert_eq!(withdraw0, estimated0);
     assert_eq!(withdraw1, estimated1);
+
+    // Verify ClaimFees event was emitted for the auto-claimed fees.
+    // Must check events before any subsequent contract call clears the event buffer.
+    assert_eq!(
+        count_claim_fees_events(&setup.env, &setup.pool.address),
+        1,
+        "expected exactly one claim_fees event from withdraw_position"
+    );
+    assert_claim_fees_event(
+        &setup.env,
+        &setup.pool.address,
+        &setup.user,
+        &setup.token0.address,
+        &setup.token1.address,
+        fees_before0,
+        fees_before1,
+    );
+
     assert_eq!(
         setup.token0.balance(&setup.user),
         bal0_before + withdraw0 as i128

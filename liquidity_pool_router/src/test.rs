@@ -4,7 +4,7 @@ extern crate std;
 use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_POOLS};
 use crate::testutils::{
     concentrated_pool, create_plane_contract, create_token_contract, rewards_gauge,
-    standard_pool, stableswap_pool, test_token, Setup,
+    stableswap_pool, standard_pool, test_token, Setup,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
@@ -353,10 +353,7 @@ fn test_stableswap_pool() {
         reward_token.balance(&payment_for_creation_address),
         1000_0000000
     );
-    assert_eq!(
-        stableswap_pool::Client::new(&e, &pool_address).a(),
-        1500,
-    );
+    assert_eq!(stableswap_pool::Client::new(&e, &pool_address).a(), 1500,);
     assert_eq!(
         stableswap_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
         5000,
@@ -475,10 +472,7 @@ fn test_stableswap_3_pool() {
         reward_token.balance(&payment_for_creation_address),
         1_0000000
     );
-    assert_eq!(
-        stableswap_pool::Client::new(&e, &pool_address).a(),
-        6750,
-    );
+    assert_eq!(stableswap_pool::Client::new(&e, &pool_address).a(), 6750,);
 
     let pools = router.get_pools(&tokens);
 
