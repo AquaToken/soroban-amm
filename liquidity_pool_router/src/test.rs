@@ -2,9 +2,9 @@
 extern crate std;
 
 use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_MAX_POOLS};
-use crate::testutils;
 use crate::testutils::{
-    concentrated_pool, create_plane_contract, create_token_contract, test_token, Setup,
+    concentrated_pool, create_plane_contract, create_token_contract, rewards_gauge,
+    standard_pool, stableswap_pool, test_token, Setup,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
@@ -110,7 +110,7 @@ fn test_constant_product_pool() {
         Symbol::new(&e, "constant_product")
     );
     assert_eq!(
-        testutils::standard_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
+        standard_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
         5000,
     );
 
@@ -354,11 +354,11 @@ fn test_stableswap_pool() {
         1000_0000000
     );
     assert_eq!(
-        testutils::stableswap_pool::Client::new(&e, &pool_address).a(),
+        stableswap_pool::Client::new(&e, &pool_address).a(),
         1500,
     );
     assert_eq!(
-        testutils::stableswap_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
+        stableswap_pool::Client::new(&e, &pool_address).get_protocol_fee_fraction(),
         5000,
     );
 
@@ -476,7 +476,7 @@ fn test_stableswap_3_pool() {
         1_0000000
     );
     assert_eq!(
-        testutils::stableswap_pool::Client::new(&e, &pool_address).a(),
+        stableswap_pool::Client::new(&e, &pool_address).a(),
         6750,
     );
 
@@ -2463,7 +2463,7 @@ fn test_chained_swap() {
 
     router.mock_all_auths().configure_init_pool_payment(
         &admin,
-        &testutils::create_token_contract(&e, &admin).address,
+        &create_token_contract(&e, &admin).address,
         &0,
         &0,
         &0,
@@ -2610,7 +2610,7 @@ fn test_chained_swap_strict_receive() {
 
     router.mock_all_auths().configure_init_pool_payment(
         &admin,
-        &testutils::create_token_contract(&e, &admin).address,
+        &create_token_contract(&e, &admin).address,
         &0,
         &0,
         &0,
@@ -2939,11 +2939,11 @@ fn test_privileged_users() {
     // test addresses inheritance
     assert_eq!(
         privileged_addrs,
-        testutils::standard_pool::Client::new(&e, &standard_address).get_privileged_addrs()
+        standard_pool::Client::new(&e, &standard_address).get_privileged_addrs()
     );
     assert_eq!(
         privileged_addrs,
-        testutils::stableswap_pool::Client::new(&e, &stable_address).get_privileged_addrs()
+        stableswap_pool::Client::new(&e, &stable_address).get_privileged_addrs()
     );
 }
 
@@ -3178,12 +3178,12 @@ fn test_protocol_fee_inheritance() {
     assert_eq!(setup.router.get_protocol_fee_fraction(), 5000);
 
     let (_, pool1_address) = setup.router.init_standard_pool(&setup.admin, &tokens, &10);
-    let pool1_client = testutils::standard_pool::Client::new(&setup.env, &pool1_address);
+    let pool1_client = standard_pool::Client::new(&setup.env, &pool1_address);
     assert_eq!(pool1_client.get_protocol_fee_fraction(), 5000);
 
     setup.router.set_protocol_fee_fraction(&setup.admin, &1000);
     let (_, pool2_address) = setup.router.init_standard_pool(&setup.admin, &tokens, &30);
-    let pool2_client = testutils::standard_pool::Client::new(&setup.env, &pool2_address);
+    let pool2_client = standard_pool::Client::new(&setup.env, &pool2_address);
     assert_eq!(pool1_client.get_protocol_fee_fraction(), 5000);
     assert_eq!(pool2_client.get_protocol_fee_fraction(), 1000);
 }
@@ -3225,13 +3225,13 @@ fn test_boosted_rewards_abuse() {
         &vec![&env, token_reward.address.clone(), token1.address.clone()],
         &100,
     );
-    let standard_pool = testutils::standard_pool::Client::new(&env, &standard_pool_id);
+    let standard_pool = standard_pool::Client::new(&env, &standard_pool_id);
     let (stable_pool_hash, stable_pool_id) = setup.router.init_stableswap_pool(
         &user2,
         &vec![&env, token_reward.address.clone(), token2.address.clone()],
         &100,
     );
-    let stable_pool = testutils::stableswap_pool::Client::new(&env, &stable_pool_id);
+    let stable_pool = stableswap_pool::Client::new(&env, &stable_pool_id);
     assert_eq!(stable_pool.a(), 1500);
 
     // first user deposits 100 tokens having 10k locked tokens out of 30k.
@@ -3519,7 +3519,7 @@ fn test_setup_rewards_gauge() {
     let [token1, token2, _, _] = setup.tokens;
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
-    let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
+    let pool_client = standard_pool::Client::new(&e, &pool_address);
     assert_eq!(pool_client.get_gauges(), Map::new(&e),);
     let distributor = Address::generate(&e);
     let gauge_token = create_token_contract(&e, &distributor);
@@ -3601,7 +3601,7 @@ fn test_setup_rewards_gauge() {
         Map::from_array(&e, [(gauge_token.address.clone(), rewards_gauge.clone())])
     );
     assert_eq!(
-        testutils::rewards_gauge::Client::new(&e, &rewards_gauge).get_reward_token(),
+        rewards_gauge::Client::new(&e, &rewards_gauge).get_reward_token(),
         gauge_token.address,
     );
 }
@@ -3707,7 +3707,7 @@ fn test_setup_rewards_gauge_token_not_enabled() {
     let [token1, token2, _, _] = setup.tokens;
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
-    let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
+    let pool_client = standard_pool::Client::new(&e, &pool_address);
     assert_eq!(pool_client.get_gauges(), Map::new(&e),);
     let distributor = Address::generate(&e);
     let gauge_token = create_token_contract(&e, &distributor);
@@ -3772,7 +3772,7 @@ fn test_deploy_multiple_rewards_gauges() {
     let [token1, token2, _, _] = setup.tokens;
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
-    let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
+    let pool_client = standard_pool::Client::new(&e, &pool_address);
     assert_eq!(pool_client.get_gauges(), Map::new(&e),);
     setup
         .router
@@ -3854,7 +3854,7 @@ fn test_pool_gauge_schedule_reward_with_reward_token_no_proof() {
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
     let (pool_hash, pool_address) = setup.router.init_standard_pool(&user1, &tokens, &30);
-    let pool_client = testutils::standard_pool::Client::new(&e, &pool_address);
+    let pool_client = standard_pool::Client::new(&e, &pool_address);
 
     // enable gauge rewards for pool tokens
     setup
@@ -3889,7 +3889,7 @@ fn test_pool_gauge_schedule_reward_with_reward_token_no_proof() {
         true
     );
     assert_eq!(
-        testutils::rewards_gauge::Client::new(&e, &rewards_gauge).get_reward_token(),
+        rewards_gauge::Client::new(&e, &rewards_gauge).get_reward_token(),
         setup.reward_token.address
     );
 }
@@ -4288,7 +4288,8 @@ fn test_chained_swap_strict_receive_rebasing_token() {
 
     router.mock_all_auths().configure_init_pool_payment(
         &admin,
-        &testutils::create_token_contract(&e, &admin).address,
+        &create_token_contract(&e, &admin).address,
+        &0,
         &0,
         &0,
         &router.address,
