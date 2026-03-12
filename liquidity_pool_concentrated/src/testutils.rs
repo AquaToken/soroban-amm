@@ -119,14 +119,28 @@ pub(crate) struct Setup<'a> {
     pub(crate) reward_boost_feed: reward_boost_feed::Client<'a>,
 }
 
+pub(crate) struct TestConfig {
+    pub(crate) fee: u32,
+    pub(crate) tick_spacing: i32,
+}
+
+impl Default for TestConfig {
+    fn default() -> Self {
+        TestConfig {
+            fee: 30,
+            tick_spacing: 1,
+        }
+    }
+}
+
 impl Default for Setup<'_> {
     fn default() -> Self {
-        Self::new()
+        Self::new_with_config(&TestConfig::default())
     }
 }
 
 impl Setup<'_> {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new_with_config(config: &TestConfig) -> Self {
         let env = Env::default();
         env.mock_all_auths();
         env.cost_estimate().budget().reset_unlimited();
@@ -171,8 +185,8 @@ impl Setup<'_> {
             ),
             &router,
             &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
-            &30,
-            &1,
+            &config.fee,
+            &config.tick_spacing,
         );
 
         Self {

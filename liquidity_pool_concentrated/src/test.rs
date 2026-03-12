@@ -4,7 +4,7 @@ extern crate std;
 use crate::math::wrapping_sub_u256;
 use crate::testutils::{
     assert_claim_fees_event, count_claim_fees_events, create_pool_contract, create_token_contract,
-    deploy_rewards_gauge, get_token_admin_client, Setup,
+    deploy_rewards_gauge, get_token_admin_client, Setup, TestConfig,
 };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, Map, Symbol, Vec, U256};
@@ -3856,6 +3856,85 @@ fn test_claim_all_position_fees_emits_single_claim_fees_event() {
         &setup.token1.address,
         claimed0,
         claimed1,
+    );
+}
+
+#[test]
+fn test_min_tick_price_positions_above() {
+    let setup = Setup::new_with_config(&TestConfig {
+        tick_spacing: 60,
+        ..TestConfig::default()
+    });
+    setup.mint_user_tokens(100_000_0000000, 100_000_0000000);
+
+    // Deposit a position — initializes pool price around tick ~18970
+    setup.pool.deposit_position(
+        &setup.user,
+        &17100,
+        &20820,
+        &Vec::from_array(&setup.env, [1_000_0000000u128, 7_000_0000000u128]),
+        &0,
+    );
+
+    // One large swap token0→token1 drains all token1, driving price to MIN_TICK
+    setup.pool.swap(&setup.user, &0, &1, &50_000_0000000, &0);
+
+    let slot_final = setup.pool.get_slot0();
+    let active_liq = setup.pool.get_active_liquidity();
+
+    // Pool is at MIN_TICK with no active liquidity
+    assert_eq!(slot_final.tick, -887_272, "price should be at MIN_TICK");
+    assert_eq!(
+        active_liq, 0,
+        "active liquidity should be 0 when price is below all positions"
+    );
+
+    // Full-range deposit should fail (OutMinNotSatisfied) — L rounds to 0
+    let full_range_result = setup
+        .pool
+        .try_estimate_deposit(&Vec::from_array(&setup.env, [1_000_0000000u128, 0u128]));
+    assert!(
+        full_range_result.is_err(),
+        "full-range deposit should fail at MIN_TICK for human-scale amounts"
+    );
+
+    // Custom-range deposit ABOVE current tick works (one-sided, token0 only)
+    let (actual_amounts, new_liq) = setup.pool.deposit_position(
+        &setup.user,
+        &17100,
+        &20820,
+        &Vec::from_array(&setup.env, [1_000_0000000u128, 1_000_0000000u128]),
+        &0,
+    );
+    let (dep0, dep1) = pair(actual_amounts);
+    assert!(new_liq > 0, "custom-range deposit above price should work");
+    assert!(dep0 > 0, "should consume token0");
+    assert_eq!(dep1, 0, "should NOT consume token1 (range above price)");
+
+    // Swap token0→token1 (price down) should fail — already at MIN_TICK
+    assert!(
+        setup
+            .pool
+            .try_estimate_swap(&0, &1, &1_000_0000000)
+            .is_err(),
+        "swap down at MIN_TICK should fail"
+    );
+
+    // Swap token1→token0 (price up) works — positions exist above
+    assert!(
+        setup.pool.estimate_swap(&1, &0, &1_000_0000000) > 0,
+        "swap up should work — positions exist above current price"
+    );
+
+    // Execute upward swap and verify price moves up
+    let swapper = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token1.address).mint(&swapper, &10_000_0000000);
+    let received = setup.pool.swap(&swapper, &1, &0, &1_0000000, &0);
+    let slot_after = setup.pool.get_slot0();
+    assert!(received > 0, "upward swap should produce output");
+    assert!(
+        slot_after.tick > slot_final.tick,
+        "price should move up after swap"
     );
 }
 

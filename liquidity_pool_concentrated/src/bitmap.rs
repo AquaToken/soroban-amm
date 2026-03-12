@@ -12,16 +12,6 @@ pub(crate) fn u256_from_array(e: &Env, bytes: &[u8; 32]) -> U256 {
     U256::from_be_bytes(e, &Bytes::from_array(e, bytes))
 }
 
-pub(crate) fn bit_is_set(word: &[u8; 32], bit_pos: u32) -> bool {
-    if bit_pos >= 256 {
-        return false;
-    }
-
-    let byte_idx = 31usize - (bit_pos / 8) as usize;
-    let bit_idx = (bit_pos % 8) as u8;
-    (word[byte_idx] & (1u8 << bit_idx)) != 0
-}
-
 pub(crate) fn set_bit(word: &mut [u8; 32], bit_pos: u32, value: bool) {
     if bit_pos >= 256 {
         return;

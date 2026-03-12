@@ -133,10 +133,6 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         desired_amounts: Vec<u128>,
         min_shares: u128,
     ) -> (Vec<u128>, u128) {
-        if desired_amounts.len() != 2 {
-            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
-        }
-
         let (tick_lower, tick_upper) = Self::full_range_ticks(&e);
 
         let (actual_amounts, liquidity) = Self::deposit_position(
@@ -153,19 +149,10 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
 
     // Estimates liquidity for a full-range deposit without executing it.
     fn estimate_deposit(e: Env, desired_amounts: Vec<u128>) -> u128 {
-        if desired_amounts.len() != 2 {
-            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
-        }
-
         let (tick_lower, tick_upper) = Self::full_range_ticks(&e);
-
-        Self::max_liquidity_for_amounts(
-            &e,
-            tick_lower,
-            tick_upper,
-            desired_amounts.get_unchecked(0),
-            desired_amounts.get_unchecked(1),
-        )
+        let (_actual_amounts, liquidity) =
+            Self::estimate_deposit_position(e, tick_lower, tick_upper, desired_amounts);
+        liquidity
     }
 
     // Exact-input swap via token indexes (0 or 1). Swaps in_amount of token[in_idx]

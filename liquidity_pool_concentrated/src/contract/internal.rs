@@ -31,10 +31,6 @@ impl ConcentratedLiquidityPool {
         }
     }
 
-    pub(super) fn abs_i128(v: i128) -> u128 {
-        v.unsigned_abs()
-    }
-
     pub(super) fn update_chunk_bitmap_bit(e: &Env, chunk_pos: i32, has_initialized: bool) {
         let (word_pos, bit_pos) = bitmap::chunk_bitmap_position(chunk_pos);
         let mut word = bitmap::u256_to_array(&get_chunk_bitmap_word(e, word_pos));
