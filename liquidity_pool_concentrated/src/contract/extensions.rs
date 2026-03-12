@@ -50,7 +50,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             desired_amount1,
         );
         if liquidity == 0 {
-            panic_with_error!(&e, LiquidityPoolValidationError::ZeroAmount);
+            panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
         if liquidity > i128::MAX as u128 {
             panic_with_error!(&e, Error::LiquidityAmountTooLarge);
@@ -128,13 +128,10 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
             desired_amount0,
             desired_amount1,
         );
-        if liquidity == 0 {
-            panic_with_error!(&e, LiquidityPoolValidationError::ZeroAmount);
-        }
         if liquidity > i128::MAX as u128 {
             panic_with_error!(&e, Error::LiquidityAmountTooLarge);
         }
-        if liquidity < min_liquidity {
+        if liquidity == 0 || liquidity < min_liquidity {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
 
