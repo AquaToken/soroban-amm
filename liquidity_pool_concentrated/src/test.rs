@@ -3921,8 +3921,9 @@ fn test_min_tick_price_positions_above() {
     );
 
     // Swap token1→token0 (price up) works — positions exist above
+    let swap_up_estimate = setup.pool.estimate_swap(&1, &0, &1_000_0000000);
     assert!(
-        setup.pool.estimate_swap(&1, &0, &1_000_0000000) > 0,
+        swap_up_estimate > 0,
         "swap up should work — positions exist above current price"
     );
 

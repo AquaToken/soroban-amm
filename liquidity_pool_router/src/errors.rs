@@ -26,6 +26,7 @@ pub enum LiquidityPoolRouterError {
     PathMustEndWithRewardToken = 321,
     ConcentratedPoolsOverMax = 322,
     RewardTokenChangeWhileActive = 323,
+    SwapChainAmountIsZero = 324,
 
     TokensNotSorted = 2002,
     InMaxNotSatisfied = 2020,

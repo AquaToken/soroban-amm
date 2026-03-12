@@ -266,6 +266,10 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
 
     // Simulates exact-output swap without executing. Returns expected input amount.
     fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128 {
+        if out_amount == 0 {
+            return 0;
+        }
+
         let zero_for_one = Self::direction_from_indexes(&e, in_idx, out_idx);
         let out_amount_i128 = out_amount as i128;
 

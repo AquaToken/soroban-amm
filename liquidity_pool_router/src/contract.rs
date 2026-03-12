@@ -1828,6 +1828,9 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
                     ],
                 ),
             );
+            if required_in == 0 {
+                panic_with_error!(&e, LiquidityPoolRouterError::SwapChainAmountIsZero);
+            }
             required_amounts.push_front(required_in);
             // The output required from the previous hop is the input needed here.
             desired_out = required_in;
