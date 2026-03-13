@@ -319,6 +319,7 @@ fn test_kill_claim_permissions() {
     let setup = Setup::default();
     let user = Address::generate(&setup.env);
 
+    // Kill: admin, pause_admin, emergency_pause_admin can all kill
     assert!(setup.pool.try_set_claim_killed(&setup.admin, &true).is_ok());
     setup.pool.set_claim_killed(&setup.admin, &false);
     assert!(setup
@@ -330,6 +331,23 @@ fn test_kill_claim_permissions() {
         .pool
         .try_set_claim_killed(&setup.emergency_pause_admin, &true)
         .is_ok());
+
+    // Unkill: only admin and pause_admin can unkill
+    assert!(setup
+        .pool
+        .try_set_claim_killed(&setup.admin, &false)
+        .is_ok());
+    setup.pool.set_claim_killed(&setup.admin, &true);
+    assert!(setup
+        .pool
+        .try_set_claim_killed(&setup.pause_admin, &false)
+        .is_ok());
+    setup.pool.set_claim_killed(&setup.admin, &true);
+    // Emergency pause admin CANNOT unkill
+    assert!(setup
+        .pool
+        .try_set_claim_killed(&setup.emergency_pause_admin, &false)
+        .is_err());
 
     assert!(setup.pool.try_set_claim_killed(&user, &true).is_err());
     assert!(setup
