@@ -10,3 +10,10 @@ pub const MAX_USER_POSITIONS: u32 = 20;
 // Chunk addressing: chunk_pos = compressed_tick.div_euclid(TICKS_PER_CHUNK),
 //                   slot      = compressed_tick.rem_euclid(TICKS_PER_CHUNK).
 pub const TICKS_PER_CHUNK: i32 = 16;
+
+/// Maximum liquidity per tick — prevents cumulative liquidity_gross/net overflow.
+/// Same formula as Uniswap V3: u128::MAX / num_usable_ticks.
+pub fn max_liquidity_per_tick(tick_spacing: i32) -> u128 {
+    let num_ticks = ((MAX_TICK - MIN_TICK) / tick_spacing) as u128 + 1;
+    u128::MAX / num_ticks
+}

@@ -1,4 +1,7 @@
-use crate::constants::{FEE_DENOMINATOR, MAX_TICK, MAX_USER_POSITIONS, MIN_TICK, TICKS_PER_CHUNK};
+use crate::constants::{
+    max_liquidity_per_tick, FEE_DENOMINATOR, MAX_TICK, MAX_USER_POSITIONS, MIN_TICK,
+    TICKS_PER_CHUNK,
+};
 use crate::errors::ConcentratedPoolError as Error;
 use crate::events::ClaimFees;
 use crate::math::{

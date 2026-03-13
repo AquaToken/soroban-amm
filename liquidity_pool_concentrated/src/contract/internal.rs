@@ -274,7 +274,15 @@ impl ConcentratedLiquidityPool {
 
         let delta = liquidity_delta.unsigned_abs();
         if liquidity_delta >= 0 {
-            tick.liquidity_gross = tick.liquidity_gross.saturating_add(delta);
+            tick.liquidity_gross = tick
+                .liquidity_gross
+                .checked_add(delta)
+                .unwrap_or_else(|| panic_with_error!(e, Error::LiquidityOverflow));
+            // Enforce per-tick cap: prevents cumulative overflow of liquidity_net.
+            let max_per_tick = max_liquidity_per_tick(spacing);
+            if tick.liquidity_gross > max_per_tick {
+                panic_with_error!(e, Error::LiquidityOverflow);
+            }
         } else {
             if tick.liquidity_gross < delta {
                 panic_with_error!(e, Error::LiquidityUnderflow);
@@ -283,9 +291,15 @@ impl ConcentratedLiquidityPool {
         }
 
         if is_upper {
-            tick.liquidity_net = tick.liquidity_net.saturating_sub(liquidity_delta);
+            tick.liquidity_net = tick
+                .liquidity_net
+                .checked_sub(liquidity_delta)
+                .unwrap_or_else(|| panic_with_error!(e, Error::LiquidityOverflow));
         } else {
-            tick.liquidity_net = tick.liquidity_net.saturating_add(liquidity_delta);
+            tick.liquidity_net = tick
+                .liquidity_net
+                .checked_add(liquidity_delta)
+                .unwrap_or_else(|| panic_with_error!(e, Error::LiquidityOverflow));
         }
 
         let is_initialized = tick.liquidity_gross > 0;
