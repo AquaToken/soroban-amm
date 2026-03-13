@@ -1,6 +1,7 @@
 #![no_std]
 
 mod bitmap;
+mod constants;
 mod contract;
 mod errors;
 mod events;

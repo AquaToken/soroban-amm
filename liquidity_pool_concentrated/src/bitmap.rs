@@ -1,4 +1,4 @@
-use crate::storage::{MAX_TICK, MIN_TICK};
+use crate::constants::{MAX_TICK, MIN_TICK};
 use soroban_sdk::{Bytes, Env, U256};
 
 pub(crate) fn u256_to_array(v: &U256) -> [u8; 32] {

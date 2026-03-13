@@ -1,5 +1,5 @@
+use crate::constants::{MAX_TICK, MIN_TICK};
 use crate::errors::ConcentratedPoolError as Error;
-use crate::storage::{MAX_TICK, MIN_TICK};
 use crate::u512::{mul_div_ceil, mul_div_floor};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{panic_with_error, Bytes, Env, U256};
@@ -254,8 +254,8 @@ pub fn tick_at_sqrt_ratio(e: &Env, sqrt_price_x96: &U256) -> i32 {
     }
 }
 
-/// 128-bit x 128-bit -> 256-bit unsigned multiply.
-/// Returns (hi, lo) where result = hi * 2^128 + lo.
+// 128-bit x 128-bit -> 256-bit unsigned multiply.
+// Returns (hi, lo) where result = hi * 2^128 + lo.
 fn widening_mul(a: u128, b: u128) -> (u128, u128) {
     let a0 = a & 0xFFFF_FFFF_FFFF_FFFF;
     let a1 = a >> 64;
@@ -578,7 +578,7 @@ mod test {
         max_sqrt_ratio, min_sqrt_ratio, sqrt_ratio_at_tick, tick_at_sqrt_ratio, u256_max, u256_one,
         widening_mul, wrapping_add_u256, wrapping_sub_u256,
     };
-    use crate::storage::{MAX_TICK, MIN_TICK};
+    use crate::constants::{MAX_TICK, MIN_TICK};
     use soroban_sdk::{Env, U256};
 
     #[test]

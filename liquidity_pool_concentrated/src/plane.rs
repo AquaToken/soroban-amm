@@ -8,11 +8,11 @@ use crate::bitmap::{
     chunk_bitmap_position, compress_tick, compressed_to_tick, find_next_set_bit, find_prev_set_bit,
     u256_to_array,
 };
+use crate::constants::{MAX_TICK, MIN_TICK, TICKS_PER_CHUNK};
 use crate::math::{amount0_delta, amount1_delta, sqrt_ratio_at_tick};
 use crate::storage::{
     chunk_address, get_chunk_bitmap_word, get_fee, get_full_range_liquidity, get_liquidity,
-    get_plane, get_reserve0, get_reserve1, get_slot0, get_tick_spacing, ChunkCache, MAX_TICK,
-    MIN_TICK, TICKS_PER_CHUNK,
+    get_plane, get_reserve0, get_reserve1, get_slot0, get_tick_spacing, ChunkCache,
 };
 use soroban_sdk::{Env, Symbol, Vec, U256};
 
