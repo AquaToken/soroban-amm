@@ -68,6 +68,9 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         if let Some(idx) = Self::get_tokens(e.clone()).first_index_of(reward_token) {
             reward_balance_to_keep = reward_balance_to_keep
                 .saturating_add(Self::get_reserves(e.clone()).get(idx).unwrap());
+            let pf = get_protocol_fees(&e);
+            let pf_amount = if idx == 0 { pf.token0 } else { pf.token1 };
+            reward_balance_to_keep = reward_balance_to_keep.saturating_add(pf_amount);
         }
 
         reward_balance.saturating_sub(reward_balance_to_keep)
