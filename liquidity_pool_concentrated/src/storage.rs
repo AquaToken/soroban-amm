@@ -17,44 +17,53 @@ use utils::{
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    // ── Instance storage: pool config & global state ──
-    Router,               // Address — router contract that manages this pool
-    Plane,                // Address — pool plane for batch metadata queries
-    Token0,               // Address — first token (sorted)
-    Token1,               // Address — second token (sorted)
-    Fee,                  // u32 — fee in basis points (e.g. 30 = 0.3%)
-    TickSpacing,          // i32 — min distance between initialized ticks
-    Slot0,                // Slot0 — current sqrt_price and tick
-    Liquidity,            // u128 — active liquidity (positions overlapping current tick)
-    FeeGrowthGlobal0X128, // U256 — cumulative fee growth for token0, Q128
-    FeeGrowthGlobal1X128, // U256 — cumulative fee growth for token1, Q128
-    ProtocolFees,         // ProtocolFees — uncollected protocol fee amounts
-    ProtocolFeeFraction,  // u32 — protocol's share of fees, per FEE_DENOMINATOR
-    IsKilledDeposit,      // bool — deposit kill switch
-    IsKilledSwap,         // bool — swap kill switch
-    TokenFutureWasm,      // BytesN<32> — staged LP token WASM hash for upgrade
-    GaugeFutureWasm,      // BytesN<32> — staged gauge WASM hash for upgrade
+    // ── Instance: pool config ──
+    Router,
+    Token0,
+    Token1,
+    Fee,                 // u32 — basis points (e.g. 30 = 0.3%)
+    TickSpacing,         // i32
+    ProtocolFeeFraction, // u32 — protocol's share of fees, per FEE_DENOMINATOR
+    Plane,
 
-    // ── Persistent storage: per-tick (chunked) ──
-    ChunkBitmap(i32), // U256 — 1 bit per chunk; set if chunk has any initialized tick.
-    //   word_pos = chunk_pos >> 8. Bit = chunk_pos & 255.
-    TickChunk(i32), // Vec<TickData> — exactly TICKS_PER_CHUNK entries, pre-allocated.
-    //   chunk_pos = compressed_tick.div_euclid(TICKS_PER_CHUNK).
+    // ── Instance: pool state ──
+    Slot0,                // Slot0 { sqrt_price_x96, tick }
+    Liquidity,            // u128 — active liquidity at current tick
+    FeeGrowthGlobal0X128, // U256
+    FeeGrowthGlobal1X128, // U256
+    ProtocolFees,         // ProtocolFees { token0, token1 }
+    Reserve0,             // u128 — tracked LP reserve (excludes protocol fees)
+    Reserve1,             // u128
 
-    // ── Persistent storage: per-user ──
-    Position(Address, i32, i32), // PositionData — keyed by (owner, tick_lower, tick_upper)
-    User(Address),               // UserState — positions + raw/weighted liquidity (single entry)
+    // ── Instance: tick bounds (anti-griefing) ──
+    MinInitTick, // i32 — lowest initialized tick
+    MaxInitTick, // i32 — highest initialized tick
 
-    // ── Rewards: distance-weighted liquidity ──
+    // ── Instance: rewards ──
     TotalRawLiquidity,      // u128 — sum of all users' raw liquidity
     TotalWeightedLiquidity, // u128 — sum of all users' weighted liquidity
-    FullRangeLiquidity,     // u128 — total liquidity in canonical full-range positions
+    FullRangeLiquidity,     // u128 — total liquidity in full-range positions
 
-    ClaimKilled, // bool — reward claim kill switch
+    // ── Instance: kill switches ──
+    IsKilledDeposit,
+    IsKilledSwap,
+    ClaimKilled,
 
-    // ── Explicit reserve tracking ──
-    Reserve0, // u128 — tracked LP reserve for token0 (excludes protocol fees)
-    Reserve1, // u128 — tracked LP reserve for token1 (excludes protocol fees)
+    // ── Instance: upgrade staging ──
+    TokenFutureWasm, // BytesN<32>
+    GaugeFutureWasm, // BytesN<32>
+
+    // ── Persistent: tick bitmap (3-level) ──
+    //   Level 0: TickChunk — Vec<16 × TickData>, keyed by chunk_pos
+    //   Level 1: ChunkBitmap — U256, 1 bit per chunk, keyed by chunk_pos >> 8
+    //   Level 2: WordBitmap — U256, 1 bit per ChunkBitmap word, keyed by (chunk_pos >> 8) >> 8
+    TickChunk(i32),
+    ChunkBitmap(i32),
+    WordBitmap(i32),
+
+    // ── Persistent: per-user ──
+    Position(Address, i32, i32), // PositionData — keyed by (owner, tick_lower, tick_upper)
+    User(Address),               // UserState — positions + raw/weighted liquidity
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
@@ -143,6 +152,20 @@ generate_instance_storage_getter_and_setter_with_default!(
 );
 generate_instance_storage_getter_and_setter_with_default!(reserve0, DataKey::Reserve0, u128, 0);
 generate_instance_storage_getter_and_setter_with_default!(reserve1, DataKey::Reserve1, u128, 0);
+
+// Tick bounds: initialized tick range. Default to inverted bounds (empty pool).
+generate_instance_storage_getter_and_setter_with_default!(
+    min_init_tick,
+    DataKey::MinInitTick,
+    i32,
+    crate::constants::MAX_TICK
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    max_init_tick,
+    DataKey::MaxInitTick,
+    i32,
+    crate::constants::MIN_TICK
+);
 
 // ── Position accessors (persistent storage) ──
 // Keyed by (owner, tick_lower, tick_upper). A user can have up to MAX_USER_POSITIONS
@@ -262,6 +285,27 @@ pub fn get_chunk_bitmap_word(e: &Env, word_pos: i32) -> soroban_sdk::U256 {
 
 pub fn set_chunk_bitmap_word(e: &Env, word_pos: i32, word: &soroban_sdk::U256) {
     let key = DataKey::ChunkBitmap(word_pos);
+    e.storage().persistent().set(&key, word);
+    bump_persistent(e, &key);
+}
+
+// ── Level-2 word bitmap accessors (persistent storage) ──
+// 256-bit words for efficient ChunkBitmap word scanning.
+// Each bit marks a ChunkBitmap word that has any chunk bit set.
+// l2_word_pos = chunk_bitmap_word_pos >> 8. bit_pos = chunk_bitmap_word_pos & 255.
+pub fn get_word_bitmap(e: &Env, l2_word_pos: i32) -> soroban_sdk::U256 {
+    let key = DataKey::WordBitmap(l2_word_pos);
+    match e.storage().persistent().get(&key) {
+        Some(word) => {
+            bump_persistent(e, &key);
+            word
+        }
+        None => soroban_sdk::U256::from_u32(e, 0),
+    }
+}
+
+pub fn set_word_bitmap(e: &Env, l2_word_pos: i32, word: &soroban_sdk::U256) {
+    let key = DataKey::WordBitmap(l2_word_pos);
     e.storage().persistent().set(&key, word);
     bump_persistent(e, &key);
 }

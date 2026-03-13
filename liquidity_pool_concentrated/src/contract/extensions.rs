@@ -672,4 +672,8 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         let sqrt_price = sqrt_price_from_amounts(&e, amount0, amount1);
         tick_at_sqrt_ratio(&e, &sqrt_price)
     }
+
+    fn get_tick_bounds(e: Env) -> (i32, i32) {
+        (get_min_init_tick(&e), get_max_init_tick(&e))
+    }
 }

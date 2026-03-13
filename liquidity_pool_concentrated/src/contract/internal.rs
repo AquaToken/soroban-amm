@@ -34,8 +34,18 @@ impl ConcentratedLiquidityPool {
     pub(super) fn update_chunk_bitmap_bit(e: &Env, chunk_pos: i32, has_initialized: bool) {
         let (word_pos, bit_pos) = bitmap::chunk_bitmap_position(chunk_pos);
         let mut word = bitmap::u256_to_array(&get_chunk_bitmap_word(e, word_pos));
+        let was_empty = word == [0u8; 32];
         bitmap::set_bit(&mut word, bit_pos, has_initialized);
+        let is_empty = word == [0u8; 32];
         set_chunk_bitmap_word(e, word_pos, &bitmap::u256_from_array(e, &word));
+
+        // Maintain level-2 word bitmap
+        if was_empty != is_empty {
+            let (l2_word_pos, l2_bit_pos) = bitmap::word_bitmap_position(word_pos);
+            let mut l2_word = bitmap::u256_to_array(&get_word_bitmap(e, l2_word_pos));
+            bitmap::set_bit(&mut l2_word, l2_bit_pos, !is_empty);
+            set_word_bitmap(e, l2_word_pos, &bitmap::u256_from_array(e, &l2_word));
+        }
     }
 
     // Check if any tick in a chunk is initialized (liquidity_gross > 0).
@@ -49,7 +59,7 @@ impl ConcentratedLiquidityPool {
     }
 
     // Scan a loaded chunk for the highest (last) initialized tick. Returns slot index.
-    fn scan_chunk_highest_init(chunk: &Vec<TickData>) -> Option<u32> {
+    pub(super) fn scan_chunk_highest_init(chunk: &Vec<TickData>) -> Option<u32> {
         for s in (0..TICKS_PER_CHUNK as u32).rev() {
             if chunk.get(s).unwrap().2 > 0 {
                 return Some(s);
@@ -59,13 +69,104 @@ impl ConcentratedLiquidityPool {
     }
 
     // Scan a loaded chunk for the lowest (first) initialized tick. Returns slot index.
-    fn scan_chunk_lowest_init(chunk: &Vec<TickData>) -> Option<u32> {
+    pub(super) fn scan_chunk_lowest_init(chunk: &Vec<TickData>) -> Option<u32> {
         for s in 0..TICKS_PER_CHUNK as u32 {
             if chunk.get(s).unwrap().2 > 0 {
                 return Some(s);
             }
         }
         None
+    }
+
+    /// Find the next globally initialized tick using the 3-level bitmap.
+    /// Called only when the global min or max tick is de-initialized, so all
+    /// remaining ticks in the same bitmap word are on the correct side.
+    /// `lte == true`: scan downward (find new max); `lte == false`: scan upward (find new min).
+    /// Returns MIN_TICK / MAX_TICK sentinel when no tick found (pool now empty).
+    fn find_next_global_tick(e: &Env, from_tick: i32, spacing: i32, lte: bool) -> i32 {
+        let compressed = bitmap::compress_tick(from_tick, spacing);
+        let (chunk_pos, _) = chunk_address(compressed);
+        let (word_pos, _) = bitmap::chunk_bitmap_position(chunk_pos);
+
+        // 1. Search current bitmap word (tick already de-initialized, so extreme is correct)
+        let tick = Self::extreme_tick_in_bitmap_word(e, word_pos, spacing, lte);
+        if lte && tick != MIN_TICK {
+            return tick;
+        }
+        if !lte && tick != MAX_TICK {
+            return tick;
+        }
+
+        // 2. Search via L2 for adjacent bitmap words
+        let (l2_pos, l2_bit) = bitmap::word_bitmap_position(word_pos);
+        let search_bit = |l2_pos: i32, from: u32| -> Option<i32> {
+            let l2_word = bitmap::u256_to_array(&get_word_bitmap(e, l2_pos));
+            let found = if lte {
+                bitmap::find_prev_set_bit(&l2_word, from)
+            } else {
+                bitmap::find_next_set_bit(&l2_word, from)
+            };
+            found.map(|bit| (l2_pos << 8) + bit as i32)
+        };
+
+        // Try current L2 word (skip own bit)
+        let adjacent = if lte && l2_bit > 0 {
+            search_bit(l2_pos, l2_bit - 1)
+        } else if !lte && l2_bit < 255 {
+            search_bit(l2_pos, l2_bit + 1)
+        } else {
+            None
+        };
+        if let Some(found_word_pos) = adjacent {
+            return Self::extreme_tick_in_bitmap_word(e, found_word_pos, spacing, lte);
+        }
+
+        // Try adjacent L2 word (at most 1 more covers entire range)
+        let l2_adj = if lte { l2_pos - 1 } else { l2_pos + 1 };
+        let from = if lte { 255 } else { 0 };
+        if let Some(found_word_pos) = search_bit(l2_adj, from) {
+            return Self::extreme_tick_in_bitmap_word(e, found_word_pos, spacing, lte);
+        }
+
+        // No initialized tick found — pool is empty; return sentinel
+        if lte {
+            MIN_TICK
+        } else {
+            MAX_TICK
+        }
+    }
+
+    // Find the extreme (highest or lowest) initialized tick within a chunk bitmap word.
+    // `highest=true`: find highest (for max bound); `highest=false`: find lowest (for min bound).
+    pub(super) fn extreme_tick_in_bitmap_word(
+        e: &Env,
+        word_pos: i32,
+        spacing: i32,
+        highest: bool,
+    ) -> i32 {
+        let word = bitmap::u256_to_array(&get_chunk_bitmap_word(e, word_pos));
+        let found_bit = if highest {
+            bitmap::find_prev_set_bit(&word, 255)
+        } else {
+            bitmap::find_next_set_bit(&word, 0)
+        };
+        if let Some(bit) = found_bit {
+            let chunk_pos = (word_pos << 8) + bit as i32;
+            let chunk = get_or_create_tick_chunk(e, chunk_pos);
+            let slot = if highest {
+                Self::scan_chunk_highest_init(&chunk)
+            } else {
+                Self::scan_chunk_lowest_init(&chunk)
+            };
+            if let Some(s) = slot {
+                return bitmap::compressed_to_tick(chunk_pos * TICKS_PER_CHUNK + s as i32, spacing);
+            }
+        }
+        if highest {
+            MIN_TICK
+        } else {
+            MAX_TICK
+        }
     }
 
     // Two-level search: scan within current chunk, then across chunks via chunk bitmap.
@@ -217,11 +318,25 @@ impl ConcentratedLiquidityPool {
         // Update chunk bitmap on initialization state change
         if !was_initialized && is_initialized {
             Self::update_chunk_bitmap_bit(e, chunk_pos, true);
+            // Expand tick bounds
+            if tick_idx < get_min_init_tick(e) {
+                set_min_init_tick(e, &tick_idx);
+            }
+            if tick_idx > get_max_init_tick(e) {
+                set_max_init_tick(e, &tick_idx);
+            }
         } else if was_initialized && !is_initialized {
             // Scan chunk to see if any tick remains initialized
             let any_init = Self::chunk_has_initialized(&chunk);
             if !any_init {
                 Self::update_chunk_bitmap_bit(e, chunk_pos, false);
+            }
+            // Shrink tick bounds if this was the min or max
+            if tick_idx == get_min_init_tick(e) {
+                set_min_init_tick(e, &Self::find_next_global_tick(e, tick_idx, spacing, false));
+            }
+            if tick_idx == get_max_init_tick(e) {
+                set_max_init_tick(e, &Self::find_next_global_tick(e, tick_idx, spacing, true));
             }
         }
     }
@@ -993,7 +1108,21 @@ impl ConcentratedLiquidityPool {
         let tick_spacing = get_tick_spacing(e);
         let mut cc = ChunkCache::new(e);
 
+        // Tick bounds: stop swap when past all initialized ticks (anti-griefing).
+        let tick_bound = if zero_for_one {
+            get_min_init_tick(e)
+        } else {
+            get_max_init_tick(e)
+        };
+
         while amount_remaining > 0 && slot.sqrt_price_x96 != price_limit {
+            // Stop if we've passed all initialized ticks — no more liquidity ahead.
+            if zero_for_one && slot.tick < tick_bound {
+                break;
+            }
+            if !zero_for_one && slot.tick >= tick_bound {
+                break;
+            }
             let (next_tick, next_tick_initialized) = Self::find_initialized_tick_in_word(
                 e,
                 slot.tick,

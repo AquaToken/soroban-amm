@@ -3876,55 +3876,31 @@ fn test_min_tick_price_positions_above() {
         &0,
     );
 
-    // One large swap token0→token1 drains all token1, driving price to MIN_TICK
+    // One large swap token0→token1 drains all token1.
+    // With tick bounds, price stops near the lowest initialized tick instead of MIN_TICK.
     setup.pool.swap(&setup.user, &0, &1, &50_000_0000000, &0);
 
     let slot_final = setup.pool.get_slot0();
-    let active_liq = setup.pool.get_active_liquidity();
+    let (min_init, _max_init) = setup.pool.get_tick_bounds();
 
-    // Pool is at MIN_TICK with no active liquidity
-    assert_eq!(slot_final.tick, -887_272, "price should be at MIN_TICK");
-    assert_eq!(
-        active_liq, 0,
-        "active liquidity should be 0 when price is below all positions"
-    );
-
-    // Full-range deposit should fail (OutMinNotSatisfied) — L rounds to 0
-    let full_range_result = setup
-        .pool
-        .try_estimate_deposit(&Vec::from_array(&setup.env, [1_000_0000000u128, 0u128]));
+    // Price stops at or just below the lowest initialized tick, NOT at MIN_TICK.
     assert!(
-        full_range_result.is_err(),
-        "full-range deposit should fail at MIN_TICK for human-scale amounts"
+        slot_final.tick >= min_init - 1,
+        "tick {} should be near min_init_tick {}, not at MIN_TICK",
+        slot_final.tick,
+        min_init,
     );
-
-    // Custom-range deposit ABOVE current tick works (one-sided, token0 only)
-    let (actual_amounts, new_liq) = setup.pool.deposit_position(
-        &setup.user,
-        &17100,
-        &20820,
-        &Vec::from_array(&setup.env, [1_000_0000000u128, 1_000_0000000u128]),
-        &0,
-    );
-    let (dep0, dep1) = pair(actual_amounts);
-    assert!(new_liq > 0, "custom-range deposit above price should work");
-    assert!(dep0 > 0, "should consume token0");
-    assert_eq!(dep1, 0, "should NOT consume token1 (range above price)");
-
-    // Swap token0→token1 (price down) should fail — already at MIN_TICK
     assert!(
-        setup
-            .pool
-            .try_estimate_swap(&0, &1, &1_000_0000000)
-            .is_err(),
-        "swap down at MIN_TICK should fail"
+        slot_final.tick > -887_272,
+        "tick should NOT reach MIN_TICK, got {}",
+        slot_final.tick,
     );
 
-    // Swap token1→token0 (price up) works — positions exist above
-    let swap_up_estimate = setup.pool.estimate_swap(&1, &0, &1_000_0000000);
+    // Pool is still usable: swap token1→token0 (price up) works
+    let swap_up_estimate = setup.pool.estimate_swap(&1, &0, &1_0000000);
     assert!(
         swap_up_estimate > 0,
-        "swap up should work — positions exist above current price"
+        "swap up should work — price is near positions, not at MIN_TICK"
     );
 
     // Execute upward swap and verify price moves up
@@ -3936,6 +3912,257 @@ fn test_min_tick_price_positions_above() {
     assert!(
         slot_after.tick > slot_final.tick,
         "price should move up after swap"
+    );
+}
+
+// Swap must stop at the edge of initialized ticks instead of sliding to MIN/MAX_TICK.
+// This prevents pool griefing where an attacker pushes price to MIN_TICK with a single swap.
+#[test]
+fn test_swap_stops_at_tick_bounds() {
+    let setup = Setup::new_with_config(&TestConfig {
+        fee: 30,
+        tick_spacing: 60,
+    });
+    setup.mint_user_tokens(10_000_0000000, 10_000_0000000);
+
+    // Create a narrow position around tick 0 (price ≈ 1:1).
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq) = setup
+        .pool
+        .deposit_position(&setup.user, &-120, &120, &amounts, &0);
+    assert!(liq > 0);
+
+    let slot_before = setup.pool.get_slot0();
+    let (min_tick, max_tick) = setup.pool.get_tick_bounds();
+    std::println!(
+        "Before swap: tick={}, bounds=({}, {})",
+        slot_before.tick,
+        min_tick,
+        max_tick
+    );
+
+    // Large swap zero_for_one — push price as far down as possible.
+    // Without tick bounds, price would slide to MIN_TICK.
+    let attacker = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&attacker, &5_000_0000000);
+    let out = setup.pool.swap(&attacker, &0, &1, &5_000_0000000, &0);
+    assert!(out > 0);
+
+    let slot_after = setup.pool.get_slot0();
+    std::println!(
+        "After swap: tick={}, min_init_tick={}",
+        slot_after.tick,
+        min_tick
+    );
+
+    // Price must NOT reach MIN_TICK — it should stop at or near the lowest initialized tick.
+    assert!(
+        slot_after.tick >= min_tick - 1,
+        "tick {} slid far below min_init_tick {}",
+        slot_after.tick,
+        min_tick,
+    );
+    assert!(
+        slot_after.tick > -887_272,
+        "tick should not reach MIN_TICK, got {}",
+        slot_after.tick,
+    );
+
+    // Pool should still be usable: swap in reverse direction must work.
+    let out2 = setup.pool.swap(&attacker, &1, &0, &(out / 2), &0);
+    assert!(out2 > 0, "reverse swap should work after bounded swap");
+    let slot_final = setup.pool.get_slot0();
+    assert!(
+        slot_final.tick > slot_after.tick,
+        "price should recover after reverse swap"
+    );
+}
+
+// Upper-side (one_for_zero) swap must also stop precisely at max_init_tick.
+// Regression test: previously the guard used strict `>` which allowed one extra
+// iteration through an empty bitmap word before breaking.
+#[test]
+fn test_swap_stops_at_upper_tick_bound() {
+    let setup = Setup::new_with_config(&TestConfig {
+        fee: 30,
+        tick_spacing: 60,
+    });
+    setup.mint_user_tokens(10_000_0000000, 10_000_0000000);
+
+    // Narrow position around tick 0.
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq) = setup
+        .pool
+        .deposit_position(&setup.user, &-120, &120, &amounts, &0);
+    assert!(liq > 0);
+
+    let (_, max_tick) = setup.pool.get_tick_bounds();
+
+    // Large swap one_for_zero (price up) to exhaust all liquidity.
+    let attacker = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &setup.token1.address).mint(&attacker, &5_000_0000000);
+    let out = setup.pool.swap(&attacker, &1, &0, &5_000_0000000, &0);
+    assert!(out > 0);
+
+    let slot_after = setup.pool.get_slot0();
+
+    // Price must stop at max_init_tick, not drift through an empty bitmap word.
+    assert_eq!(
+        slot_after.tick, max_tick,
+        "tick {} should be exactly max_init_tick {}, not drifting beyond",
+        slot_after.tick, max_tick,
+    );
+}
+
+// Verify tick bounds are updated correctly during deposit and full withdrawal.
+#[test]
+fn test_tick_bounds_update_on_deposit_withdraw() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(10_000_0000000, 10_000_0000000);
+
+    // Empty pool: min > max (inverted sentinel).
+    let (min0, max0) = setup.pool.get_tick_bounds();
+    assert!(
+        min0 > max0,
+        "empty pool should have inverted bounds: min={} max={}",
+        min0,
+        max0,
+    );
+
+    // Deposit position at [-100, 100].
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq) = setup
+        .pool
+        .deposit_position(&setup.user, &-100, &100, &amounts, &0);
+    assert!(liq > 0);
+
+    let (min1, max1) = setup.pool.get_tick_bounds();
+    assert_eq!(min1, -100, "min_init_tick should be -100");
+    assert_eq!(max1, 100, "max_init_tick should be 100");
+
+    // Deposit wider position at [-500, 500].
+    let amounts2 = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, liq2) = setup
+        .pool
+        .deposit_position(&setup.user, &-500, &500, &amounts2, &0);
+    assert!(liq2 > 0);
+
+    let (min2, max2) = setup.pool.get_tick_bounds();
+    assert_eq!(min2, -500, "min_init_tick should expand to -500");
+    assert_eq!(max2, 500, "max_init_tick should expand to 500");
+
+    // Withdraw the wider position completely.
+    let min_amounts = Vec::from_array(&setup.env, [0u128, 0u128]);
+    setup
+        .pool
+        .withdraw_position(&setup.user, &-500, &500, &liq2, &min_amounts);
+
+    let (min3, max3) = setup.pool.get_tick_bounds();
+    assert_eq!(min3, -100, "min_init_tick should shrink back to -100");
+    assert_eq!(max3, 100, "max_init_tick should shrink back to 100");
+
+    // Withdraw the remaining position completely.
+    setup
+        .pool
+        .withdraw_position(&setup.user, &-100, &100, &liq, &min_amounts);
+
+    let (min4, max4) = setup.pool.get_tick_bounds();
+    assert!(
+        min4 > max4,
+        "empty pool should have inverted bounds again: min={} max={}",
+        min4,
+        max4,
+    );
+}
+
+// Worst case: tick bounds recalculation when ticks are at opposite ends of the range.
+// With 3-level bitmap, this should need at most 4 storage reads.
+#[test]
+fn test_tick_bounds_worst_case_distant_ticks() {
+    let config = TestConfig {
+        fee: 30,
+        tick_spacing: 1,
+    };
+    let setup = Setup::new_with_config(&config);
+    setup.mint_user_tokens(i128::MAX, i128::MAX);
+
+    // First deposit sets the initial price at tick 0.
+    let seed = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, seed_liq) = setup
+        .pool
+        .deposit_position(&setup.user, &-10, &10, &seed, &0);
+    assert!(seed_liq > 0);
+
+    // Place two positions far apart to stress the bitmap traversal.
+    // Each chunk bitmap word covers 4096 compressed ticks (tick_spacing=1).
+    // Positions ~20k ticks apart → ~5 bitmap words apart from center.
+    // Position A below current price (current above range → token1 only).
+    let tick_a_lower = -10_000;
+    let tick_a_upper = -9_000;
+    let amounts_a = Vec::from_array(&setup.env, [0, 1_000_0000000]);
+    let (_, liq_a) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &tick_a_lower, &tick_a_upper, &amounts_a, &0);
+    assert!(liq_a > 0);
+
+    // Position B above current price (current below range → token0 only).
+    let tick_b_lower = 9_000;
+    let tick_b_upper = 10_000;
+    let amounts_b = Vec::from_array(&setup.env, [1_000_0000000, 0]);
+    let (_, liq_b) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &tick_b_lower, &tick_b_upper, &amounts_b, &0);
+    assert!(liq_b > 0);
+
+    let (min_tick, max_tick) = setup.pool.get_tick_bounds();
+    assert_eq!(min_tick, tick_a_lower);
+    assert_eq!(max_tick, tick_b_upper);
+
+    // Withdraw position A — forces recalculation of min_init_tick.
+    // Worst case: must scan across the entire bitmap from tick -887200
+    // to find the seed position tick at -10.
+    let min_amounts = Vec::from_array(&setup.env, [0u128, 0u128]);
+    setup.pool.withdraw_position(
+        &setup.user,
+        &tick_a_lower,
+        &tick_a_upper,
+        &liq_a,
+        &min_amounts,
+    );
+
+    let (min_after, max_after) = setup.pool.get_tick_bounds();
+    assert_eq!(
+        min_after, -10,
+        "after removing position A, min should jump to seed position lower"
+    );
+    assert_eq!(max_after, tick_b_upper);
+
+    // Withdraw position B — forces recalculation of max_init_tick across entire range.
+    setup.pool.withdraw_position(
+        &setup.user,
+        &tick_b_lower,
+        &tick_b_upper,
+        &liq_b,
+        &min_amounts,
+    );
+
+    let (min_after2, max_after2) = setup.pool.get_tick_bounds();
+    assert_eq!(min_after2, -10);
+    assert_eq!(max_after2, 10, "max should shrink to seed position upper");
+
+    // Withdraw seed position — pool becomes empty.
+    setup
+        .pool
+        .withdraw_position(&setup.user, &-10, &10, &seed_liq, &min_amounts);
+
+    let (min_final, max_final) = setup.pool.get_tick_bounds();
+    assert!(
+        min_final > max_final,
+        "pool should be empty: min={} max={}",
+        min_final,
+        max_final,
     );
 }
 

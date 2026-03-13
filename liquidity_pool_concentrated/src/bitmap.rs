@@ -85,6 +85,13 @@ pub(crate) fn chunk_bitmap_position(chunk_pos: i32) -> (i32, u32) {
     (word_pos, bit_pos)
 }
 
+// Level-2 word bitmap addressing: 1 bit per ChunkBitmap word.
+pub(crate) fn word_bitmap_position(chunk_bitmap_word_pos: i32) -> (i32, u32) {
+    let l2_word_pos = chunk_bitmap_word_pos >> 8;
+    let bit_pos = (chunk_bitmap_word_pos & 255) as u32;
+    (l2_word_pos, bit_pos)
+}
+
 pub(crate) fn compress_tick(tick: i32, spacing: i32) -> i32 {
     let mut compressed = tick / spacing;
     if tick < 0 && tick % spacing != 0 {
