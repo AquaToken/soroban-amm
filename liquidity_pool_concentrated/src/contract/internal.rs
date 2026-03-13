@@ -169,8 +169,43 @@ impl ConcentratedLiquidityPool {
         }
     }
 
-    // Two-level search: scan within current chunk, then across chunks via chunk bitmap.
-    // Returns (next_tick, initialized) — same contract as the old find_initialized_tick_in_word.
+    // Use L2 word bitmap to find the next non-empty L1 bitmap word.
+    // `lte == true`: search downward (lower word positions).
+    // `lte == false`: search upward (higher word positions).
+    fn find_adjacent_bitmap_word(e: &Env, current_word_pos: i32, lte: bool) -> Option<i32> {
+        let (l2_pos, l2_bit) = bitmap::word_bitmap_position(current_word_pos);
+
+        let search = |l2_pos: i32, from: u32| -> Option<i32> {
+            let l2_word = bitmap::u256_to_array(&get_word_bitmap(e, l2_pos));
+            let found = if lte {
+                bitmap::find_prev_set_bit(&l2_word, from)
+            } else {
+                bitmap::find_next_set_bit(&l2_word, from)
+            };
+            found.map(|bit| (l2_pos << 8) + bit as i32)
+        };
+
+        // Try current L2 word (skip own bit)
+        let adjacent = if lte && l2_bit > 0 {
+            search(l2_pos, l2_bit - 1)
+        } else if !lte && l2_bit < 255 {
+            search(l2_pos, l2_bit + 1)
+        } else {
+            None
+        };
+        if adjacent.is_some() {
+            return adjacent;
+        }
+
+        // Try adjacent L2 word
+        let l2_adj = if lte { l2_pos - 1 } else { l2_pos + 1 };
+        let from = if lte { 255 } else { 0 };
+        search(l2_adj, from)
+    }
+
+    // Three-level search: scan within current chunk, then across chunks via chunk bitmap,
+    // then across bitmap words via L2 word bitmap.
+    // Returns (next_tick, initialized).
     pub(super) fn find_initialized_tick_in_word(
         e: &Env,
         tick: i32,
@@ -210,7 +245,14 @@ impl ConcentratedLiquidityPool {
                 }
             }
 
-            // Not found in this bitmap word — return boundary
+            // 3. Use L2 word bitmap to skip empty L1 words
+            if let Some(target_word) = Self::find_adjacent_bitmap_word(e, bm_word_pos, true) {
+                let tick = Self::extreme_tick_in_bitmap_word(e, target_word, spacing, true);
+                if tick != MIN_TICK {
+                    return (tick, true);
+                }
+            }
+
             let boundary_compressed = (bm_word_pos << 8) * TICKS_PER_CHUNK;
             (
                 bitmap::compressed_to_tick(boundary_compressed, spacing),
@@ -246,7 +288,14 @@ impl ConcentratedLiquidityPool {
                 }
             }
 
-            // Not found — return boundary at end of current bitmap word
+            // 3. Use L2 word bitmap to skip empty L1 words
+            if let Some(target_word) = Self::find_adjacent_bitmap_word(e, bm_word_pos, false) {
+                let tick = Self::extreme_tick_in_bitmap_word(e, target_word, spacing, false);
+                if tick != MAX_TICK {
+                    return (tick, true);
+                }
+            }
+
             let boundary_compressed =
                 ((bm_word_pos << 8) + 255) * TICKS_PER_CHUNK + (TICKS_PER_CHUNK - 1);
             (
