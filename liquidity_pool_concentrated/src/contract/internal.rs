@@ -1229,7 +1229,6 @@ impl ConcentratedLiquidityPool {
             set_protocol_fees(e, &protocol_fees);
             set_liquidity(e, &liquidity);
             set_slot0(e, &slot);
-            update_plane(e);
         }
 
         if !exact_input && amount_remaining > 0 {
@@ -1367,6 +1366,7 @@ impl ConcentratedLiquidityPool {
         }
         set_reserve0(e, &res0);
         set_reserve1(e, &res1);
+        update_plane(e);
 
         // Event emission.
         let (token_in, token_out, in_amount, out_amount) = if zero_for_one {
