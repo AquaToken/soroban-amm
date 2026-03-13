@@ -663,6 +663,10 @@ impl ConcentratedLiquidityPool {
         let token1 = get_token1(e);
         let contract = e.current_contract_address();
 
+        if get_reserve0(e) < amount0 || get_reserve1(e) < amount1 {
+            panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
+        }
+
         if amount0 > 0 {
             SorobanTokenClient::new(e, &token0).transfer(&contract, owner, &(amount0 as i128));
         }
