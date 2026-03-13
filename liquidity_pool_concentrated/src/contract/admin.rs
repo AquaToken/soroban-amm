@@ -4,28 +4,6 @@ use crate::bitmap;
 // Admin operations — access-controlled pool management.
 #[contractimpl]
 impl AdminInterfaceTrait for ConcentratedLiquidityPool {
-    // Kill switch for reward claims.
-    // Killing: pause admin, emergency pause admin, or owner.
-    // Unkilling: pause admin or owner only (emergency pause cannot re-enable).
-    fn set_claim_killed(e: Env, admin: Address, value: bool) {
-        admin.require_auth();
-        if value {
-            require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
-        } else {
-            require_pause_admin_or_owner(&e, &admin);
-        }
-        set_claim_killed(&e, &value);
-        if value {
-            PoolEvents::new(&e).kill_claim();
-        } else {
-            PoolEvents::new(&e).unkill_claim();
-        }
-    }
-
-    fn get_claim_killed(e: Env) -> bool {
-        get_claim_killed(&e)
-    }
-
     // Assign privileged roles: rewards_admin, operations_admin, pause_admin,
     // emergency_pause_admins (multiple), system_fee_admin. Admin only.
     fn set_privileged_addrs(

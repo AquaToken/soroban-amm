@@ -643,7 +643,7 @@ fn test_claim_killed() {
     setup
         .pool
         .initialize_rewards_config(&setup.reward_token.address);
-    setup.pool.set_claim_killed(&setup.admin, &true);
+    setup.pool.kill_claim(&setup.admin);
     setup.pool.claim(&setup.user);
 }
 

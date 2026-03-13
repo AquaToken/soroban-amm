@@ -107,9 +107,6 @@ pub trait RewardsTrait {
 }
 
 pub trait AdminInterfaceTrait {
-    fn set_claim_killed(e: Env, admin: Address, value: bool);
-    fn get_claim_killed(e: Env) -> bool;
-
     fn set_privileged_addrs(
         e: Env,
         admin: Address,
