@@ -427,7 +427,7 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         set_reserve1(&e, &reserve1_after);
         update_plane(&e);
 
-        let tokens = Vec::from_array(&e, [get_token0(&e), get_token1(&e)]);
+        let tokens = Vec::from_array(&e, [token0, token1]);
         let amounts = Vec::from_array(&e, [total_amount0, total_amount1]);
         let events = PoolEvents::new(&e);
         events.withdraw_liquidity(tokens, amounts, amount);

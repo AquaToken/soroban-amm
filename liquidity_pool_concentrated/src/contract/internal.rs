@@ -1175,6 +1175,7 @@ impl ConcentratedLiquidityPool {
         let mut amount_calculated: u128 = 0;
         let mut total_fee_amount: u128 = 0;
         let tick_spacing = get_tick_spacing(e);
+        let protocol_fee_fraction = get_protocol_fee_fraction(e) as u128;
         let mut cc = ChunkCache::new(e);
 
         // Tick bounds: stop swap when past all initialized ticks (anti-griefing).
@@ -1240,7 +1241,7 @@ impl ConcentratedLiquidityPool {
             // Protocol fee split + fee growth (real swap only).
             if !dry_run {
                 let protocol_cut =
-                    step.fee_amount * get_protocol_fee_fraction(e) as u128 / FEE_DENOMINATOR;
+                    step.fee_amount * protocol_fee_fraction / FEE_DENOMINATOR;
                 let fee_for_lp = step.fee_amount.saturating_sub(protocol_cut);
                 if zero_for_one {
                     protocol_fees.token0 = protocol_fees.token0.saturating_add(protocol_cut);
