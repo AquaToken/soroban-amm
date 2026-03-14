@@ -240,7 +240,7 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
             PoolEvents::new(&e).claim_protocol_fee(token1, destination, amount1);
         }
         set_protocol_fees(&e, &fees);
-        update_plane(&e);
+        // No update_plane: protocol fees are not part of plane data.
         Vec::from_array(&e, [amount0, amount1])
     }
 }

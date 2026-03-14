@@ -726,7 +726,9 @@ impl ConcentratedLiquidityPool {
         let token1 = get_token1(e);
         let contract = e.current_contract_address();
 
-        if get_reserve0(e) < amount0 || get_reserve1(e) < amount1 {
+        let res0 = get_reserve0(e);
+        let res1 = get_reserve1(e);
+        if res0 < amount0 || res1 < amount1 {
             panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
         }
 
@@ -748,8 +750,8 @@ impl ConcentratedLiquidityPool {
             .publish(e);
         }
 
-        let res0 = get_reserve0(e) - amount0;
-        let res1 = get_reserve1(e) - amount1;
+        let res0 = res0 - amount0;
+        let res1 = res1 - amount1;
         set_reserve0(e, &res0);
         set_reserve1(e, &res1);
 
