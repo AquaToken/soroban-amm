@@ -1,5 +1,4 @@
 use super::*;
-use crate::bitmap;
 
 // Admin operations — access-controlled pool management.
 #[contractimpl]
@@ -130,79 +129,6 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
     fn get_protocol_fees(e: Env) -> Vec<u128> {
         let fees = get_protocol_fees(&e);
         Vec::from_array(&e, [fees.token0, fees.token1])
-    }
-
-    // ── Migration (temporary, remove after all pools migrated) ──
-
-    // Build WordBitmap (L2) entries from existing ChunkBitmap words in
-    // [from_word, to_word] (inclusive) and update MinInitTick/MaxInitTick.
-    // Idempotent — safe to call multiple times or with overlapping ranges.
-    fn migrate_bitmap(e: Env, admin: Address, from_word: i32, to_word: i32) {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-
-        let spacing = get_tick_spacing(&e);
-        let mut current_min = get_min_init_tick(&e);
-        let mut current_max = get_max_init_tick(&e);
-
-        for word_pos in from_word..=to_word {
-            let bm_array = bitmap::u256_to_array(&get_chunk_bitmap_word(&e, word_pos));
-            let is_nonzero = bm_array != [0u8; 32];
-
-            // Set L2 bit for this word
-            let (l2_pos, l2_bit) = bitmap::word_bitmap_position(word_pos);
-            let mut l2_word = bitmap::u256_to_array(&get_word_bitmap(&e, l2_pos));
-            bitmap::set_bit(&mut l2_word, l2_bit, is_nonzero);
-            set_word_bitmap(&e, l2_pos, &bitmap::u256_from_array(&e, &l2_word));
-
-            if is_nonzero {
-                let low = Self::extreme_tick_in_bitmap_word(&e, word_pos, spacing, false);
-                if low < current_min {
-                    current_min = low;
-                }
-                let high = Self::extreme_tick_in_bitmap_word(&e, word_pos, spacing, true);
-                if high > current_max {
-                    current_max = high;
-                }
-            }
-        }
-
-        set_min_init_tick(&e, &current_min);
-        set_max_init_tick(&e, &current_max);
-    }
-
-    // Move pool price from extreme (MIN/MAX_TICK region) to just outside
-    // initialized tick range so the next swap activates liquidity naturally.
-    // No tick crossings occur — active_liquidity stays unchanged.
-    fn unbrick_pool(e: Env, admin: Address) {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-
-        let slot = get_slot0(&e);
-        let min_tick = get_min_init_tick(&e);
-        let max_tick = get_max_init_tick(&e);
-
-        // Pool is empty (inverted bounds) or price is within initialized range
-        if min_tick > max_tick || (slot.tick >= min_tick && slot.tick <= max_tick) {
-            return;
-        }
-
-        let target = if slot.tick < min_tick {
-            // Price below all liquidity — set to tick just below first position
-            (min_tick - 1).max(MIN_TICK)
-        } else {
-            // Price above all liquidity — set to tick at upper bound
-            max_tick.min(MAX_TICK)
-        };
-
-        set_slot0(
-            &e,
-            &Slot0 {
-                sqrt_price_x96: sqrt_ratio_at_tick(&e, target),
-                tick: target,
-            },
-        );
-        update_plane(&e);
     }
 
     // Transfer accumulated protocol fees to destination. System fee admin or owner only.

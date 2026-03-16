@@ -133,17 +133,6 @@ pub trait AdminInterfaceTrait {
     fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
     fn get_protocol_fees(e: Env) -> Vec<u128>;
     fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128>;
-
-    // ── Migration (temporary, remove after all pools migrated) ──
-
-    // Build WordBitmap (L2) entries and compute MinInitTick/MaxInitTick
-    // from existing ChunkBitmap words in range [from_word, to_word] inclusive.
-    // Call in batches covering the full L1 word range for the pool's tick_spacing.
-    fn migrate_bitmap(e: Env, admin: Address, from_word: i32, to_word: i32);
-
-    // Move pool price from MIN_TICK/MAX_TICK to just outside the initialized
-    // tick range, so that the next swap can activate liquidity naturally.
-    fn unbrick_pool(e: Env, admin: Address);
 }
 
 pub trait UpgradeableContract {
