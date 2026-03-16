@@ -95,6 +95,7 @@ pub(crate) fn create_pool_contract<'a>(
         tokens,
         &fee,
         &tick_spacing,
+        &5_000,
     );
     client
 }
@@ -187,6 +188,7 @@ impl Setup<'_> {
             &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
             &config.fee,
             &config.tick_spacing,
+            &5_000,
         );
 
         Self {

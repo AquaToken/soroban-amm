@@ -16,6 +16,7 @@ pub trait ManagedLiquidityPool {
         tokens: Vec<Address>,
         fee: u32,
         tick_spacing: i32,
+        protocol_fee_fraction: u32,
         reward_config: (Address, Address, Address),
         plane: Address,
     );
@@ -32,6 +33,7 @@ pub trait LiquidityPoolInterfaceTrait {
         tokens: Vec<Address>,
         fee: u32,
         tick_spacing: i32,
+        protocol_fee_fraction: u32,
     );
 
     fn get_fee_fraction(e: Env) -> u32;

@@ -363,6 +363,7 @@ fn init_concentrated_pool(
         .unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
     let plane = get_pool_plane(e);
+    let protocol_fee_fraction = get_protocol_fee_fraction(e);
 
     e.invoke_contract::<()>(
         pool_contract_id,
@@ -384,6 +385,7 @@ fn init_concentrated_pool(
                 tokens.clone().into_val(e),
                 fee.into_val(e),
                 tick_spacing.into_val(e),
+                protocol_fee_fraction.into_val(e),
                 (
                     reward_token.to_val(),
                     reward_boost_token.to_val(),

@@ -12,6 +12,7 @@ impl ManagedLiquidityPool for ConcentratedLiquidityPool {
         tokens: Vec<Address>,
         fee: u32,
         tick_spacing: i32,
+        protocol_fee_fraction: u32,
         reward_config: (Address, Address, Address),
         plane: Address,
     ) {
@@ -25,6 +26,7 @@ impl ManagedLiquidityPool for ConcentratedLiquidityPool {
             tokens,
             fee,
             tick_spacing,
+            protocol_fee_fraction,
         );
         Self::initialize_boost_config(e.clone(), reward_boost_token, reward_boost_feed);
         Self::initialize_rewards_config(e, reward_token);

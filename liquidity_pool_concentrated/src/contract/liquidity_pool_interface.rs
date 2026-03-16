@@ -22,6 +22,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         tokens: Vec<Address>,
         fee: u32,
         tick_spacing: i32,
+        protocol_fee_fraction: u32,
     ) {
         if Self::has_admin_role(&e) {
             panic_with_error!(&e, Error::PoolAlreadyInitialized);
@@ -67,7 +68,10 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
                 token1: 0,
             },
         );
-        set_protocol_fee_fraction(&e, &5_000);
+        if protocol_fee_fraction as u128 > FEE_DENOMINATOR {
+            panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
+        }
+        set_protocol_fee_fraction(&e, &protocol_fee_fraction);
         set_is_killed_deposit(&e, &false);
         set_is_killed_swap(&e, &false);
         set_claim_killed(&e, &false);
