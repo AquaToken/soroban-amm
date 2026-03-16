@@ -1249,8 +1249,7 @@ impl ConcentratedLiquidityPool {
 
             // Protocol fee split + fee growth (real swap only).
             if !dry_run {
-                let protocol_cut =
-                    step.fee_amount * protocol_fee_fraction / FEE_DENOMINATOR;
+                let protocol_cut = step.fee_amount * protocol_fee_fraction / FEE_DENOMINATOR;
                 let fee_for_lp = step.fee_amount.saturating_sub(protocol_cut);
                 if zero_for_one {
                     protocol_fees.token0 = protocol_fees.token0.saturating_add(protocol_cut);
@@ -1434,7 +1433,11 @@ impl ConcentratedLiquidityPool {
         // amount0/amount1: positive = user pays in, negative = user receives out.
         // For exact-input, the pool keeps the full user_max_in (no refund), so
         // unswapped input also goes into reserves.
-        let unswapped = if exact_input { user_max_in - actual_in } else { 0 };
+        let unswapped = if exact_input {
+            user_max_in - actual_in
+        } else {
+            0
+        };
         let mut res0 = get_reserve0(e);
         let mut res1 = get_reserve1(e);
         if amount0 > 0 {

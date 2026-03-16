@@ -341,10 +341,7 @@ fn test_kill_claim_permissions() {
         .is_err());
 
     assert!(setup.pool.try_kill_claim(&user).is_err());
-    assert!(setup
-        .pool
-        .try_kill_claim(&setup.rewards_admin)
-        .is_err());
+    assert!(setup.pool.try_kill_claim(&setup.rewards_admin).is_err());
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
