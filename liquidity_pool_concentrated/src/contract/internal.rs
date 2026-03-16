@@ -523,8 +523,17 @@ impl ConcentratedLiquidityPool {
             set_total_raw_liquidity(e, &prev_total_raw.saturating_add(inc));
         } else {
             let dec = (-delta) as u128;
-            state.raw_liquidity = state.raw_liquidity.saturating_sub(dec);
-            set_total_raw_liquidity(e, &prev_total_raw.saturating_sub(dec));
+            state.raw_liquidity = match state.raw_liquidity.checked_sub(dec) {
+                Some(v) => v,
+                None => panic_with_error!(e, Error::LiquidityUnderflow),
+            };
+            set_total_raw_liquidity(
+                e,
+                &match prev_total_raw.checked_sub(dec) {
+                    Some(v) => v,
+                    None => panic_with_error!(e, Error::LiquidityUnderflow),
+                },
+            );
         }
         set_user_state(e, user, &state);
     }
