@@ -1351,7 +1351,9 @@ impl ConcentratedLiquidityPool {
 
     /// `user_max_in`: the user-specified maximum input amount, known at signing time.
     /// For exact-input swaps this is `in_amount`; for exact-output it is `in_max`.
-    /// Auth-deterministic: always transfers `user_max_in` from user, refunds excess.
+    /// Auth-deterministic: always transfers `user_max_in` from user.
+    /// Exact-input: no refund — pool keeps full input, unswapped portion goes to reserves.
+    /// Exact-output: refunds excess (`user_max_in - actual_in`) back to sender.
     pub(super) fn swap_internal(
         e: &Env,
         sender: &Address,
@@ -1413,9 +1415,12 @@ impl ConcentratedLiquidityPool {
         if user_max_in > 0 {
             in_client.transfer(sender, &contract, &(user_max_in as i128));
         }
-        let refund = user_max_in - actual_in;
-        if refund > 0 {
-            in_client.transfer(&contract, sender, &(refund as i128));
+        if !exact_input {
+            // Exact-output: refund excess input back to sender.
+            let refund = user_max_in - actual_in;
+            if refund > 0 {
+                in_client.transfer(&contract, sender, &(refund as i128));
+            }
         }
         if actual_out > 0 {
             SorobanTokenClient::new(e, out_token).transfer(
@@ -1427,6 +1432,9 @@ impl ConcentratedLiquidityPool {
 
         // Reserve tracking: reserves change by net token flow minus protocol fee delta.
         // amount0/amount1: positive = user pays in, negative = user receives out.
+        // For exact-input, the pool keeps the full user_max_in (no refund), so
+        // unswapped input also goes into reserves.
+        let unswapped = if exact_input { user_max_in - actual_in } else { 0 };
         let mut res0 = get_reserve0(e);
         let mut res1 = get_reserve1(e);
         if amount0 > 0 {
@@ -1438,6 +1446,13 @@ impl ConcentratedLiquidityPool {
             res1 += amount1 as u128 - pf_delta_1;
         } else if amount1 < 0 {
             res1 -= (-amount1) as u128;
+        }
+        if unswapped > 0 {
+            if zero_for_one {
+                res0 += unswapped;
+            } else {
+                res1 += unswapped;
+            }
         }
         set_reserve0(e, &res0);
         set_reserve1(e, &res1);
