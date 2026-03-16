@@ -140,20 +140,24 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         let sqrt_lower = sqrt_ratio_at_tick(&e, tick_lower);
         let sqrt_upper = sqrt_ratio_at_tick(&e, tick_upper);
 
+        // Compute actual token amounts for this liquidity (round up for pool safety),
+        // then cap at desired to prevent underflow from double-ceil rounding in amount0_delta.
         let (amount0, amount1) = if slot.sqrt_price_x96 <= sqrt_lower {
             (
-                amount0_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true),
+                amount0_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true).min(desired_amount0),
                 0,
             )
         } else if slot.sqrt_price_x96 < sqrt_upper {
             (
-                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, liquidity, true),
-                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, liquidity, true),
+                amount0_delta(&e, &slot.sqrt_price_x96, &sqrt_upper, liquidity, true)
+                    .min(desired_amount0),
+                amount1_delta(&e, &sqrt_lower, &slot.sqrt_price_x96, liquidity, true)
+                    .min(desired_amount1),
             )
         } else {
             (
                 0,
-                amount1_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true),
+                amount1_delta(&e, &sqrt_lower, &sqrt_upper, liquidity, true).min(desired_amount1),
             )
         };
 
