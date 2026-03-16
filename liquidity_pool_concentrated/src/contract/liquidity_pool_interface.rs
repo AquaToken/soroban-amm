@@ -92,7 +92,7 @@ impl LiquidityPoolInterfaceTrait for ConcentratedLiquidityPool {
         get_fee(&e)
     }
 
-    // Protocol's share of collected fees, in parts per FEE_DENOMINATOR (1_000_000).
+    // Protocol's share of collected fees, in parts per FEE_DENOMINATOR (10_000).
     fn get_protocol_fee_fraction(e: Env) -> u32 {
         get_protocol_fee_fraction(&e)
     }

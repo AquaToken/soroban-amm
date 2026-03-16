@@ -114,8 +114,8 @@ impl AdminInterfaceTrait for ConcentratedLiquidityPool {
         get_claim_killed(&e)
     }
 
-    // Set protocol's share of swap fees, in parts per FEE_DENOMINATOR (1_000_000).
-    // E.g. 5_000 = 0.5%. Operations admin or owner only.
+    // Set protocol's share of swap fees, in parts per FEE_DENOMINATOR (10_000).
+    // E.g. 5_000 = 50%. Operations admin or owner only.
     fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
