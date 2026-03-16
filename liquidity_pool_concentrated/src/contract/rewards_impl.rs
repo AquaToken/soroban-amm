@@ -218,7 +218,11 @@ impl RewardsTrait for ConcentratedLiquidityPool {
         let prev_working_supply = manager.get_working_supply(total_weighted);
         let new_working_balance =
             manager.calculate_effective_balance(&user, new_user_weighted, new_total_weighted);
-        let new_working_supply = prev_working_supply + new_working_balance - prev_working_balance;
+        let new_working_supply = if new_working_balance >= prev_working_balance {
+            prev_working_supply.saturating_add(new_working_balance - prev_working_balance)
+        } else {
+            prev_working_supply.saturating_sub(prev_working_balance - new_working_balance)
+        };
         (new_working_balance, new_working_supply)
     }
 
