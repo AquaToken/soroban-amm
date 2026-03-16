@@ -343,7 +343,7 @@ fn collect_exact_direction_steps(
 
         let sqrt_step_target = sqrt_ratio_at_tick(e, target_tick);
 
-        if sqrt_step_target == sqrt_cursor || liquidity == 0 {
+        if sqrt_step_target == sqrt_cursor {
             result.push_back(0);
             result.push_back(0);
             exhausted = true;
