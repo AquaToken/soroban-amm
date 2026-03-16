@@ -69,6 +69,11 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         let (amount0, amount1) =
             Self::amounts_for_liquidity(&e, &slot, tick_lower, tick_upper, liquidity, true);
 
+        // Cap at desired amounts to match deposit_position behavior
+        // (double-ceil rounding in amount_delta can overshoot by 1-2 units).
+        let amount0 = amount0.min(desired_amount0);
+        let amount1 = amount1.min(desired_amount1);
+
         (Vec::from_array(&e, [amount0, amount1]), liquidity)
     }
 
