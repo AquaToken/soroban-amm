@@ -25,9 +25,12 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
 
         Self::check_ticks_internal(&e, tick_lower, tick_upper);
 
-        // Match deposit_position behavior on empty pool: find optimal price for the tick range.
+        // Match deposit_position behavior on empty pool: first deposit must provide both tokens.
         let mut slot = get_slot0(&e);
-        if get_total_raw_liquidity(&e) == 0 && desired_amount0 > 0 && desired_amount1 > 0 {
+        if get_total_raw_liquidity(&e) == 0 {
+            if desired_amount0 == 0 || desired_amount1 == 0 {
+                panic_with_error!(&e, LiquidityPoolValidationError::AllCoinsRequired);
+            }
             let (sqrt_price_x96, tick) = Self::init_sqrt_price_for_range(
                 &e,
                 tick_lower,
@@ -54,6 +57,13 @@ impl ConcentratedPoolExtensionsTrait for ConcentratedLiquidityPool {
         }
         if liquidity > i128::MAX as u128 {
             panic_with_error!(&e, Error::LiquidityAmountTooLarge);
+        }
+        // Mirror the per-tick cap check from update_tick_liquidity.
+        // Note: this checks the new liquidity alone, not cumulative — the actual
+        // deposit may still revert if existing liquidity_gross + new > cap.
+        let max_per_tick = max_liquidity_per_tick(get_tick_spacing(&e));
+        if liquidity > max_per_tick {
+            panic_with_error!(&e, Error::LiquidityOverflow);
         }
 
         let (amount0, amount1) =
