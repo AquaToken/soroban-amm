@@ -4329,3 +4329,50 @@ fn test_partial_swap_surplus_goes_to_edge_lp() {
         narrow_fee0,
     );
 }
+
+// Verify surplus distribution works for one_for_zero (reverse direction) swaps.
+#[test]
+fn test_partial_swap_surplus_one_for_zero() {
+    let setup = Setup::new_with_config(&TestConfig {
+        fee: 30,
+        tick_spacing: 60,
+    });
+    setup.mint_user_tokens(10_000_0000000, 10_000_0000000);
+
+    // Narrow position with limited liquidity.
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-120, &120, &amounts, &0);
+
+    // Large swap one_for_zero (token1 → token0) to exhaust liquidity upward.
+    let swapper = Address::generate(&setup.env);
+    let swap_in = 5_000_0000000u128;
+    get_token_admin_client(&setup.env, &setup.token1.address)
+        .mint(&swapper, &(swap_in as i128));
+
+    let out = setup.pool.swap(&swapper, &1, &0, &swap_in, &0);
+    assert!(out > 0, "swap should produce some output");
+
+    // Pool keeps full input (no refund for exact-input).
+    let swapper_balance = setup.token1.balance(&swapper) as u128;
+    assert_eq!(swapper_balance, 0, "exact-input: pool keeps full input");
+
+    // LP should receive fees including surplus (token1 for one_for_zero).
+    let (_, fee1) = pair(setup.pool.claim_position_fees(&setup.user, &-120, &120));
+    assert!(
+        fee1 > 0,
+        "LP should receive token1 fees including unswapped surplus"
+    );
+
+    // Pool balance consistent with reserves.
+    let reserves = setup.pool.get_reserves();
+    let res1: u128 = reserves.get_unchecked(1);
+    let pool_bal1 = setup.token1.balance(&setup.pool.address) as u128;
+    assert!(
+        pool_bal1 >= res1,
+        "pool token1 balance {} should be >= reserve {}",
+        pool_bal1,
+        res1,
+    );
+}
