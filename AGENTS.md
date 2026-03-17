@@ -340,9 +340,30 @@ attacker could front-run with a dust deposit at a manipulated price ratio.
 - Auth-deterministic: transfers full `desired_amounts`, refunds excess
 
 **Swap Behavior**:
-- Exact-input (`swap`): transfers `in_amount` from user, refunds unused portion
-- Exact-output (`swap_strict_receive`): transfers `in_max` from user, refunds excess; reverts with `InMaxNotSatisfied` if actual cost exceeds `in_max`
+- Exact-input (`swap`): transfers `in_amount` from user, no refund — pool keeps full input.
+  If the swap partially fills (hits tick bounds / exhausts liquidity), the unswapped portion
+  is distributed to LPs at the last active tick via `fee_growth_global` (see Surplus Distribution below).
+  User is protected by `out_min` slippage parameter.
+- Exact-output (`swap_strict_receive`): transfers `in_max` from user, refunds excess (`in_max - actual_in`);
+  reverts with `InMaxNotSatisfied` if actual cost exceeds `in_max`;
+  reverts with `InsufficientLiquidity` if the pool cannot produce the requested output.
 - Both modes are auth-deterministic: transfer amounts are function parameters known at signing time
+
+**Surplus Distribution (Partial Exact-Input Swaps)**:
+When an exact-input swap cannot fully execute, the unswapped input tokens are distributed
+to LPs as bonus fees via the existing `fee_growth_global` mechanism:
+
+1. During `swap_loop`, `last_nonzero_liquidity` tracks the active liquidity value before
+   it drops to zero after the last tick crossing.
+2. After the swap loop, if `unswapped = user_max_in - actual_in > 0`, the contract calls
+   `add_fee_growth_global(zero_for_one, unswapped, last_nonzero_liquidity)`.
+3. This converts the surplus into fee_growth_delta and adds it to the global fee accumulator.
+4. LPs whose positions cover the last active tick receive the surplus proportionally to their
+   liquidity, claimable via the standard `claim_position_fees` flow.
+
+This design incentivizes LPs to provide liquidity at wider/extreme tick ranges to capture
+surplus from partial swaps. Unswapped tokens are NOT added to reserves — they are tracked
+entirely through fee_growth and claimed by LPs.
 
 **Interface (Extensions — direct pool calls)**:
 ```rust
