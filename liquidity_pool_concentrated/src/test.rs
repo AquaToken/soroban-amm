@@ -4187,3 +4187,145 @@ fn test_no_claim_fees_event_when_zero_fees() {
         "no claim_fees event when nothing claimed"
     );
 }
+
+// When an exact-input swap partially fills, the unswapped input should be
+// distributed to LPs at the last active tick via fee_growth, not left as
+// dead weight in reserves.
+#[test]
+fn test_partial_swap_unswapped_distributed_to_lps() {
+    let setup = Setup::new_with_config(&TestConfig {
+        fee: 30,
+        tick_spacing: 60,
+    });
+    setup.mint_user_tokens(10_000_0000000, 10_000_0000000);
+
+    // Create a narrow position with limited liquidity.
+    let amounts = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-120, &120, &amounts, &0);
+
+    // Large swap that exceeds available liquidity — partial fill.
+    let swapper = Address::generate(&setup.env);
+    let swap_in = 5_000_0000000u128;
+    get_token_admin_client(&setup.env, &setup.token0.address)
+        .mint(&swapper, &(swap_in as i128));
+
+    let out = setup.pool.swap(&swapper, &0, &1, &swap_in, &0);
+    assert!(out > 0, "swap should produce some output");
+
+    // Pool keeps the full swap_in (no refund for exact-input).
+    let swapper_balance = setup.token0.balance(&swapper) as u128;
+    assert_eq!(swapper_balance, 0, "exact-input: pool keeps full input");
+
+    // LP should be able to claim fees that include the unswapped portion.
+    let (fee0, fee1) = pair(setup.pool.claim_position_fees(&setup.user, &-120, &120));
+    // fee0 should include swap fees + unswapped surplus (both are token0 for zero_for_one swap).
+    assert!(
+        fee0 > 0,
+        "LP should receive fees including unswapped surplus"
+    );
+
+    // Verify pool token balance is consistent: pool holds tokens for reserves + protocol fees + unclaimed LP fees.
+    let pool_bal0 = setup.token0.balance(&setup.pool.address) as u128;
+    let reserves = setup.pool.get_reserves();
+    let res0: u128 = reserves.get_unchecked(0);
+    // Pool balance should be >= reserves (protocol fees and unclaimed fees also held).
+    assert!(
+        pool_bal0 >= res0,
+        "pool token0 balance {} should be >= reserve {}",
+        pool_bal0,
+        res0,
+    );
+}
+
+// Regression: a full exact-input swap (all input consumed) should work unchanged.
+#[test]
+fn test_exact_input_full_swap_unchanged() {
+    let setup = Setup::default();
+    setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
+
+    // Large position — plenty of liquidity.
+    let amounts = Vec::from_array(&setup.env, [500_0000000u128, 500_0000000u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-100, &100, &amounts, &0);
+
+    // Small swap that will fully execute.
+    let swapper = Address::generate(&setup.env);
+    let swap_in = 1_0000000u128;
+    get_token_admin_client(&setup.env, &setup.token0.address)
+        .mint(&swapper, &(swap_in as i128));
+
+    let out = setup.pool.swap(&swapper, &0, &1, &swap_in, &0);
+    assert!(out > 0);
+
+    // All input consumed, no unswapped remainder.
+    let balance_after = setup.token0.balance(&swapper) as u128;
+    assert_eq!(balance_after, 0, "full swap should consume all input");
+}
+
+// Verify that unswapped surplus goes to LPs covering the extreme tick,
+// not distributed evenly across all positions.
+#[test]
+fn test_partial_swap_surplus_goes_to_edge_lp() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&env);
+    let router = Address::generate(&env);
+
+    let token0 = create_token_contract(&env, &admin);
+    let token1 = create_token_contract(&env, &admin);
+
+    mod pool_plane {
+        soroban_sdk::contractimport!(
+            file = "../contracts/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    let plane = pool_plane::Client::new(&env, &env.register(pool_plane::WASM, ()));
+
+    let pool = create_pool_contract(
+        &env,
+        &admin,
+        &router,
+        &plane.address,
+        &Vec::from_array(&env, [token0.address.clone(), token1.address.clone()]),
+        30,
+        10,
+    );
+
+    let lp_narrow = Address::generate(&env);
+    let lp_wide = Address::generate(&env);
+
+    get_token_admin_client(&env, &token0.address).mint(&lp_narrow, &1_000_0000000);
+    get_token_admin_client(&env, &token1.address).mint(&lp_narrow, &1_000_0000000);
+    get_token_admin_client(&env, &token0.address).mint(&lp_wide, &1_000_0000000);
+    get_token_admin_client(&env, &token1.address).mint(&lp_wide, &1_000_0000000);
+
+    // Narrow position: [-10, 10] — will be exhausted by a large swap.
+    let amounts = Vec::from_array(&env, [50_0000000u128, 50_0000000u128]);
+    pool.deposit_position(&lp_narrow, &-10, &10, &amounts, &0);
+
+    // Wide position: [-50, 50] — covers more ticks, including the edge.
+    pool.deposit_position(&lp_wide, &-50, &50, &amounts, &0);
+
+    // Large swap zero_for_one to exhaust liquidity and create unswapped surplus.
+    let swapper = Address::generate(&env);
+    get_token_admin_client(&env, &token0.address).mint(&swapper, &5_000_0000000);
+    let out = pool.swap(&swapper, &0, &1, &5_000_0000000, &0);
+    assert!(out > 0);
+
+    // Both LPs claim fees.
+    let (narrow_fee0, _) = pair(pool.claim_position_fees(&lp_narrow, &-10, &10));
+    let (wide_fee0, _) = pair(pool.claim_position_fees(&lp_wide, &-50, &50));
+
+    // Wide LP should receive more fees (covers the extreme tick where surplus is distributed).
+    assert!(
+        wide_fee0 > narrow_fee0,
+        "wide LP (edge coverage) should get more fees: wide={}, narrow={}",
+        wide_fee0,
+        narrow_fee0,
+    );
+}
