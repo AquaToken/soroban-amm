@@ -1153,7 +1153,7 @@ impl ConcentratedLiquidityPool {
         amount_specified: i128,
         sqrt_price_limit_x96: U256,
         dry_run: bool,
-    ) -> (u128, u128, u128, Slot0, u128, u128, u128, u128, i32) {
+    ) -> (u128, u128, u128, Slot0, u128, u128, u128, u128, i32, bool) {
         if amount_specified == 0 {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
@@ -1173,6 +1173,7 @@ impl ConcentratedLiquidityPool {
         let mut last_nonzero_liquidity: u128 = liquidity;
         // Track the last initialized tick crossed (for surplus fee_growth_outside adjustment).
         let mut last_crossed_tick: i32 = slot.tick;
+        let mut had_crossing = false;
 
         let old_protocol_fees = if dry_run {
             ProtocolFees {
@@ -1295,6 +1296,7 @@ impl ConcentratedLiquidityPool {
                         liquidity = liquidity.saturating_add(liquidity_net as u128);
                     }
                     last_crossed_tick = next_tick;
+                    had_crossing = true;
                 }
 
                 slot.tick = if zero_for_one {
@@ -1334,6 +1336,7 @@ impl ConcentratedLiquidityPool {
             pf_delta_1,
             last_nonzero_liquidity,
             last_crossed_tick,
+            had_crossing,
         )
     }
 
@@ -1344,7 +1347,7 @@ impl ConcentratedLiquidityPool {
         sqrt_price_limit_x96: U256,
     ) -> (i128, i128) {
         let exact_input = amount_specified > 0;
-        let (amount_spec_used, amount_calculated, _, _, _, _, _, _, _) = Self::swap_loop(
+        let (amount_spec_used, amount_calculated, _, _, _, _, _, _, _, _) = Self::swap_loop(
             e,
             zero_for_one,
             amount_specified,
@@ -1384,6 +1387,7 @@ impl ConcentratedLiquidityPool {
             pf_delta_1,
             last_nonzero_liquidity,
             last_crossed_tick,
+            had_crossing,
         ) = Self::swap_loop(
             e,
             zero_for_one,
@@ -1500,7 +1504,7 @@ impl ConcentratedLiquidityPool {
                 // that covered the last active tick. Without this, the surplus delta
                 // cancels out because cross_tick already flipped fee_growth_outside
                 // using the old fee_growth_global (before surplus was added).
-                if surplus_growth_delta != U256::from_u32(e, 0) {
+                if had_crossing && surplus_growth_delta != U256::from_u32(e, 0) {
                     let tick_spacing = get_tick_spacing(e);
                     let mut tick_info = get_tick(e, last_crossed_tick, tick_spacing);
                     if zero_for_one {
