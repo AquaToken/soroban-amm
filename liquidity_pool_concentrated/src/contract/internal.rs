@@ -808,9 +808,9 @@ impl ConcentratedLiquidityPool {
         zero_for_one: bool,
         fee_amount_for_lp: u128,
         liquidity: u128,
-    ) {
+    ) -> U256 {
         if fee_amount_for_lp == 0 || liquidity == 0 {
-            return;
+            return U256::from_u32(e, 0);
         }
 
         let growth_delta = fee_growth_delta_x128(e, fee_amount_for_lp, liquidity);
@@ -821,6 +821,7 @@ impl ConcentratedLiquidityPool {
             let next = wrapping_add_u256(e, &get_fee_growth_global_1_x128(e), &growth_delta);
             set_fee_growth_global_1_x128(e, &next);
         }
+        growth_delta
     }
 
     pub(super) fn compute_swap_step(
@@ -1152,7 +1153,7 @@ impl ConcentratedLiquidityPool {
         amount_specified: i128,
         sqrt_price_limit_x96: U256,
         dry_run: bool,
-    ) -> (u128, u128, u128, Slot0, u128, u128, u128) {
+    ) -> (u128, u128, u128, Slot0, u128, u128, u128, u128, i32) {
         if amount_specified == 0 {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
@@ -1169,6 +1170,9 @@ impl ConcentratedLiquidityPool {
         let mut slot = get_slot0(e);
         let price_limit = Self::validate_price_limit(e, &slot, zero_for_one, sqrt_price_limit_x96);
         let mut liquidity = get_liquidity(e);
+        let mut last_nonzero_liquidity: u128 = liquidity;
+        // Track the last initialized tick crossed (for surplus fee_growth_outside adjustment).
+        let mut last_crossed_tick: i32 = slot.tick;
 
         let old_protocol_fees = if dry_run {
             ProtocolFees {
@@ -1201,6 +1205,10 @@ impl ConcentratedLiquidityPool {
             }
             if !zero_for_one && slot.tick >= tick_bound {
                 break;
+            }
+            // Track last liquidity before it may drop to zero (for surplus distribution).
+            if liquidity > 0 {
+                last_nonzero_liquidity = liquidity;
             }
             let (next_tick, next_tick_initialized) = Self::find_initialized_tick_in_word(
                 e,
@@ -1286,6 +1294,7 @@ impl ConcentratedLiquidityPool {
                     } else {
                         liquidity = liquidity.saturating_add(liquidity_net as u128);
                     }
+                    last_crossed_tick = next_tick;
                 }
 
                 slot.tick = if zero_for_one {
@@ -1323,6 +1332,8 @@ impl ConcentratedLiquidityPool {
             liquidity,
             pf_delta_0,
             pf_delta_1,
+            last_nonzero_liquidity,
+            last_crossed_tick,
         )
     }
 
@@ -1333,7 +1344,7 @@ impl ConcentratedLiquidityPool {
         sqrt_price_limit_x96: U256,
     ) -> (i128, i128) {
         let exact_input = amount_specified > 0;
-        let (amount_spec_used, amount_calculated, ..) = Self::swap_loop(
+        let (amount_spec_used, amount_calculated, _, _, _, _, _, _, _) = Self::swap_loop(
             e,
             zero_for_one,
             amount_specified,
@@ -1351,7 +1362,8 @@ impl ConcentratedLiquidityPool {
     /// `user_max_in`: the user-specified maximum input amount, known at signing time.
     /// For exact-input swaps this is `in_amount`; for exact-output it is `in_max`.
     /// Auth-deterministic: always transfers `user_max_in` from user.
-    /// Exact-input: no refund — pool keeps full input, unswapped portion goes to reserves.
+    /// Exact-input: no refund — pool keeps full input, unswapped portion is distributed
+    /// to LPs at the last active tick via fee_growth (incentivizes wider liquidity coverage).
     /// Exact-output: refunds excess (`user_max_in - actual_in`) back to sender.
     pub(super) fn swap_internal(
         e: &Env,
@@ -1370,6 +1382,8 @@ impl ConcentratedLiquidityPool {
             liquidity,
             pf_delta_0,
             pf_delta_1,
+            last_nonzero_liquidity,
+            last_crossed_tick,
         ) = Self::swap_loop(
             e,
             zero_for_one,
@@ -1377,6 +1391,12 @@ impl ConcentratedLiquidityPool {
             sqrt_price_limit_x96,
             false,
         );
+
+        // Revert if exact-input swap executed nothing (no liquidity in swap direction).
+        // Without this guard, the pool would take the full input and strand it.
+        if exact_input && amount_spec_used == 0 {
+            panic_with_error!(e, Error::InsufficientLiquidity);
+        }
 
         let (amount0, amount1) = Self::swap_amounts_signed(
             zero_for_one,
@@ -1431,13 +1451,6 @@ impl ConcentratedLiquidityPool {
 
         // Reserve tracking: reserves change by net token flow minus protocol fee delta.
         // amount0/amount1: positive = user pays in, negative = user receives out.
-        // For exact-input, the pool keeps the full user_max_in (no refund), so
-        // unswapped input also goes into reserves.
-        let unswapped = if exact_input {
-            user_max_in - actual_in
-        } else {
-            0
-        };
         let mut res0 = get_reserve0(e);
         let mut res1 = get_reserve1(e);
         if amount0 > 0 {
@@ -1450,11 +1463,75 @@ impl ConcentratedLiquidityPool {
         } else if amount1 < 0 {
             res1 -= (-amount1) as u128;
         }
-        if unswapped > 0 {
-            if zero_for_one {
-                res0 += unswapped;
-            } else {
-                res1 += unswapped;
+
+        // Surplus distribution: distribute unswapped exact-input tokens to LPs at the
+        // last active tick via fee_growth. Protocol fee is applied to surplus.
+        // Surplus is also added to reserves so collect_internal can pay out claims.
+        if exact_input {
+            let unswapped = user_max_in - actual_in;
+            if unswapped > 0 && last_nonzero_liquidity > 0 {
+                // Apply protocol fee to surplus, consistent with normal fee flow.
+                let protocol_fee_fraction = get_protocol_fee_fraction(e) as u128;
+                let surplus_protocol_cut =
+                    unswapped * protocol_fee_fraction / FEE_DENOMINATOR;
+                let surplus_for_lp = unswapped - surplus_protocol_cut;
+
+                // Accumulate protocol fee portion.
+                if surplus_protocol_cut > 0 {
+                    let mut pf = get_protocol_fees(e);
+                    if zero_for_one {
+                        pf.token0 = pf.token0.saturating_add(surplus_protocol_cut);
+                    } else {
+                        pf.token1 = pf.token1.saturating_add(surplus_protocol_cut);
+                    }
+                    set_protocol_fees(e, &pf);
+                }
+
+                // Distribute LP portion via fee_growth_global.
+                let surplus_growth_delta = Self::add_fee_growth_global(
+                    e,
+                    zero_for_one,
+                    surplus_for_lp,
+                    last_nonzero_liquidity,
+                );
+
+                // Adjust fee_growth_outside at the last crossed tick so that
+                // compute_fee_growth_inside correctly attributes surplus to positions
+                // that covered the last active tick. Without this, the surplus delta
+                // cancels out because cross_tick already flipped fee_growth_outside
+                // using the old fee_growth_global (before surplus was added).
+                if surplus_growth_delta != U256::from_u32(e, 0) {
+                    let tick_spacing = get_tick_spacing(e);
+                    let mut tick_info = get_tick(e, last_crossed_tick, tick_spacing);
+                    if zero_for_one {
+                        tick_info.fee_growth_outside_0_x128 = wrapping_add_u256(
+                            e,
+                            &tick_info.fee_growth_outside_0_x128,
+                            &surplus_growth_delta,
+                        );
+                    } else {
+                        tick_info.fee_growth_outside_1_x128 = wrapping_add_u256(
+                            e,
+                            &tick_info.fee_growth_outside_1_x128,
+                            &surplus_growth_delta,
+                        );
+                    }
+                    let compressed =
+                        bitmap::compress_tick(last_crossed_tick, tick_spacing);
+                    let (chunk_pos, slot_idx) = chunk_address(compressed);
+                    let mut chunk = get_tick_chunk(e, chunk_pos)
+                        .unwrap_or_else(|| new_empty_chunk(e));
+                    chunk.set(slot_idx, TickData::from(tick_info));
+                    set_tick_chunk(e, chunk_pos, &chunk);
+                }
+
+                // Add surplus (LP portion) to reserves so collect_internal
+                // can pay out fee claims.
+                if zero_for_one {
+                    res0 += surplus_for_lp;
+                } else {
+                    res1 += surplus_for_lp;
+                }
             }
         }
         set_reserve0(e, &res0);
