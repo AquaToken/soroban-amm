@@ -4208,8 +4208,7 @@ fn test_partial_swap_unswapped_distributed_to_lps() {
     // Large swap that exceeds available liquidity — partial fill.
     let swapper = Address::generate(&setup.env);
     let swap_in = 5_000_0000000u128;
-    get_token_admin_client(&setup.env, &setup.token0.address)
-        .mint(&swapper, &(swap_in as i128));
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &(swap_in as i128));
 
     let out = setup.pool.swap(&swapper, &0, &1, &swap_in, &0);
     assert!(out > 0, "swap should produce some output");
@@ -4254,8 +4253,7 @@ fn test_exact_input_full_swap_unchanged() {
     // Small swap that will fully execute.
     let swapper = Address::generate(&setup.env);
     let swap_in = 1_0000000u128;
-    get_token_admin_client(&setup.env, &setup.token0.address)
-        .mint(&swapper, &(swap_in as i128));
+    get_token_admin_client(&setup.env, &setup.token0.address).mint(&swapper, &(swap_in as i128));
 
     let out = setup.pool.swap(&swapper, &0, &1, &swap_in, &0);
     assert!(out > 0);
@@ -4348,8 +4346,7 @@ fn test_partial_swap_surplus_one_for_zero() {
     // Large swap one_for_zero (token1 → token0) to exhaust liquidity upward.
     let swapper = Address::generate(&setup.env);
     let swap_in = 5_000_0000000u128;
-    get_token_admin_client(&setup.env, &setup.token1.address)
-        .mint(&swapper, &(swap_in as i128));
+    get_token_admin_client(&setup.env, &setup.token1.address).mint(&swapper, &(swap_in as i128));
 
     let out = setup.pool.swap(&swapper, &1, &0, &swap_in, &0);
     assert!(out > 0, "swap should produce some output");

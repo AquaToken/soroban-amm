@@ -1476,8 +1476,7 @@ impl ConcentratedLiquidityPool {
             if unswapped > 0 && last_nonzero_liquidity > 0 {
                 // Apply protocol fee to surplus, consistent with normal fee flow.
                 let protocol_fee_fraction = get_protocol_fee_fraction(e) as u128;
-                let surplus_protocol_cut =
-                    unswapped * protocol_fee_fraction / FEE_DENOMINATOR;
+                let surplus_protocol_cut = unswapped * protocol_fee_fraction / FEE_DENOMINATOR;
                 let surplus_for_lp = unswapped - surplus_protocol_cut;
 
                 // Accumulate protocol fee portion.
@@ -1520,11 +1519,10 @@ impl ConcentratedLiquidityPool {
                             &surplus_growth_delta,
                         );
                     }
-                    let compressed =
-                        bitmap::compress_tick(last_crossed_tick, tick_spacing);
+                    let compressed = bitmap::compress_tick(last_crossed_tick, tick_spacing);
                     let (chunk_pos, slot_idx) = chunk_address(compressed);
-                    let mut chunk = get_tick_chunk(e, chunk_pos)
-                        .unwrap_or_else(|| new_empty_chunk(e));
+                    let mut chunk =
+                        get_tick_chunk(e, chunk_pos).unwrap_or_else(|| new_empty_chunk(e));
                     chunk.set(slot_idx, TickData::from(tick_info));
                     set_tick_chunk(e, chunk_pos, &chunk);
                 }
