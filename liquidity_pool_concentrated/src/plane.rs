@@ -407,7 +407,9 @@ fn collect_exact_direction_steps(
                 );
                 let liquidity_net = raw_liquidity_net.saturating_add(adj);
 
-                // Cross the tick: apply adjusted liquidity delta
+                // Cross the tick: apply adjusted liquidity delta.
+                // Must happen BEFORE the saturation early-exit so that subsequent
+                // steps use the correct liquidity value.
                 liquidity = apply_liquidity_net(liquidity, liquidity_net, zero_for_one);
                 sqrt_cursor = sqrt_init;
                 cursor_compressed = compress_tick(init_tick, spacing);
@@ -415,6 +417,12 @@ fn collect_exact_direction_steps(
                 // After crossing, move cursor past this tick for next bitmap scan
                 if zero_for_one {
                     cursor_compressed -= 1;
+                }
+
+                // If amounts saturated, further tick-walking won't improve the
+                // estimate — break early to save gas.
+                if step_in == u128::MAX || step_out == u128::MAX {
+                    break;
                 }
                 // For !zero_for_one, find_initialized_tick searches from compressed+1,
                 // so no adjustment needed.
@@ -424,8 +432,13 @@ fn collect_exact_direction_steps(
             }
         }
 
-        // Compute amounts from cursor to the step target (constant liquidity)
-        if sqrt_cursor != sqrt_step_target && liquidity > 0 {
+        // Compute amounts from cursor to the step target (constant liquidity).
+        // Skip if amounts already saturated (further computation won't help).
+        if sqrt_cursor != sqrt_step_target
+            && liquidity > 0
+            && step_in != u128::MAX
+            && step_out != u128::MAX
+        {
             let (amt_in, amt_out) =
                 compute_amounts(e, &sqrt_cursor, &sqrt_step_target, liquidity, zero_for_one);
             step_in = step_in.saturating_add(amt_in);

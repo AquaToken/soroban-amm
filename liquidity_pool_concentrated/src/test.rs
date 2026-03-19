@@ -4373,3 +4373,194 @@ fn test_partial_swap_surplus_one_for_zero() {
         res1,
     );
 }
+
+// Regression: a position at extreme ticks produces very large liquidity (~1e30).
+// A subsequent swap must not panic with LiquidityOverflow when amount0_delta
+// overflows u128 for the wide tick range to the next initialized tick.
+// Reproduces the testnet error: Error(Contract, #2122).
+#[test]
+fn test_swap_with_extreme_tick_position_no_overflow() {
+    let config = TestConfig {
+        fee: 100,          // 1% — matches testnet pool
+        tick_spacing: 200, // matches testnet pool
+    };
+    let setup = Setup::new_with_config(&config);
+
+    // Mint generous amounts: USDC-like (7 decimals) and ETH-like (7 decimals).
+    let usdc_amount: i128 = 100_000_0000000; // 100k USDC
+    let eth_amount: i128 = 100_0000000; // 100 ETH
+    setup.mint_user_tokens(usdc_amount, eth_amount);
+
+    // 1. Seed pool with initial deposit that sets the price.
+    //    First deposit auto-derives price from amounts.
+    //    Price ~0.0004 (USDC per ETH) → tick ≈ -78200.
+    //    Range must contain the derived tick.
+    // amount1/amount0 ≈ 0.0004 → tick ≈ -78200, within [-79200, -77200)
+    let seed_desired = Vec::from_array(&setup.env, [5_000_0000000u128, 2_0088936u128]);
+    let (_, seed_liq) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &-79200, &-77200, &seed_desired, &0);
+    assert!(seed_liq > 0, "seed deposit should succeed");
+
+    // 2. Deposit a position at extreme ticks (near MAX_TICK edge).
+    //    This is entirely above the current price, so only token0 is needed.
+    //    With tick_spacing=200, ticks [879400, 887200] are valid.
+    //    This produces liquidity ~1e30 from just a small USDC deposit.
+    let extreme_desired = Vec::from_array(&setup.env, [26_0000000000u128, 0u128]);
+    let (_, extreme_liq) = setup.pool.deposit_position(
+        &setup.user,
+        &879400,
+        &887200,
+        &extreme_desired,
+        &1, // ratio_check_bypass
+    );
+    assert!(extreme_liq > 1_000_000_000_000_000_000_000_000_000u128); // > 1e27
+
+    // 3. Perform a swap (zero_for_one: token0 → token1).
+    //    Before the fix, this would panic with LiquidityOverflow (#2122) because
+    //    compute_swap_step tried to compute amount0_delta to the far target tick
+    //    with L=1e30, producing a result > u128::MAX.
+    let swap_in = 6_0000000u128; // 6 USDC — modest swap
+    let out = setup.pool.swap(&setup.user, &0, &1, &swap_in, &0);
+    assert!(out > 0, "swap should produce non-zero output");
+
+    // 4. Also test the reverse direction (one_for_zero).
+    let swap_in_reverse = 1_0000000u128; // 1 ETH
+    let out_reverse = setup.pool.swap(&setup.user, &1, &0, &swap_in_reverse, &0);
+    assert!(
+        out_reverse > 0,
+        "reverse swap should produce non-zero output"
+    );
+
+    // 5. Verify estimate_swap also works (uses simulate path).
+    let estimate = setup.pool.estimate_swap(&0, &1, &swap_in);
+    assert!(estimate > 0, "estimate should be non-zero");
+}
+
+// Exact-output swap with extreme-tick position: the amount_in computation
+// for the target tick overflows u128 with L=1e30. The try_ variant in
+// compute_swap_step must handle this without panic.
+#[test]
+fn test_exact_output_swap_with_extreme_tick_position() {
+    let config = TestConfig {
+        fee: 100,
+        tick_spacing: 200,
+    };
+    let setup = Setup::new_with_config(&config);
+
+    setup.mint_user_tokens(100_000_0000000, 100_0000000);
+
+    // Seed pool: price ~0.0004, tick ≈ -78200
+    let seed_desired = Vec::from_array(&setup.env, [5_000_0000000u128, 2_0088936u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-79200, &-77200, &seed_desired, &0);
+
+    // Extreme position: L ~1e30
+    let extreme_desired = Vec::from_array(&setup.env, [26_0000000000u128, 0u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &879400, &887200, &extreme_desired, &1);
+
+    // Exact-output swap (strict receive): request specific output amount.
+    // Uses negative amount_specified internally → exact_output path in compute_swap_step.
+    let desired_out = 1_0000000u128; // 1 ETH output
+    let estimated_in = setup
+        .pool
+        .estimate_swap_strict_receive(&0, &1, &desired_out);
+    assert!(estimated_in > 0, "estimated input should be non-zero");
+
+    // Execute the real exact-output swap via swap with enough input.
+    // The swap itself uses exact-input path, but estimate_swap_strict_receive
+    // exercises the exact-output code path with the extreme position.
+    let out = setup.pool.swap(&setup.user, &0, &1, &estimated_in, &0);
+    assert!(out > 0, "swap output should be non-zero");
+}
+
+// Withdraw a position with extreme liquidity after price has moved into its range.
+// amount_delta for the position's own tick range should not overflow since the
+// computed amounts correspond to what was actually deposited (bounded by reserves).
+#[test]
+fn test_withdraw_extreme_tick_position() {
+    let config = TestConfig {
+        fee: 100,
+        tick_spacing: 200,
+    };
+    let setup = Setup::new_with_config(&config);
+
+    setup.mint_user_tokens(100_000_0000000, 100_0000000);
+
+    // Seed pool at tick ≈ -78200
+    let seed_desired = Vec::from_array(&setup.env, [5_000_0000000u128, 2_0088936u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-79200, &-77200, &seed_desired, &0);
+
+    // Extreme position at [879400, 887200]: only token0 deposited (above current price)
+    let extreme_desired = Vec::from_array(&setup.env, [26_0000000000u128, 0u128]);
+    let (deposited, extreme_liq) =
+        setup
+            .pool
+            .deposit_position(&setup.user, &879400, &887200, &extreme_desired, &1);
+    assert!(extreme_liq > 0);
+
+    // Withdraw the full extreme position.
+    // Since price is still at ~tick -78200, the position is entirely above range →
+    // withdraw returns only token0. amount0_delta is computed over [879400, 887200]
+    // which should equal what was deposited (no overflow for the position's own range).
+    let min_amounts = Vec::from_array(&setup.env, [0u128, 0u128]);
+    let withdrawn =
+        setup
+            .pool
+            .withdraw_position(&setup.user, &879400, &887200, &extreme_liq, &min_amounts);
+
+    let withdrawn0 = withdrawn.get_unchecked(0);
+    let deposited0 = deposited.get_unchecked(0);
+    // Withdrawn amount should be close to deposited (minus rounding)
+    assert!(
+        withdrawn0 > 0 && withdrawn0 <= deposited0,
+        "withdrawn {} should be > 0 and <= deposited {}",
+        withdrawn0,
+        deposited0,
+    );
+}
+
+// Plane update must not crash with extreme liquidity positions.
+// update_plane is called internally on every deposit/swap/withdraw and walks
+// tick bitmap to compute step amounts. With L=1e30, amount_delta saturates
+// but the plane early-exit prevents runaway computation.
+#[test]
+fn test_plane_update_with_extreme_liquidity() {
+    let config = TestConfig {
+        fee: 100,
+        tick_spacing: 200,
+    };
+    let setup = Setup::new_with_config(&config);
+
+    setup.mint_user_tokens(100_000_0000000, 100_0000000);
+
+    // Seed pool
+    let seed_desired = Vec::from_array(&setup.env, [5_000_0000000u128, 2_0088936u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &-79200, &-77200, &seed_desired, &0);
+
+    // Extreme position — plane update runs inside deposit_position
+    let extreme_desired = Vec::from_array(&setup.env, [26_0000000000u128, 0u128]);
+    setup
+        .pool
+        .deposit_position(&setup.user, &879400, &887200, &extreme_desired, &1);
+
+    // Swap triggers another plane update — must not crash
+    let out = setup.pool.swap(&setup.user, &0, &1, &6_0000000, &0);
+    assert!(out > 0);
+
+    // estimate_swap also triggers the dry_run path (no plane update but same math)
+    let estimate = setup.pool.estimate_swap(&0, &1, &6_0000000);
+    assert!(estimate > 0);
+
+    // Reverse direction estimate
+    let estimate_rev = setup.pool.estimate_swap(&1, &0, &1_0000000);
+    assert!(estimate_rev > 0);
+}

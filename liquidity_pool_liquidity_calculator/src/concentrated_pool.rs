@@ -118,10 +118,9 @@ fn near_window_liquidity(
     (near_liquidity, raw_in, edge_weight)
 }
 
-pub fn get_liquidity(e: &Env, data: &ConcentratedPoolData, in_idx: u32, out_idx: u32) -> u128 {
+pub fn get_liquidity(e: &Env, data: &ConcentratedPoolData, in_idx: u32, _out_idx: u32) -> u128 {
     let reserve_in = data.reserve(in_idx);
-    let reserve_out = data.reserve(out_idx);
-    if reserve_in == 0 || reserve_out == 0 {
+    if reserve_in == 0 {
         return 0;
     }
 

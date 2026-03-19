@@ -850,13 +850,17 @@ impl ConcentratedLiquidityPool {
             let amount_remaining_less_fee =
                 mul_div_u128(e, amount_remaining, fee_complement, FEE_DENOMINATOR, false);
 
+            // Use try_ variants: if the amount to reach the target overflows u128,
+            // the remaining input definitely cannot reach the target, so treat as
+            // unreachable (None → target not reached).
             let amount_in_to_target = if zero_for_one {
-                amount0_delta(e, sqrt_target, sqrt_current, liquidity, true)
+                try_amount0_delta(e, sqrt_target, sqrt_current, liquidity, true)
             } else {
-                amount1_delta(e, sqrt_current, sqrt_target, liquidity, true)
+                try_amount1_delta(e, sqrt_current, sqrt_target, liquidity, true)
             };
 
-            let sqrt_next = if amount_remaining_less_fee >= amount_in_to_target {
+            let sqrt_next = if amount_in_to_target.map_or(false, |a| amount_remaining_less_fee >= a)
+            {
                 sqrt_target.clone()
             } else {
                 let computed = get_next_sqrt_price_from_input(
@@ -901,13 +905,15 @@ impl ConcentratedLiquidityPool {
                 fee_amount,
             }
         } else {
+            // Use try_ variants: if the output amount to reach the target overflows
+            // u128, the remaining output demand cannot reach the target.
             let amount_out_to_target = if zero_for_one {
-                amount1_delta(e, sqrt_target, sqrt_current, liquidity, false)
+                try_amount1_delta(e, sqrt_target, sqrt_current, liquidity, false)
             } else {
-                amount0_delta(e, sqrt_current, sqrt_target, liquidity, false)
+                try_amount0_delta(e, sqrt_current, sqrt_target, liquidity, false)
             };
 
-            let sqrt_next = if amount_remaining >= amount_out_to_target {
+            let sqrt_next = if amount_out_to_target.map_or(false, |a| amount_remaining >= a) {
                 sqrt_target.clone()
             } else {
                 let computed = get_next_sqrt_price_from_output(
@@ -1116,8 +1122,9 @@ impl ConcentratedLiquidityPool {
         }
     }
 
-    /// Convert unsigned swap amounts to signed (amount0, amount1) pair.
-    /// Positive = user pays in, negative = user receives out.
+    // Convert unsigned swap amounts to signed (amount0, amount1) pair.
+    // Positive = user pays in, negative = user receives out.
+    // Unrealizable amounts (> i128::MAX) will panic on the token transfer.
     fn swap_amounts_signed(
         zero_for_one: bool,
         exact_input: bool,
@@ -1258,7 +1265,13 @@ impl ConcentratedLiquidityPool {
 
             // Protocol fee split + fee growth (real swap only).
             if !dry_run {
-                let protocol_cut = step.fee_amount * protocol_fee_fraction / FEE_DENOMINATOR;
+                let protocol_cut = mul_div_u128(
+                    e,
+                    step.fee_amount,
+                    protocol_fee_fraction,
+                    FEE_DENOMINATOR,
+                    false,
+                );
                 let fee_for_lp = step.fee_amount.saturating_sub(protocol_cut);
                 if zero_for_one {
                     protocol_fees.token0 = protocol_fees.token0.saturating_add(protocol_cut);
@@ -1476,7 +1489,8 @@ impl ConcentratedLiquidityPool {
             if unswapped > 0 && last_nonzero_liquidity > 0 {
                 // Apply protocol fee to surplus, consistent with normal fee flow.
                 let protocol_fee_fraction = get_protocol_fee_fraction(e) as u128;
-                let surplus_protocol_cut = unswapped * protocol_fee_fraction / FEE_DENOMINATOR;
+                let surplus_protocol_cut =
+                    mul_div_u128(e, unswapped, protocol_fee_fraction, FEE_DENOMINATOR, false);
                 let surplus_for_lp = unswapped - surplus_protocol_cut;
 
                 // Accumulate protocol fee portion.

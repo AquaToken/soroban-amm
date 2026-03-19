@@ -275,15 +275,37 @@ fn widening_mul(a: u128, b: u128) -> (u128, u128) {
     (hi, lo)
 }
 
-pub fn amount0_delta(
+// ## Overflow safety for amount deltas
+//
+// Concentrated liquidity can produce very large L values at extreme ticks
+// (e.g. L=1e30 from just 2600 USDC at ticks [879400, 887200]).  When computing
+// token amounts across wide tick ranges with such liquidity, the mathematical
+// result can exceed u128::MAX.
+//
+// Saturation to u128::MAX is safe because:
+// 1. Soroban token transfers use i128 (max ~1.7e38).  No real token amount can
+//    exceed i128::MAX, so any value > i128::MAX is unrealizable.
+// 2. In the swap loop, `amount_remaining` (user input) bounds actual consumption.
+//    A saturated target-amount just means "input can't reach the target tick" —
+//    the swap correctly falls back to `get_next_sqrt_price_from_input`.
+// 3. On withdraw, reserve checks (`InsufficientBalance`) catch impossible values.
+// 4. max_liquidity_per_tick (u128::MAX / num_ticks ≈ 3.83e34 for spacing=200)
+//    prevents liquidity_gross/net overflow.  Even for 18-decimal tokens at
+//    price ratios up to ~1e12, L stays well within this cap.
+//
+// The `try_` variants return `Option<u128>` for swap-step target checks where
+// overflow means "remaining amount cannot reach the target tick".
+
+// Internal helper: compute amount0 delta as U256 (no truncation).
+fn amount0_delta_u256(
     e: &Env,
     sqrt_price_a_x96: &U256,
     sqrt_price_b_x96: &U256,
     liquidity: u128,
     round_up: bool,
-) -> u128 {
+) -> Option<U256> {
     if liquidity == 0 {
-        return 0;
+        return Some(u256_zero(e));
     }
 
     let mut sa = sqrt_price_a_x96.clone();
@@ -292,7 +314,7 @@ pub fn amount0_delta(
         core::mem::swap(&mut sa, &mut sb);
     }
     if sa == u256_zero(e) {
-        panic_with_error!(e, Error::InvalidSqrtPrice);
+        return None;
     }
 
     // amount0 = L * Q96 * (sb - sa) / (sa * sb)
@@ -300,32 +322,31 @@ pub fn amount0_delta(
     let liquidity_u256 = u256_from_u128(e, liquidity);
     let numerator1 = liquidity_u256.mul(&u256_q96(e));
 
-    // Step 1: numerator1 * diff / sb (uses U512 for ~384-bit intermediate)
     let temp = if round_up {
         mul_div_ceil(e, &numerator1, &diff, &sb)
     } else {
         mul_div_floor(e, &numerator1, &diff, &sb)
     };
 
-    // Step 2: temp / sa
-    let amount_u256 = if round_up {
+    let amount = if round_up {
         u256_div_round_up(e, &temp, &sa)
     } else {
         temp.div(&sa)
     };
 
-    u256_to_u128(e, &amount_u256)
+    Some(amount)
 }
 
-pub fn amount1_delta(
+// Internal helper: compute amount1 delta as U256 (no truncation).
+fn amount1_delta_u256(
     e: &Env,
     sqrt_price_a_x96: &U256,
     sqrt_price_b_x96: &U256,
     liquidity: u128,
     round_up: bool,
-) -> u128 {
+) -> U256 {
     if liquidity == 0 {
-        return 0;
+        return u256_zero(e);
     }
 
     let mut sa = sqrt_price_a_x96.clone();
@@ -334,16 +355,73 @@ pub fn amount1_delta(
         core::mem::swap(&mut sa, &mut sb);
     }
 
-    // amount1 = L * (sb - sa) / Q96
     let diff = sb.sub(&sa);
     let liquidity_u256 = u256_from_u128(e, liquidity);
-    let amount_u256 = if round_up {
+    if round_up {
         mul_div_ceil(e, &liquidity_u256, &diff, &u256_q96(e))
     } else {
         mul_div_floor(e, &liquidity_u256, &diff, &u256_q96(e))
-    };
+    }
+}
 
-    u256_to_u128(e, &amount_u256)
+// Compute token0 amount between two sqrt prices. Saturates at u128::MAX
+// on overflow instead of panicking (with large liquidity at wide ranges the
+// mathematical result can exceed u128 but is bounded by actual reserves).
+pub fn amount0_delta(
+    e: &Env,
+    sqrt_price_a_x96: &U256,
+    sqrt_price_b_x96: &U256,
+    liquidity: u128,
+    round_up: bool,
+) -> u128 {
+    match amount0_delta_u256(e, sqrt_price_a_x96, sqrt_price_b_x96, liquidity, round_up) {
+        Some(v) => v.to_u128().unwrap_or(u128::MAX),
+        None => panic_with_error!(e, Error::InvalidSqrtPrice),
+    }
+}
+
+// Like `amount0_delta` but returns `None` when the result overflows u128
+// or when a sqrt price is zero (invalid).  Used in swap-step target
+// calculations where `None` means "the remaining input can never reach
+// the target tick".
+pub fn try_amount0_delta(
+    e: &Env,
+    sqrt_price_a_x96: &U256,
+    sqrt_price_b_x96: &U256,
+    liquidity: u128,
+    round_up: bool,
+) -> Option<u128> {
+    match amount0_delta_u256(e, sqrt_price_a_x96, sqrt_price_b_x96, liquidity, round_up) {
+        Some(v) => v.to_u128(),
+        None => None, // sqrt_price was zero (invalid)
+    }
+}
+
+// Compute token1 amount between two sqrt prices. Saturates at u128::MAX
+// on overflow.
+pub fn amount1_delta(
+    e: &Env,
+    sqrt_price_a_x96: &U256,
+    sqrt_price_b_x96: &U256,
+    liquidity: u128,
+    round_up: bool,
+) -> u128 {
+    amount1_delta_u256(e, sqrt_price_a_x96, sqrt_price_b_x96, liquidity, round_up)
+        .to_u128()
+        .unwrap_or(u128::MAX)
+}
+
+// Like `amount1_delta` but returns `None` when the result overflows u128.
+// Unlike `try_amount0_delta`, this cannot return `None` for invalid sqrt
+// prices because `amount1_delta` only divides by Q96 (a constant).
+pub fn try_amount1_delta(
+    e: &Env,
+    sqrt_price_a_x96: &U256,
+    sqrt_price_b_x96: &U256,
+    liquidity: u128,
+    round_up: bool,
+) -> Option<u128> {
+    amount1_delta_u256(e, sqrt_price_a_x96, sqrt_price_b_x96, liquidity, round_up).to_u128()
 }
 
 pub fn mul_div_u128(
@@ -575,8 +653,8 @@ pub fn sqrt_price_from_amounts(e: &Env, amount0: u128, amount1: u128) -> U256 {
 #[cfg(test)]
 mod test {
     use super::{
-        max_sqrt_ratio, min_sqrt_ratio, sqrt_ratio_at_tick, tick_at_sqrt_ratio, u256_max, u256_one,
-        widening_mul, wrapping_add_u256, wrapping_sub_u256,
+        max_sqrt_ratio, min_sqrt_ratio, sqrt_ratio_at_tick, tick_at_sqrt_ratio, try_amount0_delta,
+        try_amount1_delta, u256_max, u256_one, widening_mul, wrapping_add_u256, wrapping_sub_u256,
     };
     use crate::constants::{MAX_TICK, MIN_TICK};
     use soroban_sdk::{Env, U256};
@@ -759,5 +837,48 @@ mod test {
         let val = U256::from_u128(&e, 100);
         let sum = wrapping_add_u256(&e, &max, &val);
         assert_eq!(wrapping_sub_u256(&e, &sum, &val), max);
+    }
+
+    #[test]
+    fn try_amount0_delta_returns_none_on_overflow() {
+        let e = Env::default();
+        // L=1e30 across nearly the entire tick range: result >> u128::MAX
+        let sqrt_min = sqrt_ratio_at_tick(&e, MIN_TICK);
+        let sqrt_max = sqrt_ratio_at_tick(&e, MAX_TICK - 1);
+        let liquidity = 1_000_000_000_000_000_000_000_000_000_000u128; // 1e30
+        assert_eq!(
+            try_amount0_delta(&e, &sqrt_min, &sqrt_max, liquidity, true),
+            None
+        );
+    }
+
+    #[test]
+    fn try_amount1_delta_returns_none_on_overflow() {
+        let e = Env::default();
+        let sqrt_min = sqrt_ratio_at_tick(&e, MIN_TICK);
+        let sqrt_max = sqrt_ratio_at_tick(&e, MAX_TICK - 1);
+        let liquidity = 1_000_000_000_000_000_000_000_000_000_000u128; // 1e30
+        assert_eq!(
+            try_amount1_delta(&e, &sqrt_min, &sqrt_max, liquidity, true),
+            None
+        );
+    }
+
+    #[test]
+    fn try_amount0_delta_zero_liquidity_returns_some_zero() {
+        let e = Env::default();
+        let sqrt_a = sqrt_ratio_at_tick(&e, -1000);
+        let sqrt_b = sqrt_ratio_at_tick(&e, 1000);
+        assert_eq!(try_amount0_delta(&e, &sqrt_a, &sqrt_b, 0, true), Some(0));
+    }
+
+    #[test]
+    fn try_amount0_delta_equal_prices_returns_some_zero() {
+        let e = Env::default();
+        let sqrt_a = sqrt_ratio_at_tick(&e, 0);
+        assert_eq!(
+            try_amount0_delta(&e, &sqrt_a, &sqrt_a, 1_000_000, true),
+            Some(0)
+        );
     }
 }
