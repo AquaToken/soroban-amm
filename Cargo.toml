@@ -19,20 +19,23 @@ members = [
     "locker_feed",
     "liquidity_pool_provider_swap_fee_factory",
     "liquidity_pool_provider_swap_fee",
+    "liquidity_pool_concentrated",
     "integration_tests",
     "rewards_gauge",
     "liquidity_pool_reward_gauge",
     "config_storage",
     "liquidity_pool_config_storage",
+    "batcher",
+    "guard",
 ]
 
 [workspace.package]
-version = "1.8.1"
+version = "2.0.1"
 rust-version = "1.92"
 
 [workspace.dependencies]
-soroban-sdk = { version = "25.1.1" }
-soroban-token-sdk = { version = "25.1.1" }
+soroban-sdk = { version = "25.3.0" }
+soroban-token-sdk = { version = "25.3.0" }
 soroban-fixed-point-math = { version = "1.5.0"}
 paste = { version = "1.0.15" }
 utils = { path = "utils" }

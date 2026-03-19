@@ -1,4 +1,4 @@
-use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
+use crate::constants::{CONCENTRATED_MAX_POOLS, MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
 use crate::errors::LiquidityPoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
@@ -20,7 +20,7 @@ pub enum LiquidityPoolType {
     MissingPool = 0,
     ConstantProduct = 1,
     StableSwap = 2,
-    Custom = 3,
+    Concentrated = 3,
 }
 
 #[contracttype]
@@ -58,9 +58,11 @@ pub(crate) enum DataKey {
     InitPoolPaymentToken,
     InitStandardPoolPaymentAmount,
     InitStablePoolPaymentAmount,
+    InitConcentratedPoolPaymentAmt,
     InitPoolsPaymentsAddress,
     ConstantPoolHash,
     StableSwapPoolHash,
+    ConcentratedPoolHash,
     PoolCounter,
     PoolPlane,
     LiquidityCalculator,
@@ -97,6 +99,11 @@ generate_instance_storage_getter_and_setter!(
     DataKey::ConstantPoolHash,
     BytesN<32>
 );
+generate_instance_storage_getter_and_setter!(
+    concentrated_pool_hash,
+    DataKey::ConcentratedPoolHash,
+    BytesN<32>
+);
 generate_instance_storage_getter_and_setter!(token_hash, DataKey::TokenHash, BytesN<32>);
 generate_instance_storage_getter_and_setter!(
     init_pool_payment_token,
@@ -111,6 +118,11 @@ generate_instance_storage_getter_and_setter!(
 generate_instance_storage_getter_and_setter!(
     init_standard_pool_payment_amount,
     DataKey::InitStandardPoolPaymentAmount,
+    u128
+);
+generate_instance_storage_getter_and_setter!(
+    init_concentrated_pool_payment_amount,
+    DataKey::InitConcentratedPoolPaymentAmt,
     u128
 );
 generate_instance_storage_getter_and_setter!(
@@ -270,6 +282,17 @@ pub fn add_pool(
         }
         if stableswap_pools_amt > STABLESWAP_MAX_POOLS {
             panic_with_error!(&e, LiquidityPoolRouterError::StableswapPoolsOverMax);
+        }
+    }
+    if pool_type == LiquidityPoolType::Concentrated {
+        let mut concentrated_pools_amt = 0;
+        for (_key, value) in pools.iter() {
+            if value.pool_type == LiquidityPoolType::Concentrated {
+                concentrated_pools_amt += 1;
+            }
+        }
+        if concentrated_pools_amt > CONCENTRATED_MAX_POOLS {
+            panic_with_error!(&e, LiquidityPoolRouterError::ConcentratedPoolsOverMax);
         }
     }
 

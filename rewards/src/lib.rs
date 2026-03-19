@@ -2,6 +2,7 @@
 
 use soroban_sdk::Env;
 
+pub mod concentrated_weight;
 mod constants;
 pub mod errors;
 pub mod events;

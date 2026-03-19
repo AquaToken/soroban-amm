@@ -497,7 +497,14 @@ fn test_strict_receive_rebasing_token() {
     router.set_token_hash(&admin, &install_token_wasm(&e));
     router.set_reward_token(&admin, &tokens.get(0).unwrap());
     router.set_pools_plane(&admin, &plane);
-    router.configure_init_pool_payment(&admin, &tokens.get(0).unwrap(), &0, &0, &router.address);
+    router.configure_init_pool_payment(
+        &admin,
+        &tokens.get(0).unwrap(),
+        &0,
+        &0,
+        &0,
+        &router.address,
+    );
     router.set_reward_boost_config(&admin, &tokens.get(0).unwrap(), &boost_feed.address);
     router.set_protocol_fee_fraction(&admin, &5000);
 

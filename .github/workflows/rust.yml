@@ -30,7 +30,7 @@ jobs:
       uses: baptiste0928/cargo-install@v3
       with:
         crate: soroban-cli
-        version: 23.3.0
+        version: 25.1.0
         features: additional-libs
         locked: true
     - name: Check code formatting

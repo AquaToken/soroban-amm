@@ -48,6 +48,16 @@ pub fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(stableswap_pool::WASM)
 }
 
+pub mod concentrated_pool {
+    soroban_sdk::contractimport!(
+        file = "../contracts/soroban_liquidity_pool_concentrated_contract.wasm"
+    );
+}
+
+pub fn install_concentrated_liq_pool_hash(e: &Env) -> BytesN<32> {
+    e.deployer().upload_contract_wasm(concentrated_pool::WASM)
+}
+
 mod pool_plane {
     soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_plane_contract.wasm");
 }
@@ -141,7 +151,7 @@ impl Default for Setup<'_> {
         let emergency_admin = Address::generate(&env);
         let payment_for_creation_address = Address::generate(&env);
 
-        let reward_token = create_token_contract(&env, &reward_admin);
+        let reward_token = test_token::Client::new(&env, &tokens[0].address);
         let reward_boost_token = create_token_contract(&env, &reward_admin);
 
         let pool_hash = install_liq_pool_hash(&env);
@@ -173,11 +183,13 @@ impl Default for Setup<'_> {
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&env));
+        router.set_concentrated_pool_hash(&admin, &install_concentrated_liq_pool_hash(&env));
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &reward_token.address);
         router.configure_init_pool_payment(
             &admin,
             &reward_token.address,
+            &1_0000000,
             &1_0000000,
             &1_0000000,
             &payment_for_creation_address,

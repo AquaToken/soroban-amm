@@ -120,7 +120,7 @@ impl UpgradeableContract for ProviderSwapFeeFactory {
     // Returns:
     //   - A u32 representing the version.
     fn version() -> u32 {
-        180
+        200
     }
 
     // Get contract type symbolic name
