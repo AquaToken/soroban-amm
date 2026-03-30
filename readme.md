@@ -74,10 +74,13 @@ We plan to use Soroban to build Automated Market Maker (AMM) smart contracts and
 #### Smart Contracts
 - **liquidity_pool** - Exchange liquidity pool based on constant product formula (xy=k)
 - **liquidity_pool_stableswap** - Exchange liquidity pool designed for extremely efficient stablecoin trading and low risk, supplemental fee income for liquidity providers, without an opportunity cost. It allows users to trade between correlated cryptocurrencies with a bespoke low slippage, low fee algorithm.
+- **liquidity_pool_concentrated** - Concentrated liquidity pool (Uniswap V3-style) with tick-based price ranges, allowing LPs to concentrate capital within custom price intervals for higher capital efficiency
 - **token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
 - **liquidity_pool_router** - entry point and catalogue of liquidity pools which is capable to deploy new pools if necessary
 - **liquidity_pool_plane** - contract designed to store minimum information about any liquidity pool: type, parameters, reserves. being updated on every action with the pool (deposit, swap, withdraw, parameters update, etc)
 - **liquidity_pool_liquidity_calculator** - smart contract containing pools liquidity calculation logic which is capable to compare many pools at once
+- **batcher** - Multicall contract that executes multiple contract calls in a single atomic transaction, used for batched reward claims across multiple pools and safe upgrades
+- **guard** - Return-value validator that invokes a contract call and asserts the result matches an expected value, used with batcher to verify upgrade correctness (e.g. version and pool type after upgrade)
 
 [![Smart Contracts diagram][contracts-diagram]](https://aqua.network/)
 

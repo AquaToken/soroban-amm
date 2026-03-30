@@ -2,9 +2,10 @@
 extern crate std;
 
 use crate::testutils::{
-    create_token_contract, estimate_vm_overhead, get_token_admin_client, measure_budget_with_vm,
-    Setup, SetupV170, PLANE_MASTER, PLANE_V170, POOL_MASTER, POOL_V170, ROUTER_MASTER, ROUTER_V170,
-    TOKEN_MASTER, TOKEN_V170,
+    create_token_contract, estimate_vm_overhead, estimate_vm_overhead_mixed,
+    get_token_admin_client, measure_budget_with_vm, measure_budget_with_vm_mixed, Setup, SetupV170,
+    CONC_POOL_MASTER, PLANE_MASTER, PLANE_V170, POOL_MASTER, POOL_V170, ROUTER_MASTER, ROUTER_V170,
+    STABLESWAP_POOL_MASTER, TOKEN_MASTER, TOKEN_V170, YTIME1_TOKEN,
 };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
@@ -786,4 +787,456 @@ fn bench_optimization_projections() {
             total(vm_pre_opt) - total(vm_opt_swap_no_refund));
     }
     std::println!("\n========================================================\n");
+}
+
+// --- Mixed pool benchmarks (realistic mainnet scenario) ---
+//
+// Topology: standard → stableswap → concentrated → standard
+// This matches real mainnet multi-hop paths with all pool types.
+//
+// Token call formulas for mixed (N_std standard/stableswap pools, N_conc concentrated pools):
+//   strict_send:    4*N_std + 2*N_conc + 2  (std/stable: 2 balance + 2 transfer, conc: 0 balance + 2 transfer, router: 2)
+//   strict_receive: 2*N_std + 2*N + 5       (estimate: 2*N_std balance, swap: 2*N transfer, router: 5)
+// Plane calls: N (total pools)
+
+/// Set up a mixed 4-pool chain: standard → stableswap → concentrated → standard
+fn setup_mixed_4pool_chain<'a>(
+    setup: &'a Setup<'a>,
+) -> (
+    std::vec::Vec<TokenClient<'a>>,
+    std::vec::Vec<soroban_sdk::BytesN<32>>,
+) {
+    // Create 5 sorted tokens for 4-pool chain
+    let mut tokens: std::vec::Vec<Address> = (0..=4)
+        .map(|_| create_token_contract(&setup.env, &setup.admin).address)
+        .collect();
+    tokens.sort();
+
+    let token_clients: std::vec::Vec<TokenClient> = tokens
+        .iter()
+        .map(|t| TokenClient::new(&setup.env, t))
+        .collect();
+
+    let mut pool_hashes = std::vec::Vec::new();
+
+    // Pool 0: standard (tokens 0-1)
+    {
+        let admin_a = get_token_admin_client(&setup.env, &token_clients[0].address);
+        let admin_b = get_token_admin_client(&setup.env, &token_clients[1].address);
+        let (_pool, pool_hash) =
+            setup.deploy_standard_pool(&token_clients[0].address, &token_clients[1].address, 30);
+        admin_a.mint(&setup.admin, &1_000_000_0000000);
+        admin_b.mint(&setup.admin, &1_000_000_0000000);
+        _pool.deposit(
+            &setup.admin,
+            &Vec::from_array(&setup.env, [1_000_000_0000000, 1_000_000_0000000]),
+            &0,
+        );
+        pool_hashes.push(pool_hash);
+    }
+
+    // Pool 1: stableswap (tokens 1-2)
+    {
+        let admin_a = get_token_admin_client(&setup.env, &token_clients[1].address);
+        let admin_b = get_token_admin_client(&setup.env, &token_clients[2].address);
+        let (_pool, pool_hash) =
+            setup.deploy_stableswap_pool(&token_clients[1].address, &token_clients[2].address, 30);
+        admin_a.mint(&setup.admin, &1_000_000_0000000);
+        admin_b.mint(&setup.admin, &1_000_000_0000000);
+        _pool.deposit(
+            &setup.admin,
+            &Vec::from_array(&setup.env, [1_000_000_0000000, 1_000_000_0000000]),
+            &0,
+        );
+        pool_hashes.push(pool_hash);
+    }
+
+    // Pool 2: concentrated (tokens 2-3)
+    {
+        let admin_a = get_token_admin_client(&setup.env, &token_clients[2].address);
+        let admin_b = get_token_admin_client(&setup.env, &token_clients[3].address);
+        let (_pool, pool_hash) = setup.deploy_concentrated_pool(
+            &token_clients[2].address,
+            &token_clients[3].address,
+            30,
+        );
+        admin_a.mint(&setup.admin, &100_000_0000000);
+        admin_b.mint(&setup.admin, &100_000_0000000);
+        _pool.deposit(
+            &setup.admin,
+            &Vec::from_array(&setup.env, [100_000_0000000u128, 100_000_0000000u128]),
+            &0,
+        );
+        pool_hashes.push(pool_hash);
+    }
+
+    // Pool 3: standard (tokens 3-4)
+    {
+        let admin_a = get_token_admin_client(&setup.env, &token_clients[3].address);
+        let admin_b = get_token_admin_client(&setup.env, &token_clients[4].address);
+        let (_pool, pool_hash) =
+            setup.deploy_standard_pool(&token_clients[3].address, &token_clients[4].address, 30);
+        admin_a.mint(&setup.admin, &1_000_000_0000000);
+        admin_b.mint(&setup.admin, &1_000_000_0000000);
+        _pool.deposit(
+            &setup.admin,
+            &Vec::from_array(&setup.env, [1_000_000_0000000, 1_000_000_0000000]),
+            &0,
+        );
+        pool_hashes.push(pool_hash);
+    }
+
+    (token_clients, pool_hashes)
+}
+
+// Mixed pool VM call counts:
+// strict_send 4-pool (2 std + 1 stable + 1 conc):
+//   each std/stable swap: 2 balance (sync) + 2 transfer = 4 token calls
+//   each conc swap: 0 balance + 2 transfer = 2 token calls
+//   router: 1 transfer in + 1 transfer out = 2
+//   total token calls: 3*4 + 1*2 + 2 = 16
+//   pool calls: 2 std + 1 stable + 1 conc
+//   plane calls: 4
+//
+// strict_receive 4-pool (2 std + 1 stable + 1 conc):
+//   estimate pass: 3 pools with sync_reserves * 2 balance = 6, conc = 0 → 6
+//   swap pass: 0 balance (skipped), 2 transfer * 4 = 8
+//   router: 5 (1 bal pre + 1 xfer in + 1 xfer out + 1 bal refund + 1 xfer refund)
+//   total token calls: 6 + 8 + 5 = 19
+//   pool calls: 2*2 std + 2*1 stable + 2*1 conc = 8 (estimate + swap for each)
+//   plane calls: 4
+
+#[test]
+fn bench_mixed_4pool_strict_send() {
+    let setup = Setup::default();
+    let (tokens, pool_hashes) = setup_mixed_4pool_chain(&setup);
+
+    let user = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &tokens[0].address).mint(&user, &10_0000000);
+
+    let chain = build_swap_chain(&setup.env, &tokens, &pool_hashes);
+    let token_in = tokens[0].address.clone();
+    let in_amount: u128 = 10_0000000;
+
+    // 2 std + 1 stable + 1 conc: total token calls = 3*4 + 1*2 + 2 = 16
+    // pool calls: 1 swap per pool = 2 std + 1 stable + 1 conc
+    // plane calls: 4
+    // custom_token_calls: 0 (all SAC in test; on mainnet pass actual count)
+    measure_budget_with_vm_mixed(
+        &setup.env,
+        "mixed 4-pool strict_send (2std+1stable+1conc)",
+        &ROUTER_MASTER,
+        &[
+            ("standard", &POOL_MASTER, 2),
+            ("stableswap", &STABLESWAP_POOL_MASTER, 1),
+            ("concentrated", &CONC_POOL_MASTER, 1),
+        ],
+        &TOKEN_MASTER,
+        &PLANE_MASTER,
+        0, // all SAC tokens in test
+        4,
+        || {
+            setup
+                .router
+                .swap_chained(&user, &chain, &token_in, &in_amount, &0);
+        },
+    );
+}
+
+#[test]
+fn bench_mixed_4pool_strict_receive() {
+    let setup = Setup::default();
+    let (tokens, pool_hashes) = setup_mixed_4pool_chain(&setup);
+
+    let user = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &tokens[0].address).mint(&user, &100_0000000);
+
+    let chain = build_swap_chain(&setup.env, &tokens, &pool_hashes);
+    let token_in = tokens[0].address.clone();
+    let out_amount: u128 = 5_0000000;
+    let in_max: u128 = 100_0000000;
+
+    // estimate + swap for each pool: 4 std + 2 stable + 2 conc
+    // total token calls: 6 balance (estimate, 3 non-conc pools) + 8 transfer (swap) + 5 router = 19
+    // plane calls: 4
+    // custom_token_calls: 0 (all SAC in test)
+    measure_budget_with_vm_mixed(
+        &setup.env,
+        "mixed 4-pool strict_receive (2std+1stable+1conc)",
+        &ROUTER_MASTER,
+        &[
+            ("standard", &POOL_MASTER, 4),
+            ("stableswap", &STABLESWAP_POOL_MASTER, 2),
+            ("concentrated", &CONC_POOL_MASTER, 2),
+        ],
+        &TOKEN_MASTER,
+        &PLANE_MASTER,
+        0, // all SAC tokens in test
+        4,
+        || {
+            setup.router.swap_chained_strict_receive(
+                &user,
+                &chain,
+                &token_in,
+                &out_amount,
+                &in_max,
+            );
+        },
+    );
+}
+
+// Also test the testnet-matching topology: 3 standard + 1 concentrated
+
+/// Set up a 4-pool chain matching testnet: standard → standard → concentrated → standard
+fn setup_testnet_4pool_chain<'a>(
+    setup: &'a Setup<'a>,
+) -> (
+    std::vec::Vec<TokenClient<'a>>,
+    std::vec::Vec<soroban_sdk::BytesN<32>>,
+) {
+    let mut tokens: std::vec::Vec<Address> = (0..=4)
+        .map(|_| create_token_contract(&setup.env, &setup.admin).address)
+        .collect();
+    tokens.sort();
+
+    let token_clients: std::vec::Vec<TokenClient> = tokens
+        .iter()
+        .map(|t| TokenClient::new(&setup.env, t))
+        .collect();
+
+    let mut pool_hashes = std::vec::Vec::new();
+
+    // Pools 0, 1, 3: standard. Pool 2: concentrated.
+    for i in 0..4usize {
+        let admin_a = get_token_admin_client(&setup.env, &token_clients[i].address);
+        let admin_b = get_token_admin_client(&setup.env, &token_clients[i + 1].address);
+
+        if i == 2 {
+            // concentrated pool
+            let (_pool, pool_hash) = setup.deploy_concentrated_pool(
+                &token_clients[i].address,
+                &token_clients[i + 1].address,
+                30,
+            );
+            admin_a.mint(&setup.admin, &100_000_0000000);
+            admin_b.mint(&setup.admin, &100_000_0000000);
+            _pool.deposit(
+                &setup.admin,
+                &Vec::from_array(&setup.env, [100_000_0000000u128, 100_000_0000000u128]),
+                &0,
+            );
+            pool_hashes.push(pool_hash);
+        } else {
+            // standard pool
+            let (_pool, pool_hash) = setup.deploy_standard_pool(
+                &token_clients[i].address,
+                &token_clients[i + 1].address,
+                30,
+            );
+            admin_a.mint(&setup.admin, &1_000_000_0000000);
+            admin_b.mint(&setup.admin, &1_000_000_0000000);
+            _pool.deposit(
+                &setup.admin,
+                &Vec::from_array(&setup.env, [1_000_000_0000000, 1_000_000_0000000]),
+                &0,
+            );
+            pool_hashes.push(pool_hash);
+        }
+    }
+
+    (token_clients, pool_hashes)
+}
+
+#[test]
+fn bench_testnet_4pool_strict_send() {
+    let setup = Setup::default();
+    let (tokens, pool_hashes) = setup_testnet_4pool_chain(&setup);
+
+    let user = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &tokens[0].address).mint(&user, &10_0000000);
+
+    let chain = build_swap_chain(&setup.env, &tokens, &pool_hashes);
+    let token_in = tokens[0].address.clone();
+    let in_amount: u128 = 10_0000000;
+
+    // 3 std + 1 conc: total token calls = 3*4 + 1*2 + 2 = 16
+    // On testnet: 3 custom token calls (yTIME1), rest SAC. In test: all SAC → 0.
+    measure_budget_with_vm_mixed(
+        &setup.env,
+        "testnet 4-pool strict_send (3std+1conc)",
+        &ROUTER_MASTER,
+        &[
+            ("standard", &POOL_MASTER, 3),
+            ("concentrated", &CONC_POOL_MASTER, 1),
+        ],
+        &TOKEN_MASTER,
+        &PLANE_MASTER,
+        0,
+        4,
+        || {
+            setup
+                .router
+                .swap_chained(&user, &chain, &token_in, &in_amount, &0);
+        },
+    );
+}
+
+#[test]
+fn bench_testnet_4pool_strict_receive() {
+    let setup = Setup::default();
+    let (tokens, pool_hashes) = setup_testnet_4pool_chain(&setup);
+
+    let user = Address::generate(&setup.env);
+    get_token_admin_client(&setup.env, &tokens[0].address).mint(&user, &100_0000000);
+
+    let chain = build_swap_chain(&setup.env, &tokens, &pool_hashes);
+    let token_in = tokens[0].address.clone();
+    let out_amount: u128 = 5_0000000;
+    let in_max: u128 = 100_0000000;
+
+    // 3 std estimate + 3 std swap + 1 conc estimate + 1 conc swap = 6 std + 2 conc
+    // total token calls: 3*2 balance (estimate sync) + 4*2 transfer (swap) + 5 router = 19
+    // custom_token_calls: 0 (all SAC in test)
+    measure_budget_with_vm_mixed(
+        &setup.env,
+        "testnet 4-pool strict_receive (3std+1conc)",
+        &ROUTER_MASTER,
+        &[
+            ("standard", &POOL_MASTER, 6),
+            ("concentrated", &CONC_POOL_MASTER, 2),
+        ],
+        &TOKEN_MASTER,
+        &PLANE_MASTER,
+        0,
+        4,
+        || {
+            setup.router.swap_chained_strict_receive(
+                &user,
+                &chain,
+                &token_in,
+                &out_amount,
+                &in_max,
+            );
+        },
+    );
+}
+
+// --- Testnet-accurate estimate with yTIME1 custom token overhead ---
+// yTIME1 (CC52...70BT) is a 60KB custom WASM token, ~6x standard token.
+// It appears in pools 2 and 3, contributing ~3 cross-contract calls.
+
+#[test]
+fn bench_testnet_4pool_with_ytime1() {
+    let setup = Setup::default();
+    let (tokens, pool_hashes) = setup_testnet_4pool_chain(&setup);
+
+    // --- strict_send ---
+    {
+        let user = Address::generate(&setup.env);
+        get_token_admin_client(&setup.env, &tokens[0].address).mint(&user, &10_0000000);
+        let chain = build_swap_chain(&setup.env, &tokens, &pool_hashes);
+        let token_in = tokens[0].address.clone();
+        let in_amount: u128 = 10_0000000;
+
+        // Run swap to get measured memory (SAC tokens in test)
+        setup.env.cost_estimate().budget().reset_unlimited();
+        setup.env.cost_estimate().budget().reset_tracker();
+        setup
+            .router
+            .swap_chained(&user, &chain, &token_in, &in_amount, &0);
+        let measured_mem = setup.env.cost_estimate().budget().memory_bytes_cost();
+
+        // Compute VM overhead with yTIME1: 3 custom token calls (balance+transfer in pool2, transfer in pool3)
+        let vm_mem = estimate_vm_overhead_mixed(
+            "testnet 4-pool strict_send (3std+1conc, yTIME1)",
+            &ROUTER_MASTER,
+            &[
+                ("standard", &POOL_MASTER, 3),
+                ("concentrated", &CONC_POOL_MASTER, 1),
+            ],
+            &YTIME1_TOKEN,
+            &PLANE_MASTER,
+            3, // yTIME1 calls: balance(pool2 sync) + transfer(pool2→router) + transfer(router→pool3)
+            4,
+        );
+
+        let total = measured_mem + vm_mem;
+        std::println!("=== Testnet-accurate: strict_send (3std+1conc, yTIME1) ===");
+        std::println!(
+            "  Measured (SAC): {} ({:.2} MB)",
+            measured_mem,
+            measured_mem as f64 / 1_048_576.0
+        );
+        std::println!(
+            "  VM overhead:    {} ({:.2} MB)",
+            vm_mem,
+            vm_mem as f64 / 1_048_576.0
+        );
+        std::println!(
+            "  TOTAL:          {} ({:.2} MB)",
+            total,
+            total as f64 / 1_048_576.0
+        );
+        std::println!("  Testnet actual: 30321879 (28.92 MB)");
+        std::println!(
+            "  Delta:          {:.2} MB",
+            total as f64 / 1_048_576.0 - 28.92
+        );
+        std::println!();
+    }
+
+    // --- strict_receive ---
+    {
+        let user = Address::generate(&setup.env);
+        get_token_admin_client(&setup.env, &tokens[0].address).mint(&user, &100_0000000);
+        let chain = build_swap_chain(&setup.env, &tokens, &pool_hashes);
+        let token_in = tokens[0].address.clone();
+
+        setup.env.cost_estimate().budget().reset_unlimited();
+        setup.env.cost_estimate().budget().reset_tracker();
+        setup.router.swap_chained_strict_receive(
+            &user,
+            &chain,
+            &token_in,
+            &5_0000000u128,
+            &100_0000000u128,
+        );
+        let measured_mem = setup.env.cost_estimate().budget().memory_bytes_cost();
+
+        // yTIME1 calls in strict_receive: balance(pool2 estimate sync) + transfer(pool2 swap) + transfer(pool3 swap) = 3
+        let vm_mem = estimate_vm_overhead_mixed(
+            "testnet 4-pool strict_receive (3std+1conc, yTIME1)",
+            &ROUTER_MASTER,
+            &[
+                ("standard", &POOL_MASTER, 6),
+                ("concentrated", &CONC_POOL_MASTER, 2),
+            ],
+            &YTIME1_TOKEN,
+            &PLANE_MASTER,
+            3, // yTIME1 calls
+            4,
+        );
+
+        let total = measured_mem + vm_mem;
+        std::println!("=== Testnet-accurate: strict_receive (3std+1conc, yTIME1) ===");
+        std::println!(
+            "  Measured (SAC): {} ({:.2} MB)",
+            measured_mem,
+            measured_mem as f64 / 1_048_576.0
+        );
+        std::println!(
+            "  VM overhead:    {} ({:.2} MB)",
+            vm_mem,
+            vm_mem as f64 / 1_048_576.0
+        );
+        std::println!(
+            "  TOTAL:          {} ({:.2} MB)",
+            total,
+            total as f64 / 1_048_576.0
+        );
+        std::println!("  Mainnet limit:  41943040 (40.00 MB)");
+        let headroom = 41943040i64 - total as i64;
+        std::println!("  Headroom:       {:+.2} MB", headroom as f64 / 1_048_576.0);
+        std::println!();
+    }
 }

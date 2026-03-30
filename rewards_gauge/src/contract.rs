@@ -155,6 +155,15 @@ impl RewardsGauge {
             panic_with_error!(&e, GaugeError::Unauthorized);
         }
 
+        // Validate invariants: accumulated must cover claimed, inv must not regress
+        if global_data.claimed > global_data.accumulated {
+            panic_with_error!(&e, GaugeError::InvalidRewardState);
+        }
+        let current = get_global_reward_data(&e);
+        if global_data.inv.lt(&current.inv) {
+            panic_with_error!(&e, GaugeError::InvalidRewardState);
+        }
+
         set_global_reward_data(&e, &global_data);
         set_reward_configs(&e, configs);
     }
@@ -213,7 +222,7 @@ impl UpgradeableContract for RewardsGauge {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        180
+        200
     }
 
     // Get contract type symbolic name

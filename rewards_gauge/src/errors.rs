@@ -11,4 +11,5 @@ pub enum GaugeError {
     StartNotInFuture = 3002,
     StartTooEarly = 3003,
     TooManyConfigs = 3004,
+    InvalidRewardState = 3005,
 }

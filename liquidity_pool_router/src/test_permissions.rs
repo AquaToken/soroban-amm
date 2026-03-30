@@ -380,6 +380,8 @@ fn test_set_reward_token() {
     let router = setup.router;
     let user = Address::generate(&setup.env);
 
+    // reward_token is already set, so re-setting same value is idempotent (admin OK),
+    // while non-admins still fail auth
     for (addr, is_ok) in [
         (user, false),
         (setup.admin, true),
@@ -705,6 +707,7 @@ fn test_configure_init_pool_payment() {
                     &setup.reward_token.address,
                     &1,
                     &1,
+                    &0,
                     &router.address
                 )
                 .is_ok(),

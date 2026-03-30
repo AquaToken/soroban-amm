@@ -1,5 +1,6 @@
 use crate::constants::{
-    CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_MAX_FEE, STABLESWAP_MAX_TOKENS,
+    CONCENTRATED_FEE_AVAILABLE, CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A,
+    STABLESWAP_MAX_FEE, STABLESWAP_MAX_TOKENS,
 };
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
@@ -9,8 +10,9 @@ use crate::pool_interface::{
     RewardsInterfaceTrait,
 };
 use crate::pool_utils::{
-    assert_tokens_sorted, deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt,
-    get_standard_pool_salt, get_tokens_salt, get_total_liquidity, validate_tokens_contracts,
+    assert_tokens_sorted, deploy_concentrated_pool, deploy_stableswap_pool, deploy_standard_pool,
+    get_concentrated_pool_salt, get_stableswap_pool_salt, get_standard_pool_salt, get_tokens_salt,
+    get_total_liquidity, validate_tokens_contracts,
 };
 use crate::rewards::get_rewards_manager;
 use crate::rewards_gauge::{
@@ -20,16 +22,19 @@ use crate::rewards_gauge::{
 };
 use crate::router_interface::AdminInterface;
 use crate::storage::{
-    get_gauge_rewards_enabled_for, get_init_pool_payment_address, get_init_pool_payment_token,
-    get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
-    get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_protocol_fee_fraction,
-    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_tokens_set,
-    get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_gauge_rewards_enabled_for, set_init_pool_payment_address, set_init_pool_payment_token,
-    set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
-    set_liquidity_calculator, set_pool_plane, set_protocol_fee_fraction, set_reward_tokens,
-    set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash,
-    DataKey, GlobalRewardsConfig, LiquidityPoolRewardInfo,
+    get_concentrated_pool_hash, get_gauge_rewards_enabled_for,
+    get_init_concentrated_pool_payment_amount, get_init_pool_payment_address,
+    get_init_pool_payment_token, get_init_stable_pool_payment_amount,
+    get_init_standard_pool_payment_amount, get_liquidity_calculator, get_pool, get_pool_plane,
+    get_pools_plain, get_protocol_fee_fraction, get_reward_tokens, get_reward_tokens_detailed,
+    get_rewards_config, get_tokens_set, get_tokens_set_count, has_pool, remove_pool,
+    set_concentrated_pool_hash, set_constant_product_pool_hash, set_gauge_rewards_enabled_for,
+    set_init_concentrated_pool_payment_amount, set_init_pool_payment_address,
+    set_init_pool_payment_token, set_init_stable_pool_payment_amount,
+    set_init_standard_pool_payment_amount, set_liquidity_calculator, set_pool_plane,
+    set_protocol_fee_fraction, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
+    set_stableswap_pool_hash, set_token_hash, DataKey, GlobalRewardsConfig,
+    LiquidityPoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -413,7 +418,7 @@ impl UpgradeableContract for LiquidityPoolRouter {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        180
+        200
     }
 
     // Get contract type symbolic name
@@ -606,6 +611,17 @@ impl AdminInterface for LiquidityPoolRouter {
         set_stableswap_pool_hash(&e, &new_hash);
     }
 
+    // Sets the concentrated pool wasm hash.
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The new concentrated pool wasm hash.
+    fn set_concentrated_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_concentrated_pool_hash(&e, &new_hash);
+    }
+
     // Sets the rewards gauge wasm hash.
     //
     // # Arguments
@@ -636,6 +652,7 @@ impl AdminInterface for LiquidityPoolRouter {
         token: Address,
         standard_pool_amount: u128,
         stable_pool_amount: u128,
+        concentrated_pool_amount: u128,
         to: Address,
     ) {
         admin.require_auth();
@@ -644,6 +661,7 @@ impl AdminInterface for LiquidityPoolRouter {
         set_init_pool_payment_token(&e, &token);
         set_init_stable_pool_payment_amount(&e, &stable_pool_amount);
         set_init_standard_pool_payment_amount(&e, &standard_pool_amount);
+        set_init_concentrated_pool_payment_amount(&e, &concentrated_pool_amount);
         set_init_pool_payment_address(&e, &to);
     }
 
@@ -664,6 +682,10 @@ impl AdminInterface for LiquidityPoolRouter {
         get_init_standard_pool_payment_amount(&e)
     }
 
+    fn get_conc_pool_payment_amount(e: Env) -> u128 {
+        get_init_concentrated_pool_payment_amount(&e)
+    }
+
     // Sets the reward token.
     //
     // # Arguments
@@ -672,9 +694,16 @@ impl AdminInterface for LiquidityPoolRouter {
     fn set_reward_token(e: Env, admin: Address, reward_token: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        get_rewards_manager(&e)
-            .storage()
-            .put_reward_token(reward_token);
+
+        let rewards_storage = get_rewards_manager(&e).storage();
+        if rewards_storage.has_reward_token() {
+            if rewards_storage.get_reward_token() != reward_token {
+                panic_with_error!(&e, LiquidityPoolRouterError::RewardTokenChangeWhileActive);
+            }
+            return;
+        }
+
+        rewards_storage.put_reward_token(reward_token);
     }
 
     fn set_reward_boost_config(
@@ -1304,6 +1333,63 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
     }
 
+    // Initializes a concentrated pool with custom arguments.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user initializing the pool.
+    // * `tokens` - Exactly two token addresses of the pool.
+    // * `fee` - Fee tier: must be one of 10 (0.1%), 30 (0.3%), 100 (1.0%).
+    //   Tick spacing is derived automatically from the fee tier.
+    //
+    // # Returns
+    //
+    // A tuple containing:
+    // * The pool index hash.
+    // * The address of the pool.
+    fn init_concentrated_pool(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        fee: u32,
+    ) -> (BytesN<32>, Address) {
+        user.require_auth();
+        validate_tokens_contracts(&e, &tokens);
+        assert_tokens_sorted(&e, &tokens);
+
+        if tokens.len() != 2 {
+            panic_with_error!(&e, LiquidityPoolRouterError::UnsupportedTokensNum);
+        }
+        if !CONCENTRATED_FEE_AVAILABLE.contains(&fee) {
+            panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
+        }
+
+        let tick_spacing = crate::constants::concentrated_tick_spacing(fee);
+
+        let _hash = get_concentrated_pool_hash(&e);
+        let salt = get_tokens_salt(&e, &tokens);
+        let pools = get_pools_plain(&e, salt);
+        let pool_index = get_concentrated_pool_salt(&e, &fee, &tick_spacing);
+
+        match pools.get(pool_index.clone()) {
+            Some(pool_address) => (pool_index, pool_address),
+            None => {
+                let init_pool_token = get_init_pool_payment_token(&e);
+                let init_pool_amount = get_init_concentrated_pool_payment_amount(&e);
+                let init_pool_address = get_init_pool_payment_address(&e);
+                if init_pool_amount > 0 {
+                    SorobanTokenClient::new(&e, &init_pool_token).transfer(
+                        &user,
+                        &init_pool_address,
+                        &(init_pool_amount as i128),
+                    );
+                }
+
+                deploy_concentrated_pool(&e, &tokens, fee, tick_spacing)
+            }
+        }
+    }
+
     // Returns a map of pools for given set of tokens.
     //
     // # Arguments
@@ -1742,6 +1828,9 @@ impl CombinedSwapInterface for LiquidityPoolRouter {
                     ],
                 ),
             );
+            if required_in == 0 {
+                panic_with_error!(&e, LiquidityPoolRouterError::SwapChainAmountIsZero);
+            }
             required_amounts.push_front(required_in);
             // The output required from the previous hop is the input needed here.
             desired_out = required_in;
