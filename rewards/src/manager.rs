@@ -1,3 +1,4 @@
+use crate::concentrated_weight::{apply_multiplier, position_multiplier_bps};
 use crate::constants::REWARD_PRECISION;
 use crate::errors::RewardsError;
 use crate::locked_boost::manager::BoostManagerPlugin;
@@ -8,7 +9,8 @@ use crate::storage::{
     WorkingBalancesStorageTrait,
 };
 use crate::RewardsConfig;
-use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec};
+use soroban_fixed_point_math::SorobanFixedPoint;
+use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec, U256};
 
 // `Manager` orchestrates the reward logic, pulling data and methods from `Storage`.
 // It relies on Storage sub-traits to handle actual storage I/O.
@@ -111,6 +113,36 @@ impl Manager {
             total_share,
         );
         boosted_balance
+    }
+
+    pub fn calculate_effective_balance_with_multiplier(
+        &self,
+        user: &Address,
+        share_balance: u128,
+        total_share: u128,
+        multiplier_bps: u32,
+    ) -> u128 {
+        let effective_balance = self.calculate_effective_balance(user, share_balance, total_share);
+        apply_multiplier(effective_balance, multiplier_bps)
+    }
+
+    pub fn calculate_effective_balance_for_tick_range(
+        &self,
+        user: &Address,
+        share_balance: u128,
+        total_share: u128,
+        tick_current: i32,
+        tick_lower: i32,
+        tick_upper: i32,
+        fee: u32,
+    ) -> u128 {
+        let multiplier = position_multiplier_bps(tick_current, tick_lower, tick_upper, fee);
+        self.calculate_effective_balance_with_multiplier(
+            user,
+            share_balance,
+            total_share,
+            multiplier,
+        )
     }
 
     // ------------------------------------
@@ -311,8 +343,15 @@ impl Manager {
         user_share: u128,
     ) -> u128 {
         let result = self.calculate_reward(start_block, end_block);
-        // scale by user_share / REWARD_PRECISION
-        result * user_share / REWARD_PRECISION
+        // scale by user_share / REWARD_PRECISION using fixed_mul_floor to avoid u128 overflow
+        U256::from_u128(&self.env, result)
+            .fixed_mul_floor(
+                &self.env,
+                &U256::from_u128(&self.env, user_share),
+                &U256::from_u128(&self.env, REWARD_PRECISION),
+            )
+            .to_u128()
+            .expect("reward overflow")
     }
 
     // ------------------------------------
@@ -574,7 +613,15 @@ impl Manager {
     // * `total_shares` - The total shares in the pool.
     fn update_reward_inv(&mut self, accumulated: u128, working_supply: u128) {
         let reward_per_share = if working_supply > 0 {
-            REWARD_PRECISION * accumulated / working_supply
+            // Use fixed_mul_floor to avoid u128 overflow on REWARD_PRECISION * accumulated
+            U256::from_u128(&self.env, REWARD_PRECISION)
+                .fixed_mul_floor(
+                    &self.env,
+                    &U256::from_u128(&self.env, accumulated),
+                    &U256::from_u128(&self.env, working_supply),
+                )
+                .to_u128()
+                .expect("reward_per_share overflow")
         } else {
             0
         };

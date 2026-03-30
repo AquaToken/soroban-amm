@@ -1,6 +1,7 @@
 #![no_std]
 
 mod calculator;
+mod concentrated_pool;
 mod constants;
 mod contract;
 mod errors;

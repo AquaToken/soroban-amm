@@ -1,0 +1,25 @@
+[package]
+name = "soroban-liquidity-pool-concentrated-contract"
+version.workspace = true
+edition = "2021"
+publish = false
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+soroban-fixed-point-math = { workspace = true }
+rewards = { workspace = true }
+liqidity-pool-rewards-gauge = { workspace = true }
+liquidity-pool-validation-errors = { workspace = true }
+access_control = { workspace = true }
+upgrade = { workspace = true }
+utils = { workspace = true }
+paste = { workspace = true }
+liquidity-pool-events = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+utils = { workspace = true, features = ["testutils"] }

@@ -7,11 +7,12 @@ use crate::storage::{
     get_admin_actions_deadline, get_decimals, get_fee, get_future_a, get_future_a_time,
     get_future_fee, get_gauge_future_wasm, get_initial_a, get_initial_a_time, get_is_killed_claim,
     get_is_killed_deposit, get_is_killed_swap, get_plane, get_precision, get_precision_mul,
-    get_protocol_fee_fraction, get_protocol_fees, get_reserves, get_router, get_token_future_wasm,
-    get_tokens, has_plane, put_admin_actions_deadline, put_decimals, put_fee, put_future_a,
-    put_future_a_time, put_future_fee, put_initial_a, put_initial_a_time, put_protocol_fees,
-    put_reserves, put_tokens, set_gauge_future_wasm, set_is_killed_claim, set_is_killed_deposit,
-    set_is_killed_swap, set_plane, set_protocol_fee_fraction, set_router, set_token_future_wasm,
+    get_protocol_fee_fraction, get_protocol_fees, get_reserves, get_reserves_sync_ledger,
+    get_router, get_token_future_wasm, get_tokens, has_plane, put_admin_actions_deadline,
+    put_decimals, put_fee, put_future_a, put_future_a_time, put_future_fee, put_initial_a,
+    put_initial_a_time, put_protocol_fees, put_reserves, put_tokens, set_gauge_future_wasm,
+    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_plane,
+    set_protocol_fee_fraction, set_reserves_sync_ledger, set_router, set_token_future_wasm,
 };
 use crate::token::create_contract;
 use liqidity_pool_rewards_gauge as rewards_gauge;
@@ -779,6 +780,11 @@ impl LiquidityPool {
     // Allows pool to work with tokens that can increase their balances via rebases.
     // negative rebases / fee-on-transfer not supported.
     fn _sync_reserves(e: &Env) {
+        let current_ledger = e.ledger().sequence();
+        if get_reserves_sync_ledger(e) == current_ledger {
+            return;
+        }
+
         let tokens = get_tokens(e);
         let pool_address = e.current_contract_address();
 
@@ -793,6 +799,7 @@ impl LiquidityPool {
         if total_shares == 0 {
             // With no outstanding shares, pool operations start from zero reserves.
             // Ignore any external dust on balances.
+            set_reserves_sync_ledger(e, &current_ledger);
             return;
         }
 
@@ -827,9 +834,9 @@ impl LiquidityPool {
 
         if reserves_changed {
             put_reserves(e, &reserves);
-            // update plane data for every pool update
-            update_plane(e);
         }
+
+        set_reserves_sync_ledger(e, &current_ledger);
     }
 }
 
@@ -1544,8 +1551,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPool {
         rewards_gauge::operations::checkpoint_user(
             &e,
             &user,
-            rewards_manager.get_working_balance(&user, total_shares + mint_amount),
-            rewards_manager.get_working_supply(user_shares + mint_amount),
+            rewards_manager.get_working_balance(&user, user_shares + mint_amount),
+            rewards_manager.get_working_supply(total_shares + mint_amount),
         );
         rewards_manager.update_working_balance(
             &user,
@@ -1995,7 +2002,7 @@ impl UpgradeableContract for LiquidityPool {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        180
+        200
     }
 
     // Get contract type symbolic name
@@ -2262,6 +2269,14 @@ impl RewardsTrait for LiquidityPool {
             ],
         );
 
+        // gauge checkpoint before pool checkpoint
+        rewards_gauge::operations::checkpoint_user(
+            &e,
+            &user,
+            manager.get_working_balance(&user, user_shares),
+            manager.get_working_supply(total_shares),
+        );
+
         // display actual values
         let user_data = manager.checkpoint_user(&user, total_shares, user_shares);
         let pool_data = storage.get_pool_reward_data();
@@ -2304,9 +2319,16 @@ impl RewardsTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        rewards
-            .manager()
-            .get_amount_to_claim(&user, total_shares, user_shares)
+        let mut manager = rewards.manager();
+
+        rewards_gauge::operations::checkpoint_user(
+            &e,
+            &user,
+            manager.get_working_balance(&user, user_shares),
+            manager.get_working_supply(total_shares),
+        );
+
+        manager.get_amount_to_claim(&user, total_shares, user_shares)
     }
 
     // Returns the estimated working balance for a hypothetical resulting user share balance.
@@ -2478,7 +2500,16 @@ impl RewardsTrait for LiquidityPool {
             }
         }
 
-        RewardEvents::new(&e).claim(user, reward_token, reward);
+        RewardEvents::new(&e).claim(user.clone(), reward_token, reward);
+
+        // second gauge checkpoint with updated working balance
+        let manager_after = rewards.manager();
+        rewards_gauge::operations::checkpoint_user(
+            &e,
+            &user,
+            manager_after.get_working_balance(&user, user_shares),
+            manager_after.get_working_supply(total_shares),
+        );
 
         reward
     }

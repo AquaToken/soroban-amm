@@ -15,6 +15,7 @@ tasks:
       - task -d ../rewards_gauge build || exit 1
       - task -d ../liquidity_pool build || exit 1
       - task -d ../liquidity_pool_stableswap build || exit 1
+      - task -d ../liquidity_pool_concentrated build || exit 1
       - task -d ../liquidity_pool_liquidity_calculator build || exit 1
       - stellar contract build --package soroban-liquidity-pool-router-contract
       - stellar contract optimize --wasm ../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm --wasm-out ../contracts/soroban_liquidity_pool_router_contract.wasm

@@ -1,9 +1,16 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::Setup;
+use crate::testutils::{
+    create_contract, create_reward_boost_feed_contract, create_token_contract,
+    deploy_plane_contract, get_token_admin_client, install_liq_pool_hash,
+    install_stableswap_liq_pool_hash, install_token_wasm, liquidity_pool, swap_router, Setup,
+};
+use liquidity_pool_config_storage::testutils::deploy_config_storage;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Vec};
+use soroban_sdk::token::TokenClient as SorobanTokenClient;
+use soroban_sdk::{vec, Address, Env, Vec};
+use utils::test_rebasing_token;
 
 #[test]
 fn test_strict_send() {
@@ -388,7 +395,7 @@ fn test_swap_equivalence_send_receive() {
         .unwrap();
 
     let user_receive = Address::generate(&setup_receive.env);
-    // Mint enough so strict‐receive’s gross_in ≤ this amount
+    // Mint enough so strict‐receive's gross_in ≤ this amount
     setup_receive
         .token_a_admin_client
         .mint(&user_receive, &(in_amount as i128 * 2));
@@ -450,4 +457,99 @@ fn test_swap_equivalence_send_receive() {
             .balance(&setup_receive.fee_destination) as u128,
         fee_receive
     );
+}
+
+/// Regression test: swap_chained_strict_receive in ProviderSwapFee with
+/// a rebasing input token must not panic with InsufficientBalance.
+/// The fix uses balance delta for refund instead of arithmetic surplus.
+#[test]
+fn test_strict_receive_rebasing_token() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.cost_estimate().budget().reset_unlimited();
+
+    let admin = Address::generate(&e);
+    let operator = Address::generate(&e);
+    let fee_destination = Address::generate(&e);
+
+    // Deploy rebasing token (K=103, K_SCALE=100): ceil-rounds on transfer
+    let rebasing_addr = e.register(test_rebasing_token::RebasingToken, ());
+    let rebasing = test_rebasing_token::RebasingTokenClient::new(&e, &rebasing_addr);
+    rebasing.initialize(&admin, &103, &100);
+
+    let token_b = create_token_contract(&e, &admin);
+    let token_b_admin = get_token_admin_client(&e, &token_b.address);
+
+    let tokens = if rebasing_addr < token_b.address {
+        Vec::from_array(&e, [rebasing_addr.clone(), token_b.address.clone()])
+    } else {
+        Vec::from_array(&e, [token_b.address.clone(), rebasing_addr.clone()])
+    };
+
+    // Init router
+    let plane = deploy_plane_contract(&e);
+    let boost_feed = create_reward_boost_feed_contract(&e, &admin);
+    let router = swap_router::Client::new(&e, &e.register(swap_router::WASM, ()));
+    router.init_admin(&admin);
+    router.init_config_storage(&admin, &deploy_config_storage(&e, &admin, &admin).address);
+    router.set_pool_hash(&admin, &install_liq_pool_hash(&e));
+    router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&e));
+    router.set_token_hash(&admin, &install_token_wasm(&e));
+    router.set_reward_token(&admin, &tokens.get(0).unwrap());
+    router.set_pools_plane(&admin, &plane);
+    router.configure_init_pool_payment(
+        &admin,
+        &tokens.get(0).unwrap(),
+        &0,
+        &0,
+        &0,
+        &router.address,
+    );
+    router.set_reward_boost_config(&admin, &tokens.get(0).unwrap(), &boost_feed.address);
+    router.set_protocol_fee_fraction(&admin, &5000);
+
+    // Create pool & deposit liquidity
+    let liq: i128 = 1_000_000_0000000;
+    rebasing.mint(&admin, &liq);
+    token_b_admin.mint(&admin, &liq);
+    let (_, pool_address) = router.init_standard_pool(&admin, &tokens, &30);
+    liquidity_pool::Client::new(&e, &pool_address).deposit(
+        &admin,
+        &Vec::from_array(&e, [liq as u128, liq as u128]),
+        &1,
+    );
+
+    let contract = create_contract(
+        &e,
+        &router.address,
+        &operator,
+        &fee_destination,
+        100,
+        10_000,
+    );
+
+    // Swap: rebasing → token_b via provider fee contract
+    let user = Address::generate(&e);
+    rebasing.mint(&user, &10_0000000);
+
+    let (pool_index, _) = router.get_pools(&tokens).iter().last().unwrap();
+    let token_out = token_b.address.clone();
+    let out_amount: u128 = 1_0000000;
+    let in_max: u128 = 10_0000000;
+
+    let result = contract.swap_chained_strict_receive(
+        &user,
+        &vec![&e, (tokens.clone(), pool_index, token_out.clone())],
+        &rebasing_addr,
+        &out_amount,
+        &in_max,
+        &100,
+    );
+
+    assert!(result > 0 && result < in_max);
+    assert_eq!(
+        SorobanTokenClient::new(&e, &token_out).balance(&user),
+        out_amount as i128
+    );
+    assert_eq!(rebasing.balance(&contract.address), 0);
 }

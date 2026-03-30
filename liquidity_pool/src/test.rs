@@ -19,7 +19,7 @@ use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Map, Symbol, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
-use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump};
+use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump, jump_sequence};
 
 #[test]
 fn test() {
@@ -3841,6 +3841,7 @@ fn test_rebasing_token_increases_withdrawal_amounts() {
     setup
         .token1_admin_client
         .mint(&liq_pool.address, &rebase_amount);
+    jump_sequence(&e, 1);
 
     let withdrawn_amounts = liq_pool.withdraw(&user, &share_amount, &Vec::from_array(&e, [0, 0]));
 
@@ -3888,6 +3889,7 @@ fn test_rebasing_dust_ignored_when_pool_is_empty() {
     setup
         .token2_admin_client
         .mint(&liq_pool.address, &dust_amount);
+    jump_sequence(&e, 1);
 
     // Empty pool guard should prevent syncing this dust into reserves.
     assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [0, 0]));
@@ -3928,6 +3930,7 @@ fn test_rebasing_token_does_not_mint_extra_shares_on_deposit() {
     setup
         .token1_admin_client
         .mint(&liq_pool.address, &rebase_amount);
+    jump_sequence(&e, 1);
 
     let deposit_amount = 100_0000000_u128;
     let shares_before = setup.token_share.balance(&user2) as u128;
@@ -3978,6 +3981,7 @@ fn test_rebasing_token_updates_swap_quotes() {
     setup
         .token1_admin_client
         .mint(&liq_pool.address, &rebase_amount);
+    jump_sequence(&e, 1);
 
     let quote_after = liq_pool.estimate_swap(&1, &0, &swap_amount);
     assert!(quote_after > quote_before);

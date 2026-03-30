@@ -41,6 +41,67 @@ pub(crate) mod config_storage {
     soroban_sdk::contractimport!(file = "../contracts/soroban_config_storage_contract.wasm");
 }
 
+pub(crate) mod concentrated_pool {
+    soroban_sdk::contractimport!(
+        file = "../contracts/soroban_liquidity_pool_concentrated_contract.wasm"
+    );
+}
+
 pub(crate) mod rewards_gauge {
     soroban_sdk::contractimport!(file = "../contracts/soroban_rewards_gauge_contract.wasm");
+}
+
+pub(crate) mod v170 {
+    pub(crate) mod router {
+        soroban_sdk::contractimport!(
+            file = "../contracts_v170/soroban_liquidity_pool_router_contract.wasm"
+        );
+    }
+    pub(crate) mod constant_product_pool {
+        soroban_sdk::contractimport!(
+            file = "../contracts_v170/soroban_liquidity_pool_contract.wasm"
+        );
+    }
+    pub(crate) mod stableswap_pool {
+        soroban_sdk::contractimport!(
+            file = "../contracts_v170/soroban_liquidity_pool_stableswap_contract.wasm"
+        );
+    }
+    pub(crate) mod pool_plane {
+        soroban_sdk::contractimport!(
+            file = "../contracts_v170/soroban_liquidity_pool_plane_contract.wasm"
+        );
+    }
+    pub(crate) mod lp_token {
+        soroban_sdk::contractimport!(file = "../contracts_v170/soroban_token_contract.wasm");
+    }
+    pub(crate) mod boost_feed {
+        soroban_sdk::contractimport!(file = "../contracts_v170/soroban_locker_feed_contract.wasm");
+    }
+    pub(crate) mod config_storage {
+        soroban_sdk::contractimport!(
+            file = "../contracts_v170/soroban_config_storage_contract.wasm"
+        );
+    }
+    pub(crate) mod rewards_gauge {
+        soroban_sdk::contractimport!(
+            file = "../contracts_v170/soroban_rewards_gauge_contract.wasm"
+        );
+    }
+    pub(crate) mod pool_create_fees_collector {
+        soroban_sdk::contractimport!(
+            file = "../contracts_v170/soroban_fees_collector_contract.wasm"
+        );
+    }
+    pub(crate) mod swap_fee {
+        soroban_sdk::contractimport!(
+            file = "../contracts_v170/soroban_liquidity_pool_provider_swap_fee_contract.wasm"
+        );
+    }
+    pub(crate) mod swap_fee_factory {
+        soroban_sdk::contractimport!(
+            file =
+                "../contracts_v170/soroban_liquidity_pool_provider_swap_fee_factory_contract.wasm"
+        );
+    }
 }

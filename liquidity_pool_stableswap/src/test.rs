@@ -21,7 +21,7 @@ use rewards::storage::{PoolRewardsStorageTrait, UserRewardsStorageTrait};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use utils::test_utils::{install_dummy_wasm, jump};
+use utils::test_utils::{install_dummy_wasm, jump, jump_sequence};
 
 fn configure_rewards(
     env: &Env,
@@ -6732,6 +6732,7 @@ fn test_rebasing_token_increases_withdrawal_amounts() {
     let share_amount = setup.token_share.balance(&user) as u128;
     let rebase_amount = 50_0000000_i128;
     token1_admin_client.mint(&liq_pool.address, &rebase_amount);
+    jump_sequence(&e, 1);
 
     let withdrawn_amounts = liq_pool.withdraw(&user, &share_amount, &Vec::from_array(&e, [0, 0]));
 
@@ -6771,6 +6772,7 @@ fn test_rebasing_dust_ignored_when_pool_is_empty() {
     // Simulate rebasing dust on token2 while total_shares == 0.
     let dust_amount = 1_i128;
     token2_admin_client.mint(&liq_pool.address, &dust_amount);
+    jump_sequence(&e, 1);
 
     // Empty pool guard should prevent syncing this dust into reserves.
     assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [0, 0]));
@@ -6850,6 +6852,7 @@ fn test_rebasing_token_does_not_mint_extra_shares_on_deposit() {
 
     let rebase_amount = 50_0000000_i128;
     rebased_token1_admin.mint(&rebased_pool.address, &rebase_amount);
+    jump_sequence(&rebased_env, 1);
 
     let rebased_shares_before = rebased_setup.token_share.balance(&rebased_user2) as u128;
     rebased_pool.deposit(
@@ -6892,6 +6895,7 @@ fn test_rebasing_token_updates_swap_quotes() {
 
     let rebase_amount = 50_0000000_i128;
     token1_admin_client.mint(&liq_pool.address, &rebase_amount);
+    jump_sequence(&e, 1);
 
     let quote_after = liq_pool.estimate_swap(&1, &0, &(swap_amount as u128));
     assert!(quote_after > quote_before);

@@ -24,6 +24,9 @@ pub enum LiquidityPoolRouterError {
     GaugeRewardsDisabledForPool = 319, // rewards are disabled for this pool
     UnsupportedTokensNum = 320,
     PathMustEndWithRewardToken = 321,
+    ConcentratedPoolsOverMax = 322,
+    RewardTokenChangeWhileActive = 323,
+    SwapChainAmountIsZero = 324,
 
     TokensNotSorted = 2002,
     InMaxNotSatisfied = 2020,

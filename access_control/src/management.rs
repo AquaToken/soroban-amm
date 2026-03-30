@@ -3,6 +3,7 @@ use crate::errors::AccessControlError;
 use crate::role::Role;
 use crate::storage::StorageTrait;
 use soroban_sdk::{panic_with_error, Address, Vec};
+use utils::bump::bump_instance;
 
 pub trait SingleAddressManagementTrait {
     fn get_role_safe(&self, role: &Role) -> Option<Address>;
@@ -22,6 +23,7 @@ impl SingleAddressManagementTrait for AccessControl {
         }
 
         let key = self.get_key(role);
+        bump_instance(&self.0);
         self.0.storage().instance().get(&key)
     }
 
@@ -53,6 +55,7 @@ impl SingleAddressManagementTrait for AccessControl {
         }
 
         let key = self.get_key(role);
+        bump_instance(&self.0);
         self.0.storage().instance().set(&key, address);
     }
 }
@@ -64,6 +67,7 @@ impl MultipleAddressesManagementTrait for AccessControl {
         }
 
         let key = self.get_key(role);
+        bump_instance(&self.0);
         self.0
             .storage()
             .instance()
@@ -78,6 +82,7 @@ impl MultipleAddressesManagementTrait for AccessControl {
         }
 
         let key = self.get_key(role);
+        bump_instance(&self.0);
         self.0.storage().instance().set(&key, addresses);
     }
 }
