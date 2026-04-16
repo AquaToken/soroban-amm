@@ -6,13 +6,14 @@ pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
 use crate::bitmap::{
     chunk_bitmap_position, compress_tick, compressed_to_tick, find_next_set_bit, find_prev_set_bit,
-    u256_to_array,
+    u256_to_array, word_bitmap_position,
 };
 use crate::constants::{MAX_TICK, MIN_TICK, TICKS_PER_CHUNK};
 use crate::math::{amount0_delta, amount1_delta, sqrt_ratio_at_tick};
 use crate::storage::{
     chunk_address, get_chunk_bitmap_word, get_fee, get_full_range_liquidity, get_liquidity,
-    get_plane, get_reserve0, get_reserve1, get_slot0, get_tick_spacing, ChunkCache,
+    get_plane, get_reserve0, get_reserve1, get_slot0, get_tick_spacing, get_word_bitmap,
+    ChunkCache,
 };
 use soroban_sdk::{Env, Symbol, Vec, U256};
 
@@ -136,6 +137,36 @@ fn find_initialized_tick(
             }
         }
 
+        // 3. Use L2 word bitmap to find previous non-empty ChunkBitmap word
+        let (l2_word_pos, l2_bit_pos) = word_bitmap_position(bm_word_pos);
+        let prev_l2_word_pos = if l2_bit_pos > 0 {
+            let l2_word = u256_to_array(&get_word_bitmap(e, l2_word_pos));
+            find_prev_set_bit(&l2_word, l2_bit_pos - 1).map(|bit| (l2_word_pos << 8) + bit as i32)
+        } else {
+            None
+        };
+        let target_word_pos_opt = prev_l2_word_pos.or_else(|| {
+            let l2_word = u256_to_array(&get_word_bitmap(e, l2_word_pos - 1));
+            find_prev_set_bit(&l2_word, 255).map(|bit| ((l2_word_pos - 1) << 8) + bit as i32)
+        });
+        if let Some(target_word_pos) = target_word_pos_opt {
+            let target_l1_word = u256_to_array(&get_chunk_bitmap_word(e, target_word_pos));
+            if let Some(found_bit) = find_prev_set_bit(&target_l1_word, 255) {
+                let found_chunk_pos = (target_word_pos << 8) + found_bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in (0..TICKS_PER_CHUNK as u32).rev() {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed >= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         None
     } else {
         // --- Scanning upward ---
@@ -162,6 +193,36 @@ fn find_initialized_tick(
         if bm_bit_pos < 255 {
             if let Some(found_bit) = find_next_set_bit(&word, bm_bit_pos + 1) {
                 let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in 0..TICKS_PER_CHUNK as u32 {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed <= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Use L2 word bitmap to find next non-empty ChunkBitmap word
+        let (l2_word_pos, l2_bit_pos) = word_bitmap_position(bm_word_pos);
+        let next_l2_word_pos = if l2_bit_pos < 255 {
+            let l2_word = u256_to_array(&get_word_bitmap(e, l2_word_pos));
+            find_next_set_bit(&l2_word, l2_bit_pos + 1).map(|bit| (l2_word_pos << 8) + bit as i32)
+        } else {
+            None
+        };
+        let target_word_pos_opt = next_l2_word_pos.or_else(|| {
+            let l2_word = u256_to_array(&get_word_bitmap(e, l2_word_pos + 1));
+            find_next_set_bit(&l2_word, 0).map(|bit| ((l2_word_pos + 1) << 8) + bit as i32)
+        });
+        if let Some(target_word_pos) = target_word_pos_opt {
+            let target_l1_word = u256_to_array(&get_chunk_bitmap_word(e, target_word_pos));
+            if let Some(found_bit) = find_next_set_bit(&target_l1_word, 0) {
+                let found_chunk_pos = (target_word_pos << 8) + found_bit as i32;
                 if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
                     for s in 0..TICKS_PER_CHUNK as u32 {
                         let td = chunk.get(s).unwrap();

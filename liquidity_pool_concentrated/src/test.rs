@@ -4564,3 +4564,91 @@ fn test_plane_update_with_extreme_liquidity() {
     let estimate_rev = setup.pool.estimate_swap(&1, &0, &1_0000000);
     assert!(estimate_rev > 0);
 }
+
+// Regression test for X3: plane find_initialized_tick only scanned 2 of 3 bitmap
+// levels, missing ticks across a ChunkBitmap word boundary.
+//
+// With tick_spacing=10 the L1 word boundary sits at tick=0 (chunk_pos 0/-1). A pool
+// at tick=0 hits bm_bit_pos=0 on the first downward scan — old code skipped L2 and
+// returned None, so positions in word -1 were invisible to the plane snapshot.
+#[test]
+fn test_plane_find_tick_across_chunk_bitmap_word_boundary() {
+    let fee = 30u32;
+    let tick_spacing = 10i32;
+    // tick_spacing=10 puts the L1 word boundary exactly at tick=0
+    let setup = Setup::new_with_config(&TestConfig { fee, tick_spacing });
+    setup.mint_user_tokens(1_000_0000000, 1_000_0000000);
+
+    // Initialize pool at tick 0 (straddles the word boundary)
+    let init_deposit = 1_000u128;
+    setup.pool.deposit_position(
+        &setup.user,
+        &-10,
+        &10,
+        &Vec::from_array(&setup.env, [init_deposit, init_deposit]),
+        &0,
+    );
+
+    // Position in ChunkBitmap word -1: below the boundary, only token1
+    let below_token1 = 50_0000000u128;
+    setup.pool.deposit_position(
+        &setup.user,
+        &-50,
+        &-10,
+        &Vec::from_array(&setup.env, [0u128, below_token1]),
+        &0,
+    );
+
+    // Position in ChunkBitmap word 0: above the boundary, only token0
+    let above_token0 = 50_0000000u128;
+    setup.pool.deposit_position(
+        &setup.user,
+        &10,
+        &50,
+        &Vec::from_array(&setup.env, [above_token0, 0u128]),
+        &0,
+    );
+
+    let plane = pool_plane::Client::new(&setup.env, &setup.plane);
+    let snapshot = plane.get(&Vec::from_array(&setup.env, [setup.pool.address.clone()]));
+    let (_pool_type, init_args, reserves) = snapshot.get_unchecked(0);
+
+    // exact_steps=20 is the internally computed value for tick_spacing=10
+    let exact_steps = 20u128;
+    assert_eq!(
+        init_args,
+        Vec::from_array(
+            &setup.env,
+            [1u128, fee as u128, tick_spacing as u128, exact_steps]
+        )
+    );
+
+    // reserve0 = above_token0 (above-range position) + init_deposit (straddles tick 0)
+    // reserve1 = below_token1 (below-range position) + init_deposit
+    assert_eq!(reserves.get_unchecked(0), above_token0 + init_deposit);
+    assert_eq!(reserves.get_unchecked(1), below_token1 + init_deposit);
+    assert_eq!(reserves.get_unchecked(2), 0); // no full-range position
+    assert_eq!(reserves.get_unchecked(3), 0);
+
+    // Downward steps (0→1) start at index 4.
+    // Step 0 crosses tick -10: the only active liquidity at tick=0 is the tiny init_deposit
+    // position [-10,10], so the crossing amount is close to init_deposit.
+    // Before the L2 fix this step returned 0 because the scan missed word -1 entirely.
+    assert_eq!(reserves.get_unchecked(4), 1001); // step0 in  ≈ init_deposit
+    assert_eq!(reserves.get_unchecked(5), 999); // step0 out ≈ init_deposit
+                                                // Step 1: position [-50,-10] is now active after crossing tick -10;
+                                                // amounts are proportional to below_token1 (~half of it per step).
+    assert_eq!(reserves.get_unchecked(6), 501249436); // step1 in  ≈ below_token1 / 2
+    assert_eq!(reserves.get_unchecked(7), 500247988); // step1 out ≈ below_token1 / 2
+
+    // Upward steps (1→0) start at index 4 + exact_steps*2.
+    let up = (4 + exact_steps * 2) as u32;
+    // Upward steps spread above_token0 over 3 steps before the position [10,50] is exhausted.
+    assert_eq!(reserves.get_unchecked(up), 125282534); // step0 in  ≈ above_token0 / 4
+    assert_eq!(reserves.get_unchecked(up + 1), 125094759); // step0 out
+    assert_eq!(reserves.get_unchecked(up + 2), 250751058); // step1 in  ≈ above_token0 / 2
+    assert_eq!(reserves.get_unchecked(up + 3), 249999968); // step1 out
+    assert_eq!(reserves.get_unchecked(up + 4), 125469587); // step2 in  ≈ above_token0 / 4
+    assert_eq!(reserves.get_unchecked(up + 5), 124906270); // step2 out
+    assert_eq!(reserves.get_unchecked(up + 6), 0); // step3 in — position exhausted
+}
