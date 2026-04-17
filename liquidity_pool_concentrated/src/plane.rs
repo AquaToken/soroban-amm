@@ -535,9 +535,159 @@ pub fn update_plane(e: &Env) {
 #[cfg(test)]
 mod tests {
     use super::{
-        exact_tick_steps_for_spacing, full_range_liquidity_net_adjustment,
+        exact_tick_steps_for_spacing, find_initialized_tick, full_range_liquidity_net_adjustment,
         full_range_ticks_for_spacing,
     };
+    use crate::bitmap::{set_bit, u256_from_array};
+    use crate::storage::{
+        get_tick_chunk, new_empty_chunk, set_chunk_bitmap_word, set_tick_chunk, set_word_bitmap,
+        ChunkCache,
+    };
+    use crate::types::TickData;
+    use soroban_sdk::{contract, Env, U256};
+
+    // Minimal host used to scope `as_contract` — needed so the persistent storage
+    // writes in `set_tick_chunk` / `set_chunk_bitmap_word` / `set_word_bitmap` have
+    // a contract to attach to. No methods are required for the tests.
+    #[contract]
+    struct Noop;
+
+    // Helper: write a TickData at (chunk_pos, slot) with the given sentinel `net`
+    // and a non-zero `gross` so `td.2 > 0` marks the slot as initialized.
+    fn seed_tick(e: &Env, chunk_pos: i32, slot: u32, net: i128) {
+        let mut chunk = new_empty_chunk(e);
+        let zero = U256::from_u32(e, 0);
+        chunk.set(slot, TickData(zero.clone(), zero, 1, net));
+        set_tick_chunk(e, chunk_pos, &chunk);
+    }
+
+    // Helper: set a single bit in a 256-bit bitmap word and write it to storage
+    // under the ChunkBitmap(word_pos) key.
+    fn seed_chunk_bitmap_bit(e: &Env, word_pos: i32, bit_pos: u32) {
+        let mut arr = [0u8; 32];
+        set_bit(&mut arr, bit_pos, true);
+        set_chunk_bitmap_word(e, word_pos, &u256_from_array(e, &arr));
+    }
+
+    // Helper: set a single bit in a 256-bit bitmap word and write it to storage
+    // under the WordBitmap(l2_word_pos) key.
+    fn seed_word_bitmap_bit(e: &Env, l2_word_pos: i32, bit_pos: u32) {
+        let mut arr = [0u8; 32];
+        set_bit(&mut arr, bit_pos, true);
+        set_word_bitmap(e, l2_word_pos, &u256_from_array(e, &arr));
+    }
+
+    // Test D — downward / lte=true. Cursor at compressed=0 naturally exercises
+    // the `l2_bit == 0` guard case. A target chain is seeded in the adjacent L2
+    // word (chunk -1, slot 15). A decoy chain is seeded at chunk 255 slot 15 with
+    // WB(0) bit 0 — the cursor's own L2 bit — so a guard-less 3-level
+    // implementation that lets `l2_bit - 1` wrap to u32::MAX would route to the
+    // decoy instead of the target.
+    //
+    // * Current 2-level code: returns None (no L2 step).
+    // * Guard-less 3-level code: returns Some((819_000, decoy_net_d)).
+    // * Correctly-guarded 3-level code: returns Some((-200, target_net_d)).
+    #[test]
+    fn test_find_initialized_tick_l2_downward_guarded() {
+        let e = Env::default();
+        let contract_id = e.register(Noop {}, ());
+
+        let target_net_d: i128 = -0xAAAA_AAAAi128;
+        let decoy_net_d: i128 = 0x1111_1111i128;
+        let spacing: i32 = 200;
+        let compressed: i32 = 0;
+        let limit_compressed: i32 = -1;
+
+        e.as_contract(&contract_id, || {
+            // Target: chunk_pos=-1 slot=15, CB(-1) bit 255, WB(-1) bit 255.
+            seed_tick(&e, -1, 15, target_net_d);
+            seed_chunk_bitmap_bit(&e, -1, 255);
+            seed_word_bitmap_bit(&e, -1, 255);
+
+            // Decoy: chunk_pos=255 slot=15, CB(0) bit 255, WB(0) bit 0
+            // (the cursor's own L2 bit — only reachable via an unguarded
+            // `l2_bit - 1` underflow).
+            seed_tick(&e, 255, 15, decoy_net_d);
+            seed_chunk_bitmap_bit(&e, 0, 255);
+            seed_word_bitmap_bit(&e, 0, 0);
+
+            let mut cc = ChunkCache::new(&e);
+            let result =
+                find_initialized_tick(&e, compressed, limit_compressed, spacing, true, &mut cc);
+
+            // Expected: Some((-200, target_net_d)). The tick is
+            // compressed_to_tick(-1, 200) = -200.
+            assert_eq!(result, Some((-200i32, target_net_d)));
+
+            // Control: seeded chunks are not mutated by the read path.
+            let target_chunk = get_tick_chunk(&e, -1).expect("target chunk seeded");
+            let target_slot = target_chunk.get(15).unwrap();
+            assert_eq!(target_slot.2, 1);
+            assert_eq!(target_slot.3, target_net_d);
+
+            let decoy_chunk = get_tick_chunk(&e, 255).expect("decoy chunk seeded");
+            let decoy_slot = decoy_chunk.get(15).unwrap();
+            assert_eq!(decoy_slot.2, 1);
+            assert_eq!(decoy_slot.3, decoy_net_d);
+        });
+    }
+
+    // Test U — upward / lte=false. Cursor at compressed=-17 → compressed+1=-16 →
+    // chunk_pos=-1. Both `chunk_bitmap_position(-1)` and
+    // `word_bitmap_position(-1)` produce bit 255 (via arithmetic `>>` and
+    // two's-complement `& 255`). This naturally exercises the `l2_bit == 255`
+    // guard case; `bm_bit_pos == 255` simultaneously makes the L1 scan
+    // unreachable. The target chain lives in the adjacent L2 word (chunk 0 slot
+    // 0); the decoy chain is anchored at WB(-1) bit 255 — the cursor's own L2
+    // bit — so a guard-less 3-level implementation that computes `l2_bit + 1`
+    // (clamped to 255) would re-scan the current L2 word and hit the decoy.
+    //
+    // * Current 2-level code: returns None (no L2 step).
+    // * Guard-less 3-level code: returns Some((-819_200, decoy_net_u)).
+    // * Correctly-guarded 3-level code: returns Some((0, target_net_u)).
+    #[test]
+    fn test_find_initialized_tick_l2_upward_guarded() {
+        let e = Env::default();
+        let contract_id = e.register(Noop {}, ());
+
+        let target_net_u: i128 = 0xBBBB_BBBBi128;
+        let decoy_net_u: i128 = 0x2222_2222i128;
+        let spacing: i32 = 200;
+        let compressed: i32 = -17;
+        let limit_compressed: i32 = 0;
+
+        e.as_contract(&contract_id, || {
+            // Target: chunk_pos=0 slot=0, CB(0) bit 0, WB(0) bit 0.
+            seed_tick(&e, 0, 0, target_net_u);
+            seed_chunk_bitmap_bit(&e, 0, 0);
+            seed_word_bitmap_bit(&e, 0, 0);
+
+            // Decoy: chunk_pos=-256 slot=0, CB(-1) bit 0, WB(-1) bit 255
+            // (the cursor's own L2 bit — only reachable via a guard-less
+            // `find_next_set_bit(WB(-1), (255 + 1).min(255) = 255)`).
+            seed_tick(&e, -256, 0, decoy_net_u);
+            seed_chunk_bitmap_bit(&e, -1, 0);
+            seed_word_bitmap_bit(&e, -1, 255);
+
+            let mut cc = ChunkCache::new(&e);
+            let result =
+                find_initialized_tick(&e, compressed, limit_compressed, spacing, false, &mut cc);
+
+            // Expected: Some((0, target_net_u)).
+            assert_eq!(result, Some((0i32, target_net_u)));
+
+            // Control: seeded chunks are not mutated by the read path.
+            let target_chunk = get_tick_chunk(&e, 0).expect("target chunk seeded");
+            let target_slot = target_chunk.get(0).unwrap();
+            assert_eq!(target_slot.2, 1);
+            assert_eq!(target_slot.3, target_net_u);
+
+            let decoy_chunk = get_tick_chunk(&e, -256).expect("decoy chunk seeded");
+            let decoy_slot = decoy_chunk.get(0).unwrap();
+            assert_eq!(decoy_slot.2, 1);
+            assert_eq!(decoy_slot.3, decoy_net_u);
+        });
+    }
 
     #[test]
     fn test_exact_tick_steps_for_spacing_bounds() {
