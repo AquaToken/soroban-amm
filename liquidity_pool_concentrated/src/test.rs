@@ -4564,3 +4564,163 @@ fn test_plane_update_with_extreme_liquidity() {
     let estimate_rev = setup.pool.estimate_swap(&1, &0, &1_0000000);
     assert!(estimate_rev > 0);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// X3: plane tick search must consult the L2 WordBitmap across L1 word boundaries
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// These two tests drive `plane::find_initialized_tick` directly through the
+// pool's storage context. Each constructs a fresh pool with only one non-full-
+// range position so the chunk/word layout is known exactly, then asserts the
+// helper's return for three `limit_compressed` values that together pin down
+// both the L2 traversal and the limit guard.
+
+#[test]
+fn test_plane_find_tick_across_chunk_bitmap_word_boundary_lte() {
+    let spacing = 10i32;
+    let setup = Setup::new_with_config(&TestConfig {
+        fee: 30,
+        tick_spacing: spacing,
+    });
+    setup.mint_user_tokens(2_000_0000000, 2_000_0000000);
+
+    let large_full_range = 1_000_0000000u128;
+    setup.pool.deposit_position(
+        &setup.user,
+        &-887_270,
+        &887_270,
+        &Vec::from_array(&setup.env, [large_full_range, large_full_range]),
+        &0,
+    );
+    // Position lower tick -10 → compressed=-1, chunk_pos=-1 (L1 word_pos=-1);
+    // chunk 0 stays empty.
+    let lower_tick = -20;
+    let upper_tick = -10;
+    setup.pool.deposit_position(
+        &setup.user,
+        &lower_tick,
+        &upper_tick,
+        &Vec::from_array(&setup.env, [0u128, 100_0000000u128]),
+        &0,
+    );
+
+    setup.env.as_contract(&setup.pool.address, || {
+        let expected = crate::storage::get_tick(&setup.env, upper_tick, spacing).liquidity_net;
+        let target_compressed = upper_tick / spacing; // -1
+
+        // (a) unconstrained limit — L2 walk lands on chunk -1, slot 15.
+        let mut cc = crate::storage::ChunkCache::new(&setup.env);
+        assert_eq!(
+            crate::plane::find_initialized_tick(&setup.env, 0, i32::MIN, spacing, true, &mut cc),
+            Some((upper_tick, expected))
+        );
+
+        // (b) limit equal to target — inclusive lower bound.
+        let mut cc = crate::storage::ChunkCache::new(&setup.env);
+        assert_eq!(
+            crate::plane::find_initialized_tick(
+                &setup.env,
+                0,
+                target_compressed,
+                spacing,
+                true,
+                &mut cc
+            ),
+            Some((upper_tick, expected))
+        );
+
+        // (c) limit one above target — candidate rejected, L2 branch bails.
+        let mut cc = crate::storage::ChunkCache::new(&setup.env);
+        assert_eq!(
+            crate::plane::find_initialized_tick(
+                &setup.env,
+                0,
+                target_compressed + 1,
+                spacing,
+                true,
+                &mut cc
+            ),
+            None
+        );
+    });
+}
+
+#[test]
+fn test_plane_find_tick_across_chunk_bitmap_word_boundary_gte() {
+    let spacing = 10i32;
+    let setup = Setup::new_with_config(&TestConfig {
+        fee: 30,
+        tick_spacing: spacing,
+    });
+    setup.mint_user_tokens(2_000_0000000, 2_000_0000000);
+
+    let large_full_range = 1_000_0000000u128;
+    setup.pool.deposit_position(
+        &setup.user,
+        &-887_270,
+        &887_270,
+        &Vec::from_array(&setup.env, [large_full_range, large_full_range]),
+        &0,
+    );
+    // Position lower tick 0 → compressed=0, chunk_pos=0 (L1 word_pos=0);
+    // chunk -1 stays empty.
+    let lower_tick = 0;
+    let upper_tick = 20;
+    setup.pool.deposit_position(
+        &setup.user,
+        &lower_tick,
+        &upper_tick,
+        &Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]),
+        &0,
+    );
+
+    setup.env.as_contract(&setup.pool.address, || {
+        let expected = crate::storage::get_tick(&setup.env, lower_tick, spacing).liquidity_net;
+        // Cursor at compressed=-17 → start_compressed=-16 → chunk_pos=-1,
+        // bm_bit_pos=255. Steps 1+2 miss; step 3 must walk L2 to word 0.
+        let cursor_compressed = -17;
+        let target_compressed = lower_tick / spacing; // 0
+
+        // (a) unconstrained limit.
+        let mut cc = crate::storage::ChunkCache::new(&setup.env);
+        assert_eq!(
+            crate::plane::find_initialized_tick(
+                &setup.env,
+                cursor_compressed,
+                i32::MAX,
+                spacing,
+                false,
+                &mut cc
+            ),
+            Some((lower_tick, expected))
+        );
+
+        // (b) limit equal to target — inclusive upper bound.
+        let mut cc = crate::storage::ChunkCache::new(&setup.env);
+        assert_eq!(
+            crate::plane::find_initialized_tick(
+                &setup.env,
+                cursor_compressed,
+                target_compressed,
+                spacing,
+                false,
+                &mut cc
+            ),
+            Some((lower_tick, expected))
+        );
+
+        // (c) limit one below target — candidate rejected.
+        let mut cc = crate::storage::ChunkCache::new(&setup.env);
+        assert_eq!(
+            crate::plane::find_initialized_tick(
+                &setup.env,
+                cursor_compressed,
+                target_compressed - 1,
+                spacing,
+                false,
+                &mut cc
+            ),
+            None
+        );
+    });
+}
