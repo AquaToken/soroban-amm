@@ -6,13 +6,14 @@ pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
 use crate::bitmap::{
     chunk_bitmap_position, compress_tick, compressed_to_tick, find_next_set_bit, find_prev_set_bit,
-    u256_to_array,
+    u256_to_array, word_bitmap_position,
 };
 use crate::constants::{MAX_TICK, MIN_TICK, TICKS_PER_CHUNK};
 use crate::math::{amount0_delta, amount1_delta, sqrt_ratio_at_tick};
 use crate::storage::{
     chunk_address, get_chunk_bitmap_word, get_fee, get_full_range_liquidity, get_liquidity,
-    get_plane, get_reserve0, get_reserve1, get_slot0, get_tick_spacing, ChunkCache,
+    get_plane, get_reserve0, get_reserve1, get_slot0, get_tick_spacing, get_word_bitmap,
+    ChunkCache,
 };
 use soroban_sdk::{Env, Symbol, Vec, U256};
 
@@ -84,13 +85,102 @@ fn push_empty_steps(out: &mut Vec<u128>, steps: u32) {
     }
 }
 
-// Two-level chunk-based tick search.
+fn scan_chunk_for_init(
+    e: &Env,
+    cc: &mut ChunkCache,
+    chunk_pos: i32,
+    start_slot: u32,
+    lte: bool,
+    limit_compressed: i32,
+    spacing: i32,
+) -> Option<(i32, i128)> {
+    let chunk = cc.get_chunk(e, chunk_pos)?;
+
+    if lte {
+        for s in (0..=start_slot).rev() {
+            let td = chunk.get(s).unwrap();
+            if td.2 > 0 {
+                let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
+                if found_compressed >= limit_compressed {
+                    return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                }
+            }
+        }
+    } else {
+        for s in start_slot..TICKS_PER_CHUNK as u32 {
+            let td = chunk.get(s).unwrap();
+            if td.2 > 0 {
+                let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
+                if found_compressed <= limit_compressed {
+                    return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn adjacent_chunk_in_l1_word(e: &Env, bm_word_pos: i32, bm_bit_pos: u32, lte: bool) -> Option<i32> {
+    let word = u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
+    let found_bit = if lte && bm_bit_pos > 0 {
+        find_prev_set_bit(&word, bm_bit_pos - 1)
+    } else if !lte && bm_bit_pos < 255 {
+        find_next_set_bit(&word, bm_bit_pos + 1)
+    } else {
+        None
+    }?;
+
+    Some((bm_word_pos << 8) + found_bit as i32)
+}
+
+fn adjacent_bitmap_word(e: &Env, current_word_pos: i32, lte: bool) -> Option<i32> {
+    let (l2_pos, l2_bit) = word_bitmap_position(current_word_pos);
+
+    let search = |word_pos: i32, from: u32| -> Option<i32> {
+        let word = u256_to_array(&get_word_bitmap(e, word_pos));
+        let found = if lte {
+            find_prev_set_bit(&word, from)
+        } else {
+            find_next_set_bit(&word, from)
+        }?;
+        Some((word_pos << 8) + found as i32)
+    };
+
+    let adjacent = if lte && l2_bit > 0 {
+        search(l2_pos, l2_bit - 1)
+    } else if !lte && l2_bit < 255 {
+        search(l2_pos, l2_bit + 1)
+    } else {
+        None
+    };
+    if adjacent.is_some() {
+        return adjacent;
+    }
+
+    let l2_adj = if lte { l2_pos - 1 } else { l2_pos + 1 };
+    let from = if lte { 255 } else { 0 };
+    search(l2_adj, from)
+}
+
+fn extreme_chunk_in_l1_word(e: &Env, word_pos: i32, lte: bool) -> Option<i32> {
+    let word = u256_to_array(&get_chunk_bitmap_word(e, word_pos));
+    let found_bit = if lte {
+        find_prev_set_bit(&word, 255)
+    } else {
+        find_next_set_bit(&word, 0)
+    }?;
+
+    Some((word_pos << 8) + found_bit as i32)
+}
+
+// Three-level chunk-based tick search.
 // For lte (zero_for_one): scans from `compressed` downward toward `limit_compressed`.
 // For !lte (one_for_zero): scans from `compressed + 1` upward toward `limit_compressed`.
 // Returns (tick, liquidity_net) of the first initialized tick found, or None.
 // Since the chunk is already loaded during the search, liquidity_net is returned directly
 // to avoid a redundant storage read.
-fn find_initialized_tick(
+pub(crate) fn find_initialized_tick(
     e: &Env,
     compressed: i32,
     limit_compressed: i32,
@@ -98,86 +188,38 @@ fn find_initialized_tick(
     lte: bool,
     cc: &mut ChunkCache,
 ) -> Option<(i32, i128)> {
-    if lte {
-        // --- Scanning downward ---
-        let (chunk_pos, slot) = chunk_address(compressed);
-
-        // 1. Check current chunk: scan slots [0..=slot] downward
-        if let Some(chunk) = cc.get_chunk(e, chunk_pos) {
-            for s in (0..=slot).rev() {
-                let td = chunk.get(s).unwrap();
-                if td.2 > 0 {
-                    let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
-                    if found_compressed >= limit_compressed {
-                        return Some((compressed_to_tick(found_compressed, spacing), td.3));
-                    }
-                }
-            }
-        }
-
-        // 2. Use chunk bitmap to find previous chunk with initialized ticks
-        let (bm_word_pos, bm_bit_pos) = chunk_bitmap_position(chunk_pos);
-        let word = u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
-
-        if bm_bit_pos > 0 {
-            if let Some(found_bit) = find_prev_set_bit(&word, bm_bit_pos - 1) {
-                let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
-                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
-                    for s in (0..TICKS_PER_CHUNK as u32).rev() {
-                        let td = chunk.get(s).unwrap();
-                        if td.2 > 0 {
-                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
-                            if found_compressed >= limit_compressed {
-                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        None
+    let start = if lte {
+        compressed
     } else {
-        // --- Scanning upward ---
-        let start_compressed = compressed.saturating_add(1);
-        let (chunk_pos, slot) = chunk_address(start_compressed);
+        compressed.saturating_add(1)
+    };
+    let (chunk_pos, slot) = chunk_address(start);
 
-        // 1. Check current chunk: scan slots [slot..TICKS_PER_CHUNK) upward
-        if let Some(chunk) = cc.get_chunk(e, chunk_pos) {
-            for s in slot..TICKS_PER_CHUNK as u32 {
-                let td = chunk.get(s).unwrap();
-                if td.2 > 0 {
-                    let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
-                    if found_compressed <= limit_compressed {
-                        return Some((compressed_to_tick(found_compressed, spacing), td.3));
-                    }
-                }
-            }
-        }
-
-        // 2. Use chunk bitmap to find next chunk with initialized ticks
-        let (bm_word_pos, bm_bit_pos) = chunk_bitmap_position(chunk_pos);
-        let word = u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
-
-        if bm_bit_pos < 255 {
-            if let Some(found_bit) = find_next_set_bit(&word, bm_bit_pos + 1) {
-                let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
-                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
-                    for s in 0..TICKS_PER_CHUNK as u32 {
-                        let td = chunk.get(s).unwrap();
-                        if td.2 > 0 {
-                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
-                            if found_compressed <= limit_compressed {
-                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        None
+    if let Some(hit) = scan_chunk_for_init(e, cc, chunk_pos, slot, lte, limit_compressed, spacing) {
+        return Some(hit);
     }
+
+    let (bm_word_pos, bm_bit_pos) = chunk_bitmap_position(chunk_pos);
+    if let Some(adj) = adjacent_chunk_in_l1_word(e, bm_word_pos, bm_bit_pos, lte) {
+        let extreme = if lte { TICKS_PER_CHUNK as u32 - 1 } else { 0 };
+        if let Some(hit) = scan_chunk_for_init(e, cc, adj, extreme, lte, limit_compressed, spacing)
+        {
+            return Some(hit);
+        }
+    }
+
+    if let Some(target_word_pos) = adjacent_bitmap_word(e, bm_word_pos, lte) {
+        if let Some(chunk) = extreme_chunk_in_l1_word(e, target_word_pos, lte) {
+            let extreme = if lte { TICKS_PER_CHUNK as u32 - 1 } else { 0 };
+            if let Some(hit) =
+                scan_chunk_for_init(e, cc, chunk, extreme, lte, limit_compressed, spacing)
+            {
+                return Some(hit);
+            }
+        }
+    }
+
+    None
 }
 
 // Cumulative boundary count at step `i`: triangular number (i+1)*(i+2)/2.

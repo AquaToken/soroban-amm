@@ -2,6 +2,8 @@
 extern crate std;
 
 use crate::math::wrapping_sub_u256;
+use crate::plane::find_initialized_tick;
+use crate::storage::ChunkCache;
 use crate::testutils::{
     assert_claim_fees_event, count_claim_fees_events, create_pool_contract, create_token_contract,
     deploy_rewards_gauge, get_token_admin_client, Setup, TestConfig,
@@ -3611,6 +3613,64 @@ fn test_bitmap_word_boundary_crossing() {
         "swap should reach position in [-50,-10], tick={}",
         slot2.tick
     );
+}
+
+#[test]
+fn test_plane_find_initialized_tick_l2_downward_unconstrained() {
+    let setup = Setup::new_with_config(&TestConfig {
+        fee: 30,
+        tick_spacing: 10,
+    });
+    setup.mint_user_tokens(2_000_0000000, 2_000_0000000);
+
+    let seed = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, seed_liq) = setup.pool.deposit(&setup.user, &seed, &0);
+    assert!(seed_liq > 0);
+
+    let narrow = Vec::from_array(&setup.env, [0u128, 100_0000000u128]);
+    let (_, narrow_liq) = setup
+        .pool
+        .deposit_position(&setup.user, &-20, &-10, &narrow, &0);
+    assert!(narrow_liq > 0);
+
+    let tick_minus_10 = setup.pool.get_tick(&-10);
+    assert!(tick_minus_10.liquidity_gross > 0);
+
+    let actual = setup.env.as_contract(&setup.pool.address, || {
+        let mut cc = ChunkCache::new(&setup.env);
+        find_initialized_tick(&setup.env, 0, i32::MIN, 10, true, &mut cc)
+    });
+
+    assert_eq!(actual, Some((-10, tick_minus_10.liquidity_net)));
+}
+
+#[test]
+fn test_plane_find_initialized_tick_l2_upward_unconstrained() {
+    let setup = Setup::new_with_config(&TestConfig {
+        fee: 30,
+        tick_spacing: 10,
+    });
+    setup.mint_user_tokens(2_000_0000000, 2_000_0000000);
+
+    let seed = Vec::from_array(&setup.env, [100_0000000u128, 100_0000000u128]);
+    let (_, seed_liq) = setup.pool.deposit(&setup.user, &seed, &0);
+    assert!(seed_liq > 0);
+
+    let narrow = Vec::from_array(&setup.env, [100_0000000u128, 0u128]);
+    let (_, narrow_liq) = setup
+        .pool
+        .deposit_position(&setup.user, &0, &20, &narrow, &0);
+    assert!(narrow_liq > 0);
+
+    let tick_zero = setup.pool.get_tick(&0);
+    assert!(tick_zero.liquidity_gross > 0);
+
+    let actual = setup.env.as_contract(&setup.pool.address, || {
+        let mut cc = ChunkCache::new(&setup.env);
+        find_initialized_tick(&setup.env, -17, i32::MAX, 10, false, &mut cc)
+    });
+
+    assert_eq!(actual, Some((0, tick_zero.liquidity_net)));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
