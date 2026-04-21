@@ -85,7 +85,7 @@ fn push_empty_steps(out: &mut Vec<u128>, steps: u32) {
     }
 }
 
-// Three-level chunk-based tick search.
+// Two-level chunk-based tick search.
 // For lte (zero_for_one): scans from `compressed` downward toward `limit_compressed`.
 // For !lte (one_for_zero): scans from `compressed + 1` upward toward `limit_compressed`.
 // Returns (tick, liquidity_net) of the first initialized tick found, or None.
@@ -99,101 +99,150 @@ fn find_initialized_tick(
     lte: bool,
     cc: &mut ChunkCache,
 ) -> Option<(i32, i128)> {
-    let start_compressed = if lte {
-        compressed
-    } else {
-        compressed.saturating_add(1)
-    };
-    let full_chunk_end = TICKS_PER_CHUNK as u32;
-    let in_range = |found_compressed: i32| {
-        if lte {
-            found_compressed >= limit_compressed
-        } else {
-            found_compressed <= limit_compressed
+    if lte {
+        // --- Scanning downward ---
+        let (chunk_pos, slot) = chunk_address(compressed);
+
+        // 1. Check current chunk: scan slots [0..=slot] downward
+        if let Some(chunk) = cc.get_chunk(e, chunk_pos) {
+            for s in (0..=slot).rev() {
+                let td = chunk.get(s).unwrap();
+                if td.2 > 0 {
+                    let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
+                    if found_compressed >= limit_compressed {
+                        return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                    }
+                }
+            }
         }
-    };
-    let bm_find = |word: &[u8; 32], from: u32| {
-        if lte {
-            find_prev_set_bit(word, from)
-        } else {
-            find_next_set_bit(word, from)
-        }
-    };
-    let bm_scan_bit = |bm_bit_pos: u32| {
-        if lte {
-            bm_bit_pos.checked_sub(1)
-        } else if bm_bit_pos < 255 {
-            Some(bm_bit_pos + 1)
-        } else {
-            None
-        }
-    };
-    let l2_adjacent_word = |l2_pos: i32| if lte { l2_pos - 1 } else { l2_pos + 1 };
-    let l2_extreme_from = if lte { 255 } else { 0 };
-    let mut scan_chunk =
-        |chunk_pos: i32, start_slot: u32, end_slot: u32, stop_on_out_of_range: bool| {
-            let chunk = cc.get_chunk(e, chunk_pos)?;
-            if lte {
-                for s in (start_slot..end_slot).rev() {
-                    let td = chunk.get(s).unwrap();
-                    if td.2 > 0 {
-                        let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
-                        if in_range(found_compressed) {
-                            return Some((compressed_to_tick(found_compressed, spacing), td.3));
-                        }
-                        if stop_on_out_of_range {
-                            return None;
+
+        // 2. Use chunk bitmap to find previous chunk with initialized ticks
+        let (bm_word_pos, bm_bit_pos) = chunk_bitmap_position(chunk_pos);
+        let word = u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
+
+        if bm_bit_pos > 0 {
+            if let Some(found_bit) = find_prev_set_bit(&word, bm_bit_pos - 1) {
+                let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in (0..TICKS_PER_CHUNK as u32).rev() {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed >= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
                         }
                     }
                 }
-            } else {
-                for s in start_slot..end_slot {
-                    let td = chunk.get(s).unwrap();
-                    if td.2 > 0 {
-                        let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
-                        if in_range(found_compressed) {
-                            return Some((compressed_to_tick(found_compressed, spacing), td.3));
-                        }
-                        if stop_on_out_of_range {
+            }
+        }
+
+        // 3. Use L2 word bitmap to find the adjacent ChunkBitmap word
+        let (l2_pos, l2_bit) = word_bitmap_position(bm_word_pos);
+        let l2_search = |l2_p: i32, from: u32| -> Option<i32> {
+            let l2_arr = u256_to_array(&get_word_bitmap(e, l2_p));
+            find_prev_set_bit(&l2_arr, from).map(|bit| (l2_p << 8) + bit as i32)
+        };
+        let adj_bm_word = if l2_bit > 0 {
+            l2_search(l2_pos, l2_bit - 1)
+        } else {
+            None
+        }
+        .or_else(|| l2_search(l2_pos - 1, 255));
+
+        if let Some(adj_word_pos) = adj_bm_word {
+            let bm_arr = u256_to_array(&get_chunk_bitmap_word(e, adj_word_pos));
+            if let Some(bit) = find_prev_set_bit(&bm_arr, 255) {
+                let found_chunk_pos = (adj_word_pos << 8) + bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in (0..TICKS_PER_CHUNK as u32).rev() {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed >= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
                             return None;
                         }
                     }
                 }
             }
-            None
-        };
-    let find_bitmap_chunk = |bm_word_pos: i32, from: Option<u32>| {
-        let found_bit = bm_find(
-            &u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos)),
-            from?,
-        )?;
-        Some((bm_word_pos << 8) + found_bit as i32)
-    };
-
-    let (chunk_pos, slot) = chunk_address(start_compressed);
-    let current_start = if lte { 0 } else { slot };
-    let current_end = if lte { slot + 1 } else { full_chunk_end };
-    if let Some(found) = scan_chunk(chunk_pos, current_start, current_end, false) {
-        return Some(found);
-    }
-
-    let (bm_word_pos, bm_bit_pos) = chunk_bitmap_position(chunk_pos);
-    if let Some(found_chunk_pos) = find_bitmap_chunk(bm_word_pos, bm_scan_bit(bm_bit_pos)) {
-        if let Some(found) = scan_chunk(found_chunk_pos, 0, full_chunk_end, false) {
-            return Some(found);
         }
+
+        None
+    } else {
+        // --- Scanning upward ---
+        let start_compressed = compressed.saturating_add(1);
+        let (chunk_pos, slot) = chunk_address(start_compressed);
+
+        // 1. Check current chunk: scan slots [slot..TICKS_PER_CHUNK) upward
+        if let Some(chunk) = cc.get_chunk(e, chunk_pos) {
+            for s in slot..TICKS_PER_CHUNK as u32 {
+                let td = chunk.get(s).unwrap();
+                if td.2 > 0 {
+                    let found_compressed = chunk_pos * TICKS_PER_CHUNK + s as i32;
+                    if found_compressed <= limit_compressed {
+                        return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                    }
+                }
+            }
+        }
+
+        // 2. Use chunk bitmap to find next chunk with initialized ticks
+        let (bm_word_pos, bm_bit_pos) = chunk_bitmap_position(chunk_pos);
+        let word = u256_to_array(&get_chunk_bitmap_word(e, bm_word_pos));
+
+        if bm_bit_pos < 255 {
+            if let Some(found_bit) = find_next_set_bit(&word, bm_bit_pos + 1) {
+                let found_chunk_pos = (bm_word_pos << 8) + found_bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in 0..TICKS_PER_CHUNK as u32 {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed <= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Use L2 word bitmap to find the adjacent ChunkBitmap word
+        let (l2_pos, l2_bit) = word_bitmap_position(bm_word_pos);
+        let l2_search = |l2_p: i32, from: u32| -> Option<i32> {
+            let l2_arr = u256_to_array(&get_word_bitmap(e, l2_p));
+            find_next_set_bit(&l2_arr, from).map(|bit| (l2_p << 8) + bit as i32)
+        };
+        let adj_bm_word = if l2_bit < 255 {
+            l2_search(l2_pos, l2_bit + 1)
+        } else {
+            None
+        }
+        .or_else(|| l2_search(l2_pos + 1, 0));
+
+        if let Some(adj_word_pos) = adj_bm_word {
+            let bm_arr = u256_to_array(&get_chunk_bitmap_word(e, adj_word_pos));
+            if let Some(bit) = find_next_set_bit(&bm_arr, 0) {
+                let found_chunk_pos = (adj_word_pos << 8) + bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in 0..TICKS_PER_CHUNK as u32 {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed <= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
-
-    let (l2_pos, l2_bit) = word_bitmap_position(bm_word_pos);
-    let l2_search = |l2_p: i32, from: u32| {
-        bm_find(&u256_to_array(&get_word_bitmap(e, l2_p)), from).map(|bit| (l2_p << 8) + bit as i32)
-    };
-    let adj_bm_word = bm_scan_bit(l2_bit)
-        .and_then(|from| l2_search(l2_pos, from))
-        .or_else(|| l2_search(l2_adjacent_word(l2_pos), l2_extreme_from));
-
-    let adj_chunk_pos = find_bitmap_chunk(adj_bm_word?, Some(l2_extreme_from))?;
-    scan_chunk(adj_chunk_pos, 0, full_chunk_end, true)
 }
 
 // Cumulative boundary count at step `i`: triangular number (i+1)*(i+2)/2.
