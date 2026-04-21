@@ -206,7 +206,7 @@ impl ConcentratedLiquidityPool {
     // Three-level search: scan within current chunk, then across chunks via chunk bitmap,
     // then across bitmap words via L2 word bitmap.
     // Returns (next_tick, initialized).
-    pub(super) fn find_initialized_tick_in_word(
+    pub(crate) fn find_initialized_tick_in_word(
         e: &Env,
         tick: i32,
         spacing: i32,

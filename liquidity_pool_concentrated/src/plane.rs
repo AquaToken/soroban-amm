@@ -702,4 +702,70 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn test_find_initialized_tick_equivalence() {
+        let run_case = |current_tick: i32, init_tick: i32, lte: bool, liquidity_net: i128| {
+            let e = Env::default();
+            let contract_id = e.register(ConcentratedLiquidityPool {}, ());
+
+            e.as_contract(&contract_id, || {
+                let spacing = 1;
+                let current_compressed = compress_tick(current_tick, spacing);
+                let init_compressed = compress_tick(init_tick, spacing);
+                seed_initialized_tick(&e, init_compressed, liquidity_net);
+
+                let permissive_limit = if lte { i32::MIN } else { i32::MAX };
+                let mut plane_cc = ChunkCache::new(&e);
+                let plane_result = find_initialized_tick(
+                    &e,
+                    current_compressed,
+                    permissive_limit,
+                    spacing,
+                    lte,
+                    &mut plane_cc,
+                );
+
+                let mut internal_cc = ChunkCache::new(&e);
+                let (internal_tick, internal_initialized) =
+                    ConcentratedLiquidityPool::find_initialized_tick_in_word(
+                        &e,
+                        current_tick,
+                        spacing,
+                        lte,
+                        &mut internal_cc,
+                    );
+
+                assert!(internal_initialized);
+                assert_eq!(internal_tick, init_tick);
+                assert_eq!(plane_result, Some((init_tick, liquidity_net)));
+                assert_eq!(plane_result.unwrap().0, internal_tick);
+
+                let bounded_limit = if lte {
+                    init_compressed + 1
+                } else {
+                    init_compressed - 1
+                };
+                let mut bounded_cc = ChunkCache::new(&e);
+                assert_eq!(
+                    find_initialized_tick(
+                        &e,
+                        current_compressed,
+                        bounded_limit,
+                        spacing,
+                        lte,
+                        &mut bounded_cc,
+                    ),
+                    None
+                );
+            });
+        };
+
+        run_case(5, 3, true, 101);
+        run_case(5, 8, false, 102);
+        run_case(1_600, 815, true, 201);
+        run_case(815, 1_600, false, 202);
+        run_case(4_160, 0, true, 301);
+        run_case(0, 4_160, false, 302);
+    }
 }
