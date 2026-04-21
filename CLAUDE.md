@@ -86,6 +86,7 @@ Workspace dependencies are defined in root `Cargo.toml` `[workspace.dependencies
 ## Code Conventions
 
 - Run `task fmt` before committing (CI enforces zero diff after formatting)
+- **Rebuild and commit WASM artefacts whenever you change production contract code.** After any source change that alters compiled contract output (anything outside `#[cfg(test)]`, `mod tests`, docs, comments, or formatting), run `task build` and `git add contracts/*.wasm` in the same commit (or a follow-up commit on the same branch). Reason: the repo ships WASM binaries alongside source — the `check_bindings` CI step compares the committed `contracts/*.wasm` against the bindings exported from source, and a downstream consumer that pins a commit SHA (integration tests, deployment scripts) loads the WASM from the tree, not from a rebuild. Test-only changes (`#[cfg(test)] mod tests`, sibling `*_tests.rs` modules, doc updates) do NOT need a rebuild — WASM output is identical. When unsure, run `task build` and check `git status`: if any `contracts/*.wasm` is modified, include it. Recent commits like `160bca2 format code & build contracts` and `8f34278 rebuild WASMs after audit fixes` document this practice.
 - Use `panic_with_error!` with typed error enums, not raw panics
 - Minimize storage operations — batch reads/writes (Soroban execution costs)
 - Comments in English only
