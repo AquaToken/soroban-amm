@@ -6,13 +6,14 @@ pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
 use crate::bitmap::{
     chunk_bitmap_position, compress_tick, compressed_to_tick, find_next_set_bit, find_prev_set_bit,
-    u256_to_array,
+    u256_to_array, word_bitmap_position,
 };
 use crate::constants::{MAX_TICK, MIN_TICK, TICKS_PER_CHUNK};
 use crate::math::{amount0_delta, amount1_delta, sqrt_ratio_at_tick};
 use crate::storage::{
     chunk_address, get_chunk_bitmap_word, get_fee, get_full_range_liquidity, get_liquidity,
-    get_plane, get_reserve0, get_reserve1, get_slot0, get_tick_spacing, ChunkCache,
+    get_plane, get_reserve0, get_reserve1, get_slot0, get_tick_spacing, get_word_bitmap,
+    ChunkCache,
 };
 use soroban_sdk::{Env, Symbol, Vec, U256};
 
@@ -136,6 +137,38 @@ fn find_initialized_tick(
             }
         }
 
+        // 3. Use L2 word bitmap to find the adjacent ChunkBitmap word
+        let (l2_pos, l2_bit) = word_bitmap_position(bm_word_pos);
+        let l2_search = |l2_p: i32, from: u32| -> Option<i32> {
+            let l2_arr = u256_to_array(&get_word_bitmap(e, l2_p));
+            find_prev_set_bit(&l2_arr, from).map(|bit| (l2_p << 8) + bit as i32)
+        };
+        let adj_bm_word = if l2_bit > 0 {
+            l2_search(l2_pos, l2_bit - 1)
+        } else {
+            None
+        }
+        .or_else(|| l2_search(l2_pos - 1, 255));
+
+        if let Some(adj_word_pos) = adj_bm_word {
+            let bm_arr = u256_to_array(&get_chunk_bitmap_word(e, adj_word_pos));
+            if let Some(bit) = find_prev_set_bit(&bm_arr, 255) {
+                let found_chunk_pos = (adj_word_pos << 8) + bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in (0..TICKS_PER_CHUNK as u32).rev() {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed >= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+
         None
     } else {
         // --- Scanning upward ---
@@ -170,6 +203,38 @@ fn find_initialized_tick(
                             if found_compressed <= limit_compressed {
                                 return Some((compressed_to_tick(found_compressed, spacing), td.3));
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Use L2 word bitmap to find the adjacent ChunkBitmap word
+        let (l2_pos, l2_bit) = word_bitmap_position(bm_word_pos);
+        let l2_search = |l2_p: i32, from: u32| -> Option<i32> {
+            let l2_arr = u256_to_array(&get_word_bitmap(e, l2_p));
+            find_next_set_bit(&l2_arr, from).map(|bit| (l2_p << 8) + bit as i32)
+        };
+        let adj_bm_word = if l2_bit < 255 {
+            l2_search(l2_pos, l2_bit + 1)
+        } else {
+            None
+        }
+        .or_else(|| l2_search(l2_pos + 1, 0));
+
+        if let Some(adj_word_pos) = adj_bm_word {
+            let bm_arr = u256_to_array(&get_chunk_bitmap_word(e, adj_word_pos));
+            if let Some(bit) = find_next_set_bit(&bm_arr, 0) {
+                let found_chunk_pos = (adj_word_pos << 8) + bit as i32;
+                if let Some(chunk) = cc.get_chunk(e, found_chunk_pos) {
+                    for s in 0..TICKS_PER_CHUNK as u32 {
+                        let td = chunk.get(s).unwrap();
+                        if td.2 > 0 {
+                            let found_compressed = found_chunk_pos * TICKS_PER_CHUNK + s as i32;
+                            if found_compressed <= limit_compressed {
+                                return Some((compressed_to_tick(found_compressed, spacing), td.3));
+                            }
+                            return None;
                         }
                     }
                 }
@@ -533,65 +598,5 @@ pub fn update_plane(e: &Env) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        exact_tick_steps_for_spacing, full_range_liquidity_net_adjustment,
-        full_range_ticks_for_spacing,
-    };
-
-    #[test]
-    fn test_exact_tick_steps_for_spacing_bounds() {
-        assert_eq!(exact_tick_steps_for_spacing(0), 0);
-        assert_eq!(exact_tick_steps_for_spacing(-1), 0);
-        assert_eq!(exact_tick_steps_for_spacing(1), 20);
-        assert_eq!(exact_tick_steps_for_spacing(10), 20);
-        assert_eq!(exact_tick_steps_for_spacing(60), 14);
-        assert_eq!(exact_tick_steps_for_spacing(200), 8);
-    }
-
-    #[test]
-    fn test_full_range_ticks_for_spacing() {
-        assert_eq!(full_range_ticks_for_spacing(0), None);
-        assert_eq!(full_range_ticks_for_spacing(-1), None);
-        assert_eq!(full_range_ticks_for_spacing(1), Some((-887_272, 887_272)));
-        assert_eq!(full_range_ticks_for_spacing(10), Some((-887_270, 887_270)));
-        assert_eq!(full_range_ticks_for_spacing(60), Some((-887_220, 887_220)));
-    }
-
-    #[test]
-    fn test_full_range_liquidity_net_adjustment() {
-        let spacing = 20;
-        let (fr_lower, fr_upper) = full_range_ticks_for_spacing(spacing).unwrap();
-        let fl: u128 = 1_000_000;
-
-        // At the full-range lower tick: subtract full-range contribution
-        assert_eq!(
-            full_range_liquidity_net_adjustment(fr_lower, spacing, fr_lower, fr_upper, fl),
-            -(fl as i128)
-        );
-
-        // At the full-range upper tick: add back full-range contribution
-        assert_eq!(
-            full_range_liquidity_net_adjustment(fr_upper, spacing, fr_lower, fr_upper, fl),
-            fl as i128
-        );
-
-        // At an unrelated tick: no adjustment
-        assert_eq!(
-            full_range_liquidity_net_adjustment(0, spacing, fr_lower, fr_upper, fl),
-            0
-        );
-
-        // With zero full-range liquidity: no adjustment anywhere
-        assert_eq!(
-            full_range_liquidity_net_adjustment(fr_lower, spacing, fr_lower, fr_upper, 0),
-            0
-        );
-
-        // With zero spacing: no adjustment
-        assert_eq!(
-            full_range_liquidity_net_adjustment(fr_lower, 0, fr_lower, fr_upper, fl),
-            0
-        );
-    }
-}
+#[path = "plane_tests.rs"]
+mod tests;

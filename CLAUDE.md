@@ -86,11 +86,13 @@ Workspace dependencies are defined in root `Cargo.toml` `[workspace.dependencies
 ## Code Conventions
 
 - Run `task fmt` before committing (CI enforces zero diff after formatting)
+- **Rebuild and commit WASM artefacts whenever you change production contract code.** After any source change that alters compiled contract output (anything outside `#[cfg(test)]`, `mod tests`, docs, comments, or formatting), run `task build` and `git add contracts/*.wasm` in the same commit (or a follow-up commit on the same branch). Reason: the repo ships WASM binaries alongside source — the `check_bindings` CI step compares the committed `contracts/*.wasm` against the bindings exported from source, and a downstream consumer that pins a commit SHA (integration tests, deployment scripts) loads the WASM from the tree, not from a rebuild. Test-only changes (`#[cfg(test)] mod tests`, sibling `*_tests.rs` modules, doc updates) do NOT need a rebuild — WASM output is identical. When unsure, run `task build` and check `git status`: if any `contracts/*.wasm` is modified, include it. Recent commits like `160bca2 format code & build contracts` and `8f34278 rebuild WASMs after audit fixes` document this practice.
 - Use `panic_with_error!` with typed error enums, not raw panics
 - Minimize storage operations — batch reads/writes (Soroban execution costs)
 - Comments in English only
 - Authorization pattern: `admin.require_auth()` then `AccessControl::new(&e).assert_address_has_role(...)` or use helpers like `require_operations_admin_or_owner`
 - Events use `liquidity_pool_events`: `PoolEvents::new(&e).deposit_liquidity(...)`, `PoolEvents::new(&e).trade(...)`
+- **Keep unit tests in a sibling file, not inline.** When a source file (e.g. `foo.rs`) needs an in-crate unit-test module that accesses private items, put the tests in a sibling `foo_tests.rs` and wire them via `#[cfg(test)] #[path = "foo_tests.rs"] mod tests;` at the bottom of `foo.rs`. Do NOT write an inline `#[cfg(test)] mod tests { ... }` block. Reason: source files that bundle their tests inline grow large (tests often exceed 25% of file length), which inflates the context cost every time a code reader (human or agent) opens the file to study production logic. `#[path]` submodules keep `use super::*;` working against private items with zero visibility changes. Example: `plane.rs` + `plane_tests.rs`. Exception: a trivial test module (&lt;~40 lines, one or two tests) may stay inline.
 
 ## Development Workflow
 
